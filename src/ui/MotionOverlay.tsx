@@ -50,13 +50,14 @@ export default function MotionOverlay({ project, playhead, trackingSelectionEnab
       }
       const frame = motionGraphicFrame(project, graphic, playhead);
       if (!frame.visible) return null;
+      const projectPixel = (value: number) => `${value / project.width * 100}cqw`;
       return <div key={graphic.id} className={`motion-graphic motion-${graphic.kind}`} style={{
         left: `${frame.x * 100}%`, top: `${frame.y * 100}%`, width: `${frame.width * 100}%`, opacity: frame.opacity,
         transform: `rotate(${frame.rotationDegrees}deg) scale(${frame.scale})`, color: graphic.textColor, backgroundColor: graphic.backgroundColor,
-        borderColor: graphic.accentColor, fontSize: `${Math.max(14, graphic.fontSize * 0.45)}px`,
-        fontFamily: cssFontFamily(face?.fontFamily ?? graphic.fontFamily), fontWeight: face?.fontWeight ?? graphic.fontWeight, fontSynthesis: "style", letterSpacing: `${graphic.letterSpacing ?? 0}px`,
-        borderWidth: `${graphic.outlineWidth ?? 3}px`, borderRadius: `${graphic.cornerRadius ?? 10}px`,
-        textShadow: graphic.shadowDepth ? `${graphic.shadowDepth * .35}px ${graphic.shadowDepth * .35}px 0 ${graphic.accentColor}, 0 ${graphic.shadowDepth * .45}px ${graphic.shadowDepth}px rgba(0,0,0,.38)` : undefined,
+        borderColor: graphic.accentColor, fontSize: projectPixel(graphic.fontSize),
+        fontFamily: cssFontFamily(face?.fontFamily ?? graphic.fontFamily), fontWeight: face?.fontWeight ?? graphic.fontWeight, fontSynthesis: "style", letterSpacing: projectPixel(graphic.letterSpacing ?? 0),
+        borderWidth: projectPixel(graphic.outlineWidth ?? 3), borderRadius: projectPixel(graphic.cornerRadius ?? 10),
+        textShadow: graphic.shadowDepth ? `${projectPixel(graphic.shadowDepth * .35)} ${projectPixel(graphic.shadowDepth * .35)} 0 ${graphic.accentColor}, 0 ${projectPixel(graphic.shadowDepth * .45)} ${projectPixel(graphic.shadowDepth)} rgba(0,0,0,.38)` : undefined,
       }} data-testid="motion-graphic" data-font-weight-substituted={face?.weightSubstituted} title={face?.weightSubstituted ? `字重 ${face.requestedWeight} → ${face.fontWeight}` : undefined} data-visual-style={graphic.visualStyle ?? "solid_panel"}><span>{graphic.text}</span></div>;
     })}
     {trackingSelectionEnabled && <div className="tracking-help">框住要跟著跑的人或物件</div>}
