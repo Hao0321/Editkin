@@ -3324,8 +3324,8 @@
     },
     {
       "path": "scripts/verify-public-source.mjs",
-      "bytes": 6531,
-      "sha256": "ce097f85e68866029094a6f57764280db48350d88972ec7ddada45c19ecdad7e",
+      "bytes": 6560,
+      "sha256": "6667b4f8ca59f22bf4ba26b93c5c782ecb9785a0eb04029936a2277c8c25b980",
       "origin": "open-source/verify-public-source.mjs",
       "rights": "GPL-3.0-or-later"
     },

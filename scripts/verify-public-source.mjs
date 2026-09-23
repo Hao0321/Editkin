@@ -19,7 +19,7 @@ const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 const slash = path => path.split(sep).join("/");
 
 function safeRelative(path) {
-  if (typeof path !== "string" || !path || path.includes("\\") || path.includes("\0") || isAbsolute(path)) return false;
+  if (typeof path !== "string" || !path || path.includes("\\") || path.includes("\0") || isAbsolute(path) || /^[A-Za-z]:\//.test(path)) return false;
   const full = resolve(root, path);
   const rel = relative(root, full);
   return slash(rel) === path && !rel.startsWith(`..${sep}`) && rel !== ".." && !path.split("/").includes("..");
