@@ -19,13 +19,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": ".github/dependabot.yml",
-      "bytes": 1279,
-      "sha256": "7129504b6d94561ebcc549e433acd4b8473a966a2b592573958e3cc8bb89ef8b",
-      "origin": "open-source/.github/dependabot.yml",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": ".github/ISSUE_TEMPLATE/bug_report.yml",
       "bytes": 882,
       "sha256": "1a718e478be88091cd9b9256b64aead003466caf5e7291c2653a59c2ffb32a4c",
