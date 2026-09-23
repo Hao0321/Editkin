@@ -8,7 +8,7 @@ Use Node.js 22.13+ and `npm ci`. Run `npm test` and `npm run build`; `npm run de
 
 With an independently installed FFmpeg and ffprobe on `PATH`, run `npm run test:journey`. On Windows you may set `HAO_FFMPEG_PATH` and `HAO_FFPROBE_PATH` to their exact executable paths. This uses the synthetic MP4 to check import, EditGraph changes, preview state, atomic save/reopen, export, and a decoded preview frame. It writes evidence under ignored `.rd/` and does not test a delivered desktop installer.
 
-`npm run source:verify:self-test` checks the source verifier's negative controls. `npm run source:verify` checks the exact public file manifest, source hashes, binary rights classes, private directory boundary, and CI permission boundary. These checks support maintainer review; they cannot decide whether arbitrary contributor code is malicious.
+`npm run source:verify:self-test` checks the source verifier's negative controls. `npm run source:verify` checks the exact initial publication snapshot and its hash manifest. `npm run source:scan` checks the current checkout, including pull requests, for private paths, unexpected binaries, key patterns, and the CI permission boundary while allowing ordinary text source changes. New binary assets need maintainer review and a refreshed rights record. These checks support maintainer review; they cannot decide whether arbitrary contributor code is malicious.
 
 ## Desktop and release path
 

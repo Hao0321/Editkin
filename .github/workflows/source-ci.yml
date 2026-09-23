@@ -25,7 +25,7 @@ jobs:
           node-version: 22.23.2
           cache: npm
       - run: npm run source:verify:self-test
-      - run: npm run source:verify
+      - run: npm run source:scan
       - run: npm ci
       - run: npm test
       - run: npm run build

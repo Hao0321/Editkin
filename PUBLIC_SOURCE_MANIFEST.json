@@ -20,8 +20,8 @@
     },
     {
       "path": ".github/dependabot.yml",
-      "bytes": 511,
-      "sha256": "77fa981fb239a2fb42a230cf82bb1c579a09cfae3da99162cd1f4b158965429c",
+      "bytes": 1279,
+      "sha256": "7129504b6d94561ebcc549e433acd4b8473a966a2b592573958e3cc8bb89ef8b",
       "origin": "open-source/.github/dependabot.yml",
       "rights": "GPL-3.0-or-later"
     },
@@ -62,8 +62,8 @@
     },
     {
       "path": ".github/workflows/source-ci.yml",
-      "bytes": 731,
-      "sha256": "8a7e316bd3ddc54c4931488e236aaef092154ea7016623e23eab1eb627a77285",
+      "bytes": 729,
+      "sha256": "3e3432cb37877e3020025440a89cc777fdc549b7aed7f3d9fa38ea8cf0162d97",
       "origin": "open-source/.github/workflows/source-ci.yml",
       "rights": "GPL-3.0-or-later"
     },
@@ -118,8 +118,8 @@
     },
     {
       "path": "docs/BUILDING.md",
-      "bytes": 3205,
-      "sha256": "7fa2402ef3b4aba7fd07a91b1b44c03ceb730947c7bb7ca3066cf1e81d1e43f1",
+      "bytes": 3419,
+      "sha256": "29ef9cf768bd2b3ac696d62c2964afa35b80a0b884421e43c44495901975995b",
       "origin": "open-source/docs/BUILDING.md",
       "rights": "GPL-3.0-or-later"
     },
@@ -146,8 +146,8 @@
     },
     {
       "path": "docs/SECURITY_MODEL.md",
-      "bytes": 2183,
-      "sha256": "895216afbb24a21211e07b3df58bc50d9de667a95a1487c1f331be1d965f47a2",
+      "bytes": 2262,
+      "sha256": "48ba359230e4ffa477e957e7afcafdb0de223990344198e24734a04237d7cbcc",
       "origin": "open-source/docs/SECURITY_MODEL.md",
       "rights": "GPL-3.0-or-later"
     },
@@ -587,8 +587,8 @@
     },
     {
       "path": "package.json",
-      "bytes": 1380,
-      "sha256": "56e40e99b89ef9d5782d1077e1ecb26163daf60a83d9a46c87738b5617d6e93d",
+      "bytes": 1447,
+      "sha256": "6981c2e80b98c20f34ea3625a52e0016a0fe69b7a252d0363f66f7d287e857a1",
       "origin": "open-source/package-profile",
       "rights": "GPL-3.0-or-later"
     },
@@ -3324,8 +3324,8 @@
     },
     {
       "path": "scripts/verify-public-source.mjs",
-      "bytes": 6560,
-      "sha256": "6667b4f8ca59f22bf4ba26b93c5c782ecb9785a0eb04029936a2277c8c25b980",
+      "bytes": 7618,
+      "sha256": "8f88ac5d57e740beedbf524da9c2797e5fbc3ea3d45bdcb1139801cc5d67c43a",
       "origin": "open-source/verify-public-source.mjs",
       "rights": "GPL-3.0-or-later"
     },

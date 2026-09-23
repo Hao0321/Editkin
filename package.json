@@ -19,6 +19,7 @@
     "test:journey": "tsx scripts/public-source-journey.ts",
     "source:verify": "node scripts/verify-public-source.mjs",
     "source:verify:self-test": "node scripts/verify-public-source.mjs --self-test",
+    "source:scan": "node scripts/verify-public-source.mjs --scan",
     "mcp": "tsx src/mcp/server.ts"
   },
   "dependencies": {

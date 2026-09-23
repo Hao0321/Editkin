@@ -17,6 +17,7 @@ const sensitive = [
 ];
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 const slash = path => path.split(sep).join("/");
+const scanOnly = process.argv.includes("--scan");
 
 function safeRelative(path) {
   if (typeof path !== "string" || !path || path.includes("\\") || path.includes("\0") || isAbsolute(path) || /^[A-Za-z]:\//.test(path)) return false;
@@ -69,7 +70,9 @@ if (process.argv.includes("--self-test")) {
   process.exit(0);
 }
 
-const manifest = JSON.parse(await readFile(resolve(root, "PUBLIC_SOURCE_MANIFEST.json"), "utf8"));
+const manifestText = await readFile(resolve(root, "PUBLIC_SOURCE_MANIFEST.json"), "utf8");
+if (sensitivePattern(manifestText)) throw new Error("Sensitive text in public source manifest");
+const manifest = JSON.parse(manifestText);
 if (manifest.schema !== "editkin.public-source-manifest/v1" || !Array.isArray(manifest.files)) throw new Error("Invalid source manifest");
 const expected = new Map();
 for (const row of manifest.files) {
@@ -83,24 +86,35 @@ for (const row of manifest.files) {
 const seen = new Set();
 for await (const entry of walk()) {
   if (entry.path === "PUBLIC_SOURCE_MANIFEST.json") continue;
+  if (!safeRelative(entry.path)) throw new Error(`Unsafe path: ${entry.path}`);
   if (entry.kind !== "file") throw new Error(`Unsafe filesystem entry: ${entry.path}`);
   if (entry.path.split("/").some(part => forbiddenDirs.has(part))) throw new Error(`Private directory: ${entry.path}`);
+  if (forbiddenRootFiles.has(entry.path)) throw new Error(`Owner-only internal document: ${entry.path}`);
+  const extension = extname(entry.path).toLowerCase();
+  if (forbiddenExt.has(extension)) throw new Error(`Forbidden binary: ${entry.path}`);
   const row = expected.get(entry.path);
-  if (!row) throw new Error(`Unmanifested file: ${entry.path}`);
   const bytes = await readFile(join(root, entry.path));
-  if (bytes.length !== row.bytes || hash(bytes) !== row.sha256) throw new Error(`Changed file: ${entry.path}`);
-  if (!binaryExt.has(extname(entry.path).toLowerCase()) && sensitivePattern(bytes.toString("utf8"))) {
-    throw new Error(`Sensitive text in ${entry.path}`);
+  if (!scanOnly && !row) throw new Error(`Unmanifested file: ${entry.path}`);
+  if (!scanOnly && (bytes.length !== row.bytes || hash(bytes) !== row.sha256)) throw new Error(`Changed file: ${entry.path}`);
+  if (binaryExt.has(extension)) {
+    if (!row || !allowedBinary(entry.path, row.rights) || bytes.length !== row.bytes || hash(bytes) !== row.sha256) {
+      throw new Error(`Unreviewed binary: ${entry.path}`);
+    }
+  } else {
+    let content;
+    try { content = new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+    catch { throw new Error(`Non-text file: ${entry.path}`); }
+    if (bytes.includes(0) || sensitivePattern(content)) throw new Error(`Sensitive or binary text in ${entry.path}`);
   }
   seen.add(entry.path);
 }
-for (const path of expected.keys()) if (!seen.has(path)) throw new Error(`Missing file: ${path}`);
+if (!scanOnly) for (const path of expected.keys()) if (!seen.has(path)) throw new Error(`Missing file: ${path}`);
 const defaults = JSON.parse(await readFile(join(root, "src/creative/haoCorePack.json"), "utf8"));
 if (defaults.source?.compiler !== "editkin-public-defaults/v1" || defaults.source?.referenceCount !== 0 || defaults.source?.privateImagesEmbedded !== false) {
   throw new Error("Public creative defaults replaced or invalid");
 }
 const workflow = await readFile(join(root, ".github/workflows/source-ci.yml"), "utf8");
-if (!/permissions:\s*\n\s*contents:\s*read/.test(workflow) || /pull_request_target|secrets\.|id-token:\s*write/.test(workflow)) {
+if (!/permissions:\s*\n\s*contents:\s*read/.test(workflow) || /pull_request_target|secrets\.|id-token:\s*write/.test(workflow) || !/run: npm run source:scan/.test(workflow) || !/run: npm test/.test(workflow) || !/run: npm run build/.test(workflow)) {
   throw new Error("Source CI permission boundary changed");
 }
-process.stdout.write(`${JSON.stringify({ status: "GREEN", files: seen.size, manifestSha256: hash(await readFile(join(root, "PUBLIC_SOURCE_MANIFEST.json"))) })}\n`);
+process.stdout.write(`${JSON.stringify({ status: "GREEN", mode: scanOnly ? "scan" : "snapshot", files: seen.size, manifestSha256: hash(await readFile(join(root, "PUBLIC_SOURCE_MANIFEST.json"))) })}\n`);
