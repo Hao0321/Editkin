@@ -19,7 +19,7 @@ ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_IO", "Win32_System_Console"] }
-windows-core = "0.62.2"
+windows-core = "0.100.0"
 windows = { version = "0.62.2", features = [
   "Win32_Foundation",
   "Win32_Media_Audio",
