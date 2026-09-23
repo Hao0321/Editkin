@@ -1,0 +1,37 @@
+{
+  "schema": "editkin.plugin/v1",
+  "id": "com.example.first-effect",
+  "name": "First GPU Color Effect",
+  "version": "1.0.0",
+  "minimumHostVersion": "0.15.0",
+  "publisher": { "name": "Example Creator" },
+  "license": { "spdx": "MIT", "commercialUse": true },
+  "permissions": ["render.effect"],
+  "capabilities": [{
+    "id": "gentle-filmic",
+    "name": "Gentle Filmic",
+    "description": "A safe parameterised color module built with the Editkin SDK.",
+    "kind": "effect",
+    "automation": "assisted",
+    "semanticRoles": ["cinematic", "b-roll"],
+    "formats": ["longform", "shorts", "reels"],
+    "requires": ["normally exposed visual clip"],
+    "avoidWhen": ["highlights are already clipped"],
+    "parameters": [
+      { "id": "strength", "name": "Strength", "type": "number", "default": 0.2, "min": 0, "max": 1, "step": 0.01 },
+      { "id": "toe", "name": "Toe", "type": "number", "default": 0.1, "min": 0, "max": 1, "step": 0.01 },
+      { "id": "shoulder", "name": "Shoulder", "type": "number", "default": 0.2, "min": 0, "max": 1, "step": 0.01 }
+    ],
+    "runtime": {
+      "type": "gpu_effect_module",
+      "abiVersion": 1,
+      "supportedFormats": ["rgba16_float", "rgba32_float"],
+      "maxTemporalRadius": 0,
+      "module": {
+        "schema": "editkin.gpu-effect-module/v1",
+        "nodes": [{ "id": "curve", "input": "$source", "op": "filmic_curve", "args": ["$parameter.strength", "$parameter.toe", "$parameter.shoulder"] }],
+        "output": "curve"
+      }
+    }
+  }]
+}

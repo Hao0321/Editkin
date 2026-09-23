@@ -1,0 +1,136 @@
+.cinematic-language-explorer {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.cinematic-explorer-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cinematic-explorer-heading > div { display: grid; gap: 3px; }
+.cinematic-explorer-heading strong { font-size: 15px; }
+.cinematic-explorer-heading small { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.cinematic-explorer-heading > span {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.execution-state-map {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.execution-state-map > div {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-height: 72px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.execution-state-map > div::before { content: ""; width: 22px; height: 3px; border-radius: 99px; background: var(--muted); }
+.execution-state-map > .direct::before { background: #45c77a; }
+.execution-state-map > .planning::before { background: #7197ff; }
+.execution-state-map > .compilable::before { background: #45c7b8; }
+.execution-state-map b { color: var(--soft); font-size: 12px; }
+.execution-state-map span { color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+
+.cinematic-explorer-tabs {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.cinematic-explorer-tabs button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.cinematic-explorer-tabs button small {
+  display: grid;
+  place-items: center;
+  min-width: 19px;
+  height: 19px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  color: inherit;
+  font-size: 11px;
+}
+
+.cinematic-explorer-tabs button.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.cinematic-recipe-list {
+  display: grid;
+  gap: 8px;
+  max-height: 430px;
+  padding-right: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.cinematic-recipe-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.cinematic-recipe-card > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.cinematic-recipe-card > header strong { min-width: 0; color: var(--soft); font-size: 14px; overflow-wrap: anywhere; }
+.capability-state { flex: 0 0 auto; padding: 4px 7px; border-radius: 999px; font-size: 11px; font-weight: 850; }
+.capability-state.planning { background: color-mix(in srgb, #7197ff 16%, transparent); color: #91adff; }
+.capability-state.compilable { background: color-mix(in srgb, #45c7b8 16%, transparent); color: #62d8ca; }
+.capability-state.evidence { background: color-mix(in srgb, #f4a340 16%, transparent); color: #f4b45f; }
+.cinematic-recipe-card > p { margin: 0; color: var(--soft); font-size: 12px; line-height: 1.6; }
+
+.evidence-requirements {
+  display: grid;
+  gap: 5px;
+  padding: 8px;
+  border-radius: 9px;
+  background: color-mix(in srgb, #f4a340 7%, var(--surface-2));
+}
+
+.evidence-requirements b { color: #f4b45f; font-size: 11px; }
+.evidence-requirements ul { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.evidence-requirements li { padding: 4px 7px; border: 1px solid color-mix(in srgb, #f4a340 25%, var(--line)); border-radius: 6px; color: var(--muted); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.cinematic-recipe-card > footer { color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+
+@media (max-width: 440px) {
+  .execution-state-map { grid-template-columns: 1fr; }
+  .execution-state-map > div { min-height: 0; }
+}

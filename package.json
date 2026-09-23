@@ -1,0 +1,47 @@
+{
+  "name": "editkin",
+  "productName": "Editkin",
+  "description": "AI-native local-first video editor",
+  "author": "Hao0321 Studio",
+  "private": true,
+  "version": "0.15.0",
+  "type": "module",
+  "main": "desktop-dist/main.mjs",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && node scripts/build-web-public.mjs && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "test:journey": "tsx scripts/public-source-journey.ts",
+    "source:verify": "node scripts/verify-public-source.mjs",
+    "source:verify:self-test": "node scripts/verify-public-source.mjs --self-test",
+    "mcp": "tsx src/mcp/server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "@tauri-apps/api": "^2.11.1",
+    "qrcode": "^1.5.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
+    "@types/node": "22.19.11",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "4.7.0",
+    "esbuild": "^0.25.10",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vite": "6.4.3",
+    "vitest": "5.0.1"
+  },
+  "license": "GPL-3.0-or-later"
+}

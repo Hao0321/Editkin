@@ -1,0 +1,79 @@
+{
+  "schema": "hao.gpu-render-graph/v1",
+  "width": 960,
+  "height": 540,
+  "layers": [
+    {
+      "id": "background",
+      "source": { "kind": "gradient", "start": [7, 10, 18, 255], "end": [22, 44, 69, 255], "horizontal": false },
+      "blendMode": "normal",
+      "opacity": 1.0,
+      "transform": { "x": 0.0, "y": 0.0, "scale": 1.0, "rotation": 0.0 },
+      "enabled": true
+    },
+    {
+      "id": "screen-glow",
+      "source": { "kind": "radial", "inner": [170, 255, 40, 235], "outer": [0, 0, 0, 0], "center": [0.72, 0.36], "radius": 0.34 },
+      "blendMode": "screen",
+      "opacity": 0.82,
+      "transform": { "x": 0.0, "y": 0.0, "scale": 1.0, "rotation": 0.0 },
+      "enabled": true
+    },
+    {
+      "id": "red-panel",
+      "source": { "kind": "rect", "color": [255, 43, 31, 225], "rect": [0.08, 0.58, 0.52, 0.84], "radius": 0.035 },
+      "blendMode": "normal",
+      "opacity": 0.94,
+      "transform": { "x": 18.0, "y": -8.0, "scale": 1.0, "rotation": -0.025 },
+      "enabled": true
+    },
+    {
+      "id": "add-highlight",
+      "source": { "kind": "radial", "inner": [255, 255, 255, 210], "outer": [0, 0, 0, 0], "center": [0.39, 0.69], "radius": 0.12 },
+      "blendMode": "add",
+      "opacity": 0.72,
+      "transform": { "x": 0.0, "y": 0.0, "scale": 1.0, "rotation": 0.0 },
+      "enabled": true
+    },
+    {
+      "id": "overlay-accent",
+      "source": { "kind": "rect", "color": [128, 220, 255, 90], "rect": [0.02, 0.05, 0.16, 0.19], "radius": 0.02 },
+      "blendMode": "overlay", "opacity": 0.7, "transform": { "x": 0, "y": 0, "scale": 1, "rotation": 0 }, "enabled": true
+    },
+    {
+      "id": "soft-light-accent",
+      "source": { "kind": "rect", "color": [255, 160, 95, 90], "rect": [0.17, 0.05, 0.31, 0.19], "radius": 0.02 },
+      "blendMode": "soft_light", "opacity": 0.7, "transform": { "x": 0, "y": 0, "scale": 1, "rotation": 0 }, "enabled": true
+    },
+    {
+      "id": "hard-light-accent",
+      "source": { "kind": "rect", "color": [170, 255, 80, 90], "rect": [0.32, 0.05, 0.46, 0.19], "radius": 0.02 },
+      "blendMode": "hard_light", "opacity": 0.7, "transform": { "x": 0, "y": 0, "scale": 1, "rotation": 0 }, "enabled": true
+    },
+    {
+      "id": "difference-accent",
+      "source": { "kind": "rect", "color": [130, 90, 240, 80], "rect": [0.47, 0.05, 0.61, 0.19], "radius": 0.02 },
+      "blendMode": "difference", "opacity": 0.65, "transform": { "x": 0, "y": 0, "scale": 1, "rotation": 0 }, "enabled": true
+    },
+    {
+      "id": "darken-accent",
+      "source": { "kind": "rect", "color": [70, 90, 120, 95], "rect": [0.62, 0.05, 0.73, 0.19], "radius": 0.02 },
+      "blendMode": "darken", "opacity": 0.7, "transform": { "x": 0, "y": 0, "scale": 1, "rotation": 0 }, "enabled": true
+    },
+    {
+      "id": "lighten-accent",
+      "source": { "kind": "rect", "color": [190, 210, 235, 90], "rect": [0.74, 0.05, 0.85, 0.19], "radius": 0.02 },
+      "blendMode": "lighten", "opacity": 0.7, "transform": { "x": 0, "y": 0, "scale": 1, "rotation": 0 }, "enabled": true
+    },
+    {
+      "id": "dodge-accent",
+      "source": { "kind": "rect", "color": [85, 120, 170, 70], "rect": [0.86, 0.05, 0.92, 0.19], "radius": 0.02 },
+      "blendMode": "color_dodge", "opacity": 0.5, "transform": { "x": 0, "y": 0, "scale": 1, "rotation": 0 }, "enabled": true
+    },
+    {
+      "id": "burn-accent",
+      "source": { "kind": "rect", "color": [210, 150, 110, 70], "rect": [0.93, 0.05, 0.99, 0.19], "radius": 0.02 },
+      "blendMode": "color_burn", "opacity": 0.5, "transform": { "x": 0, "y": 0, "scale": 1, "rotation": 0 }, "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+.asset-list-empty { display: grid; gap: 4px; padding: 12px; border: 1px dashed var(--line-strong); border-radius: 12px; background: var(--surface-2); text-align: left; }
+.asset-list-empty b { color: var(--soft); font-size: 10px; }
+.asset-list-empty span { color: var(--muted); font-size: 9px; line-height: 1.45; }
+
+.media-tabs{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:4px}
+.media-tabs button{height:40px;padding-inline:3px;font-size:12px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.media-tabs button b{font-size:10px}
+.asset-list{gap:0;scrollbar-width:thin}.asset-list:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.asset-row{grid-template-columns:56px minmax(0,1fr) 54px;gap:8px;height:68px;min-height:68px;margin-bottom:8px;padding:6px;flex:0 0 auto}
+.asset-thumb{height:52px}.asset-thumb-fallback{font-size:11px;font-weight:800;color:var(--muted)}
+.asset-row-actions{display:flex;min-width:0;flex-direction:column;gap:4px}
+.asset-row-actions button{min-width:0;min-height:26px;padding:2px 3px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--soft);font-size:10px;font-weight:800;line-height:1.1;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.asset-row-actions button:hover{border-color:var(--accent);color:var(--accent)}
+.asset-row-actions .pip{background:var(--accent-soft);color:var(--accent)}
+.asset-list-empty b{font-size:12px}.asset-list-empty span{font-size:11px}
+.media-bin .import-drop.has-media {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  min-height: 64px;
+  height: auto;
+  padding: 10px 12px;
+  column-gap: 10px;
+  text-align: left;
+  flex-shrink: 0;
+}
+.media-bin .import-drop.has-media .import-icon { grid-row: 1 / 3; width: 30px; height: 30px; font-size: 22px; }
+.media-bin .import-drop.has-media strong { font-size: 14px; line-height: 1.4; }
+.media-bin .import-drop.has-media small { min-width: 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.media-bin .asset-list { min-height: 76px; }

@@ -1,0 +1,364 @@
+{
+  "schema_version": 1,
+  "standard_id": "editkin-community-aesthetic-standard",
+  "version": "1.0.0-public",
+  "source_sha256": "6ac9a5c14721c654d89558c03d8de55c2c895a264e182525be6762ebdd14cb36",
+  "reference_basis": {
+    "shared_dna": [],
+    "shared_dna_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "dimensions": {
+    "semantic_fit": {
+      "label_zh": "內容契合",
+      "weight": 10,
+      "question": "Does the edit have clear semantic fit?"
+    },
+    "focal_hierarchy": {
+      "label_zh": "視覺焦點",
+      "weight": 10,
+      "question": "Does the edit have clear focal hierarchy?"
+    },
+    "typography": {
+      "label_zh": "文字可讀性",
+      "weight": 10,
+      "question": "Does the edit have clear typography?"
+    },
+    "colour_contrast": {
+      "label_zh": "色彩對比",
+      "weight": 10,
+      "question": "Does the edit have clear colour contrast?"
+    },
+    "subject_integration": {
+      "label_zh": "主體整合",
+      "weight": 10,
+      "question": "Does the edit have clear subject integration?"
+    },
+    "temporal_design": {
+      "label_zh": "節奏",
+      "weight": 10,
+      "question": "Does the edit have clear temporal design?"
+    },
+    "finish_material": {
+      "label_zh": "完成度",
+      "weight": 10,
+      "question": "Does the edit have clear finish material?"
+    },
+    "originality_consistency": {
+      "label_zh": "一致性",
+      "weight": 10,
+      "question": "Does the edit have clear originality consistency?"
+    },
+    "mrbeast_information_energy": {
+      "label_zh": "資訊能量",
+      "weight": 10,
+      "question": "Does the edit have clear mrbeast information energy?"
+    },
+    "yingshi_hurricane_cinematic_craft": {
+      "label_zh": "影像工藝",
+      "weight": 10,
+      "question": "Does the edit have clear yingshi hurricane cinematic craft?"
+    }
+  },
+  "format_multipliers": {
+    "shorts": {
+      "semantic_fit": 1,
+      "focal_hierarchy": 1,
+      "typography": 1,
+      "colour_contrast": 1,
+      "subject_integration": 1,
+      "temporal_design": 1.25,
+      "finish_material": 1,
+      "originality_consistency": 1,
+      "mrbeast_information_energy": 1,
+      "yingshi_hurricane_cinematic_craft": 1
+    },
+    "longform": {
+      "semantic_fit": 1,
+      "focal_hierarchy": 1,
+      "typography": 1,
+      "colour_contrast": 1,
+      "subject_integration": 1,
+      "temporal_design": 0.75,
+      "finish_material": 1,
+      "originality_consistency": 1,
+      "mrbeast_information_energy": 1,
+      "yingshi_hurricane_cinematic_craft": 1
+    }
+  },
+  "score_contract": {
+    "pass_score": 90,
+    "block_below": 60,
+    "minimum_dimension_rating": 3.5,
+    "human_review_required": true
+  },
+  "style_families": {
+    "cobalt_editorial": {
+      "label_zh": "cobalt editorial",
+      "templates": [],
+      "traits": [
+        "clear",
+        "readable"
+      ],
+      "best_for": [
+        "general editing"
+      ]
+    },
+    "shape_play": {
+      "label_zh": "shape play",
+      "templates": [],
+      "traits": [
+        "clear",
+        "readable"
+      ],
+      "best_for": [
+        "general editing"
+      ]
+    },
+    "luminous_organic": {
+      "label_zh": "luminous organic",
+      "templates": [],
+      "traits": [
+        "clear",
+        "readable"
+      ],
+      "best_for": [
+        "general editing"
+      ]
+    },
+    "night_signal": {
+      "label_zh": "night signal",
+      "templates": [],
+      "traits": [
+        "clear",
+        "readable"
+      ],
+      "best_for": [
+        "general editing"
+      ]
+    },
+    "travel_scrapbook": {
+      "label_zh": "travel scrapbook",
+      "templates": [],
+      "traits": [
+        "clear",
+        "readable"
+      ],
+      "best_for": [
+        "general editing"
+      ]
+    },
+    "food_hero": {
+      "label_zh": "food hero",
+      "templates": [],
+      "traits": [
+        "clear",
+        "readable"
+      ],
+      "best_for": [
+        "general editing"
+      ]
+    },
+    "brush_culture": {
+      "label_zh": "brush culture",
+      "templates": [],
+      "traits": [
+        "clear",
+        "readable"
+      ],
+      "best_for": [
+        "general editing"
+      ]
+    },
+    "cobalt_lime_ui": {
+      "label_zh": "cobalt lime ui",
+      "templates": [],
+      "traits": [
+        "clear",
+        "readable"
+      ],
+      "best_for": [
+        "general editing"
+      ]
+    },
+    "iridescent_future": {
+      "label_zh": "iridescent future",
+      "templates": [],
+      "traits": [
+        "clear",
+        "readable"
+      ],
+      "best_for": [
+        "general editing"
+      ]
+    },
+    "ticket_ribbon": {
+      "label_zh": "ticket ribbon",
+      "templates": [],
+      "traits": [
+        "clear",
+        "readable"
+      ],
+      "best_for": [
+        "general editing"
+      ]
+    },
+    "arcade_pop": {
+      "label_zh": "arcade pop",
+      "templates": [],
+      "traits": [
+        "clear",
+        "readable"
+      ],
+      "best_for": [
+        "general editing"
+      ]
+    },
+    "pixel_terminal": {
+      "label_zh": "pixel terminal",
+      "templates": [],
+      "traits": [
+        "clear",
+        "readable"
+      ],
+      "best_for": [
+        "general editing"
+      ]
+    },
+    "japanese_lifestyle_calm": {
+      "label_zh": "japanese lifestyle calm",
+      "templates": [],
+      "traits": [
+        "clear",
+        "readable"
+      ],
+      "best_for": [
+        "general editing"
+      ]
+    }
+  },
+  "domain_routes": {
+    "ai": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "technology": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "food": {
+      "primary": "japanese_lifestyle_calm",
+      "support": [],
+      "avoid": []
+    },
+    "cafe": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "travel": {
+      "primary": "travel_scrapbook",
+      "support": [],
+      "avoid": []
+    },
+    "toy": {
+      "primary": "arcade_pop",
+      "support": [],
+      "avoid": []
+    },
+    "game": {
+      "primary": "arcade_pop",
+      "support": [],
+      "avoid": []
+    },
+    "automotive": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "documentary": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "interview": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "business": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "music": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "culture": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "event": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "nature": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "fitness": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "fashion": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "beauty": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "luxury": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "architecture": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "product": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "diy": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "design": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    },
+    "general": {
+      "primary": "shape_play",
+      "support": [],
+      "avoid": []
+    }
+  },
+  "machine_block_signals": {
+    "visual_density_overload": "Too many simultaneous elements for the target frame."
+  }
+}

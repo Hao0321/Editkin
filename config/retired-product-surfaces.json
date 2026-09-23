@@ -1,0 +1,174 @@
+{
+  "schema": "editkin.retired-product-surfaces/v1",
+  "policyId": "editkin.sam-onnx-product-route-retirement/1",
+  "packageJson": "package.json",
+  "researchScriptPrefix": "research:auto-roto:",
+  "gateScripts": {
+    "retired-surfaces:self-test": "node scripts/retired-product-surfaces-gate.mjs --self-test",
+    "retired-surfaces:gate": "node scripts/retired-product-surfaces-gate.mjs"
+  },
+  "retiredProductScriptNames": [
+    "auto-roto:baseline",
+    "auto-roto:integration",
+    "auto-roto:model-router-self-test",
+    "auto-roto:router-gate",
+    "auto-roto:router-self-test",
+    "auto-roto:sam21-candidate-gate",
+    "auto-roto:sam21-candidate-self-test",
+    "auto-roto:sam21-davis-hardcase-gate",
+    "auto-roto:sam21-delivery-gate",
+    "auto-roto:sam21-delivery-self-test",
+    "auto-roto:sam21-formal-parity-gate",
+    "auto-roto:sam21-formal-parity-self-test",
+    "auto-roto:sam21-internal-gate",
+    "auto-roto:sam21-internal-self-test",
+    "auto-roto:sam21-native-fallback-gate",
+    "auto-roto:sam21-portable-pack-build",
+    "auto-roto:sam21-portable-pack-gate",
+    "auto-roto:sam21-portable-pack-self-test",
+    "auto-roto:sam21-product-path-gate",
+    "auto-roto:sam21-service-bridge-gate",
+    "auto-roto:sam21-synthetic-hardcase-gate",
+    "auto-roto:sam21-synthetic-hardcase-self-test",
+    "auto-roto:sam21-tauri-lifecycle-gate",
+    "auto-roto:self-test"
+  ],
+  "requiredResearchScripts": {
+    "research:auto-roto:model-router:unit": "vitest run src/application/autoRotoModelRouter.test.ts",
+    "research:auto-roto:onnx:baseline": "tsx scripts/auto-roto-render-integration.ts --baseline",
+    "research:auto-roto:onnx:integration": "tsx scripts/auto-roto-render-integration.ts",
+    "research:auto-roto:onnx:self-test": "tsx scripts/auto-roto-render-integration.ts --self-test",
+    "research:auto-roto:router:gate": "tsx scripts/auto-roto-model-router-gate.ts",
+    "research:auto-roto:router:self-test": "tsx scripts/auto-roto-model-router-gate.ts --self-test",
+    "research:auto-roto:sam21:candidate-gate": "node scripts/auto-roto-sam21-candidate-gate.mjs",
+    "research:auto-roto:sam21:candidate-self-test": "node scripts/auto-roto-sam21-candidate-gate.mjs --self-test",
+    "research:auto-roto:sam21:davis-hardcase-gate": "node scripts/auto-roto-davis-hardcase-gate.mjs",
+    "research:auto-roto:sam21:delivery-gate": "node scripts/auto-roto-sam21-delivery-gate.mjs",
+    "research:auto-roto:sam21:delivery-self-test": "node scripts/auto-roto-sam21-delivery-gate.mjs --self-test",
+    "research:auto-roto:sam21:formal-parity-gate": "tsx scripts/auto-roto-sam21-formal-parity-gate.ts",
+    "research:auto-roto:sam21:formal-parity-self-test": "tsx scripts/auto-roto-sam21-formal-parity-gate.ts --self-test",
+    "research:auto-roto:sam21:internal-gate": "node scripts/auto-roto-sam21-internal-gate.mjs",
+    "research:auto-roto:sam21:internal-self-test": "node scripts/auto-roto-sam21-internal-gate.mjs --self-test",
+    "research:auto-roto:sam21:native-fallback-gate": "tsx scripts/auto-roto-non-nvidia-fallback-gate.ts",
+    "research:auto-roto:sam21:portable-pack-build": "node scripts/build-auto-roto-sam21-portable-pack.mjs",
+    "research:auto-roto:sam21:portable-pack-gate": "tsx scripts/auto-roto-sam21-portable-pack-gate.ts",
+    "research:auto-roto:sam21:portable-pack-self-test": "tsx scripts/auto-roto-sam21-portable-pack-gate.ts --self-test",
+    "research:auto-roto:sam21:product-path-gate": "tsx scripts/auto-roto-sam21-product-path-gate.ts",
+    "research:auto-roto:sam21:service-bridge-gate": "node scripts/auto-roto-sam21-service-bridge-gate.mjs",
+    "research:auto-roto:sam21:synthetic-hardcase-gate": "tsx scripts/auto-roto-synthetic-hardcase-gate.ts",
+    "research:auto-roto:sam21:synthetic-hardcase-self-test": "tsx scripts/auto-roto-synthetic-hardcase-gate.ts --self-test",
+    "research:auto-roto:sam21:tauri-lifecycle-gate": "node scripts/auto-roto-tauri-model-lifecycle-gate.mjs"
+  },
+  "researchSurfaceDiscovery": {
+    "roots": ["scripts"],
+    "extensions": [".js", ".mjs", ".py", ".ts"],
+    "pathPatterns": [
+      "(?:^|/)auto-roto-sam21[^/]*$",
+      "(?:^|/)build-auto-roto-sam21-portable-pack\\.mjs$",
+      "(?:^|/)auto-roto-(?:davis-hardcase|model-router-gate|non-nvidia-fallback|render-integration|synthetic-hardcase|tauri-model-lifecycle)[^/]*$"
+    ],
+    "contentPatterns": [
+      "auto-roto-research(?:-onnx)?",
+      "AUTO_ROTO_(?:ONNX|SAM21)_ENGINE",
+      "bindSam21VideoPack",
+      "onnxruntime\\.dll",
+      "auto-roto-sam21-video-host",
+      "sam2\\.1_hiera",
+      "editkin-sam21-video-memory-roto"
+    ],
+    "excludedPaths": ["scripts/retired-product-surfaces-gate.mjs"]
+  },
+  "classifiedResearchSurfaceFiles": [
+    { "path": "scripts/auto-roto-davis-hardcase-gate.mjs", "role": "research-executor" },
+    { "path": "scripts/auto-roto-davis-hardcase.py", "role": "research-helper" },
+    { "path": "scripts/auto-roto-model-router-gate.ts", "role": "research-executor" },
+    { "path": "scripts/auto-roto-native-product-artifact-freshness-gate.ts", "role": "product-denial-gate" },
+    { "path": "scripts/auto-roto-non-nvidia-fallback-gate.ts", "role": "research-executor" },
+    { "path": "scripts/auto-roto-render-integration.ts", "role": "research-executor" },
+    { "path": "scripts/auto-roto-sam21-candidate-gate.mjs", "role": "research-executor" },
+    { "path": "scripts/auto-roto-sam21-delivery-gate.mjs", "role": "research-executor" },
+    { "path": "scripts/auto-roto-sam21-formal-parity-gate.ts", "role": "research-executor" },
+    { "path": "scripts/auto-roto-sam21-internal-gate.mjs", "role": "research-executor" },
+    { "path": "scripts/auto-roto-sam21-portable-pack-gate.ts", "role": "research-executor" },
+    { "path": "scripts/auto-roto-sam21-product-path-gate.ts", "role": "research-executor" },
+    { "path": "scripts/auto-roto-sam21-service-bridge-gate.mjs", "role": "research-executor" },
+    { "path": "scripts/auto-roto-sam21-video-host.py", "role": "research-helper" },
+    { "path": "scripts/auto-roto-synthetic-hardcase-gate.ts", "role": "research-executor" },
+    { "path": "scripts/auto-roto-tauri-model-lifecycle-gate.mjs", "role": "research-executor" },
+    { "path": "scripts/build-auto-roto-sam21-portable-pack.mjs", "role": "research-executor" },
+    { "path": "scripts/build-tauri-product-binary.mjs", "role": "product-build-policy" },
+    { "path": "scripts/lib/build-input-identity.mjs", "role": "product-build-policy" },
+    { "path": "scripts/product-release-manifest-policy-gate.mjs", "role": "product-denial-gate" },
+    { "path": "scripts/roto-keyer-autopilot-integration.ts", "role": "product-negative-control" },
+    { "path": "scripts/self-authored-auto-roto-product-boundary-gate.ts", "role": "product-denial-gate" },
+    { "path": "scripts/tauri-product-feature-policy-self-test.mjs", "role": "product-negative-control" }
+  ],
+  "retiredCargoFeatures": [
+    {
+      "manifestPath": "src-tauri/Cargo.toml",
+      "feature": "auto-roto-research",
+      "expectedDependencies": [],
+      "sentinelPath": "src-tauri/src/main.rs",
+      "sentinelMessage": "Editkin product route retired: feature auto-roto-research is research history only and cannot be compiled."
+    },
+    {
+      "manifestPath": "native/hao-core/Cargo.toml",
+      "feature": "auto-roto-research-onnx",
+      "expectedDependencies": ["dep:ort"],
+      "sentinelPath": "native/hao-core/src/lib.rs",
+      "sentinelMessage": "Editkin product route retired: feature auto-roto-research-onnx is research history only and cannot be compiled."
+    }
+  ],
+  "pipelineBindings": [
+    {
+      "path": "scripts/tauri-frontend.mjs",
+      "requiredMarkers": ["await runNode(\"scripts/retired-product-surfaces-gate.mjs\")"]
+    },
+    {
+      "path": "scripts/lib/build-input-identity.mjs",
+      "requiredMarkers": ["config/retired-product-surfaces.json", "scripts/retired-product-surfaces-gate.mjs"]
+    }
+  ],
+  "provenanceFiles": [
+    {
+      "path": "config/auto-roto-sam21-candidate.json",
+      "requiredMarkers": ["facebookresearch/sam2", "microsoft/onnxruntime"]
+    },
+    {
+      "path": "config/auto-roto-hardcase-benchmark.json",
+      "requiredMarkers": ["SAM 2.1"]
+    },
+    {
+      "path": "native/hao-core/src/engine/auto_roto_onnx.rs",
+      "requiredMarkers": ["editkin.auto-roto-onnx-pack/v1", "ONNX Runtime"]
+    },
+    {
+      "path": "scripts/auto-roto-portable-runtime-inventory.py",
+      "requiredMarkers": ["editkin.auto-roto-runtime-source/v1", "torchvision"]
+    },
+    {
+      "path": "src/application/autoRotoModelRouter.ts",
+      "requiredMarkers": ["editkin-native-onnx-assisted-roto/v1", "editkin-sam21-video-memory-roto/v1"]
+    },
+    {
+      "path": "src/application/autoRotoVideoModel.ts",
+      "requiredMarkers": ["editkin.auto-roto-video-pack/v2"]
+    },
+    {
+      "path": "src/application/autoRotoVideoPack.ts",
+      "requiredMarkers": ["editkin.auto-roto-video-pack/v2"]
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "requiredMarkers": ["ONNX Runtime Auto Roto adapter", "integration fixture"]
+    },
+    {
+      "path": "vendor/auto-roto-models/onnx-logit-calibrator-fixture/SOURCE.json",
+      "requiredMarkers": ["Microsoft ONNX Runtime", "not a semantic segmentation model"]
+    },
+    {
+      "path": "vendor/onnxruntime/win32-x64/SOURCE.json",
+      "requiredMarkers": ["Microsoft ONNX Runtime", "github.com/microsoft/onnxruntime"]
+    }
+  ]
+}

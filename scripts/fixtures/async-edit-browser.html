@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Editkin async edit React regression</title>
+  <style>
+    :root{font:16px/1.5 system-ui,sans-serif;color:#14213b;background:#f6f8fb;color-scheme:light}body{max-width:1100px;margin:auto;padding:24px}h1{font-size:26px}#summary,.boundary,#active-host{background:white;border:1px solid #c5cfde;border-radius:8px;padding:16px;margin:16px 0}#summary{font-weight:700}li{padding:6px 0}.pass,[data-status=PASS]{color:#00623c}.fail,[data-status=FAIL]{color:#ac1432}pre,output{display:block;white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.5 ui-monospace,monospace}pre{background:white;border:1px solid #c5cfde;padding:16px}
+  </style>
+</head>
+<body>
+  <h1>非同步剪輯：React 19 StrictMode 整合回歸</h1>
+  <p class="boundary">直接掛載 production 自動字幕、智慧成片、素材庫、批次 hook，以及 Auto Roto action／專案 task token。桌面 API、確認視窗、影像分析結果都是記憶體替身；使用真實 domain reducer 檢查完整 history。這不是根 App 介面、原生 IPC、實體磁碟、已交付 EXE 或剪輯畫質驗收。</p>
+  <p>載入自動執行完整案例。deferred promises 精準控制交錯，不依賴固定 sleep；不讀写使用者資料、不播放媒體。</p>
+  <div id="summary" data-testid="async-edit-summary" data-status="RUNNING" role="status">RUNNING</div>
+  <ol id="checks"></ol><section id="active-host" aria-label="目前掛載的 hooks"></section>
+  <h2>可見結果 JSON</h2><pre id="result" data-testid="async-edit-result">{"status":"RUNNING"}</pre>
+  <script type="module" src="./async-edit-browser.tsx"></script>
+</body>
+</html>

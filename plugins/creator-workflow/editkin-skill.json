@@ -1,0 +1,70 @@
+{
+  "schema": "hao.editkin.skill-pack/v1",
+  "identity": {
+    "pluginId": "studio.hao.creator-workflow",
+    "capabilityId": "balanced-creator-workflow",
+    "version": "1.0.0"
+  },
+  "title": "Balanced Creator Workflow",
+  "description": "A restrained creator workflow for tutorials, product demonstrations, talking-head footage and evidence-led stories.",
+  "planSchema": "hao.video-autopilot.edit-plan/v4",
+  "conflictGroup": "primary-editorial-workflow",
+  "defaultPriority": 10,
+  "preferences": {
+    "pacing": "balanced",
+    "captionDensity": "balanced",
+    "captionColorPolicy": "single_primary_text_color",
+    "graphicDensity": "balanced",
+    "transitionPolicy": "motivated_only",
+    "colorPolicy": "single_primary_look",
+    "audioPolicy": "dialogue_first"
+  },
+  "capabilityQueries": [
+    {
+      "id": "clarity-look",
+      "kind": "effect",
+      "semanticRoles": ["clarity", "tutorial", "talking-head"],
+      "formats": ["longform", "shorts", "reels"],
+      "maxCandidates": 2,
+      "required": false
+    },
+    {
+      "id": "motivated-emphasis",
+      "kind": "workflow_tool",
+      "semanticRoles": ["hook", "payoff", "reveal"],
+      "formats": ["longform", "shorts", "reels"],
+      "maxCandidates": 3,
+      "required": false
+    },
+    {
+      "id": "picture-in-picture",
+      "kind": "workflow_tool",
+      "semanticRoles": ["picture-in-picture", "screen-demo"],
+      "formats": ["longform", "shorts", "reels"],
+      "maxCandidates": 2,
+      "required": false
+    },
+    {
+      "id": "semantic-broll",
+      "kind": "generator",
+      "semanticRoles": ["semantic-broll", "evidence"],
+      "formats": ["longform", "shorts", "reels"],
+      "maxCandidates": 3,
+      "required": false
+    }
+  ],
+  "guardrails": {
+    "maxCapabilityDeepReads": 3,
+    "maxContextTokens": 600,
+    "maxAutomaticActions": 16,
+    "structuredCommandsOnly": true,
+    "auditBeforeApply": true,
+    "humanReviewRequired": true,
+    "publishAllowed": false
+  },
+  "outcomeLearning": {
+    "checkpoints": ["D2", "D7", "D28"],
+    "learnFromHumanReview": true,
+    "automaticCoreMutation": false
+  }
+}

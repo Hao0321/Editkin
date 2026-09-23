@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Editkin save/recovery React integration fixture</title>
+    <style>
+      :root { color-scheme: light; font: 16px/1.5 system-ui, sans-serif; color: #17233a; background: #f5f7fb; }
+      body { max-width: 1080px; margin: 0 auto; padding: 24px; }
+      h1 { font-size: 26px; margin-bottom: 8px; }
+      .boundary, #active-host, #summary { padding: 16px; background: white; border: 1px solid #ccd5e3; border-radius: 8px; margin: 16px 0; }
+      #summary { font-weight: 700; }
+      #summary[data-status="PASS"] { color: #006539; border-color: #168652; }
+      #summary[data-status="FAIL"] { color: #a9182f; border-color: #bc2140; }
+      li { padding: 6px 0; }
+      pre, output { display: block; white-space: pre-wrap; overflow-wrap: anywhere; font: 14px/1.5 ui-monospace, monospace; }
+      pre { padding: 16px; background: #fff; border: 1px solid #ccd5e3; }
+      .pass { color: #006539; } .fail { color: #a9182f; }
+    </style>
+  </head>
+  <body>
+    <h1>Editkin 存檔／復原：React 19 StrictMode 回歸頁</h1>
+    <p class="boundary">直接掛載 production <code>useProjectRecovery</code> 與 <code>createProjectSession</code>。桌面 API、確認視窗與復原磁碟均為此頁的記憶體 fixture；不接觸使用者檔案。這不是原生視窗、實體磁碟或已交付 EXE 的驗收。</p>
+    <p>載入後自動依序執行。使用真實 React effects、StrictMode 重播與 500ms autosave debounce；其餘交錯由 deferred promises 控制，不使用固定等待時間推測結果。</p>
+    <div id="summary" data-testid="save-recovery-summary" data-status="RUNNING" role="status">RUNNING — 正在執行</div>
+    <ol id="checks"></ol>
+    <section id="active-host" aria-label="目前掛載的 production hook"></section>
+    <h2>可見結果 JSON</h2>
+    <pre id="result" data-testid="save-recovery-result">{"status":"RUNNING"}</pre>
+    <script type="module" src="./save-recovery-browser.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 2,
+  "contractVersion": "editkin.agent-setup/v2",
+  "serverId": "editkin",
+  "launcher": {
+    "schemaVersion": 3,
+    "entrypointMode": "stable_generation_launcher",
+    "resourceRelativePath": "agent-runtime-v3/launcher.mjs",
+    "embeddedContractRelativePath": "agent-runtime-v3/agent-setup-contract.json",
+    "stateEnvKey": "EDITKIN_AGENT_STATE_ROOT",
+    "stateDirectoryName": "agent-runtime-v3",
+    "args": []
+  },
+  "starterPrompt": "請用目前最新的 video-autopilot 規則與 Editkin 剪我的素材。剪輯執行全程只使用 Editkin MCP、EditGraph 與 Editkin 自己的介面，不得把計畫或素材交給任何外部剪輯器。先呼叫 get_autopilot_contract，依題材只用 list_community_editing_knowledge／read_community_editing_knowledge 分頁讀最相關的匿名節奏、美感、演算法與負面案例，不要整包塞進 context。接著呼叫 start_ai_editing_session；先讓 Editkin 在本機執行 prepare_ai_material，再用 get_material_context(afterCueIndex,maxTokens) 分頁取得有界的來源 hash、逐字稿與關鍵幀索引。每個相關視覺素材都必須呼叫 view_material_keyframes 查看實際畫面，每次最多四張，並依 prepare 回傳的實際 image bytes 拆批；不能只看索引或在不確定時才看圖。判讀後必須用 record_material_semantics 寫成 evidence-bound receipt。預先確認只作街景、過場或純配樂畫面的影片，才可明確使用 includeTranscript=false；這不表示原片無人聲。對白與訪談保留逐字稿，辨識失敗必須回報，不得偽造空逐字稿。原始影片、整份逐字稿與整批關鍵幀不得送進 Agent context，也不要把舊成片當 ground truth。全部素材語意成立後，先呼叫 get_editkin_workflow_profile 讀取 Editkin 主程式持有的唯讀授權摘要，再用 list_installed_editkin_skills 取得最多八個純資料 Skill 候選；只有該 Profile 內有精確 manifest／pack grant 時才呼叫 resolve_editkin_skill_workflow，Agent 不得提交或偽造 Profile，深讀最多三包，並把 selection receipt 放進 v4 extensions.skillSelection。只能從 resolve 回傳的 capabilityResolution 取用每個 query 最多 maxCandidates 個候選；required query 沒有候選時必須停止。若需查找未由 Skill 指定的補充能力，才用 list_installed_plugins(automationReadyOnly=true,format,semanticRoles,limit<=8)，總共只深讀最多三個 capability；get_plugin_capability 只會回傳機器欄位，不把作者自由文字放進 context。符合素材證據且有主程式授權後，只准呼叫 compile_plugin_application 做唯讀編譯，把精確 commands 與 pluginApplications command indexes 放進同一份 v4 plan，audit 前不得用任何外掛入口改專案。Skill Pack 與外掛不得取代真實證據、剪輯動機、QA、人工審片或改寫 Video Autopilot 主幹。計畫封存前，必須呼叫 get_autopilot_design_brief，用目前路由、成片 duration、每個敘事段落 id／energy／primaryFocus（作為 subject）與設計 role 編譯你目前 Skill 的設計 DNA、學習記憶及影視颶風 craft；分頁讀完 context 與各 beat:<id>，直到 hasMore=false。把 request、projectSha256、sourceSha256、briefSha256 與每段 recipeSha256、application、實際視覺／聲音 commandIndexes 放進 designEvidence，並逐一填好全部十類 editorial.motionTreatment 的 use／omit 理由。缺少、偽造或過期配方會在 audit/apply 被阻擋；只寫 set_aesthetic_system 不算美感執行。計畫必須使用 get_autopilot_contract 回傳的 requiredPlanSource 並套用 editkin-community-aesthetic-standard，機器不得代簽 PASSED。若一支長片包含多個可獨立發布的題目，先建立含完整 promise/setup/payoff 的 closed-world deliverable map，明確寫出預期 N，再用 audit_editorial_batch_plan → create_editorial_batch_projects 建立 N 個獨立可編輯草稿，禁止合成一支合輯。批次草稿和 render_editorial_batch 預覽不代表已完成本次 Skill 美感整合；每支草稿都須讀取實際素材、建立當前 designEvidence 與 v4 plan，逐支走 audit_autopilot_plan(projectPath)。單支成片同樣走 audit_autopilot_plan(projectPath) 取得 accepted audit receipt，再把同一份 receipt 交給 apply_autopilot_plan 一次原子套用。完成後保留可編輯 Timeline，標記 REVIEW_REQUIRED，先不要公開發布。多支影片完成逐支 v4 計畫後，建立 editkin.autopilot-batch/v1 清單（batchId、expectedDeliverableCount、items[{id,projectPath,planPath,outputPath}]），使用 run_autopilot_batch 執行同一套 current audit/apply/render 與全片解碼。每支有獨立專案及輸出，失敗可按相同清單續跑；get_autopilot_batch_status 會重验 SHA。不得把草稿批次或本機粗剪標成完整 Skill 成片，不可跳過逐支看圖、逐字稿、語意、designEvidence 與人工審片。",
+  "envKeys": [
+    "ELECTRON_RUN_AS_NODE",
+    "EDITKIN_AGENT_STATE_ROOT",
+    "EDITKIN_WORKSPACE",
+    "EDITKIN_VIDEO_AUTOPILOT_SKILL",
+    "HAO_FFMPEG_PATH",
+    "HAO_FFPROBE_PATH",
+    "EDITKIN_WHISPER_CLI_PATH",
+    "HAO_NATIVE_CORE_PATH",
+    "EDITKIN_CREATIVE_PACK_ROOT",
+    "EDITKIN_PERSONAL_MUSIC_ROOT",
+    "EDITKIN_PERSONAL_VISUAL_ROOT",
+    "EDITKIN_PLUGIN_ROOTS",
+    "EDITKIN_WORKFLOW_PROFILE_PATH",
+    "EDITKIN_MODEL_ROOT",
+    "EDITKIN_CACHE_ROOT"
+  ]
+}

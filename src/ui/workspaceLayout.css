@@ -1,0 +1,32 @@
+.workspace-controls{position:relative}.workspace-controls>summary{display:flex;align-items:center;gap:7px;min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);font-size:12px;list-style:none;cursor:pointer}.workspace-controls>summary::-webkit-details-marker{display:none}.workspace-controls>summary span{color:var(--accent);font-size:16px}.workspace-controls[open]>summary{border-color:var(--accent);color:var(--accent)}.workspace-controls-popover{position:absolute;z-index:90;top:49px;right:0;width:360px;padding:15px;border:1px solid var(--line-strong);border-radius:17px;background:var(--surface);box-shadow:var(--shadow)}.workspace-controls-heading{display:flex;align-items:start;justify-content:space-between;gap:12px}.workspace-controls-heading strong,.workspace-controls-heading small{display:block}.workspace-controls-heading strong{font-size:16px}.workspace-controls-heading small{margin-top:3px;color:var(--muted);font-size:11px}.workspace-controls-heading button{min-height:34px;padding:0 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);font-size:11px;cursor:pointer}.workspace-preset-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:14px}.workspace-preset-grid button{min-height:58px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);text-align:left;cursor:pointer}.workspace-preset-grid button.active{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 12%,transparent)}.workspace-preset-grid b,.workspace-preset-grid small{display:block}.workspace-preset-grid b{font-size:13px}.workspace-preset-grid small{margin-top:3px;color:var(--muted);font-size:10px}.workspace-controls fieldset{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:14px 0 0;padding:12px;border:1px solid var(--line);border-radius:12px}.workspace-controls legend{padding:0 5px;color:var(--muted);font-size:11px}.workspace-controls fieldset label{display:flex;align-items:center;gap:7px;font-size:12px}.workspace-controls fieldset input{width:17px;height:17px;accent-color:var(--accent)}.workspace-text-size{display:grid;grid-template-columns:1fr 150px;align-items:center;gap:10px;margin-top:12px;font-size:12px;font-weight:750}.workspace-text-size select{height:38px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);color:var(--ink);padding:0 9px}.workspace-controls-popover>p{margin:12px 0 0;color:var(--muted);font-size:10px;line-height:1.5}.workspace-resizer{position:relative;z-index:12;display:grid;place-items:center;background:var(--surface-2);touch-action:none}.workspace-resizer.horizontal{width:8px;cursor:col-resize}.workspace-resizer.vertical{position:absolute;z-index:15;top:-6px;right:0;left:0;height:12px;cursor:row-resize;background:transparent}.workspace-resizer span{display:block;border-radius:999px;background:var(--line-strong);transition:background .12s ease,transform .12s ease}.workspace-resizer.horizontal span{width:2px;height:44px}.workspace-resizer.vertical span{width:64px;height:4px}.workspace-resizer:hover span,.workspace-resizer:focus-visible span{background:var(--accent);transform:scale(1.15)}.timeline-region{position:relative;min-height:0}.timeline-region>.timeline-shell{height:100%}.app-shell[data-text-size="large"] .media-bin :where(button,label,select,input,small),.app-shell[data-text-size="large"] .inspector :where(button,label,select,input,small),.app-shell[data-text-size="large"] .center-workspace :where(button,label,select,input,small),.app-shell[data-text-size="large"] .timeline-shell :where(button,label,select,input,small){font-size:max(11px,1em)}.app-shell[data-text-size="large"] :where(.eyebrow,.asset-copy span,.library-summary span,.privacy-note,.agent-copy span,.agent-copy p,.metric-grid span,.preview-toolbar,.transport-readout){font-size:11px}.app-shell[data-text-size="large"] :where(.asset-copy strong,.selected-card strong,.field-label,.inspector-section>summary,.timeline-clip strong){font-size:12px}@media(max-width:900px){.workspace-controls-popover{position:fixed;top:72px;right:10px;left:10px;width:auto}.workspace-resizer.horizontal{display:none}}
+/* Inside the scrollable project menu this is an inline disclosure, not a
+   second floating menu. Scope also overrides the standalone mobile popover. */
+.project-menu .workspace-controls > .workspace-controls-popover {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  box-shadow: none;
+  overflow-wrap: anywhere;
+}
+.project-menu .workspace-controls-heading { flex-wrap: wrap; }
+.project-menu .workspace-controls-heading > div { min-width: 0; }
+.project-menu .workspace-controls-heading button { flex-shrink: 0; }
+.project-menu .workspace-preset-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.project-menu .workspace-preset-grid button { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.project-menu .workspace-controls fieldset {
+  min-inline-size: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+}
+.project-menu .workspace-controls fieldset label { min-width: 0; }
+.project-menu .workspace-controls fieldset input { flex: 0 0 17px; }
+.project-menu .workspace-text-size { grid-template-columns: minmax(0, 1fr) minmax(0, 140px); }
+.project-menu .workspace-text-size select { min-width: 0; max-width: 100%; }

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-window-events",
+  "description": "Allow the main editor window to subscribe to native drag-and-drop events.",
+  "windows": ["main"],
+  "permissions": ["core:event:default"]
+}

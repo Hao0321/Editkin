@@ -1,0 +1,29 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": ["nsis"],
+    "resources": {
+      "../vendor/node/win32-x64/node.exe": "runtime/node.exe",
+      "../vendor/node/win32-x64/NODE-LICENSE.txt": "runtime/NODE-LICENSE.txt",
+      "../vendor/node/win32-x64/manifest.json": "runtime/NODE-MANIFEST.json",
+      "../vendor/ffmpeg/win32-x64/ffmpeg.exe": "runtime/ffmpeg.exe",
+      "../vendor/ffmpeg/win32-x64/ffprobe.exe": "runtime/ffprobe.exe",
+      "../vendor/ffmpeg/win32-x64/FFMPEG-LICENSE.txt": "runtime/FFMPEG-LICENSE.txt",
+      "../vendor/whisper/win32-x64/whisper-cli.exe": "runtime/whisper-cli.exe",
+      "../vendor/whisper/win32-x64/whisper.dll": "runtime/whisper.dll",
+      "../vendor/whisper/win32-x64/ggml.dll": "runtime/ggml.dll",
+      "../vendor/whisper/win32-x64/ggml-base.dll": "runtime/ggml-base.dll",
+      "../vendor/whisper/win32-x64/ggml-cpu.dll": "runtime/ggml-cpu.dll",
+      "../vendor/whisper/win32-x64/WHISPER-LICENSE.txt": "runtime/WHISPER-LICENSE.txt",
+      "../vendor/whisper/win32-x64/manifest.json": "runtime/WHISPER-MANIFEST.json",
+      "../native/bin/win32-x64/hao-core.exe": "runtime/hao-core.exe",
+      "../native/bin/win32-x64/editkin-gpu-compositor.exe": "runtime/editkin-gpu-compositor.exe"
+    },
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "compression": "zlib"
+      }
+    }
+  }
+}

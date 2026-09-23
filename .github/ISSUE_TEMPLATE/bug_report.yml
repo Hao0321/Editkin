@@ -1,0 +1,36 @@
+name: Bug report
+description: Report one reproducible Editkin problem with redistributable evidence.
+title: "bug: "
+labels: [bug, needs triage]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not include credentials or private footage. Report security vulnerabilities through SECURITY.md."
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redistributable fixture or logs

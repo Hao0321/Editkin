@@ -1,0 +1,18 @@
+.preview-caption {
+  display: grid;
+  gap: 3px;
+  justify-items: stretch;
+  width: auto;
+  padding: .12em .35em .18em;
+  border-radius: .22em;
+  line-height: 1.18;
+  white-space: pre-line;
+}
+
+.preview-caption > span {
+  display: block;
+}
+
+.preview-caption-translation {
+  line-height: 1.15;
+}

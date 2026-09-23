@@ -1,0 +1,42 @@
+{
+  "schema": "editkin.remote-provider-connector-registry/v1",
+  "registryRevision": "2026-09-05.1",
+  "connectors": [
+    {
+      "connectorId": "tailscale-funnel",
+      "connectorRevision": "research-2026-09-05",
+      "providerId": "tailscale",
+      "providerDisplayName": "Tailscale",
+      "productName": "Funnel",
+      "transport": "https-tunnel",
+      "availability": "research-only-disabled",
+      "approvalEnabled": false,
+      "attested": false,
+      "executionOwner": "native-typed-connector",
+      "authMode": "provider-owned-browser",
+      "stableHttpsName": true,
+      "supportedPublicPorts": [443, 8443, 10000],
+      "allowedPlanOperations": ["inspect-status", "request-provider-owned-login", "create-or-resume-single-funnel", "cancel-single-funnel", "reconcile-single-funnel"],
+      "limitations": ["Beta service", "Public ports are limited to 443, 8443, and 10000", "Bandwidth limits are provider-controlled and not configurable by Editkin", "No Editkin account or real-phone E2E evidence"],
+      "sourceUrls": ["https://tailscale.com/kb/1223/funnel", "https://tailscale.com/kb/1242/tailscale-serve"]
+    },
+    {
+      "connectorId": "cloudflare-quick-tunnel",
+      "connectorRevision": "research-2026-09-05",
+      "providerId": "cloudflare",
+      "providerDisplayName": "Cloudflare",
+      "productName": "Quick Tunnel",
+      "transport": "https-tunnel",
+      "availability": "unsupported-temporary",
+      "approvalEnabled": false,
+      "attested": false,
+      "executionOwner": "native-typed-connector",
+      "authMode": "none",
+      "stableHttpsName": false,
+      "supportedPublicPorts": [],
+      "allowedPlanOperations": ["inspect-status"],
+      "limitations": ["Development and testing only", "No service-level agreement", "Maximum 200 in-flight requests", "Server-sent events are unsupported", "Not a persistent default Remote connector"],
+      "sourceUrls": ["https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/"]
+    }
+  ]
+}

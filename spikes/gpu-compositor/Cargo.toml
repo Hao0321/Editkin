@@ -1,0 +1,47 @@
+[package]
+name = "editkin-gpu-compositor"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+bytemuck = { version = "1.23", features = ["derive"] }
+fontdue = "0.9"
+flate2 = "1.1"
+image = { version = "0.25", default-features = false, features = ["png", "exr"] }
+hao-core = { path = "../../native/hao-core" }
+pollster = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+wgpu = "30.0.0"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Direct3D",
+  "Win32_Graphics_Direct3D10",
+  "Win32_Graphics_Direct3D11",
+  "Win32_Graphics_Direct3D12",
+  "Win32_Graphics_Dxgi",
+  "Win32_Graphics_Dxgi_Common",
+  "Win32_Graphics_Gdi",
+  "Win32_Media_MediaFoundation",
+  "Win32_Security",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Threading",
+  "Win32_System_Variant",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+cc = "1.2"
+
+[profile.release]
+lto = "thin"
+strip = true
+panic = "abort"

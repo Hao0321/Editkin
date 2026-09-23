@@ -1,0 +1,33 @@
+{
+  "schema": "editkin.community-knowledge/v1",
+  "privacy": "public authored defaults",
+  "sourceFileCount": 1,
+  "includedModuleCount": 1,
+  "excludedSourceCount": 0,
+  "stableRuleCount": 1,
+  "stableRulesSha256": "a192ce6314a3c8fbcd5bcce5861fc02c8ab016975efa6fb6fb5483a1baeab07f",
+  "modules": [
+    {
+      "id": "editing-basics",
+      "source": "community-defaults.md",
+      "sourceSha256": "948ff933b04b8778952459ba4b67fb12e47c310ce7ad84921687d58ed8bd3acf",
+      "contentSha256": "948ff933b04b8778952459ba4b67fb12e47c310ce7ad84921687d58ed8bd3acf",
+      "format": "markdown",
+      "tags": [
+        "color",
+        "editorial"
+      ],
+      "derivation": {
+        "policy": "personal-data-sanitized; retired-editor-history-omitted-never-renamed",
+        "retiredEditorHistoryFragmentsOmitted": 0
+      },
+      "content": "Prefer clear cuts, readable captions, lawful media, and human review of the finished video."
+    }
+  ],
+  "stableRules": [
+    {
+      "id": "M1",
+      "text": "Prefer clear cuts, readable captions, lawful media, and human review of the finished video."
+    }
+  ]
+}

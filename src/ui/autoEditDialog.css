@@ -1,0 +1,22 @@
+.auto-edit-dialog{width:min(520px,calc(100vw - 32px));max-height:calc(100dvh - 32px);box-sizing:border-box;overflow:auto;border:1px solid var(--line);border-radius:18px;padding:24px;background:var(--surface);color:var(--ink);font:inherit;box-shadow:0 24px 80px #0004}
+.auto-edit-dialog::backdrop{background:#0007}
+.auto-edit-dialog form{display:grid;gap:20px;min-width:0}
+.auto-edit-dialog header{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.auto-edit-dialog h2{margin:0;font-size:22px;line-height:1.35}
+.auto-edit-dialog p{margin:0;font-size:15px;line-height:1.65;color:var(--soft);overflow-wrap:anywhere}
+.auto-edit-dialog button{min-height:44px;border:1px solid var(--line);border-radius:10px;padding:8px 18px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer}
+.auto-edit-dialog header button{flex-shrink:0;width:44px;padding:0;font-size:24px}
+.auto-edit-formats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;border:0;padding:0;margin:0;min-width:0}
+.auto-edit-formats legend{margin-bottom:12px;font-size:15px;font-weight:700}
+.auto-edit-formats label{display:flex;align-items:flex-start;gap:8px;border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;min-width:0}
+.auto-edit-formats label:has(:checked){border-color:var(--accent);background:var(--accent-soft)}
+.auto-edit-dialog input{flex-shrink:0;width:18px;height:18px;margin:2px 0;accent-color:var(--accent)}
+.auto-edit-dialog strong{display:block;font-size:16px;line-height:1.4}
+.auto-edit-dialog small{display:block;margin-top:6px;font-size:13px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere}
+.auto-edit-preserve{display:flex;align-items:flex-start;gap:10px;font-size:15px;line-height:1.5;cursor:pointer}
+.auto-edit-dialog .auto-edit-note{font-size:13px;color:var(--muted)}
+.auto-edit-dialog footer{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.auto-edit-dialog button[type=submit]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.auto-edit-dialog button:disabled{opacity:.45;cursor:not-allowed}
+.auto-edit-dialog :focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+@media(max-width:440px){.auto-edit-dialog{padding:18px}.auto-edit-formats{grid-template-columns:1fr}}

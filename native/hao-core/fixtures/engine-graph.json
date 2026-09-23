@@ -1,0 +1,40 @@
+{
+  "schema": "editkin.engine-graph/v1",
+  "graphId": "engine-gate-fixture",
+  "width": 1920,
+  "height": 1080,
+  "timebase": { "numerator": 1001, "denominator": 30000 },
+  "workingFormat": "rgba16_float",
+  "cacheBudgetMb": 512,
+  "nodes": [
+    { "id": "source", "inputs": [], "enabled": true, "kind": "source", "assetId": "fixture-video", "mediaKind": "video", "inputColorSpace": "rec709", "timeline": { "timelineStartFrame": 0, "sourceStartFrame": 24, "durationFrames": 300 } },
+    { "id": "transform3d", "inputs": ["source"], "enabled": true, "kind": "transform3d", "position": [0, 0, 2], "rotationRadians": [0, 0, 0], "scale": [1, 1, 1] },
+    { "id": "camera", "inputs": [], "enabled": true, "kind": "camera", "position": [0, 0, 0], "target": [0, 0, 1], "up": [0, 1, 0], "verticalFovRadians": 1.0471976, "near": 0.1, "far": 1000 },
+    { "id": "light", "inputs": [], "enabled": true, "kind": "light", "lightKind": "directional", "color": [1, 1, 1], "intensity": 1, "position": [0, 2, 0], "direction": [0, -1, 1] },
+    { "id": "color", "inputs": ["transform3d"], "enabled": true, "kind": "color", "processor": "studio-config-v4.0.0_aces-v2.0_ocio-v2.5", "inputSpace": "rec709", "workingSpace": "ACEScct", "outputSpace": "rec709_sdr" },
+    { "id": "effect", "inputs": ["color"], "enabled": true, "kind": "effect", "pluginId": "editkin.builtin.glow", "abiVersion": 1, "temporalRadius": 0, "parameters": { "radius": 12, "gain": 0.6 } },
+    { "id": "particles", "inputs": [], "enabled": true, "kind": "particle_emitter", "timeline": { "timelineStartFrame": 0, "sourceStartFrame": 0, "durationFrames": 240 }, "seed": 42, "ratePerSecond": 60, "lifetimeSeconds": 2, "initialVelocity": [0, 1, 0], "gravity": [0, -9.8, 0], "maxParticles": 10000 },
+    { "id": "composite", "inputs": ["effect", "particles"], "enabled": true, "kind": "composite", "blendMode": "screen", "opacity": 1, "matteInput": "source", "matteMode": "luma" },
+    { "id": "adjustment", "inputs": ["composite"], "enabled": true, "kind": "adjustment", "affectedInputs": ["composite"] },
+    { "id": "precomp", "inputs": [], "enabled": true, "kind": "precomposition", "nestedGraphId": "composition:nested", "timeline": { "timelineStartFrame": 30, "sourceStartFrame": 0, "durationFrames": 120 } },
+    { "id": "composite-precomp", "inputs": ["adjustment", "precomp"], "enabled": true, "kind": "composite", "blendMode": "normal", "opacity": 1 },
+    { "id": "caption", "inputs": [], "enabled": true, "kind": "caption", "cueId": "cue-1", "text": "同一張圖", "timeline": { "timelineStartFrame": 30, "sourceStartFrame": 0, "durationFrames": 60 }, "fontFamily": "Noto Sans TC", "fontSize": 48, "textColor": "#FFFFFFFF", "outlineColor": "#000000FF", "outlineWidth": 3, "backgroundColor": "#00000000", "alignment": 2, "marginVertical": 36, "bold": true, "italic": false, "translation": "One graph" },
+    { "id": "composite-caption", "inputs": ["composite-precomp", "caption"], "enabled": true, "kind": "composite", "blendMode": "normal", "opacity": 1 },
+    { "id": "motion", "inputs": [], "enabled": true, "kind": "motion_graphic", "graphicId": "title-1", "graphicKind": "title", "text": "Editkin", "timeline": { "timelineStartFrame": 60, "sourceStartFrame": 0, "durationFrames": 90 }, "x": 0.5, "y": 0.2, "width": 0.7, "fontSize": 72, "fontFamily": "Noto Sans TC", "fontWeight": 700, "letterSpacing": 0, "outlineWidth": 2, "shadowDepth": 2, "cornerRadius": 18, "textColor": "#FFFFFFFF", "backgroundColor": "#000000AA", "accentColor": "#A8FF3EFF", "animation": "spring_soft", "trackingMode": "anchor", "offsetX": 0, "offsetY": 0 },
+    { "id": "composite-motion", "inputs": ["composite-caption", "motion"], "enabled": true, "kind": "composite", "blendMode": "normal", "opacity": 1 },
+    { "id": "dof", "inputs": ["composite-motion", "camera"], "enabled": true, "kind": "depth_of_field", "focusDistance": 2, "aperture": 2.8, "maxBlurRadius": 24 },
+    { "id": "motion-blur", "inputs": ["dof"], "enabled": true, "kind": "motion_blur", "shutterAngle": 180, "samples": 8 },
+    { "id": "output", "inputs": ["motion-blur"], "enabled": true, "kind": "output", "format": "rgba16_float" }
+  ],
+  "outputNode": "output",
+  "audio": {
+    "sampleRate": 48000,
+    "channels": 2,
+    "masterNode": "audio-output",
+    "nodes": [
+      { "id": "audio-source", "inputs": [], "operation": { "kind": "source", "asset_id": "fixture-audio" }, "automation": [] },
+      { "id": "audio-gain", "inputs": ["audio-source"], "operation": { "kind": "gain", "gain_db": -3 }, "automation": [{ "property": "gainDb", "points": [{ "sample": 0, "value": -12, "interpolation": "linear" }, { "sample": 48000, "value": -3, "interpolation": "smooth" }] }] },
+      { "id": "audio-output", "inputs": ["audio-gain"], "operation": { "kind": "output" }, "automation": [] }
+    ]
+  }
+}

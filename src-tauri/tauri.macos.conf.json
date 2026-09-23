@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": ["app", "dmg"],
+    "resources": {
+      "../.platform-runtime/node": "runtime/node",
+      "../.platform-runtime/NODE-LICENSE.txt": "runtime/NODE-LICENSE.txt",
+      "../.platform-runtime/manifest.json": "runtime/PLATFORM-MANIFEST.json",
+      "../.platform-runtime/ffmpeg": "runtime/ffmpeg",
+      "../.platform-runtime/ffprobe": "runtime/ffprobe",
+      "../.platform-runtime/FFMPEG-LICENSE.txt": "runtime/FFMPEG-LICENSE.txt",
+      "../.platform-runtime/FFPROBE-LICENSE.txt": "runtime/FFPROBE-LICENSE.txt",
+      "../.platform-runtime/hao-core": "runtime/hao-core",
+      "../.platform-runtime/editkin-gpu-compositor": "runtime/editkin-gpu-compositor",
+      "../.platform-runtime/whisper-cli": "runtime/whisper-cli",
+      "../.platform-runtime/WHISPER-LICENSE.txt": "runtime/WHISPER-LICENSE.txt",
+      "../.platform-runtime/WHISPER-PROVENANCE.json": "runtime/WHISPER-PROVENANCE.json",
+      "../.platform-runtime/WHISPER-CAPABILITY.json": "runtime/WHISPER-CAPABILITY.json"
+    },
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "signingIdentity": "-"
+    }
+  }
+}

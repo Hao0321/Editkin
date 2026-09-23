@@ -1,0 +1,93 @@
+{
+  "schema": "editkin.auto-roto-model-candidate/v1",
+  "candidateId": "meta-sam2.1-hiera-tiny-windows-cuda",
+  "tier": "research_candidate",
+  "productPromotion": "BLOCKED",
+  "upstream": {
+    "repository": "https://github.com/facebookresearch/sam2",
+    "commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+    "checkpointUrl": "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_tiny.pt",
+    "licenseSpdx": "Apache-2.0",
+    "checkpointPath": ".rd/tmp/auto-roto-sam2/sam2/checkpoints/sam2.1_hiera_tiny.pt",
+    "checkpointBytes": 156008466,
+    "checkpointSha256": "7402e0d864fa82708a20fbd15bc84245c2f26dff0eb43a4b5b93452deb34be69",
+    "licensePath": ".rd/tmp/auto-roto-sam2/sam2/LICENSE",
+    "licenseBytes": 11558,
+    "licenseSha256": "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6"
+  },
+  "officialOnnxAssessment": {
+    "repository": "https://github.com/microsoft/onnxruntime/tree/main/onnxruntime/python/tools/transformers/models/sam2",
+    "commit": "b1f76d586aaf545ccb92198934fa49553a806a1c",
+    "imageEncoderDecoderAvailable": true,
+    "videoMemoryPropagationAvailable": false,
+    "decision": "Do not present the official image-only ONNX export as Auto Roto Tracking. A native video-memory export or a separately gated hybrid tracker is still required."
+  },
+  "targetCell": {
+    "os": "Windows-10-10.0.19045-SP0",
+    "gpu": "NVIDIA GeForce RTX 2060",
+    "computeCapability": "7.5",
+    "precision": "float16",
+    "precisionReason": "Turing FP16 is the measured candidate. BF16 remains a quality reference, not the runtime default for this cell."
+  },
+  "thresholds": {
+    "jAndFMin": 70,
+    "jMin": 70,
+    "fMin": 65,
+    "precisionJAndFDeltaMax": 0.05,
+    "fp16SpeedupMin": 2,
+    "fp16SteadyP95MsMax": 160,
+    "fp16PeakReservedBytesMax": 1610612736,
+    "modelLoadSecondsMax": 5,
+    "stateInitializationSecondsMax": 30,
+    "promptMillisecondsMax": 250
+  },
+  "evidence": {
+    "bfloat16Feasibility": {
+      "path": ".rd/benchmarks/editkin-auto-roto-sam21-feasibility/report.json",
+      "bytes": 5662,
+      "sha256": "767333194b4e4735bd8dcace903ddb82b1371933dd61a77fd5dcab236e6be589"
+    },
+    "float16Feasibility": {
+      "path": ".rd/benchmarks/editkin-auto-roto-sam21-feasibility-float16/report.json",
+      "bytes": 5685,
+      "sha256": "af1fc9aa51d70b8455dafd3aba1432b2b2f1cc86f2fdf3f423dbef1ad8751296"
+    },
+    "bfloat16Natural": {
+      "path": ".rd/benchmarks/editkin-auto-roto-sam21-natural-holdout/report.json",
+      "bytes": 4464,
+      "sha256": "09185dc4609388c7ab33d8f6d4cbe37a49c23b8c376c7be074fa14f3a54e1afa"
+    },
+    "float16Natural": {
+      "path": ".rd/benchmarks/editkin-auto-roto-sam21-natural-holdout-float16/report.json",
+      "bytes": 4498,
+      "sha256": "dd60b7247c53398651e47fb7816ad7e11199abd73bdc74cfe6ea1351f0bbd6a0"
+    }
+  },
+  "deploymentArchitecture": {
+    "interactivePreview": "proxy-cache",
+    "formalPropagation": "background-fp16",
+    "measuredRealtime": false,
+    "packagedInEditkin": false,
+    "nativeVideoMemoryRuntime": false,
+    "researchApplicationPath": true,
+    "researchServiceBridge": true,
+    "researchHostPackagedAsResource": true,
+    "researchRuntimeSelfContained": false,
+    "researchEvidence": [
+      ".rd/benchmarks/editkin-auto-roto-sam21-product-path/report.json",
+      ".rd/benchmarks/editkin-auto-roto-sam21-service-bridge/report.json",
+      ".rd/benchmarks/editkin-auto-roto-sam21-internal/report.json"
+    ]
+  },
+  "requiredPromotionBlockers": [
+    "publisher signature and install-time package trust",
+    "native video-memory runtime or independently qualified hybrid propagation",
+    "diverse annotated natural holdouts for hair and fingers",
+    "annotated transparency and motion-blur holdouts",
+    "full-occlusion disappearance and reacquisition holdouts",
+    "correction workflow and correction-seconds measurement",
+    "proxy preview cache plus formal-output matte parity",
+    "fresh extracted installer replay and model lifecycle recovery",
+    "non-NVIDIA fallback and macOS parity"
+  ]
+}

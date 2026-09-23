@@ -1,0 +1,39 @@
+[package]
+name = "hao-core"
+version = "0.4.0"
+edition = "2024"
+license = "MIT"
+
+[features]
+default = []
+# Historical ONNX research surface only. src/lib.rs deliberately compile-errors if enabled.
+auto-roto-research-onnx = ["dep:ort"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+png = "0.18"
+libloading = "0.8"
+sha2 = "0.10"
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "ndarray", "load-dynamic"], optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_IO", "Win32_System_Console"] }
+windows-core = "0.62.2"
+windows = { version = "0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_Media_Audio",
+  "Win32_Security",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Threading",
+  "Win32_System_Variant",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "=0.2.189"
+
+[profile.release]
+lto = "thin"
+strip = true
+panic = "abort"

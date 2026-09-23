@@ -1,0 +1,266 @@
+{
+  "schema": "editkin.plugin/v1",
+  "id": "studio.hao.creator-accelerators",
+  "name": "Creator Accelerators",
+  "version": "1.5.0",
+  "minimumHostVersion": "0.15.0",
+  "publisher": { "name": "Hao0321 Studio" },
+  "license": { "spdx": "LicenseRef-Editkin-Bundled", "commercialUse": true },
+  "permissions": ["project.read", "project.write", "render.effect"],
+  "capabilities": [
+    {
+      "id": "clean-creator-polish",
+      "name": "乾淨創作者質感",
+      "description": "一次套用單一乾淨 Look 與可輸出的細節效果，適合教學、AI 工具展示與長片 B-roll。",
+      "kind": "workflow_tool",
+      "automation": "full",
+      "semanticRoles": ["clarity", "proof", "tutorial", "b-roll"],
+      "formats": ["longform", "shorts", "reels"],
+      "requires": ["visual clip"],
+      "avoidWhen": ["已有強烈創意調色", "主體高光已過曝"],
+      "parameters": [
+        { "id": "effect", "name": "細節效果", "type": "enum", "default": "scanline_focus", "options": [
+          { "value": "scanline_focus", "label": "清晰聚焦" },
+          { "value": "film_grain_soft", "label": "柔和底片" },
+          { "value": "high_key_bloom", "label": "高調柔光" }
+        ] }
+      ],
+      "runtime": {
+        "type": "editgraph_commands",
+        "operations": [
+          { "command": "set_clip_creative", "template": { "patch": { "effectPresetIds": ["$parameter.effect"], "lookPresetId": "clean_neutral" } } }
+        ]
+      }
+    },
+    {
+      "id": "picture-in-picture-right",
+      "name": "右上畫中畫",
+      "description": "將片段縮成可調整位置與大小的右上畫中畫，保留原素材完整裁切。",
+      "kind": "workflow_tool",
+      "automation": "full",
+      "semanticRoles": ["picture-in-picture", "reaction", "screen-demo"],
+      "formats": ["any"],
+      "requires": ["overlay video track", "visual clip"],
+      "avoidWhen": ["右上角已有字幕或重要證據"],
+      "parameters": [
+        { "id": "x", "name": "水平位置", "type": "number", "default": 0.63, "min": 0, "max": 0.8, "step": 0.01 },
+        { "id": "y", "name": "垂直位置", "type": "number", "default": 0.05, "min": 0, "max": 0.8, "step": 0.01 },
+        { "id": "width", "name": "寬度", "type": "number", "default": 0.32, "min": 0.1, "max": 0.8, "step": 0.01 },
+        { "id": "height", "name": "高度", "type": "number", "default": 0.32, "min": 0.1, "max": 0.8, "step": 0.01 }
+      ],
+      "runtime": {
+        "type": "editgraph_commands",
+        "operations": [
+          { "command": "set_clip_layout", "template": { "layout": { "crop": { "x": 0, "y": 0, "width": 1, "height": 1 }, "viewport": { "x": "$parameter.x", "y": "$parameter.y", "width": "$parameter.width", "height": "$parameter.height" } } } },
+          { "command": "set_clip_layer", "template": { "patch": { "enabled": true, "blendMode": "normal", "role": "content" } } }
+        ]
+      }
+    },
+    {
+      "id": "attention-punch",
+      "name": "重點瞬間強化",
+      "description": "以可控對比、飽和與縮放強化單一重點片段，不自動加入轉場。",
+      "kind": "workflow_tool",
+      "automation": "full",
+      "semanticRoles": ["hook", "payoff", "reveal"],
+      "formats": ["longform", "shorts", "reels"],
+      "requires": ["one motivated emphasis beat"],
+      "avoidWhen": ["每個剪點都使用", "字幕或臉部已貼近安全區"],
+      "parameters": [
+        { "id": "contrast", "name": "對比", "type": "number", "default": 1.12, "min": 0.8, "max": 1.5, "step": 0.01 },
+        { "id": "saturation", "name": "飽和度", "type": "number", "default": 1.06, "min": 0, "max": 1.5, "step": 0.01 },
+        { "id": "scale", "name": "縮放", "type": "number", "default": 1.04, "min": 0.8, "max": 1.2, "step": 0.01 }
+      ],
+      "runtime": {
+        "type": "editgraph_commands",
+        "operations": [
+          { "command": "set_clip_color", "template": { "patch": { "contrast": "$parameter.contrast", "saturation": "$parameter.saturation" } } },
+          { "command": "update_clip_transform", "template": { "patch": { "scale": "$parameter.scale" } } }
+        ]
+      }
+    },
+    {
+      "id": "particle-highlight-vfx",
+      "name": "節拍粒子 VFX",
+      "description": "在指定時間區間加入可重現、受上限約束的螢幕空間粒子層；由原生 GPU resident video 路徑以區間內局部時鐘即時預覽，不會替字幕任意增加顏色。",
+      "kind": "workflow_tool",
+      "automation": "full",
+      "semanticRoles": ["beat-emphasis", "celebration", "stylized-overlay"],
+      "formats": ["longform", "shorts", "reels"],
+      "requires": ["one motivated emphasis interval", "Rec.709 resident video project", "no active 2.5D scene"],
+      "avoidWhen": ["subtle dialogue program", "particle already enabled", "ACES or HDR project", "visual evidence would be obscured"],
+      "parameters": [
+        { "id": "start", "name": "開始秒數", "type": "number", "default": 0, "min": 0, "max": 86400, "step": 0.01 },
+        { "id": "duration", "name": "作用秒數", "type": "number", "default": 1.2, "min": 0.04, "max": 60, "step": 0.01 },
+        { "id": "rate", "name": "每秒粒子數", "type": "number", "default": 48, "min": 1, "max": 240, "step": 1 },
+        { "id": "lifetime", "name": "存活秒數", "type": "number", "default": 1.25, "min": 0.1, "max": 10, "step": 0.05 },
+        { "id": "radius", "name": "粒子半徑", "type": "number", "default": 3.25, "min": 0.5, "max": 64, "step": 0.25 },
+        { "id": "velocity_x", "name": "水平初速", "type": "number", "default": 18, "min": -240, "max": 240, "step": 1 },
+        { "id": "velocity_y", "name": "垂直初速", "type": "number", "default": -76, "min": -240, "max": 240, "step": 1 },
+        { "id": "gravity_y", "name": "垂直重力", "type": "number", "default": 82, "min": -240, "max": 240, "step": 1 },
+        { "id": "emitter_x", "name": "發射器水平位置", "type": "number", "default": 0.5, "min": 0, "max": 1, "step": 0.01 },
+        { "id": "emitter_y", "name": "發射器垂直位置", "type": "number", "default": 0.72, "min": 0, "max": 1, "step": 0.01 },
+        { "id": "seed", "name": "固定種子", "type": "number", "default": 32021, "min": 0, "max": 4294967295, "step": 1 }
+      ],
+      "runtime": {
+        "type": "editgraph_commands",
+        "operations": [
+          { "command": "configure_particle_simulation", "template": { "enabled": true } },
+          { "command": "set_particle_simulation_settings", "template": { "settings": {
+            "schema": "editkin.particle-simulation/v1",
+            "enabled": true,
+            "timeline": { "start": "$parameter.start", "duration": "$parameter.duration" },
+            "seed": "$parameter.seed",
+            "ratePerSecond": "$parameter.rate",
+            "lifetimeSeconds": "$parameter.lifetime",
+            "maxParticles": 64,
+            "emitterPosition": ["$parameter.emitter_x", "$parameter.emitter_y"],
+            "initialVelocity": ["$parameter.velocity_x", "$parameter.velocity_y"],
+            "gravity": [0, "$parameter.gravity_y"],
+            "radiusPixels": "$parameter.radius",
+            "color": [1, 0.42, 0.06, 0.92]
+          } } }
+        ]
+      }
+    },
+    {
+      "id": "dual-particle-burst-vfx",
+      "name": "雙層粒子爆發",
+      "description": "以暖橘主爆發加上冰藍尾流建立有層次的節拍強調；兩個發射器各自擁有時間、seed 與運動，直接進入同一個原生 GPU resident 合成路徑。",
+      "kind": "workflow_tool",
+      "automation": "full",
+      "semanticRoles": ["beat-emphasis", "celebration", "layered-vfx", "reveal"],
+      "formats": ["longform", "shorts", "reels"],
+      "requires": ["one motivated emphasis interval", "Rec.709 resident video project", "no active 2.5D scene"],
+      "avoidWhen": ["subtle dialogue program", "ACES or HDR project", "visual evidence would be obscured", "three or more particle emitters already exist"],
+      "parameters": [
+        { "id": "start", "name": "主爆發開始", "type": "number", "default": 0, "min": 0, "max": 86400, "step": 0.01 },
+        { "id": "duration", "name": "主爆發秒數", "type": "number", "default": 1.2, "min": 0.04, "max": 60, "step": 0.01 },
+        { "id": "secondary_start", "name": "尾流開始", "type": "number", "default": 0.2, "min": 0, "max": 86400, "step": 0.01 },
+        { "id": "secondary_duration", "name": "尾流秒數", "type": "number", "default": 0.9, "min": 0.04, "max": 60, "step": 0.01 },
+        { "id": "primary_rate", "name": "主爆發密度", "type": "number", "default": 48, "min": 1, "max": 240, "step": 1 },
+        { "id": "secondary_rate", "name": "尾流密度", "type": "number", "default": 36, "min": 1, "max": 240, "step": 1 },
+        { "id": "seed", "name": "固定種子", "type": "number", "default": 32021, "min": 0, "max": 4294960000, "step": 1 }
+      ],
+      "runtime": {
+        "type": "editgraph_commands",
+        "operations": [
+          { "command": "configure_particle_simulation", "template": { "enabled": true } },
+          { "command": "set_particle_simulation_settings", "template": { "settings": {
+            "schema": "editkin.particle-simulation/v1",
+            "enabled": true,
+            "timeline": { "start": "$parameter.start", "duration": "$parameter.duration" },
+            "seed": "$parameter.seed",
+            "ratePerSecond": "$parameter.primary_rate",
+            "lifetimeSeconds": 1.25,
+            "maxParticles": 64,
+            "emitterPosition": [0.62, 0.72],
+            "initialVelocity": [18, -76],
+            "gravity": [0, 82],
+            "radiusPixels": 3.25,
+            "color": [1, 0.42, 0.06, 0.92],
+            "additionalEmitters": [{
+              "id": "cool-trail",
+              "timeline": { "start": "$parameter.secondary_start", "duration": "$parameter.secondary_duration" },
+              "seed": 90210,
+              "ratePerSecond": "$parameter.secondary_rate",
+              "lifetimeSeconds": 0.9,
+              "maxParticles": 48,
+              "emitterPosition": [0.35, 0.62],
+              "initialVelocity": [-22, -58],
+              "gravity": [0, 70],
+              "radiusPixels": 2.5,
+              "color": [0.1, 0.65, 1, 0.85]
+            }]
+          } } }
+        ]
+      }
+    },
+    {
+      "id": "clean-punch-gpu",
+      "name": "乾淨強化",
+      "description": "在原生 GPU 合成器中做輕微增亮、對比、飽和與邊緣收斂；適合教學、人物口播與產品展示，不製造廉價濾鏡感。",
+      "kind": "effect",
+      "automation": "assisted",
+      "semanticRoles": ["clarity", "tutorial", "talking-head", "product-demo"],
+      "formats": ["longform", "shorts", "reels"],
+        "requires": ["曝光正常的視覺片段", "GPU effect graph 堆疊尚有可用插槽（最多 4 個）"],
+        "avoidWhen": ["高光已剪裁", "來源已有強烈對比或暗角", "堆疊總操作即將超過 16 個"],
+      "parameters": [
+        { "id": "gain", "name": "亮度增益", "description": "整體線性增益；高光接近剪裁時請降低。", "type": "number", "default": 1.02, "min": 0.8, "max": 1.2, "step": 0.01 },
+        { "id": "contrast", "name": "對比", "type": "number", "default": 1.1, "min": 0.85, "max": 1.35, "step": 0.01 },
+        { "id": "saturation", "name": "飽和度", "type": "number", "default": 1.05, "min": 0.7, "max": 1.35, "step": 0.01 },
+        { "id": "vignette", "name": "邊緣收斂", "type": "number", "default": 0.1, "min": 0, "max": 0.35, "step": 0.01 }
+      ],
+      "runtime": {
+        "type": "gpu_effect_graph",
+        "abiVersion": 1,
+        "supportedFormats": ["rgba16_float", "rgba32_float"],
+        "maxTemporalRadius": 0,
+        "operations": [
+          { "op": "gain", "args": ["$parameter.gain"] },
+          { "op": "contrast", "args": ["$parameter.contrast", 0.48] },
+          { "op": "saturation", "args": ["$parameter.saturation"] },
+          { "op": "vignette", "args": ["$parameter.vignette", 0.42, 0.35] }
+        ]
+      }
+    },
+    {
+      "id": "warm-cinematic-gpu",
+      "name": "暖調電影感",
+      "description": "以極輕微暖色偏移、柔和對比、克制飽和與可調暗角建立統一氛圍，適合 B-roll、敘事段落與品牌片。",
+      "kind": "effect",
+      "automation": "assisted",
+      "semanticRoles": ["cinematic", "b-roll", "story", "brand"],
+      "formats": ["longform", "shorts", "reels"],
+        "requires": ["白平衡大致正確的視覺片段", "GPU effect graph 堆疊尚有可用插槽（最多 4 個）"],
+        "avoidWhen": ["膚色已過暖", "產品色彩必須精準還原", "堆疊總操作即將超過 16 個"],
+      "parameters": [
+        { "id": "contrast", "name": "電影對比", "type": "number", "default": 1.07, "min": 0.85, "max": 1.3, "step": 0.01 },
+        { "id": "saturation", "name": "飽和度", "type": "number", "default": 0.94, "min": 0.65, "max": 1.25, "step": 0.01 },
+        { "id": "vignette", "name": "暗角", "type": "number", "default": 0.16, "min": 0, "max": 0.4, "step": 0.01 }
+      ],
+      "runtime": {
+        "type": "gpu_effect_graph",
+        "abiVersion": 1,
+        "supportedFormats": ["rgba16_float", "rgba32_float"],
+        "maxTemporalRadius": 0,
+        "operations": [
+          { "op": "tint", "args": [1.035, 1, 0.965] },
+          { "op": "contrast", "args": ["$parameter.contrast", 0.5] },
+          { "op": "saturation", "args": ["$parameter.saturation"] },
+          { "op": "vignette", "args": ["$parameter.vignette", 0.4, 0.4] }
+        ]
+      }
+    },
+    {
+      "id": "mono-editorial-gpu",
+      "name": "黑白編輯感",
+      "description": "以可調黑白比例、乾淨對比、曝光增益與柔和暗角建立雜誌式畫面；保留控制，不套用假底片顆粒。",
+      "kind": "effect",
+      "automation": "assisted",
+      "semanticRoles": ["monochrome", "editorial", "memory", "dramatic"],
+      "formats": ["longform", "shorts", "reels"],
+        "requires": ["有明確敘事動機的黑白段落", "GPU effect graph 堆疊尚有可用插槽（最多 4 個）"],
+        "avoidWhen": ["色彩本身是證據或教學重點", "整支影片無動機地反覆切換黑白", "堆疊總操作即將超過 16 個"],
+      "parameters": [
+        { "id": "monochrome", "name": "黑白比例", "type": "number", "default": 1, "min": 0, "max": 1, "step": 0.01 },
+        { "id": "contrast", "name": "對比", "type": "number", "default": 1.14, "min": 0.85, "max": 1.5, "step": 0.01 },
+        { "id": "gain", "name": "亮度增益", "type": "number", "default": 1.01, "min": 0.75, "max": 1.25, "step": 0.01 },
+        { "id": "vignette", "name": "暗角", "type": "number", "default": 0.14, "min": 0, "max": 0.45, "step": 0.01 }
+      ],
+      "runtime": {
+        "type": "gpu_effect_graph",
+        "abiVersion": 1,
+        "supportedFormats": ["rgba16_float", "rgba32_float"],
+        "maxTemporalRadius": 0,
+        "operations": [
+          { "op": "grayscale", "args": ["$parameter.monochrome"] },
+          { "op": "contrast", "args": ["$parameter.contrast", 0.48] },
+          { "op": "gain", "args": ["$parameter.gain"] },
+          { "op": "vignette", "args": ["$parameter.vignette", 0.4, 0.42] }
+        ]
+      }
+    }
+  ]
+}

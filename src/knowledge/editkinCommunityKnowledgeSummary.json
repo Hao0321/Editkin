@@ -1,0 +1,10 @@
+{
+  "schema": "editkin.community-knowledge/v1",
+  "privacy": "public authored defaults",
+  "sourceFileCount": 1,
+  "includedModuleCount": 1,
+  "excludedSourceCount": 0,
+  "stableRuleCount": 1,
+  "stableRulesSha256": "a192ce6314a3c8fbcd5bcce5861fc02c8ab016975efa6fb6fb5483a1baeab07f",
+  "packSha256": "75254729bc7bcc162ffe1458956007794df5bce25686f32c0f54fe2f5dac0aee"
+}

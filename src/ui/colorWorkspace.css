@@ -1,0 +1,38 @@
+.color-workspace { position: relative; width: min(1180px,95vw); max-height: 91vh; overflow: hidden; border: 1px solid var(--line-strong); border-radius: 24px; background: var(--surface); color: var(--ink); box-shadow: 0 34px 110px rgba(0,0,0,.42); }
+.color-workspace > header { display: flex; align-items: flex-start; justify-content: space-between; min-height: 92px; padding: 24px 72px 18px 26px; border-bottom: 1px solid var(--line); }
+.color-workspace h2 { margin: 4px 0 2px; font-size: 24px; }
+.color-workspace header p { margin: 0; color: var(--muted); font-size: 11px; }
+.color-layout { display: grid; grid-template-columns: minmax(0,1fr) 330px; min-height: 570px; max-height: calc(91vh - 92px); }
+.scope-stage { min-width: 0; overflow: auto; padding: 18px 22px 22px; background: #080d16; color: #eaf3ff; }
+.scope-toolbar { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+.scope-toolbar strong { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.scope-toolbar span { padding: 5px 8px; border-radius: 8px; background: #173026; color: #68f0a9; font-size: 9px; }
+.scope-toolbar span.blocked { background: #3c1721; color: #ff7b91; }
+.scope-toolbar button { min-height: 34px; border: 1px solid #33445e; border-radius: 9px; background: #121c2a; color: #bcd0ea; font-size: 9px; cursor: pointer; }
+.scope-toolbar button.active { border-color: #ff4f92; color: #ff88b5; }
+.color-source-preview, .scope-unavailable { display: block; width: 100%; height: 258px; object-fit: contain; border: 1px solid #26364c; border-radius: 14px; background: #03060b; }
+.color-source-preview { image-rendering: auto; }
+.color-source-sampler { position: fixed; left: -10000px; width: 320px; height: 180px; pointer-events: none; opacity: 0; }
+.scope-unavailable { display: grid; place-items: center; color: #71839b; font-size: 11px; }
+.scope-grid { display: grid; grid-template-columns: minmax(0,1fr) 210px; gap: 12px; margin-top: 14px; }
+.scope-grid figure { margin: 0; padding: 10px; border: 1px solid #25354a; border-radius: 12px; background: #070b12; }
+.scope-grid figcaption { margin-bottom: 7px; color: #8fa3bd; font-size: 9px; font-weight: 800; letter-spacing: .08em; }
+.scope-grid canvas { display: block; width: 100%; height: 150px; }
+.scope-stage > small { display: block; margin-top: 9px; color: #71839b; font-size: 9px; }
+.grade-controls { overflow: auto; padding: 20px; border-left: 1px solid var(--line); }
+.grade-controls > label { display: grid; gap: 7px; margin-top: 14px; color: var(--muted); font-size: 11px; font-weight: 800; }
+.grade-controls select { height: 38px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--ink); }
+.pipeline-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0; padding: 0; border: 0; }
+.pipeline-mode legend { grid-column: 1/-1; margin-bottom: 7px; color: var(--muted); font-size: 11px; font-weight: 850; }
+.pipeline-mode button { min-height: 42px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); color: var(--soft); font-weight: 800; cursor: pointer; }
+.pipeline-mode button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.color-pipeline-note { display: grid; gap: 4px; margin-top: 14px; padding: 11px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); }
+.color-pipeline-note strong { color: var(--ink); font-size: 11px; }
+.color-pipeline-note span { color: var(--muted); font-size: 9px; line-height: 1.5; }
+.grade-control-grid { display: grid; gap: 12px; margin-top: 18px; }
+.grade-control-grid label { display: grid; gap: 6px; }
+.grade-control-grid label > span { display: flex; justify-content: space-between; color: var(--soft); font-size: 10px; }
+.grade-control-grid output { color: var(--accent); font-variant-numeric: tabular-nums; }
+.grade-control-grid input { width: 100%; accent-color: var(--accent); }
+.grade-reset { width: 100%; min-height: 40px; margin-top: 20px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); color: var(--soft); font-weight: 800; cursor: pointer; }
+@media (max-width: 900px) { .color-layout { grid-template-columns: 1fr; } .grade-controls { border-left: 0; border-top: 1px solid var(--line); } }

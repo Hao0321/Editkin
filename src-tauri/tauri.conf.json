@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Editkin",
+  "version": "0.15.0",
+  "identifier": "studio.hao.editkin",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Editkin",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1080,
+        "minHeight": 720,
+        "backgroundColor": "#eaf2ff"
+      }
+    ],
+    "security": {
+      "freezePrototype": true,
+      "dangerousDisableAssetCspModification": false,
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost blob: data:; media-src 'self' asset: http://asset.localhost blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost",
+      "assetProtocol": {
+        "enable": true,
+        "scope": []
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "resources": {
+      "../public/demo-source.mp4": "runtime/demo-source.mp4",
+      "../public/editkin-demo-preview.mp4": "runtime/editkin-demo-preview.mp4",
+      "../public/fonts": "font-packs/editkin-open-fonts",
+      "../public/color/aces2": "color/aces2",
+      "../plugins": "plugins"
+    }
+  }
+}

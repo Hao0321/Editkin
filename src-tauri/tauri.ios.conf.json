@@ -1,0 +1,8 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Editkin Remote",
+  "bundle": {
+    "active": false,
+    "resources": null
+  }
+}

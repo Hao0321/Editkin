@@ -1,0 +1,36 @@
+{
+  "schema": "editkin.software-video-fixture-source/v1",
+  "generator": {
+    "version": "8.0-full_build-www.gyan.dev",
+    "sha256": "81b5832f6c548d64feba0ec7d643397e2351d9f3460a65c6c296956045eebaea",
+    "use": "Synthetic test-media generation only; this GPL executable is not loaded by the software decode route."
+  },
+  "source": "lavfi:testsrc2=size=128x72:rate=30:duration=2",
+  "outputs": [
+    {
+      "path": "h264-yuv422p10le-rec709-limited.mp4",
+      "sha256": "31bf4b41551665fb5d1a0f2d1acc442856f849556eb4c84f79ace6b8458aa33a",
+      "role": "positive H.264 High 4:2:2 10-bit, progressive, Rec.709 limited"
+    },
+    {
+      "path": "hevc-yuv422p10le-rec709-limited.mp4",
+      "sha256": "cd6b67d34f13234dfba9f4b132760bfc3b434a51b0d086ef03adb21c6ff67e9f",
+      "role": "positive HEVC Range Extensions 4:2:2 10-bit, progressive, Rec.709 limited"
+    },
+    {
+      "path": "h264-yuv420p8-rec709-limited.mp4",
+      "sha256": "f9bb3a852e33e6e85890402a155889c59bae7b1de492781196fa49e2bdb66f5d",
+      "role": "negative wrong pixel format and bit depth"
+    },
+    {
+      "path": "h264-yuv422p10le-rec709-full.mp4",
+      "sha256": "2282b3266b16f0351f38eedcf772fdf170d9d6f9e6a6d714ae0a1eef313de88d",
+      "role": "negative wrong color range"
+    },
+    {
+      "path": "ffv1-yuv422p10le-rec709-limited.mkv",
+      "sha256": "9116d47a80d8b4ef731799913b2d936e7dced60f3501acc9425baa2923b31f21",
+      "role": "negative unsupported codec"
+    }
+  ]
+}

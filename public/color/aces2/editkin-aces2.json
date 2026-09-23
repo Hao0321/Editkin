@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 1,
+  "standard": "ACES 2.0",
+  "ocioVersion": "2.5.2",
+  "config": "studio-config-v4.0.0_aces-v2.0_ocio-v2.5.ocio",
+  "configSha256": "eda5b0008a43b72b98ad540e32eb0eb83b340dde54e35bddba64ccbafac1029a",
+  "cubeSize": {
+    "inputs": {
+      "rec709": 65,
+      "srgb": 65,
+      "hlg": 65,
+      "pq": 65,
+      "acescct": 65,
+      "apple_log": 65,
+      "arri_logc3": 65,
+      "arri_logc4": 97,
+      "bmd_film_gen5": 65,
+      "canon_log2": 65,
+      "canon_log3": 65,
+      "dji_dlog": 97,
+      "panasonic_vlog": 97,
+      "red_log3g10": 65,
+      "sony_slog3_cine": 65
+    },
+    "outputs": {
+      "rec709_sdr": 65,
+      "p3d65_sdr": 65,
+      "rec2100_hlg_1000": 129,
+      "rec2100_pq_1000": 129
+    }
+  },
+  "workingSpace": "ACEScct",
+  "blockedLutPairs": {
+    "panasonic_vlog->rec2100_pq_1000": "雙 3D LUT 的極端高彩度 p99 誤差超標；等待原生 OCIO processor",
+    "dji_dlog->rec2100_pq_1000": "雙 3D LUT 的極端高彩度 p99 誤差超標；等待原生 OCIO processor"
+  },
+  "inputs": {
+    "rec709": {
+      "colorSpace": "Camera Rec.709",
+      "cubeSize": 65,
+      "file": "luts/input-rec709-to-acescct.cube",
+      "sha256": "22150539416458a8c1e0838116a24e5429dd01ab5059f2159a99c9ca49d83324"
+    },
+    "srgb": {
+      "colorSpace": "sRGB Encoded Rec.709 (sRGB)",
+      "cubeSize": 65,
+      "file": "luts/input-srgb-to-acescct.cube",
+      "sha256": "bee69c6ae787ab66c75421f529875912a21a6f3374e8010674cf993c2dae41b1"
+    },
+    "hlg": {
+      "colorSpace": "Rec.2100-HLG - Display",
+      "cubeSize": 65,
+      "file": "luts/input-hlg-to-acescct.cube",
+      "sha256": "8d79458693a78fbe89dd867496b313f69f38e526793631ce516756eb45d03c60"
+    },
+    "pq": {
+      "colorSpace": "Rec.2100-PQ - Display",
+      "cubeSize": 65,
+      "file": "luts/input-pq-to-acescct.cube",
+      "sha256": "69896a0ae001eeb0737910acb23967df7a583eea917bd57cd28c68313b123d40"
+    },
+    "acescct": {
+      "colorSpace": "ACEScct",
+      "cubeSize": 65,
+      "file": "luts/input-acescct-to-acescct.cube",
+      "sha256": "5be768292104e3cffc2332c701331603c98d5a01adcc4778ab0f132482f3a69b"
+    },
+    "apple_log": {
+      "colorSpace": "Apple Log",
+      "cubeSize": 65,
+      "file": "luts/input-apple_log-to-acescct.cube",
+      "sha256": "31819ca77528365d8ef379abadfa281a45a268dc9c9dc10374a51771eab93b4a"
+    },
+    "arri_logc3": {
+      "colorSpace": "ARRI LogC3 (EI800)",
+      "cubeSize": 65,
+      "file": "luts/input-arri_logc3-to-acescct.cube",
+      "sha256": "66f130e0cd9aaec841f79ce333dd1af23bc2acfccb9e8e63f641aa663b62e6aa"
+    },
+    "arri_logc4": {
+      "colorSpace": "ARRI LogC4",
+      "cubeSize": 97,
+      "file": "luts/input-arri_logc4-to-acescct.cube",
+      "sha256": "cd0256c746450647e65ed5b127d72fcc5f826393ede185f81e1e5296a9720b73"
+    },
+    "bmd_film_gen5": {
+      "colorSpace": "BMDFilm WideGamut Gen5",
+      "cubeSize": 65,
+      "file": "luts/input-bmd_film_gen5-to-acescct.cube",
+      "sha256": "f6169c0a1cd97d712237728ec3519dfbe5e07adc248af1cdc62c172b8e35f4a0"
+    },
+    "canon_log2": {
+      "colorSpace": "CanonLog2 CinemaGamut D55",
+      "cubeSize": 65,
+      "file": "luts/input-canon_log2-to-acescct.cube",
+      "sha256": "8a88547bfc7cb6a08f2315621feafe2b54daa8c4995a41e8aefed101990b7e41"
+    },
+    "canon_log3": {
+      "colorSpace": "CanonLog3 CinemaGamut D55",
+      "cubeSize": 65,
+      "file": "luts/input-canon_log3-to-acescct.cube",
+      "sha256": "be3d49a66d8eb5cd8181510e2185a35587d2207086e7cf91194effc7bdda2de5"
+    },
+    "dji_dlog": {
+      "colorSpace": "D-Log D-Gamut",
+      "cubeSize": 97,
+      "file": "luts/input-dji_dlog-to-acescct.cube",
+      "sha256": "9e3016349ca66359c48fe13b296fd51bff97c21f09995b131a1d694753017221"
+    },
+    "panasonic_vlog": {
+      "colorSpace": "V-Log V-Gamut",
+      "cubeSize": 97,
+      "file": "luts/input-panasonic_vlog-to-acescct.cube",
+      "sha256": "a12e6b5638363ebbbb807f479e384cde8b8c41d8eb6f74f9f99d526fd4ba97fc"
+    },
+    "red_log3g10": {
+      "colorSpace": "Log3G10 REDWideGamutRGB",
+      "cubeSize": 65,
+      "file": "luts/input-red_log3g10-to-acescct.cube",
+      "sha256": "a9660879fd9c7ef0cde46ace33d3fa2fef76b2b985b429315fee2e77e51dbd1b"
+    },
+    "sony_slog3_cine": {
+      "colorSpace": "S-Log3 S-Gamut3.Cine",
+      "cubeSize": 65,
+      "file": "luts/input-sony_slog3_cine-to-acescct.cube",
+      "sha256": "576c49a345b25d5fe27ed0137bded3bef03cd39c886770c3d7c553d79422b0b1"
+    }
+  },
+  "outputs": {
+    "rec709_sdr": {
+      "display": "sRGB - Display",
+      "view": "ACES 2.0 - SDR 100 nits (Rec.709)",
+      "cubeSize": 65,
+      "file": "luts/output-acescct-to-rec709_sdr.cube",
+      "sha256": "0808837eb979b6f59e79db411f6bd861469456a89bf399ffe652a99bf0c454b3"
+    },
+    "p3d65_sdr": {
+      "display": "Display P3 - Display",
+      "view": "ACES 2.0 - SDR 100 nits (P3 D65)",
+      "cubeSize": 65,
+      "file": "luts/output-acescct-to-p3d65_sdr.cube",
+      "sha256": "8b3fd7792ddc2bf18774860f95f3afd6f70b04d28f12d33dd2d2758523155772"
+    },
+    "rec2100_hlg_1000": {
+      "display": "Rec.2100-HLG - Display",
+      "view": "ACES 2.0 - HDR 1000 nits (P3 D65)",
+      "cubeSize": 129,
+      "file": "luts/output-acescct-to-rec2100_hlg_1000.cube",
+      "sha256": "ab4a459ae1a284ceb34546ffe1bed664af6bdf6f43f4b7bc4ca562a4492a0eda"
+    },
+    "rec2100_pq_1000": {
+      "display": "Rec.2100-PQ - Display",
+      "view": "ACES 2.0 - HDR 1000 nits (Rec.2020)",
+      "cubeSize": 129,
+      "file": "luts/output-acescct-to-rec2100_pq_1000.cube",
+      "sha256": "0cad3aecbc3c5e12aec4f0c489bea6eb5a3a4c0e322aa28010468b856b6b121f"
+    }
+  }
+}

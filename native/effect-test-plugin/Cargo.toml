@@ -1,0 +1,13 @@
+[package]
+name = "editkin-effect-test-plugin"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+lto = "thin"
+strip = true
+panic = "abort"

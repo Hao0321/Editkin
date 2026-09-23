@@ -1,0 +1,29 @@
+{
+  "schema": "editkin.plugin/v1",
+  "id": "studio.hao.creator-workflow",
+  "name": "Creator Workflow Skill",
+  "version": "1.0.0",
+  "minimumHostVersion": "0.15.0",
+  "publisher": { "name": "Hao0321 Studio" },
+  "license": { "spdx": "LicenseRef-Editkin-Bundled", "commercialUse": true },
+  "permissions": ["workflow.read"],
+  "capabilities": [
+    {
+      "id": "balanced-creator-workflow",
+      "name": "平衡型創作者工作流",
+      "description": "為教學、產品展示、口播與證據型敘事提供克制且可調整的自動剪輯偏好。",
+      "kind": "workflow_skill",
+      "automation": "assisted",
+      "semanticRoles": ["technology", "tutorial", "creator", "talking-head", "screen-demo"],
+      "formats": ["longform", "shorts", "reels"],
+      "requires": ["使用者在 Workflow Profile 中明確啟用並核准目前 manifest 與 pack hash"],
+      "avoidWhen": ["素材語意 receipt 尚未完成", "使用者選擇其他互斥主工作流"],
+      "parameters": [],
+      "runtime": {
+        "type": "skill_pack",
+        "index": "editkin-skill.json",
+        "sha256": "05f60d79bb7ed1f740d70afd2b4d387effbe6831ce2499b19976ddcdc8888462"
+      }
+    }
+  ]
+}

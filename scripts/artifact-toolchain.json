@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "sevenZip": {
+    "package": "electron-winstaller",
+    "packageVersion": "5.4.4",
+    "path": "node_modules/electron-winstaller/vendor/7z.exe",
+    "bytes": 446976,
+    "sha256": "c7245e21a7553d9e52d434002a401c77a7ca7d0f245f2311b0ddf16f8f946c6f"
+  }
+}

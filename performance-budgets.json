@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "mainJavaScriptMaxBytes": 320000,
+  "mainJavaScriptGzipMaxBytes": 105000,
+  "initialJavaScriptMaxBytes": 330000,
+  "initialJavaScriptGzipMaxBytes": 110000,
+  "mainCssMaxBytes": 48000,
+  "mainCssGzipMaxBytes": 10500
+}

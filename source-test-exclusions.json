@@ -1,0 +1,158 @@
+{
+  "schema": "editkin.source-test-exclusions/v1",
+  "reason": "These original product integration suites require binaries or generated artifacts absent from the community source checkout. They are retained in source and are not claimed by npm test.",
+  "entries": [
+    {
+      "file": "src/application/autoColorExposure.integration.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/application/autoColorReceiptTarget.integration.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/application/autoWhiteBalance.integration.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/application/autoWhiteBalanceFloatSurface.integration.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/application/inspectMediaOrientation.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/application/materialColorBundleIdentity.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/application/materialColorSampling.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/application/materialIntelligenceColor.integration.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/application/materialIntelligenceTranscript.test.ts",
+      "prerequisite": "Native ASR runtime and deterministic cache fixture"
+    },
+    {
+      "file": "src/application/materialKeyframeExtraction.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/application/mediaDerivatives.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/application/mediaDerivativesHighBit.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/application/mediaThumbnailDisplay.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/application/pqWhiteBalanceBoundary.integration.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/application/updateManager.test.ts",
+      "prerequisite": "Local TLS certificate fixture"
+    },
+    {
+      "file": "src/color/hlgDisplayReference.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/color/linearWhiteBalance.integration.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/color/primaryGradePixels.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/creative/travelEditorialPresets.test.ts",
+      "prerequisite": "Generated static font faces"
+    },
+    {
+      "file": "src/render/compositeFrameClock.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/creativeFilters.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/keyframeBoundaries.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/maskFeatherIsolation.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/maskSpatialOrder.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/musicOnlyAudio.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/musicOnlyQa.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/outputColorMetadata.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/parentedTransforms.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/pixelMatteCompositor.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/pixelMatteSampling.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/pqExposure.integration.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/pqWhiteBalanceBoundary.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/renderArtifactIdentity.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/sourceColorFiltersPixels.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/sourceLinearWhiteBalance.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/render/sourceLinearWhiteBalanceMetadata.test.ts",
+      "prerequisite": "External FFmpeg, generated color products, or native media runtime"
+    },
+    {
+      "file": "src/service/autoRotoServiceArtifact.test.ts",
+      "prerequisite": "Official BUILD-MANIFEST identity"
+    },
+    {
+      "file": "src/shared/updateVersion.test.ts",
+      "prerequisite": "Bundled Node runtime fixture"
+    }
+  ]
+}

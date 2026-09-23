@@ -1,0 +1,33 @@
+{
+  "schema": "editkin.auto-roto-hardcase-benchmark/v1",
+  "dataset": {
+    "name": "DAVIS 2017 trainval 480p",
+    "source": "https://data.vision.ee.ethz.ch/csergi/share/davis/DAVIS-2017-trainval-480p.zip",
+    "zipBytes": 832766765,
+    "zipSha256": "e3d0b5b77c3d031b000a19e0e25e3e2cac65d183755601bc2cf066df1a2aa492",
+    "license": "CC BY-NC 4.0",
+    "distributionBoundary": "Internal benchmark input only; never bundled or redistributed with Editkin."
+  },
+  "protocol": {
+    "prompt": "All labeled object masks from frame 0 only",
+    "propagation": "Forward over every source frame with the signed production SAM 2.1 tiny pack",
+    "evaluation": "Per-object region J and DAVIS-style boundary F; frame 0 is excluded",
+    "precision": "float16",
+    "thresholds": {
+      "aggregateJAndFMin": 70,
+      "aggregateJMin": 70,
+      "aggregateFMin": 65,
+      "perSequenceJAndFMin": 45,
+      "lateQuartileJAndFMin": 50
+    }
+  },
+  "sequences": [
+    { "id": "dance-twirl", "tags": ["hair", "articulated-motion", "thin-detail"] },
+    { "id": "breakdance", "tags": ["motion-blur", "fast-motion", "limbs"] },
+    { "id": "parkour", "tags": ["fast-motion", "scale-change", "occlusion"] },
+    { "id": "dogs-jump", "tags": ["hair", "fast-motion", "multi-object"] },
+    { "id": "bmx-trees", "tags": ["occlusion", "reappearance", "thin-structure"] },
+    { "id": "scooter-black", "tags": ["occlusion", "reappearance", "articulated-motion"] },
+    { "id": "drift-chicane", "tags": ["motion-blur", "fast-camera", "scale-change"] }
+  ]
+}

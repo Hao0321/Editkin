@@ -1,0 +1,60 @@
+.aesthetic-review-panel { margin: 20px 24px; min-width: 0; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.aesthetic-review-panel *, .aesthetic-review-panel *::before, .aesthetic-review-panel *::after { box-sizing: border-box; }
+.aesthetic-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.aesthetic-panel-heading > div { flex: 1 1 240px; min-width: 0; }
+.aesthetic-panel-heading h3 { margin: 0; font-size: 19px; }
+.aesthetic-panel-heading p, .aesthetic-panel-footer p { margin: 4px 0 12px; }
+.aesthetic-review-state { flex: 0 1 auto; padding: 6px 10px; border-radius: 8px; background: var(--surface-2); color: var(--soft); font-size: 14px; }
+.aesthetic-binding-note { padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--soft); }
+.aesthetic-group { margin-top: 12px; min-width: 0; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); }
+.aesthetic-review-panel summary { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 14px; list-style: none; cursor: pointer; }
+.aesthetic-review-panel summary::-webkit-details-marker { display: none; }
+.aesthetic-review-panel summary::before { content: "+"; flex: 0 0 16px; font-size: 18px; line-height: 1; color: var(--muted); }
+.aesthetic-review-panel details[open] > summary::before { content: "−"; }
+.aesthetic-review-panel summary > span { flex: 1; min-width: 0; }
+.aesthetic-review-panel summary b { font-size: 15px; }
+.aesthetic-review-panel summary small { display: block; font-size: 14px; color: var(--muted); }
+.aesthetic-review-panel summary > strong, .aesthetic-criterion > summary > small { flex: 0 1 auto; text-align: right; font-size: 14px; font-variant-numeric: tabular-nums; }
+.aesthetic-items { min-width: 0; padding: 0 14px 14px; }
+.aesthetic-criterion { min-width: 0; border-top: 1px solid var(--line); }
+.aesthetic-criterion > summary { padding: 12px 0; }
+.aesthetic-criterion-body { min-width: 0; padding: 0 0 16px 28px; }
+.aesthetic-criterion-body > p { margin: 0 0 12px; color: var(--soft); }
+.aesthetic-review-panel button, .aesthetic-review-panel select, .aesthetic-review-panel input:not([type="checkbox"]), .aesthetic-review-panel textarea { min-width: 0; max-width: 100%; min-height: 44px; padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; }
+.aesthetic-review-panel button { cursor: pointer; white-space: normal; overflow-wrap: anywhere; }
+.aesthetic-review-panel button:disabled, .aesthetic-review-panel input:disabled { opacity: .55; cursor: not-allowed; }
+.aesthetic-review-panel :is(button, select, input, textarea, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.aesthetic-rating { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.aesthetic-rating select { width: min(220px,100%); }
+.aesthetic-evidence-help { color: var(--muted); font-size: 14px; }
+.aesthetic-evidence { min-inline-size: 0; min-width: 0; margin: 14px 0; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.aesthetic-evidence legend { padding: 0 6px; font-weight: 650; }
+.aesthetic-time-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.aesthetic-evidence label { display: grid; gap: 6px; min-width: 0; }
+.aesthetic-evidence input, .aesthetic-evidence textarea { width: 100%; }
+.aesthetic-evidence textarea { min-height: 100px; resize: vertical; }
+.aesthetic-evidence-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.aesthetic-evidence-actions button { flex: 0 1 auto; }
+.aesthetic-field-error { color: var(--danger); font-size: 14px; }
+.aesthetic-add-evidence { width: auto; }
+.aesthetic-panel-footer { padding-top: 18px; color: var(--soft); }
+.aesthetic-attestation { display: flex; align-items: center; gap: 12px; min-height: 44px; margin: 12px 0; cursor: pointer; }
+.aesthetic-attestation input { flex: 0 0 22px; width: 22px; height: 22px; margin: 11px 0; accent-color: var(--accent); }
+.aesthetic-save-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.aesthetic-save-actions button { flex: 0 1 auto; min-width: 160px; }
+.aesthetic-save-actions button:first-child { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.aesthetic-next-step, .aesthetic-notice { font-size: 14px; }
+.aesthetic-notice:empty { display: none; }
+@media (max-width: 600px) {
+  .aesthetic-review-panel { margin: 16px 12px; }
+  .aesthetic-panel-heading { gap: 8px; }
+  .aesthetic-panel-heading > div { flex-basis: 100%; }
+  .aesthetic-review-panel summary { gap: 8px; padding: 12px; }
+  .aesthetic-items { padding: 0 12px 12px; }
+  .aesthetic-criterion > summary { padding: 12px 0; }
+  .aesthetic-criterion-body { padding-left: 0; }
+  .aesthetic-evidence { padding: 10px; }
+  .aesthetic-time-fields { grid-template-columns: minmax(0,1fr); gap: 10px; }
+  .aesthetic-evidence-actions button { flex: 1 1 110px; }
+  .aesthetic-save-actions button { flex: 1 1 100%; }
+}

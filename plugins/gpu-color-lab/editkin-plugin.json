@@ -1,0 +1,50 @@
+{
+  "schema": "editkin.plugin/v1",
+  "id": "studio.hao.gpu-color-lab",
+  "name": "GPU Color Lab",
+  "version": "1.0.0",
+  "minimumHostVersion": "0.15.0",
+  "publisher": { "name": "Hao0321 Studio" },
+  "license": { "spdx": "LicenseRef-Editkin-Bundled", "commercialUse": true },
+  "permissions": ["render.effect"],
+  "capabilities": [
+    {
+      "id": "soft-skin-filmic",
+      "name": "柔和膚色電影曲線",
+      "description": "以 GPU Effect Module SDK 節點圖組合白平衡、lift/gamma/gain、色相與 filmic toe/shoulder；保持膚色克制，適合人物口播與生活感 B-roll。",
+      "kind": "effect",
+      "automation": "assisted",
+      "semanticRoles": ["talking-head", "skin-tone", "lifestyle", "b-roll", "cinematic"],
+      "formats": ["longform", "shorts", "reels"],
+      "requires": ["曝光正常且白平衡可判讀", "人物膚色或生活感 B-roll", "GPU effect 堆疊仍有插槽"],
+      "avoidWhen": ["產品色彩必須精準還原", "來源已套強烈 LUT", "高光已剪裁", "沒有明確調色動機"],
+      "parameters": [
+        { "id": "temperature", "name": "色溫", "type": "number", "default": 0.08, "min": -0.5, "max": 0.5, "step": 0.01 },
+        { "id": "tint", "name": "色偏", "type": "number", "default": 0.02, "min": -0.4, "max": 0.4, "step": 0.01 },
+        { "id": "lift", "name": "黑位抬升", "type": "number", "default": 0.012, "min": -0.08, "max": 0.12, "step": 0.002 },
+        { "id": "gamma", "name": "中間調 Gamma", "type": "number", "default": 1.04, "min": 0.7, "max": 1.4, "step": 0.01 },
+        { "id": "gain", "name": "亮部增益", "type": "number", "default": 1.01, "min": 0.8, "max": 1.25, "step": 0.01 },
+        { "id": "hue", "name": "色相微調", "type": "number", "default": 0.015, "min": -0.15, "max": 0.15, "step": 0.005 },
+        { "id": "curve", "name": "電影曲線強度", "type": "number", "default": 0.28, "min": 0, "max": 0.65, "step": 0.01 },
+        { "id": "toe", "name": "陰影 Toe", "type": "number", "default": 0.12, "min": 0, "max": 0.5, "step": 0.01 },
+        { "id": "shoulder", "name": "高光 Shoulder", "type": "number", "default": 0.22, "min": 0, "max": 0.6, "step": 0.01 }
+      ],
+      "runtime": {
+        "type": "gpu_effect_module",
+        "abiVersion": 1,
+        "supportedFormats": ["rgba16_float", "rgba32_float"],
+        "maxTemporalRadius": 0,
+        "module": {
+          "schema": "editkin.gpu-effect-module/v1",
+          "nodes": [
+            { "id": "balance", "input": "$source", "op": "temperature_tint", "args": ["$parameter.temperature", "$parameter.tint"] },
+            { "id": "primary", "input": "balance", "op": "lift_gamma_gain", "args": ["$parameter.lift", "$parameter.gamma", "$parameter.gain"] },
+            { "id": "hue", "input": "primary", "op": "hue_rotate", "args": ["$parameter.hue"] },
+            { "id": "curve", "input": "hue", "op": "filmic_curve", "args": ["$parameter.curve", "$parameter.toe", "$parameter.shoulder"] }
+          ],
+          "output": "curve"
+        }
+      }
+    }
+  ]
+}

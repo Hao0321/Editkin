@@ -1,0 +1,159 @@
+{
+  "schema": "editkin.autopilot-edit-quality-evidence/v1",
+  "fixtureOnly": true,
+  "journey": {
+    "id": "calibration-quality-journey",
+    "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "plan": {
+      "retainedEvidence": true,
+      "schema": "hao.video-autopilot.edit-plan/v4",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "invocationBindingSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "contextTokens": 800,
+      "maximumContextTokens": 1100,
+      "semanticReceiptCount": 1,
+      "semanticReceiptSha256": "9999999999999999999999999999999999999999999999999999999999999999",
+      "auditReceiptSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "auditAccepted": true,
+      "secondPassRequired": true
+    },
+    "apply": {
+      "retainedEvidence": true,
+      "schema": "hao.video-autopilot.execution-receipt/v1",
+      "planSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "invocationBindingSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "projectRevisionBefore": 4,
+      "projectRevisionAfter": 5,
+      "atomic": true,
+      "editableTimelineReopened": true,
+      "singleAtomicBatchBoundary": true,
+      "sourcePreserved": true,
+      "executionReceiptSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    },
+    "render": {
+      "retainedEvidence": true,
+      "schema": "editkin.autopilot-render-receipt/v1",
+      "planSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "projectRevision": 5,
+      "outputSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "bytes": 250000,
+      "durationSeconds": 10,
+      "hasVideo": true,
+      "hasAudio": true,
+      "decodedFrameCount": 300,
+      "uniqueTailFrames": 3,
+      "decodedProbeSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    "qualityReceipt": {
+      "retainedEvidence": true,
+      "schema": "editkin.autopilot-decoded-quality-receipt/v1",
+      "journeyId": "calibration-quality-journey",
+      "planSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "projectRevision": 5,
+      "outputSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "reviewState": "REVIEW_REQUIRED",
+      "certified": false,
+      "bindingSha256": "abababababababababababababababababababababababababababababababab",
+      "semanticReceiptSha256": "9999999999999999999999999999999999999999999999999999999999999999",
+      "auditReceiptSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "executionReceiptSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "decodedProbeSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+  },
+  "families": {
+    "smartCut": {
+      "state": "measured",
+      "status": "GREEN",
+      "sameJourney": true,
+      "journeyId": "calibration-quality-journey",
+      "bindingSha256": "abababababababababababababababababababababababababababababababab",
+      "evidenceLevel": "frozen-regression",
+      "evaluatorCalibrated": true,
+      "negativeControlsRejected": 3,
+      "reportSha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    "captions": {
+      "state": "measured",
+      "status": "GREEN",
+      "sameJourney": true,
+      "journeyId": "calibration-quality-journey",
+      "bindingSha256": "abababababababababababababababababababababababababababababababab",
+      "evidenceLevel": "frozen-regression",
+      "evaluatorCalibrated": true,
+      "negativeControlsRejected": 3,
+      "reportSha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    "motionGraphics": {
+      "state": "measured",
+      "status": "GREEN",
+      "sameJourney": true,
+      "journeyId": "calibration-quality-journey",
+      "bindingSha256": "abababababababababababababababababababababababababababababababab",
+      "evidenceLevel": "decoded-artifact",
+      "evaluatorCalibrated": true,
+      "negativeControlsRejected": 3,
+      "reportSha256": "3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "transitions": {
+      "state": "measured",
+      "status": "GREEN",
+      "sameJourney": true,
+      "journeyId": "calibration-quality-journey",
+      "bindingSha256": "abababababababababababababababababababababababababababababababab",
+      "evidenceLevel": "decoded-artifact",
+      "evaluatorCalibrated": true,
+      "negativeControlsRejected": 3,
+      "reportSha256": "4444444444444444444444444444444444444444444444444444444444444444"
+    },
+    "audio": {
+      "state": "measured",
+      "status": "GREEN",
+      "sameJourney": true,
+      "journeyId": "calibration-quality-journey",
+      "bindingSha256": "abababababababababababababababababababababababababababababababab",
+      "evidenceLevel": "decoded-artifact",
+      "evaluatorCalibrated": true,
+      "negativeControlsRejected": 3,
+      "reportSha256": "5555555555555555555555555555555555555555555555555555555555555555"
+    },
+    "color": {
+      "state": "measured",
+      "status": "GREEN",
+      "sameJourney": true,
+      "journeyId": "calibration-quality-journey",
+      "bindingSha256": "abababababababababababababababababababababababababababababababab",
+      "evidenceLevel": "decoded-artifact",
+      "evaluatorCalibrated": true,
+      "negativeControlsRejected": 3,
+      "reportSha256": "6666666666666666666666666666666666666666666666666666666666666666"
+    },
+    "qa": {
+      "state": "measured",
+      "status": "GREEN",
+      "sameJourney": true,
+      "journeyId": "calibration-quality-journey",
+      "bindingSha256": "abababababababababababababababababababababababababababababababab",
+      "evidenceLevel": "decoded-artifact",
+      "evaluatorCalibrated": true,
+      "negativeControlsRejected": 3,
+      "reportSha256": "7777777777777777777777777777777777777777777777777777777777777777"
+    }
+  },
+  "humanEditorial": {
+    "state": "measured",
+    "blind": true,
+    "independentGroundTruth": true,
+    "datasetVisibility": "blind-holdout",
+    "caseCount": 8,
+    "reviewerCount": 3,
+    "responseCount": 24,
+    "winRateExcludingTies": 0.625,
+    "severeErrorRate": 0,
+    "meanScoreDelta": 0.25,
+    "reportSha256": "8888888888888888888888888888888888888888888888888888888888888888"
+  }
+}

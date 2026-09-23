@@ -1,0 +1,509 @@
+{
+  "schemaVersion": 2,
+  "id": "studio.hao.editkin-open-fonts",
+  "version": "0.15.0",
+  "sourceRepository": "https://github.com/google/fonts",
+  "sourceCommit": "ec626514f79f831f1ab848a82114a0ce7e2d6372",
+  "redistribution": "community-installer",
+  "fonts": [
+    {
+      "id": "noto-sans-tc",
+      "family": "Noto Sans TC",
+      "file": "NotoSansTC[wght].ttf",
+      "bytes": 11941968,
+      "sha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f",
+      "license": "OFL-1.1",
+      "licenseFile": "noto-sans-tc-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/ec626514f79f831f1ab848a82114a0ce7e2d6372/ofl/notosanstc/NotoSansTC%5Bwght%5D.ttf",
+      "licenseSha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9",
+      "faces": [
+        {
+          "id": "EditkinFace-noto-sans-tc-100",
+          "weight": 100,
+          "file": "render/EditkinFace-noto-sans-tc-100.ttf",
+          "bytes": 7147296,
+          "sha256": "0446e5a1ec6a06a41f75818956847c51c1feefdb25a910bcecf32e7cb384c5fd",
+          "family": "EditkinFace noto-sans-tc 100",
+          "postscriptName": "EditkinFace-noto-sans-tc-100",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-150",
+          "weight": 150,
+          "file": "render/EditkinFace-noto-sans-tc-150.ttf",
+          "bytes": 7149404,
+          "sha256": "bd24239f91c9e6304f451180b3493f340861e7b504ec80704a64b18deded7ac5",
+          "family": "EditkinFace noto-sans-tc 150",
+          "postscriptName": "EditkinFace-noto-sans-tc-150",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-200",
+          "weight": 200,
+          "file": "render/EditkinFace-noto-sans-tc-200.ttf",
+          "bytes": 7150760,
+          "sha256": "b5f58133de31475e5129324f99c0a44ed3a2604eda3f52de590497e4eeb523e9",
+          "family": "EditkinFace noto-sans-tc 200",
+          "postscriptName": "EditkinFace-noto-sans-tc-200",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-250",
+          "weight": 250,
+          "file": "render/EditkinFace-noto-sans-tc-250.ttf",
+          "bytes": 7150604,
+          "sha256": "8bf624268366a81cb1da5c8d318b0cfdfabd4d266a5533aa5f6a238aaad6ba9b",
+          "family": "EditkinFace noto-sans-tc 250",
+          "postscriptName": "EditkinFace-noto-sans-tc-250",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-300",
+          "weight": 300,
+          "file": "render/EditkinFace-noto-sans-tc-300.ttf",
+          "bytes": 7151140,
+          "sha256": "bd96cdc24110544bed4f68224d244c980ea0dd31cec49451f23f808d961b6bc6",
+          "family": "EditkinFace noto-sans-tc 300",
+          "postscriptName": "EditkinFace-noto-sans-tc-300",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-350",
+          "weight": 350,
+          "file": "render/EditkinFace-noto-sans-tc-350.ttf",
+          "bytes": 7150388,
+          "sha256": "ecb38291b367f1548b22da949f15971d59e22ab5c04027175b0df7fa0a3ed9b3",
+          "family": "EditkinFace noto-sans-tc 350",
+          "postscriptName": "EditkinFace-noto-sans-tc-350",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-400",
+          "weight": 400,
+          "file": "render/EditkinFace-noto-sans-tc-400.ttf",
+          "bytes": 7149232,
+          "sha256": "edb17500d6ccfb11d5a7ce1e0c7f94253c86f85c577c928e9e1053b898f7ecb7",
+          "family": "EditkinFace noto-sans-tc 400",
+          "postscriptName": "EditkinFace-noto-sans-tc-400",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-450",
+          "weight": 450,
+          "file": "render/EditkinFace-noto-sans-tc-450.ttf",
+          "bytes": 7146852,
+          "sha256": "e5cbde466a30f47b5b6d77fc673e8d364b63a1b55e0a786a8cd92a65361e9e6e",
+          "family": "EditkinFace noto-sans-tc 450",
+          "postscriptName": "EditkinFace-noto-sans-tc-450",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-500",
+          "weight": 500,
+          "file": "render/EditkinFace-noto-sans-tc-500.ttf",
+          "bytes": 7145336,
+          "sha256": "d60c08e576240902537c77c599b37bdfe6eb4ec6ce7b92e7d1c9e22277c89908",
+          "family": "EditkinFace noto-sans-tc 500",
+          "postscriptName": "EditkinFace-noto-sans-tc-500",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-550",
+          "weight": 550,
+          "file": "render/EditkinFace-noto-sans-tc-550.ttf",
+          "bytes": 7144340,
+          "sha256": "2e6351b8c807549478f52462f20bfd2affed0351cd7d16c92426e16b566dd6de",
+          "family": "EditkinFace noto-sans-tc 550",
+          "postscriptName": "EditkinFace-noto-sans-tc-550",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-600",
+          "weight": 600,
+          "file": "render/EditkinFace-noto-sans-tc-600.ttf",
+          "bytes": 7142680,
+          "sha256": "2075997c0bfd24c1621b57211d3cf5578a284f7f1270b3177ad6c9ab5af00a3f",
+          "family": "EditkinFace noto-sans-tc 600",
+          "postscriptName": "EditkinFace-noto-sans-tc-600",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-650",
+          "weight": 650,
+          "file": "render/EditkinFace-noto-sans-tc-650.ttf",
+          "bytes": 7141284,
+          "sha256": "7c141ba6f8ad1eaa407e73bc0b43e1eace88dc4e6631b93e4e3fbcf1c849a592",
+          "family": "EditkinFace noto-sans-tc 650",
+          "postscriptName": "EditkinFace-noto-sans-tc-650",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-700",
+          "weight": 700,
+          "file": "render/EditkinFace-noto-sans-tc-700.ttf",
+          "bytes": 7143792,
+          "sha256": "77eb25869dea8dc970951be87d7fdaa96177f97c489bf9b88e45e3be960ae5bd",
+          "family": "EditkinFace noto-sans-tc 700",
+          "postscriptName": "EditkinFace-noto-sans-tc-700",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-750",
+          "weight": 750,
+          "file": "render/EditkinFace-noto-sans-tc-750.ttf",
+          "bytes": 7142152,
+          "sha256": "e6698d52b3b6f0e5fe1768bca537e2ffd6e1093128f7c1f3ef470d61e9dc53d0",
+          "family": "EditkinFace noto-sans-tc 750",
+          "postscriptName": "EditkinFace-noto-sans-tc-750",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-800",
+          "weight": 800,
+          "file": "render/EditkinFace-noto-sans-tc-800.ttf",
+          "bytes": 7140416,
+          "sha256": "fbc1d11f4644a3fd794141464a79dc3c18d3bb6a604ff2c6a7a631e504c644ed",
+          "family": "EditkinFace noto-sans-tc 800",
+          "postscriptName": "EditkinFace-noto-sans-tc-800",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-850",
+          "weight": 850,
+          "file": "render/EditkinFace-noto-sans-tc-850.ttf",
+          "bytes": 7138892,
+          "sha256": "68b7b531c46ec5e5cfeb5bdb7150ae15a0aed6c80fac698ff7bc5f3ca31981cb",
+          "family": "EditkinFace noto-sans-tc 850",
+          "postscriptName": "EditkinFace-noto-sans-tc-850",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        },
+        {
+          "id": "EditkinFace-noto-sans-tc-900",
+          "weight": 900,
+          "file": "render/EditkinFace-noto-sans-tc-900.ttf",
+          "bytes": 7137992,
+          "sha256": "c7714c8d15cb7da5aa5e979ee0eee750303bee364e271ea11674182d2b670da8",
+          "family": "EditkinFace noto-sans-tc 900",
+          "postscriptName": "EditkinFace-noto-sans-tc-900",
+          "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f"
+        }
+      ]
+    },
+    {
+      "id": "noto-serif-tc",
+      "family": "Noto Serif TC",
+      "file": "NotoSerifTC[wght].ttf",
+      "bytes": 16851596,
+      "sha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6",
+      "license": "OFL-1.1",
+      "licenseFile": "noto-serif-tc-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/ec626514f79f831f1ab848a82114a0ce7e2d6372/ofl/notoseriftc/NotoSerifTC%5Bwght%5D.ttf",
+      "licenseSha256": "5e0da210fb04058a8c0087985d2d456b931c2579811a49655721d3cf0c36b6d6",
+      "faces": [
+        {
+          "id": "EditkinFace-noto-serif-tc-200",
+          "weight": 200,
+          "file": "render/EditkinFace-noto-serif-tc-200.ttf",
+          "bytes": 9999504,
+          "sha256": "10bfa0374af24fd3d4ae4ef36ea0db6f8c8980f11ae713694ad81c2dc0ca52e0",
+          "family": "EditkinFace noto-serif-tc 200",
+          "postscriptName": "EditkinFace-noto-serif-tc-200",
+          "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6"
+        },
+        {
+          "id": "EditkinFace-noto-serif-tc-250",
+          "weight": 250,
+          "file": "render/EditkinFace-noto-serif-tc-250.ttf",
+          "bytes": 10001176,
+          "sha256": "ece16d4ba67b73149cc257824de298b074170088687c59a3f15206cd1d3c1717",
+          "family": "EditkinFace noto-serif-tc 250",
+          "postscriptName": "EditkinFace-noto-serif-tc-250",
+          "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6"
+        },
+        {
+          "id": "EditkinFace-noto-serif-tc-300",
+          "weight": 300,
+          "file": "render/EditkinFace-noto-serif-tc-300.ttf",
+          "bytes": 10002032,
+          "sha256": "169d3e12b6fa30408d0ba5b9f2832d10d60ca73ed4a89fc62c7f5cc99d3856df",
+          "family": "EditkinFace noto-serif-tc 300",
+          "postscriptName": "EditkinFace-noto-serif-tc-300",
+          "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6"
+        },
+        {
+          "id": "EditkinFace-noto-serif-tc-350",
+          "weight": 350,
+          "file": "render/EditkinFace-noto-serif-tc-350.ttf",
+          "bytes": 10002748,
+          "sha256": "2672a7631fc2b18e209a034ceb5b0b6c3e0a5b7132e5dea32c6f107023663ef1",
+          "family": "EditkinFace noto-serif-tc 350",
+          "postscriptName": "EditkinFace-noto-serif-tc-350",
+          "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6"
+        },
+        {
+          "id": "EditkinFace-noto-serif-tc-400",
+          "weight": 400,
+          "file": "render/EditkinFace-noto-serif-tc-400.ttf",
+          "bytes": 10003676,
+          "sha256": "3f4e9cf17d3345c98a263bc9272c1fe11100a252144e56d55aa55f8010ac8a4f",
+          "family": "EditkinFace noto-serif-tc 400",
+          "postscriptName": "EditkinFace-noto-serif-tc-400",
+          "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6"
+        },
+        {
+          "id": "EditkinFace-noto-serif-tc-450",
+          "weight": 450,
+          "file": "render/EditkinFace-noto-serif-tc-450.ttf",
+          "bytes": 10004608,
+          "sha256": "2d6e3181d9d43c1e1960dc6279566b8214daf23d610b9baafaab0c20f8e89db1",
+          "family": "EditkinFace noto-serif-tc 450",
+          "postscriptName": "EditkinFace-noto-serif-tc-450",
+          "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6"
+        },
+        {
+          "id": "EditkinFace-noto-serif-tc-500",
+          "weight": 500,
+          "file": "render/EditkinFace-noto-serif-tc-500.ttf",
+          "bytes": 10005240,
+          "sha256": "9f14f87946e97d4bf7d9845ebbd642b9d4e3b3036e997aa3b7914133367eb1ad",
+          "family": "EditkinFace noto-serif-tc 500",
+          "postscriptName": "EditkinFace-noto-serif-tc-500",
+          "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6"
+        },
+        {
+          "id": "EditkinFace-noto-serif-tc-550",
+          "weight": 550,
+          "file": "render/EditkinFace-noto-serif-tc-550.ttf",
+          "bytes": 10005764,
+          "sha256": "b49d85f1483ea22710b3cc90ae74da5be773902a74022f4d2fa314a72cda4844",
+          "family": "EditkinFace noto-serif-tc 550",
+          "postscriptName": "EditkinFace-noto-serif-tc-550",
+          "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6"
+        },
+        {
+          "id": "EditkinFace-noto-serif-tc-600",
+          "weight": 600,
+          "file": "render/EditkinFace-noto-serif-tc-600.ttf",
+          "bytes": 10005920,
+          "sha256": "ef0292c8cb22f1cc3b774fe295f3504beb4d403bd2f1ce579681549a670480b3",
+          "family": "EditkinFace noto-serif-tc 600",
+          "postscriptName": "EditkinFace-noto-serif-tc-600",
+          "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6"
+        },
+        {
+          "id": "EditkinFace-noto-serif-tc-650",
+          "weight": 650,
+          "file": "render/EditkinFace-noto-serif-tc-650.ttf",
+          "bytes": 10006296,
+          "sha256": "18ae7f2a8f56a108250bb004a21a237c3980c20215548301908d80aa75f1327b",
+          "family": "EditkinFace noto-serif-tc 650",
+          "postscriptName": "EditkinFace-noto-serif-tc-650",
+          "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6"
+        },
+        {
+          "id": "EditkinFace-noto-serif-tc-700",
+          "weight": 700,
+          "file": "render/EditkinFace-noto-serif-tc-700.ttf",
+          "bytes": 10006520,
+          "sha256": "8ced8b6429c2ffa89013bd7c4bd9fc1522af029b3efe23d8452468f6b319f5c9",
+          "family": "EditkinFace noto-serif-tc 700",
+          "postscriptName": "EditkinFace-noto-serif-tc-700",
+          "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6"
+        },
+        {
+          "id": "EditkinFace-noto-serif-tc-750",
+          "weight": 750,
+          "file": "render/EditkinFace-noto-serif-tc-750.ttf",
+          "bytes": 10007152,
+          "sha256": "2bce2bbdb69d5ed9e8418150cd97767c87cbda122f2bbe46be760c6b7051dcb3",
+          "family": "EditkinFace noto-serif-tc 750",
+          "postscriptName": "EditkinFace-noto-serif-tc-750",
+          "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6"
+        },
+        {
+          "id": "EditkinFace-noto-serif-tc-800",
+          "weight": 800,
+          "file": "render/EditkinFace-noto-serif-tc-800.ttf",
+          "bytes": 10007084,
+          "sha256": "6d8cb25eab316c9a23666d3bf0667b41a30872c90e9627272d169a03e0e0ce6b",
+          "family": "EditkinFace noto-serif-tc 800",
+          "postscriptName": "EditkinFace-noto-serif-tc-800",
+          "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6"
+        },
+        {
+          "id": "EditkinFace-noto-serif-tc-850",
+          "weight": 850,
+          "file": "render/EditkinFace-noto-serif-tc-850.ttf",
+          "bytes": 10008036,
+          "sha256": "04a8d3f59d88a4d78b1966bd45a5b02ccc9fd91d4ba001ef4a49c46721fce22a",
+          "family": "EditkinFace noto-serif-tc 850",
+          "postscriptName": "EditkinFace-noto-serif-tc-850",
+          "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6"
+        },
+        {
+          "id": "EditkinFace-noto-serif-tc-900",
+          "weight": 900,
+          "file": "render/EditkinFace-noto-serif-tc-900.ttf",
+          "bytes": 10007836,
+          "sha256": "fb55570407f72afc125126b72d50ab463f06b7ba50ed3fb9489200722f2ba6d9",
+          "family": "EditkinFace noto-serif-tc 900",
+          "postscriptName": "EditkinFace-noto-serif-tc-900",
+          "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6"
+        }
+      ]
+    },
+    {
+      "id": "lxgw-wenkai-mono-tc",
+      "family": "LXGW WenKai Mono TC",
+      "file": "LXGWWenKaiMonoTC-Regular.ttf",
+      "bytes": 13122932,
+      "sha256": "ea6707f71c862f4f255cbe510148b676ca8f5360872633de88694f8004f3f8b3",
+      "license": "OFL-1.1",
+      "licenseFile": "lxgw-wenkai-mono-tc-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/ec626514f79f831f1ab848a82114a0ce7e2d6372/ofl/lxgwwenkaimonotc/LXGWWenKaiMonoTC-Regular.ttf",
+      "licenseSha256": "4fff27d35db0e22cd81d58da6f20e09f415cf354a3338e3cf1fc0eb9222c7174",
+      "faces": [
+        {
+          "id": "EditkinFace-lxgw-wenkai-mono-tc-400",
+          "weight": 400,
+          "file": "render/EditkinFace-lxgw-wenkai-mono-tc-400.ttf",
+          "bytes": 13122884,
+          "sha256": "0ddea81a7bdf32fe20ef3171459d6042367b03ca3dfae49a74874e7c3b0a3139",
+          "family": "EditkinFace lxgw-wenkai-mono-tc 400",
+          "postscriptName": "EditkinFace-lxgw-wenkai-mono-tc-400",
+          "sourceSha256": "ea6707f71c862f4f255cbe510148b676ca8f5360872633de88694f8004f3f8b3"
+        }
+      ]
+    },
+    {
+      "id": "bebas-neue",
+      "family": "Bebas Neue",
+      "file": "BebasNeue-Regular.ttf",
+      "bytes": 61400,
+      "sha256": "08e4623805102d819f58601e46e345648846075e363b2ceb23313c2d1c83ec73",
+      "license": "OFL-1.1",
+      "licenseFile": "bebas-neue-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/ec626514f79f831f1ab848a82114a0ce7e2d6372/ofl/bebasneue/BebasNeue-Regular.ttf",
+      "licenseSha256": "72082f6cb4d04be2ecf7cc7d9e1e7d73787f0af8a5a278a47cade70c16b78341",
+      "faces": [
+        {
+          "id": "EditkinFace-bebas-neue-400",
+          "weight": 400,
+          "file": "render/EditkinFace-bebas-neue-400.ttf",
+          "bytes": 61212,
+          "sha256": "e94b42810aae2e373fec15d1ffe3c12fd5ad10cb9da45cc46302c2748e566406",
+          "family": "EditkinFace bebas-neue 400",
+          "postscriptName": "EditkinFace-bebas-neue-400",
+          "sourceSha256": "08e4623805102d819f58601e46e345648846075e363b2ceb23313c2d1c83ec73"
+        }
+      ]
+    },
+    {
+      "id": "fredoka",
+      "family": "Fredoka",
+      "file": "Fredoka[wdth,wght].ttf",
+      "bytes": 159184,
+      "sha256": "2ba02e68b152868aef9ba28e24b3648c7d457fe6f25c761f2c2c53fb61a73fc8",
+      "license": "OFL-1.1",
+      "licenseFile": "fredoka-OFL.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/ec626514f79f831f1ab848a82114a0ce7e2d6372/ofl/fredoka/Fredoka%5Bwdth,wght%5D.ttf",
+      "licenseSha256": "5c9e7eee5c6b25f4b05b8d53b2e470ea4962f9ced742d044a98f7d95d1375bab",
+      "faces": [
+        {
+          "id": "EditkinFace-fredoka-300",
+          "weight": 300,
+          "file": "render/EditkinFace-fredoka-300.ttf",
+          "bytes": 50164,
+          "sha256": "5a41ad48f339c4b8a46757770aa3e19f0837f350bd7eb0e00a43f95fb955ce7e",
+          "family": "EditkinFace fredoka 300",
+          "postscriptName": "EditkinFace-fredoka-300",
+          "sourceSha256": "2ba02e68b152868aef9ba28e24b3648c7d457fe6f25c761f2c2c53fb61a73fc8"
+        },
+        {
+          "id": "EditkinFace-fredoka-350",
+          "weight": 350,
+          "file": "render/EditkinFace-fredoka-350.ttf",
+          "bytes": 50252,
+          "sha256": "c181ff4c61aa35471ac582191244881f237d1125deccbb698ca2d395245e34dd",
+          "family": "EditkinFace fredoka 350",
+          "postscriptName": "EditkinFace-fredoka-350",
+          "sourceSha256": "2ba02e68b152868aef9ba28e24b3648c7d457fe6f25c761f2c2c53fb61a73fc8"
+        },
+        {
+          "id": "EditkinFace-fredoka-400",
+          "weight": 400,
+          "file": "render/EditkinFace-fredoka-400.ttf",
+          "bytes": 50284,
+          "sha256": "b770c52ed66d6813c36ac949ac304f07d2488fe4523ea92fa0ad44ace8b6c722",
+          "family": "EditkinFace fredoka 400",
+          "postscriptName": "EditkinFace-fredoka-400",
+          "sourceSha256": "2ba02e68b152868aef9ba28e24b3648c7d457fe6f25c761f2c2c53fb61a73fc8"
+        },
+        {
+          "id": "EditkinFace-fredoka-450",
+          "weight": 450,
+          "file": "render/EditkinFace-fredoka-450.ttf",
+          "bytes": 50148,
+          "sha256": "340d2affd9c621f193e153497307cb3a54903433bc51916c5c96ad528b948afb",
+          "family": "EditkinFace fredoka 450",
+          "postscriptName": "EditkinFace-fredoka-450",
+          "sourceSha256": "2ba02e68b152868aef9ba28e24b3648c7d457fe6f25c761f2c2c53fb61a73fc8"
+        },
+        {
+          "id": "EditkinFace-fredoka-500",
+          "weight": 500,
+          "file": "render/EditkinFace-fredoka-500.ttf",
+          "bytes": 50188,
+          "sha256": "421b7b469d08bc98ecc34521be232d2dae90b4c9c00fbffa1c52345a03718cd6",
+          "family": "EditkinFace fredoka 500",
+          "postscriptName": "EditkinFace-fredoka-500",
+          "sourceSha256": "2ba02e68b152868aef9ba28e24b3648c7d457fe6f25c761f2c2c53fb61a73fc8"
+        },
+        {
+          "id": "EditkinFace-fredoka-550",
+          "weight": 550,
+          "file": "render/EditkinFace-fredoka-550.ttf",
+          "bytes": 50112,
+          "sha256": "97093680d8044d201c4c2a1b963c56c4d983a783277685bf01bb8861ebe58c4c",
+          "family": "EditkinFace fredoka 550",
+          "postscriptName": "EditkinFace-fredoka-550",
+          "sourceSha256": "2ba02e68b152868aef9ba28e24b3648c7d457fe6f25c761f2c2c53fb61a73fc8"
+        },
+        {
+          "id": "EditkinFace-fredoka-600",
+          "weight": 600,
+          "file": "render/EditkinFace-fredoka-600.ttf",
+          "bytes": 50164,
+          "sha256": "0950b3b10dce49022ad92aa0f09f76c42ba74befc8907dc86fd4ce5d940549b1",
+          "family": "EditkinFace fredoka 600",
+          "postscriptName": "EditkinFace-fredoka-600",
+          "sourceSha256": "2ba02e68b152868aef9ba28e24b3648c7d457fe6f25c761f2c2c53fb61a73fc8"
+        },
+        {
+          "id": "EditkinFace-fredoka-650",
+          "weight": 650,
+          "file": "render/EditkinFace-fredoka-650.ttf",
+          "bytes": 50084,
+          "sha256": "6afc62b930a313ae1a42853e05bfbaf86cb9d636232ff5689867744c4cf3355c",
+          "family": "EditkinFace fredoka 650",
+          "postscriptName": "EditkinFace-fredoka-650",
+          "sourceSha256": "2ba02e68b152868aef9ba28e24b3648c7d457fe6f25c761f2c2c53fb61a73fc8"
+        },
+        {
+          "id": "EditkinFace-fredoka-700",
+          "weight": 700,
+          "file": "render/EditkinFace-fredoka-700.ttf",
+          "bytes": 50028,
+          "sha256": "f132a6db393b408bad04b0036b1c42a42d079c0495c2a4015d642c9eb9203525",
+          "family": "EditkinFace fredoka 700",
+          "postscriptName": "EditkinFace-fredoka-700",
+          "sourceSha256": "2ba02e68b152868aef9ba28e24b3648c7d457fe6f25c761f2c2c53fb61a73fc8"
+        }
+      ]
+    }
+  ],
+  "staticFaceProvenance": {
+    "file": "static-face-provenance.json",
+    "sha256": "5e225aa3a69aee30a149646d22d7fff99491e93d2f9ab87e029a57da77e2aaeb"
+  }
+}

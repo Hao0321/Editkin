@@ -1,0 +1,596 @@
+.preview-stage.tracking-selecting {
+  cursor: crosshair;
+  box-shadow:
+    0 0 0 2px var(--success),
+    0 18px 38px rgba(4, 8, 19, 0.22),
+    0 0 34px color-mix(in srgb, var(--success) 24%, transparent);
+  touch-action: none;
+}
+.motion-graphic {
+  position: absolute;
+  z-index: 8;
+  box-sizing: border-box;
+  padding: 0.28em 0.48em;
+  border: 2px solid;
+  border-radius: 0.34em;
+  font-weight: 900;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  transform-origin: top left;
+  box-shadow: 0 9px 28px rgba(0, 0, 0, 0.22);
+  pointer-events: none;
+}
+.motion-graphic span {
+  position: relative;
+  z-index: 1;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.motion-graphic[data-visual-style]:not([data-visual-style="solid_panel"]) {
+  overflow: hidden;
+  box-shadow:
+    0 0 14px currentColor,
+    0 12px 30px rgba(0, 0, 0, 0.32);
+}
+.motion-graphic[data-visual-style]:not(
+    [data-visual-style="solid_panel"]
+  ):before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  opacity: 0.18;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0 4px,
+    currentColor 5px 6px
+  );
+}
+.motion-graphic[data-visual-style="holo_grid_lime"]:before {
+  background-image:
+    linear-gradient(currentColor 1px, transparent 1px),
+    linear-gradient(90deg, currentColor 1px, transparent 1px);
+  background-size: 12px 12px;
+}
+.motion-graphic[data-visual-style="target_lock_red"]:before {
+  inset: 5px;
+  border: 1px dashed currentColor;
+  background:
+    linear-gradient(currentColor, currentColor) 50% 0/1px 8px no-repeat,
+    linear-gradient(currentColor, currentColor) 50% 100%/1px 8px no-repeat;
+  opacity: 0.55;
+}
+.motion-graphic[data-visual-style="spectral_wire_violet"]:before {
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 10px,
+    currentColor 11px 12px
+  );
+}
+.motion-graphic[data-visual-style="depth_glass_blue"],
+.motion-graphic[data-visual-style="neon_extrude_white"] {
+  text-shadow:
+    3px 3px 0 currentColor,
+    0 0 12px currentColor !important;
+}
+.motion-graphic[data-visual-style="telemetry_beam_amber"]:before {
+  background: repeating-linear-gradient(
+      90deg,
+      currentColor 0 1px,
+      transparent 1px 12px
+    )
+    0 100%/100% 6px no-repeat;
+}
+.motion-graphic[data-visual-style="quantum_label_magenta"]:before {
+  background: radial-gradient(circle, currentColor 1px, transparent 1.5px);
+  background-size: 8px 8px;
+}
+.motion-graphic.motion-tag {
+  width: auto !important;
+  max-width: 32%;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.motion-graphic.motion-counter {
+  padding: 0.16em 0.24em;
+  border-radius: 0.22em;
+  font-variant-numeric: tabular-nums;
+}
+.tracking-help {
+  position: absolute;
+  z-index: 31;
+  top: 14px;
+  left: 50%;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(5, 18, 12, 0.86);
+  color: #b9ff9c;
+  font-size: 11px;
+  font-weight: 850;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.tracking-box {
+  position: absolute;
+  z-index: 30;
+  border: 2px solid #8bff58;
+  background: color-mix(in srgb, #8bff58 9%, transparent);
+  box-shadow:
+    0 0 0 1px #07110a,
+    0 0 20px rgba(139, 255, 88, 0.5);
+  pointer-events: none;
+}
+.tracking-box:before,
+.tracking-box:after {
+  content: "";
+  position: absolute;
+  background: rgba(139, 255, 88, 0.55);
+}
+.tracking-box:before {
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+}
+.tracking-box:after {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+}
+.tracking-box i {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #07110a;
+  background: #8bff58;
+}
+.tracking-box i:nth-child(1) {
+  top: -5px;
+  left: -5px;
+}
+.tracking-box i:nth-child(2) {
+  top: -5px;
+  right: -5px;
+}
+.tracking-box i:nth-child(3) {
+  bottom: -5px;
+  left: -5px;
+}
+.tracking-box i:nth-child(4) {
+  right: -5px;
+  bottom: -5px;
+}
+.motion-controls {
+  display: grid;
+  gap: 10px;
+  padding: 10px 0;
+}
+.motion-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+.motion-quick-grid button,
+.tracking-workflow > button,
+.motion-track-row button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-1);
+  color: var(--soft);
+  font-size: 10px;
+  font-weight: 780;
+  cursor: pointer;
+}
+.motion-quick-grid button:hover,
+.tracking-workflow > button:hover,
+.motion-track-row button:hover {
+  border-color: var(--success);
+  color: var(--success);
+}
+.motion-graphic-list {
+  display: grid;
+  gap: 5px;
+}
+.motion-graphic-list > div {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--surface-1);
+}
+.motion-graphic-list input {
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 11px;
+}
+.motion-graphic-list span {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 9px;
+}
+.motion-graphic-list button {
+  grid-column: 2;
+  grid-row: 1/3;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+}
+.motion-width-mode {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.motion-width-mode select {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 6px 10px;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.tracking-workflow {
+  display: grid;
+  gap: 7px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+}
+.tracking-workflow > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+.tracking-workflow > div:first-child strong {
+  color: var(--ink);
+  font-size: 11px;
+}
+.tracking-workflow small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+.tracking-workflow > button.active {
+  border-color: var(--success);
+  background: color-mix(in srgb, var(--success) 15%, var(--surface));
+  color: var(--success);
+}
+.motion-track-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto 28px;
+  gap: 4px;
+  align-items: center;
+  padding: 6px;
+  border-radius: 10px;
+  background: var(--surface-1);
+}
+.motion-track-row span,
+.motion-track-row b,
+.motion-track-row small {
+  display: block;
+  min-width: 0;
+}
+.motion-track-row b {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.motion-track-row button {
+  min-height: 30px;
+  padding: 0 7px;
+}
+.motion-track-row button.danger {
+  padding: 0;
+  color: var(--danger);
+}
+.motion-graphic-v2 {
+  position: absolute;
+  z-index: 8;
+  box-sizing: border-box;
+  overflow: visible;
+  container-type: inline-size;
+  pointer-events: none;
+}
+.motion-v2-background {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: visible;
+}
+.motion-graphic-v2 > span {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  box-sizing: border-box;
+  white-space: pre;
+  transform-origin: left top;
+  will-change: transform, opacity;
+}
+.motion-graphic-v2[data-motion-preset^="lower_third_"] {
+  z-index: 12;
+  filter: drop-shadow(0 0.7cqw 1.3cqw rgba(0, 0, 0, 0.34));
+}
+.motion-graphic-v2[data-motion-preset^="lower_third_"]
+  .motion-v2-background {
+  box-shadow: inset 0 0 0 0.08cqw rgba(255, 255, 255, 0.18);
+}
+.motion-v2-blocked {
+  position: absolute;
+  z-index: 9;
+  top: 5%;
+  left: 5%;
+  padding: 6px 9px;
+  border: 1px solid #ff6b6b;
+  border-radius: 7px;
+  background: #260b10e8;
+  color: #ffd7d7;
+  font-size: 11px;
+  font-weight: 800;
+  pointer-events: none;
+}
+.motion-quick-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+.motion-preset-card {
+  display: flex !important;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  padding: 5px !important;
+}
+.motion-preset-card > span {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 52px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #315cff;
+  color: #fff;
+  animation: motion-preview 1.6s ease-in-out infinite;
+}
+.motion-preset-card.card > span {
+  background: #fff;
+  color: #10162b;
+  border: 2px solid #ff4fa3;
+}
+.motion-preset-card.counter > span {
+  background: #ff3d9a;
+}
+.motion-preset-card b {
+  font-size: 10px;
+}
+.motion-preset-card.counter b {
+  font-size: 20px;
+}
+.motion-preset-card i {
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  font-size: 6px;
+  opacity: 0.72;
+}
+.motion-preset-card small {
+  font-size: 8px;
+  white-space: nowrap;
+}
+.tracking-preview {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+}
+.tracking-preview > span {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 56px;
+  height: 42px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #0f1826, #1d3420);
+}
+.tracking-preview > span:before {
+  content: "";
+  position: absolute;
+  width: 22px;
+  height: 26px;
+  border: 1px dashed #8bff58;
+  animation: tracking-box 1.7s ease-in-out infinite;
+}
+.tracking-preview > span b {
+  z-index: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: #8bff58;
+  color: #07110a;
+  font-size: 7px;
+}
+@keyframes motion-preview {
+  0%,
+  100% {
+    transform: translateY(4px);
+    opacity: 0.6;
+  }
+  45%,
+  70% {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes tracking-box {
+  50% {
+    transform: translateX(13px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-preset-card > span,
+  .tracking-preview > span:before {
+    animation: none;
+  }
+}
+.wave2-motion-library {
+  margin-top: 10px;
+}
+.wave2-motion-library section {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+.wave2-motion-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+.wave2-motion-grid button {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  text-align: left;
+}
+.wave2-motion-grid button i {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 24px;
+  border-radius: 6px;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+}
+.wave2-motion-grid button span {
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hologram-motion-library {
+  margin-top: 8px;
+}
+.hologram-motion-library > summary {
+  min-height: 34px;
+  font-size: 11px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.hologram-motion-library > summary small {
+  font-size: 9px;
+}
+.hologram-motion-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  max-height: 250px;
+  margin-top: 8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.hologram-motion-grid button {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  min-height: 50px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-1);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.hologram-motion-grid button:hover {
+  border-color: var(--success);
+}
+.hologram-motion-grid i {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 36px;
+  overflow: hidden;
+  border: 1px solid;
+  border-radius: 7px;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 900;
+  text-shadow: 0 0 8px currentColor;
+}
+.hologram-motion-grid i:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0 4px,
+    currentColor 5px 6px
+  );
+  opacity: 0.16;
+}
+.hologram-motion-grid span,
+.hologram-motion-grid b,
+.hologram-motion-grid small {
+  display: block;
+  min-width: 0;
+}
+.hologram-motion-grid b {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hologram-motion-grid small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.hologram-motion-grid button[data-visual-style="holo_grid_lime"] i:after {
+  background-image:
+    linear-gradient(currentColor 1px, transparent 1px),
+    linear-gradient(90deg, currentColor 1px, transparent 1px);
+  background-size: 8px 8px;
+  opacity: 0.22;
+}
+.hologram-motion-grid button[data-visual-style="target_lock_red"] i {
+  border-radius: 2px;
+}
+.hologram-motion-grid button[data-visual-style="spectral_wire_violet"] i:after {
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 6px,
+    currentColor 7px 8px
+  );
+  opacity: 0.2;
+}
+.hologram-motion-grid
+  button[data-visual-style="quantum_label_magenta"]
+  i:after {
+  background: radial-gradient(circle, currentColor 1px, transparent 1.5px);
+  background-size: 7px 7px;
+  opacity: 0.22;
+}

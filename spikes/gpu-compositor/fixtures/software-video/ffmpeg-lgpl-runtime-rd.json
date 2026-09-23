@@ -1,0 +1,47 @@
+{
+  "schema": "editkin.ffmpeg-lgpl-runtime/v1",
+  "distributionScope": "rd-only-not-for-package",
+  "shippingEligible": false,
+  "provider": "BtbN/FFmpeg-Builds",
+  "releaseTag": "autobuild-2026-09-03-13-17",
+  "buildRepositoryCommit": "8267213e26c1031621e6e1210fe3aa4867214f6a",
+  "ffmpegCommit": "1a748fe2cd43e3ead22fafb1b5b7d77f153898a8",
+  "assetName": "ffmpeg-n8.1.2-50-g1a748fe2cd-win64-lgpl-shared-8.1.zip",
+  "assetBytes": 70835267,
+  "assetSha256": "383f173d39cf610ba7d1d56bf22941f5e9470dd5ebfcf76a152e8a6f6235fe68",
+  "licenseExpression": "LGPL-3.0-or-later",
+  "licenseFile": {
+    "path": "LICENSE.txt",
+    "bytes": 7651,
+    "sha256": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768"
+  },
+  "libraries": [
+    {
+      "path": "bin/avutil-60.dll",
+      "bytes": 2937344,
+      "sha256": "156c3225112bd492e6c87ed3183c3a6cc7c550a0a82267cbb55dd5c2f4689541"
+    },
+    {
+      "path": "bin/swresample-6.dll",
+      "bytes": 722944,
+      "sha256": "6e84f36ebebd751b037f3818e3c192c63b39584b75d9271e4528e8226a317db3"
+    },
+    {
+      "path": "bin/avcodec-62.dll",
+      "bytes": 70869504,
+      "sha256": "06d152269d851b2893b5876a70c351ccf9cc752757cc6693667af7588bd30493"
+    },
+    {
+      "path": "bin/avformat-62.dll",
+      "bytes": 22107648,
+      "sha256": "d5eeee10b132ec83a88a0a64e2ca4ffe5f1f7bc8e2ac5faf311f0cb740761595"
+    }
+  ],
+  "correspondingSource": {
+    "ffmpeg": "https://github.com/FFmpeg/FFmpeg/tree/1a748fe2cd43e3ead22fafb1b5b7d77f153898a8",
+    "buildScripts": "https://github.com/BtbN/FFmpeg-Builds/tree/8267213e26c1031621e6e1210fe3aa4867214f6a",
+    "bundled": false,
+    "thirdPartyDependencySourceClosure": false
+  },
+  "packagingBlocker": "The R&D runtime is hash-pinned and LGPL-labelled, but the product does not yet bundle a reproducible minimal build plus corresponding source/notices for every statically included third-party dependency."
+}

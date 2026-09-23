@@ -1,0 +1,64 @@
+.plugin-browser { display: grid; flex: 1 1 auto; align-content: start; min-height: 0; gap: 14px; padding: 4px 6px 12px 2px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.plugin-browser-intro { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: 14px; background: color-mix(in srgb, var(--accent) 9%, var(--panel)); }
+.plugin-browser-intro > div:first-child { display: grid; gap: 4px; }
+.plugin-browser-intro b { font-size: 15px; }
+.plugin-browser-intro span, .plugin-browser-state span { color: var(--muted); font-size: 13px; line-height: 1.55; }
+.plugin-browser-state { display: grid; gap: 7px; min-height: 150px; place-content: center; padding: 20px; text-align: center; }
+.plugin-browser-actions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; }
+.plugin-browser-actions button { min-height: 38px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 750; }
+.plugin-browser-actions button.secondary { border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.plugin-selection-tip { padding: 9px 12px; border-radius: 10px; background: var(--surface-2); color: var(--muted); font-size: 13px; }
+.workflow-profile-notice { padding: 9px 12px; border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--accent) 7%, var(--surface)); color: var(--muted); font-size: 12px; line-height: 1.45; }
+.plugin-group { display: grid; gap: 8px; }
+.plugin-group > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 4px; }
+.plugin-group > header span { display: grid; gap: 2px; min-width: 0; }
+.plugin-group > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.plugin-group > header small { color: var(--muted); font-size: 11px; }
+.plugin-group > header > b { display: grid; min-width: 25px; height: 25px; place-items: center; border-radius: 999px; background: var(--surface-2); font-size: 12px; }
+.plugin-capability-list { display: grid; gap: 8px; }
+.plugin-capability { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 12px; overflow: hidden; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); }
+.plugin-capability-copy { display: grid; flex: 1; gap: 4px; min-width: 0; }
+.plugin-capability-copy > strong { font-size: 14px; }
+.plugin-capability-copy p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.plugin-capability-copy .workflow-skill-safety { color: var(--ink); }
+.workflow-skill-safety b { color: var(--accent); }
+.plugin-kind { width: max-content; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-size: 11px; }
+.plugin-role-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.plugin-role-list small { padding: 2px 6px; border-radius: 6px; background: var(--surface-2); color: var(--muted); font-size: 10px; }
+.plugin-capability button { min-height: 38px; padding: 0 11px; border: 0; border-radius: 10px; font-weight: 700; }
+.plugin-apply { min-width: 64px; background: var(--accent); color: var(--accent-ink); }
+.plugin-application-controls { display: grid; justify-items: stretch; gap: 7px; width: min(142px, 34vw); }
+.plugin-automation-toggle { min-height: 32px !important; padding: 0 8px !important; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line)) !important; background: var(--surface-2) !important; color: var(--muted); font-size: 10px; line-height: 1.2; }
+.plugin-automation-toggle[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, var(--surface)) !important; color: var(--ink); }
+.workflow-skill-controls { display: grid; justify-items: end; gap: 7px; max-width: 150px; }
+.workflow-skill-toggle { min-width: 132px; border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line)) !important; background: color-mix(in srgb, var(--accent) 12%, var(--surface)) !important; color: var(--ink); font-size: 11px; }
+.workflow-skill-toggle[aria-pressed="true"] { background: var(--accent) !important; color: var(--accent-ink); }
+.workflow-skill-priority { display: grid; grid-template-columns: 1fr 28px 28px; align-items: center; gap: 4px; width: 100%; }
+.workflow-skill-priority span { color: var(--muted); font-size: 11px; text-align: right; }
+.workflow-skill-priority button { min-height: 28px; padding: 0; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); }
+.workflow-skill-contract { display: grid; gap: 3px; margin: 7px 0; padding: 9px 10px; border-radius: 9px; background: var(--surface-2); }
+.workflow-skill-contract p { margin: 0; overflow-wrap: anywhere; line-height: 1.45; }
+.plugin-capability button:disabled { cursor: not-allowed; background: var(--surface-2); color: var(--muted); opacity: .75; }
+.plugin-settings { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 8px; color: var(--muted); font-size: 12px; }
+.plugin-settings > summary { min-height: 30px; cursor: pointer; color: var(--ink); font-size: 12px; font-weight: 700; line-height: 30px; }
+.plugin-parameter-list { display: grid; gap: 10px; padding: 8px 0 4px; }
+.plugin-parameter { display: grid; gap: 6px; }
+.plugin-parameter > span { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--ink); font-size: 12px; }
+.plugin-parameter output { color: var(--accent); font-variant-numeric: tabular-nums; }
+.plugin-parameter input[type="range"] { width: 100%; accent-color: var(--accent); }
+.plugin-parameter input[type="number"], .plugin-parameter input[type="text"], .plugin-parameter select { min-height: 36px; width: 100%; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); color: var(--ink); padding: 0 9px; }
+.plugin-parameter-toggle { grid-template-columns: 1fr auto; align-items: center; }
+.plugin-parameter-toggle input { width: 20px; height: 20px; accent-color: var(--accent); }
+.plugin-reset { justify-self: start; min-height: 32px !important; border: 1px solid var(--line) !important; background: var(--surface-2); color: var(--ink); }
+.plugin-usage-notes { display: grid; gap: 4px; margin-top: 8px; padding: 9px 10px; border-radius: 9px; background: var(--surface-2); }
+.plugin-usage-notes p { margin: 0; line-height: 1.5; }
+.plugin-usage-notes b { color: var(--ink); }
+.plugin-diagnostics { padding: 9px 11px; border-radius: 10px; background: var(--surface-2); color: var(--muted); font-size: 12px; }
+.plugin-diagnostics p { margin: 7px 0 0; line-height: 1.5; }
+@media (max-width: 420px) {
+  .plugin-capability { grid-template-columns: minmax(0, 1fr); }
+  .plugin-application-controls { width: 100%; }
+  .workflow-skill-controls { width: 100%; max-width: none; justify-items: stretch; }
+  .workflow-skill-toggle { width: 100%; }
+  .workflow-skill-priority { grid-template-columns: 1fr 38px 38px; }
+}

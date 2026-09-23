@@ -1,0 +1,23 @@
+name: Feature request
+description: Propose one bounded improvement to an Editkin user journey.
+title: "feature: "
+labels: [enhancement, needs design]
+body:
+  - type: textarea
+    id: journey
+    attributes:
+      label: User journey and problem
+      description: What is hard to do today, and for whom?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Observable acceptance criteria
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies, permissions, assets, or services
+      description: Include licenses and source links if relevant.

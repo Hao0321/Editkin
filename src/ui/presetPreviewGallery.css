@@ -1,0 +1,196 @@
+.caption-preset-gallery,
+.visual-preset-row {
+  display: flex;
+  gap: 9px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-inline: contain;
+  padding: 2px 1px 8px;
+}
+
+.caption-preset-gallery button,
+.visual-preset-row > button {
+  flex: 0 0 116px;
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  scroll-snap-align: start;
+  overflow: hidden;
+}
+
+.caption-preset-gallery button.active,
+.visual-preset-row > button.active,
+.transition-preview-grid article.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.caption-preset-gallery span {
+  display: grid;
+  place-items: center;
+  height: 46px;
+  border-radius: 8px;
+  background: #17203a;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.caption-preset-gallery small,
+.visual-preset-row small {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-gallery-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.preset-gallery-heading strong { font-size: 16px; }
+.preset-gallery-heading small { color: var(--muted); font-size: 12px; text-align: right; }
+
+.preset-visual {
+  display: grid;
+  place-items: center;
+  height: 64px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.preset-visual img { width: 100%; height: 100%; object-fit: cover; }
+.preset-visual i { padding: 8px; color: var(--muted); font-size: 12px; font-weight: 500; font-style: normal; text-align: center; }
+
+.transition-library-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 3px 0 7px;
+}
+
+.transition-library-tabs button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 6px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.transition-library-tabs button.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  color: var(--primary);
+}
+
+.transition-truth-note {
+  display: block;
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.transition-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  max-height: 430px;
+  padding-right: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.transition-preview-grid article {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.transition-preview-grid article > strong {
+  display: block;
+  margin: 6px 0 2px;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transition-preview-grid article > small {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.transition-preview-grid article > div:last-child { display: flex; gap: 6px; }
+.transition-preview-grid button { flex: 1; min-height: 32px; padding: 6px; font-size: 11px; }
+
+.transition-demo {
+  position: relative;
+  height: 46px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: #10182e;
+}
+
+.transition-demo i,
+.transition-demo b { position: absolute; inset: 0 50% 0 0; background: #315cff; }
+.transition-demo b { left: 50%; right: 0; background: #ff4fa3; }
+.transition-demo.fade i { animation: p-fade 1.4s ease-in-out infinite; }
+.transition-demo.zoom b { animation: p-zoom 1.4s ease-in-out infinite; }
+.transition-demo.whip i { animation: p-whip 1.4s ease-in-out infinite; }
+.transition-demo.flash::after { content: ""; position: absolute; inset: 0; background: #fff; animation: p-flash 1.4s ease-in-out infinite; }
+
+/* Preview motion only when requested, not dozens of hidden infinite animations. */
+.transition-demo i,.transition-demo b,.transition-demo.flash::after { animation-play-state: paused; }
+.transition-preview-grid article:hover .transition-demo i,
+.transition-preview-grid article:hover .transition-demo b,
+.transition-preview-grid article:hover .transition-demo::after,
+.transition-preview-grid article:focus-within .transition-demo i,
+.transition-preview-grid article:focus-within .transition-demo b,
+.transition-preview-grid article:focus-within .transition-demo::after { animation-play-state: running; }
+.transition-library-tabs button,.transition-preview-grid button { min-height: 38px; font-size: 13px; }
+.transition-preview-grid article > strong { font-size: 14px; white-space: normal; line-height: 1.4; }
+.transition-preview-grid article > small { font-size: 12px; }
+.applied-transition-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.applied-transition-actions button { min-height: 38px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.applied-transition-actions button:hover { border-color: var(--danger); color: var(--danger); }
+.caption-preset-gallery:focus-visible,.visual-preset-row:focus-visible,.transition-preview-grid:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+@keyframes p-fade { 50% { opacity: .12; } }
+@keyframes p-zoom { 50% { transform: scale(1.35); } }
+@keyframes p-whip { 50% { transform: translateX(88%); } }
+@keyframes p-flash { 0%, 40%, 60%, 100% { opacity: 0; } 50% { opacity: .9; } }
+
+.caption-color-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.caption-color-grid label { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 7px; border: 1px solid var(--line); border-radius: 9px; font-size: 11px; }
+.caption-color-grid input[type="color"] { width: 32px; height: 24px; padding: 0; border: 0; background: transparent; }
+.caption-background-presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.caption-background-presets button { padding: 6px 2px; font-size: 10px; }
+.caption-opacity { display: grid; grid-template-columns: 1fr 40px; gap: 6px; align-items: center; }
+.caption-opacity input { width: 100%; }
+
+@media (max-width: 440px) {
+  .transition-preview-grid { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transition-demo *,
+  .transition-demo::after { animation: none !important; }
+}
