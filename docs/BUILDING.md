@@ -14,7 +14,7 @@ With an independently installed FFmpeg and ffprobe on `PATH`, run `npm run test:
 
 The Rust and Tauri source is included for development. The desktop media pipeline needs platform-specific runtimes and generated color/font products. A developer must fetch or build those from their upstream sources and comply with their licenses. The existing internal release scripts may expect owner-only creative packs or signing inputs; their failure in this community checkout is an explicit limitation, not a request to obtain the maintainer's private files.
 
-Do not distribute a binary as an official Editkin release based solely on a passing web build or source test. A public installer needs a fresh, exact-artifact review: third-party corresponding source and notices (especially FFmpeg), platform-specific build and edit/export testing, code signing, update-channel verification, and provenance attestation. [RELEASE.md](RELEASE.md) tracks that work.
+Do not distribute a binary as an official Editkin release based solely on a passing web build or source test. A public installer needs a fresh, exact-artifact review: third-party corresponding source and notices (especially FFmpeg), platform-specific build and edit/export testing, final hashes and SBOM, a verified release identity, and provenance attestation. The current packaged Windows updater specifically requires Authenticode; an unsigned community build cannot use that updater. [RELEASE.md](RELEASE.md) tracks the available release paths.
 
 ## Source asset provenance
 

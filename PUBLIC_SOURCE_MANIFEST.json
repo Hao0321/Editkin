@@ -111,8 +111,8 @@
     },
     {
       "path": "docs/BUILDING.md",
-      "bytes": 3642,
-      "sha256": "b4bdfbbadad7c2aade8e92649a82e66e43d3faeac61eae681ad508967c379214",
+      "bytes": 3795,
+      "sha256": "0469d5844bb79e6e6687c30935ec327825e86bdd358e2fdaea813207e60b15aa",
       "origin": "open-source/docs/BUILDING.md",
       "rights": "GPL-3.0-or-later"
     },
@@ -132,8 +132,8 @@
     },
     {
       "path": "docs/RELEASE.md",
-      "bytes": 1124,
-      "sha256": "06683df0a15dc3ac7af97819151206255d7126d0d1dc2c8287ea062ac04a7807",
+      "bytes": 1602,
+      "sha256": "a80a29671f4bdc09bdc97d3939df289e73b980a55489d88b90862e7d9d29d510",
       "origin": "open-source/docs/RELEASE.md",
       "rights": "GPL-3.0-or-later"
     },
@@ -769,15 +769,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 2202,
-      "sha256": "348d8cb8dc3d62d15cce8d4745de7688e506e7d40a32605a4a584986444d68ac",
+      "bytes": 2203,
+      "sha256": "9bea63b6f16cf8cd36e6e1952b7552081b46a217a9c5c93b19e89f8f9dae397d",
       "origin": "open-source/README.md",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "README.zh-TW.md",
-      "bytes": 2041,
-      "sha256": "752c2cb7c01f6f0f66c00dcbcbbc08b5fcd217bc6578c8a34db55f7e948d6452",
+      "bytes": 2197,
+      "sha256": "3a9435437485ab9661e1c7e636213fccf5b81b70fee02a9b0e5e85ba6a680751",
       "origin": "open-source/README.zh-TW.md",
       "rights": "GPL-3.0-or-later"
     },
@@ -4199,15 +4199,15 @@
     },
     {
       "path": "src/application/automaticCaptions.test.ts",
-      "bytes": 6795,
-      "sha256": "58a9e926f16934bed06af2819ab099efada6e57428a8f6f07d41194cd28aa291",
+      "bytes": 6933,
+      "sha256": "dca85b5ab1c763597be371d0376bf37b2877714672f3264fe1746cd40b9ae7ac",
       "origin": "src/application/automaticCaptions.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/application/automaticCaptions.ts",
-      "bytes": 34238,
-      "sha256": "188712c5fe9a11418b0737ea6faec09d63a523f6f64512c122cdc29e0e9887ff",
+      "bytes": 34417,
+      "sha256": "3762bada81005f99306ca0caa6b6309299bccd1e7acbd1fdec3c7054b00ffb40",
       "origin": "src/application/automaticCaptions.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -5277,15 +5277,15 @@
     },
     {
       "path": "src/application/semanticAutoEdit.test.ts",
-      "bytes": 4148,
-      "sha256": "c15797906c901722c630eac0ca736152dd609461312231506db98e33c9d0cdd6",
+      "bytes": 4721,
+      "sha256": "4bda138432346e489e3d5f64900b3515a927b53092801fb1b86575dec39ca397",
       "origin": "src/application/semanticAutoEdit.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/application/semanticAutoEdit.ts",
-      "bytes": 10146,
-      "sha256": "3c38097dbe106b30fb9b125a9330288591eed1500d9e04892cbe8d5a9a35cab0",
+      "bytes": 11320,
+      "sha256": "5a3bf1be7b53c5edcc04467ef01331e20f9c68c882a3bd549c065f834def37ac",
       "origin": "src/application/semanticAutoEdit.ts",
       "rights": "GPL-3.0-or-later"
     },

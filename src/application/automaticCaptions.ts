@@ -310,7 +310,9 @@ export function parseWhisperSrt(input: string, duration = Number.POSITIVE_INFINI
     const [startText, endText] = timestamps;
     const start = parseTimestamp(startText ?? "");
     const end = parseTimestamp((endText ?? "").trim().split(/\s+/)[0]);
-    const text = lines.slice(timingIndex + 1).join(" ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+    // Whisper SRT can contain formatting tags. Remove complete tags and any
+    // leftover angle delimiters so malformed markup remains plain caption text.
+    const text = lines.slice(timingIndex + 1).join(" ").replace(/<[^>]+>/g, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
     if (start === undefined || end === undefined || end <= start || !text) throw new AutomaticCaptionParseError(index + 1);
     // Preserve the existing exact marker policy; this is not a speech detector.
     // The complete original output is retained by parseWhisperRecognition.

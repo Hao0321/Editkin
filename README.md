@@ -15,7 +15,7 @@ npm run build
 npm run dev
 ```
 
-`npm run dev` opens the web UI at `http://127.0.0.1:5173`. The UI and core TypeScript can be built without private files. Native desktop builds also need Rust stable and platform-specific media runtimes. This source snapshot does not include a cleared, signed installer. See [BUILDING.md](docs/BUILDING.md) before claiming a desktop release.
+`npm run dev` opens the web UI at `http://127.0.0.1:5173`. The UI and core TypeScript can be built without private files. Native desktop builds also need Rust stable and platform-specific media runtimes. This source snapshot does not include a cleared official installer. See [BUILDING.md](docs/BUILDING.md) before claiming a desktop release.
 
 The bundled demo videos are generated color bars with silent audio. You can use your own lawfully redistributable media when testing edits. Some advanced rendering, fonts, color transforms, captions, and native model features require separately obtained dependencies; a web build alone does not prove those paths.
 

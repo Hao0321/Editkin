@@ -36,7 +36,43 @@ export interface SemanticAutoEditPlan {
 }
 
 const SIGNAL_WORDS = /(重點|關鍵|結論|方法|結果|原因|證明|總結|為什麼|怎麼|important|key|result|because|therefore|how|why|summary|\d)/giu;
-const FILLER_ONLY = /^(?:(?:嗯+|呃+|啊+|喔+|那個|就是|然後|好|okay|ok|um+|uh+|erm+)[\s,.!?，。！？、]*)+$/i;
+const FILLER_SEPARATORS = new Set([",", ".", "!", "?", "，", "。", "！", "？", "、"]);
+const FILLER_FIXED_WORDS = ["那個", "就是", "然後", "okay", "ok"];
+
+// A repeated, nested regex can backtrack exponentially on a long transcript.
+// Consume each character once so hostile caption text cannot stall auto-edit.
+function isFillerOnly(text: string): boolean {
+  const value = text.toLowerCase();
+  let cursor = 0;
+  let sawWord = false;
+  while (cursor < value.length) {
+    const character = value[cursor];
+    if (/\s/u.test(character) || FILLER_SEPARATORS.has(character)) {
+      if (!sawWord) return false;
+      cursor += 1;
+      continue;
+    }
+    if ("嗯呃啊喔好".includes(character)) {
+      sawWord = true;
+      cursor += 1;
+      continue;
+    }
+    const fixed = FILLER_FIXED_WORDS.find((word) => value.startsWith(word, cursor));
+    if (fixed) {
+      sawWord = true;
+      cursor += fixed.length;
+      continue;
+    }
+    const repeated = value.startsWith("erm", cursor) ? ["erm", "m"]
+      : value.startsWith("um", cursor) ? ["um", "m"]
+      : value.startsWith("uh", cursor) ? ["uh", "h"] : undefined;
+    if (!repeated) return false;
+    sawWord = true;
+    cursor += repeated[0].length;
+    while (value[cursor] === repeated[1]) cursor += 1;
+  }
+  return sawWord;
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -106,7 +142,7 @@ function scoreSegment(start: number, end: number, request: SemanticAutoEditReque
   const signalScore = clamp(signals / 3, 0, 1);
   const emphasis = /[!?！？]/.test(text) ? 1 : 0;
   const visualScore = clamp(Math.max(0, ...boundaryCut.map((cut) => cut.score)) / 100, 0, 1);
-  const fillerPenalty = compactText && FILLER_ONLY.test(text.trim()) ? 0.82 : 0;
+  const fillerPenalty = compactText && isFillerOnly(text.trim()) ? 0.82 : 0;
   const semantic = analyzeSemanticHighlightSignals(text);
   const score = clamp(0.12 * speechCoverage + 0.08 * density + 0.06 * signalScore + 0.04 * emphasis + 0.05 * visualScore + semantic.bonus - semantic.penalty - fillerPenalty, 0, 1);
   const reasons: string[] = [...semantic.reasons];

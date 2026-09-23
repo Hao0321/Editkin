@@ -20,6 +20,13 @@ const fixture = {
 } as const;
 
 describe("semantic automatic editing", () => {
+  it("scores long repeated filler transcripts without regex backtracking", () => {
+    const onlyFiller = planSemanticAutoEdit({ duration: 10, fps: 30, cues: [{ start: 0, end: 10, text: "嗯".repeat(8_000) }] });
+    const withContent = planSemanticAutoEdit({ duration: 10, fps: 30, cues: [{ start: 0, end: 10, text: "嗯".repeat(8_000) + "x" }] });
+    expect(onlyFiller.segments.some((segment) => segment.reasons.includes("僅有填充語"))).toBe(true);
+    expect(withContent.segments.some((segment) => segment.reasons.includes("僅有填充語"))).toBe(false);
+  });
+
   it("rejects subframe inputs and does not round the reported original duration upward", () => {
     expect(() => planSemanticAutoEdit({ duration: .01, fps: 30, cues: [{ start: 0, end: .01, text: "短" }] })).toThrow("完整影格");
     const plan = planSemanticAutoEdit({ duration: 21.95, fps: 30, cues: [{ start: 0, end: 21.95, text: "完整語句" }], targetRatio: 1 });
