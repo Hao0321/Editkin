@@ -1,7 +1,11 @@
 {
   "schema": "editkin.source-test-exclusions/v1",
-  "reason": "These original product integration suites require binaries or generated artifacts absent from the community source checkout. They are retained in source and are not claimed by npm test.",
+  "reason": "These original product integration suites require binaries, an external skill, or generated artifacts absent from the community source checkout. They are retained in source and are not claimed by npm test.",
   "entries": [
+    {
+      "file": "src/application/autopilotPlanHash.integration.test.ts",
+      "prerequisite": "Separately installed video-autopilot skill and its Python workflow_state module"
+    },
     {
       "file": "src/application/autoColorExposure.integration.test.ts",
       "prerequisite": "External FFmpeg, generated color products, or native media runtime"

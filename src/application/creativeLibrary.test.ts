@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -36,7 +36,7 @@ describe("community Creative Library", () => {
     expect(listed.assets[0]).not.toHaveProperty("sha256");
     const resolved = await resolveCreativeLibraryAsset(root, asset.id);
     expect(resolved.sha256).toBe(asset.sha256);
-    expect(resolved.absolutePath).toBe(join(root, "sample.mp4"));
+    expect(resolved.absolutePath).toBe(await realpath(join(root, "sample.mp4")));
   });
 
   it("rejects private sources and paths that escape the pack", async () => {

@@ -36,6 +36,7 @@ export default defineConfig(({ command }) => ({
       ...configDefaults.exclude,
       ".rd/**",
       ...nodeTestFiles,
+      ...(process.platform === "win32" ? [] : ["scripts/electron-update-ipc.test.ts"]),
       ...(process.env.EDITKIN_FULL_TESTS === "1" ? [] : sourceTestExclusions.entries.map(row => row.file)),
     ],
   },

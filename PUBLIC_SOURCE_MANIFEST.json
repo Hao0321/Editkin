@@ -118,8 +118,8 @@
     },
     {
       "path": "docs/BUILDING.md",
-      "bytes": 3524,
-      "sha256": "ae6932831a649e838947de26af0a738b84e8a778a65a35ff5f1ea0aecd12a1e2",
+      "bytes": 3642,
+      "sha256": "b4bdfbbadad7c2aade8e92649a82e66e43d3faeac61eae681ad508967c379214",
       "origin": "open-source/docs/BUILDING.md",
       "rights": "GPL-3.0-or-later"
     },
@@ -181,8 +181,8 @@
     },
     {
       "path": "electron/runtimeUrls.test.ts",
-      "bytes": 2933,
-      "sha256": "071c516e4baaecfb67923d376d36971eaf747aeff1f6b290f26b9b21304688c0",
+      "bytes": 3035,
+      "sha256": "e6d2de747407f0bb0cf5bddd5f805987842d2faea01fd68fe3013a8f5a120eff",
       "origin": "electron/runtimeUrls.test.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -3366,8 +3366,8 @@
     },
     {
       "path": "source-test-exclusions.json",
-      "bytes": 6560,
-      "sha256": "00343e3d87ac042d7876da34792e943d1c04a712e2bacd423b1f7ab497887021",
+      "bytes": 6766,
+      "sha256": "df6acdd4b25fac05b9b21951dbbceb94f2591417d6a25463e1c44457cd0ce05e",
       "origin": "open-source/source-test-exclusions.json",
       "rights": "GPL-3.0-or-later"
     },
@@ -4444,8 +4444,8 @@
     },
     {
       "path": "src/application/batchAutoEdit.test.ts",
-      "bytes": 4869,
-      "sha256": "cf31b1e91c534d7dec02b09b8647bfbc977e39ccfb04127f06a39fd4bd1e8432",
+      "bytes": 4974,
+      "sha256": "29710fa9df3a93260e423bda83b2c6f2382993f84f177ef7274e7bc8f065c648",
       "origin": "src/application/batchAutoEdit.test.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -4500,8 +4500,8 @@
     },
     {
       "path": "src/application/creativeLibrary.test.ts",
-      "bytes": 3055,
-      "sha256": "9418cb09872967abe719d8b91ccc70f93f09f526de6e82fe988493f4b7b11d9c",
+      "bytes": 3081,
+      "sha256": "691c20b58e61d436f8fb83a8e3d41facedc7b6a565b6d28b729ee54e3f03df8c",
       "origin": "open-source/overrides/src/application/creativeLibrary.test.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -8826,8 +8826,8 @@
     },
     {
       "path": "vite.config.ts",
-      "bytes": 2051,
-      "sha256": "f2082f4c1784781e84117219a306d2d01ce86b4faae7eb9f520c06cc920ecba9",
+      "bytes": 2139,
+      "sha256": "5b7f04296fea986f2f8946b120185f159faaeb56f388fe4d7a86530977f74369",
       "origin": "open-source/overrides/vite.config.ts",
       "rights": "GPL-3.0-or-later"
     }

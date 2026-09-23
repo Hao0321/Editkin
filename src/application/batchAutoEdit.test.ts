@@ -1,5 +1,5 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { batchArtifactPaths, createBatchSourceProject, runBatchAutoEditItem } from "./batchAutoEdit";
@@ -83,8 +83,9 @@ describe("batch auto edit", () => {
   });
 
   it("keeps vertical footage vertical and rejects unsafe job identities", () => {
+    const fixtureRoot = resolve(tmpdir(), "editkin-batch-test-fixture");
     const built = createBatchSourceProject({
-      sourcePath: "C:\\media\\vertical.mp4",
+      sourcePath: join(fixtureRoot, "vertical.mp4"),
       jobId: "job-003",
       duration: 8,
       width: 1080,
@@ -94,10 +95,10 @@ describe("batch auto edit", () => {
     });
     expect([built.project.width, built.project.height]).toEqual([1080, 1920]);
     const square = createBatchSourceProject({
-      sourcePath: "C:\\media\\square.mp4", jobId: "job-004", duration: 8, width: 1080, height: 1080,
+      sourcePath: join(fixtureRoot, "square.mp4"), jobId: "job-004", duration: 8, width: 1080, height: 1080,
       sourceSha256: "e".repeat(64), now: new Date("2026-08-22T00:00:00.000Z"),
     });
     expect([square.project.width, square.project.height]).toEqual([1080, 1080]);
-    expect(() => batchArtifactPaths({ jobId: "../escape", sourcePath: "C:\\media\\x.mp4", outputRoot: "C:\\output" })).toThrow(/ID/);
+    expect(() => batchArtifactPaths({ jobId: "../escape", sourcePath: join(fixtureRoot, "x.mp4"), outputRoot: fixtureRoot })).toThrow(/ID/);
   });
 });
