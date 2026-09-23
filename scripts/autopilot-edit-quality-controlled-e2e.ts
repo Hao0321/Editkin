@@ -1,11 +1,12 @@
 import { strict as assert } from "node:assert";
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { copyFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { createAutopilotV4Fixture } from "../src/application/autopilotPlanFixture";
+import { MOTION_TREATMENT_FAMILIES, motionCommandFamilies } from "../src/application/motionTreatment";
 import {
   AUTOPILOT_MAX_CONTEXT_TOKENS,
   autopilotPlanSha256,
@@ -19,8 +20,8 @@ import { createMotionGraphic } from "../src/motion/composition";
 
 const appRoot = resolve(import.meta.dirname, "..");
 const artifactParent = resolve(appRoot, ".rd/artifacts");
-const artifactRoot = resolve(artifactParent, "autopilot-edit-quality-controlled-e2e");
-const reportPath = resolve(appRoot, ".rd/benchmarks/editkin-autopilot-edit-quality-controlled-e2e/report.json");
+const artifactRoot = resolve(process.env.EDITKIN_CONTROLLED_E2E_ARTIFACT_ROOT ?? resolve(artifactParent, "autopilot-edit-quality-controlled-e2e"));
+const reportPath = resolve(process.env.EDITKIN_CONTROLLED_E2E_REPORT_PATH ?? resolve(appRoot, ".rd/benchmarks/editkin-autopilot-edit-quality-controlled-e2e/report.json"));
 const ffmpegPath = resolve(appRoot, "vendor/ffmpeg/win32-x64/ffmpeg.exe");
 const ffprobePath = resolve(appRoot, "vendor/ffmpeg/win32-x64/ffprobe.exe");
 const nativeCorePath = resolve(appRoot, "native/bin/win32-x64/hao-core.exe");
@@ -202,9 +203,12 @@ function calibrateFamilyEvaluator(observations: Record<FamilyId, JsonRecord>): R
 async function main(): Promise<void> {
   const artifactRelation = relative(artifactParent, artifactRoot);
   assert.ok(artifactRelation && !artifactRelation.startsWith("..") && !isAbsolute(artifactRelation), "unsafe controlled artifact path");
+  const benchmarkParent = resolve(appRoot, ".rd/benchmarks");
+  const reportRelation = relative(benchmarkParent, reportPath);
+  assert.ok(reportRelation && !reportRelation.startsWith("..") && !isAbsolute(reportRelation), "unsafe controlled report path");
   await rm(artifactRoot, { recursive: true, force: true });
   await mkdir(artifactRoot, { recursive: true });
-  await mkdir(resolve(appRoot, ".rd/benchmarks/editkin-autopilot-edit-quality-controlled-e2e"), { recursive: true });
+  await mkdir(resolve(reportPath, ".."), { recursive: true });
 
   const sourcePath = join(artifactRoot, sourceFileName);
   const musicPath = join(artifactRoot, musicFileName);
@@ -212,7 +216,13 @@ async function main(): Promise<void> {
   const baselinePath = join(artifactRoot, baselineFileName);
   const candidatePath = join(artifactRoot, candidateFileName);
   const qualityReceiptPath = join(artifactRoot, qualityReceiptFileName);
-  await copyFile(resolve(appRoot, "public/demo-source.mp4"), sourcePath);
+  await runText(ffmpegPath, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+    "-f", "lavfi", "-i", "testsrc2=size=960x540:rate=30:duration=4",
+    "-f", "lavfi", "-i", "sine=frequency=220:sample_rate=48000:duration=4",
+    "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18",
+    "-pix_fmt", "yuv420p", "-x264-params", "colorprim=bt709:transfer=bt709:colormatrix=bt709:range=tv",
+    "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv",
+    "-c:a", "aac", "-b:a", "128k", "-t", "4", sourcePath]);
   await runText(ffmpegPath, [
     "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
     "-f", "lavfi", "-i", "sine=frequency=330:sample_rate=48000:duration=4",
@@ -268,7 +278,7 @@ async function main(): Promise<void> {
             type: "import_asset",
             asset: {
               id: "asset-source", name: "Controlled source", kind: "video", uri: sourcePath,
-              duration: 12, width: 960, height: 540,
+              duration: 4, width: 960, height: 540,
               derivatives: { sourceSha256, generatedAt },
             },
           },
@@ -325,8 +335,8 @@ async function main(): Promise<void> {
         locations: [],
         segments: [{
           start: 0, end: 4,
-          summary: "保留主體畫面，移除中段短暫停頓，並以可編輯字幕與圖卡補足說明",
-          subjects: ["software interface"], actions: ["demonstration"], objects: ["editor"], importance: 0.9,
+          summary: "可見彩色測試圖樣；工程樣片用來驗證可編輯字幕、圖卡、調色和音訊輸出",
+          subjects: ["synthetic test pattern"], actions: ["motion test"], objects: ["colour bars"], importance: 0.9,
           evidenceFrameIds: frameIds, transcriptCueIndexes: [],
         }],
       },
@@ -361,6 +371,37 @@ async function main(): Promise<void> {
       { type: "add_director_marker", marker: { id: "marker-review", time: 2.3, title: "檢查圖卡", note: "工程 evidence，不代表真人審美通過", kind: "note", status: "open", createdAt: generatedAt } },
       { type: "rename_project", name: "Controlled v4 Autopilot Edited" },
     ];
+    const designRequest = {
+      format: fixture.route.format, domain: fixture.route.domain,
+      topic: "可編輯自動剪輯工程驗證", duration: 3,
+      beats: fixture.editorial.narrative.beats.map(beat => ({
+        id: beat.id, role: beat.id === "promise" ? "first_frame" : beat.id === "payoff" ? "payoff" : "chapter",
+        energy: beat.energy, subject: beat.primaryFocus,
+      })),
+    };
+    const designPages = new Map<string, JsonRecord>();
+    for (const pageId of ["context", ...designRequest.beats.map(beat => `beat:${beat.id}`)]) {
+      let offset = 0; let content = ""; let page: JsonRecord;
+      do {
+        page = toolPayload(await client.callTool({ name: "get_autopilot_design_brief",
+          arguments: { projectPath: projectFileName, request: designRequest, pageId, offset, maxTokens: 900 } }),
+        `get_autopilot_design_brief:${pageId}`);
+        assert.equal(page.status, "GREEN");
+        content += page.text;
+        offset = page.nextOffset;
+      } while (page.hasMore);
+      JSON.parse(content);
+      designPages.set(pageId, page);
+    }
+    const designContext = designPages.get("context")!;
+    const beatCommandIndexes: Record<string, number[]> = { promise: [2], setup: [6], payoff: [8] };
+    const motionTreatment = { schema: "editkin.motion-treatment/v1", decisions: MOTION_TREATMENT_FAMILIES.map(family => {
+      const commandIndexes = commands.flatMap((command, index) =>
+        motionCommandFamilies(command as CurrentAutopilotPlan["commands"][number]).includes(family) ? [index] : []);
+      return { family, action: commandIndexes.length ? "use" : "omit",
+        reason: commandIndexes.length ? `工程驗證素材的 ${family} 命令有實際畫面或聲音用途` : `工程驗證素材沒有 ${family} 的必要語意與證據，保持乾淨`,
+        beatIds: commandIndexes.length ? designRequest.beats.map(beat => beat.id) : [], commandIndexes };
+    }) };
     const planInput = {
       ...fixture,
       budget: { ...fixture.budget, contextTokens },
@@ -375,8 +416,16 @@ async function main(): Promise<void> {
           semanticReceiptSha256,
         }],
       },
+      designEvidence: { schema: "editkin.autopilot-design-evidence/v1", request: designRequest,
+        projectSha256: designContext.projectSha256, sourceSha256: designContext.sourceSha256,
+        briefSha256: designContext.briefSha256,
+        decisions: designRequest.beats.map(beat => ({ beatId: beat.id,
+          recipeSha256: designPages.get(`beat:${beat.id}`)!.recipeSha256,
+          application: `以真實來源畫面實作 ${beat.subject}，並保持可讀的視覺層級`,
+          commandIndexes: beatCommandIndexes[beat.id] })) },
       editorial: {
         ...fixture.editorial,
+        motionTreatment,
         graphics: [{
           id: "graphic-proof", presetId: "studio_marker_burst", range: { startFrame: 69, endFrame: 99 },
           kind: "title_card", purpose: "payoff", message: "可編輯・可重做", evidenceRefs: ["receipt:controlled-v4"],

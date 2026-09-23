@@ -2,11 +2,10 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { designRequestSchema, assertDesignDecisionBinding, type DesignRequest } from "../application/autopilotDesignContract";
 import type { CurrentAutopilotPlan } from "../application/autopilotPlan";
-import { sha256Canonical } from "../application/autopilotInvocationIdentity";
+import { readLiveAutopilotIdentity, resolveLiveVideoAutopilotSkillPath, sha256Canonical } from "../application/autopilotInvocationIdentity";
 import { assertMotionTreatmentBinding } from "../application/motionTreatment";
 import type { EditProject } from "../domain/types";
 import type { EditorCommand } from "../domain/commands";
@@ -20,15 +19,21 @@ export interface CurrentDesignBrief {
   context: unknown;
   recipes: { beatId: string; recipe: { route: { primary_family: string }; [key: string]: unknown } }[];
 }
-export async function compileCurrentDesign(request: DesignRequest): Promise<CurrentDesignBrief> {
-  const script = resolve(homedir(), ".codex/skills/video-autopilot/editkin_design_bridge.py");
-  const { stdout } = await promisify(execFile)("python", ["-X", "utf8", script, "--request-json", JSON.stringify(request)], {
+export async function compileCurrentDesign(request: DesignRequest, options: { skillPath?: string; pluginRoots?: string[] } = {}): Promise<CurrentDesignBrief> {
+  const skillPath = await resolveLiveVideoAutopilotSkillPath(options.skillPath);
+  await readLiveAutopilotIdentity({ skillPath, pluginRoots: options.pluginRoots });
+  const script = resolve(dirname(skillPath), "editkin_design_bridge.py");
+  const { stdout } = await promisify(execFile)(process.env.EDITKIN_PYTHON_EXECUTABLE ?? "python", ["-X", "utf8", script, "--request-json", JSON.stringify(request)], {
     windowsHide: true, timeout: 30000, maxBuffer: 1024 * 1024, encoding: "utf8",
   });
   const brief = JSON.parse(stdout) as CurrentDesignBrief;
   if (brief.schema !== "hao.editkin.current-design-brief/v1" ||
-      sha256Canonical(brief.request) !== sha256Canonical(request) || !/^[a-f0-9]{64}$/.test(brief.sourceSha256) ||
-      brief.recipes.length !== request.beats.length || brief.recipes.some((row, i) => row.beatId !== request.beats[i].id)) {
+      sha256Canonical(brief.request) !== sha256Canonical(request) ||
+      !Array.isArray(brief.sources) || brief.sources.length === 0 ||
+      brief.sources.some(row => !row || typeof row.path !== "string" || !/^[a-f0-9]{64}$/.test(row.sha256)) ||
+      brief.sourceSha256 !== sha256Canonical(brief.sources) ||
+      !Array.isArray(brief.recipes) || brief.recipes.length !== request.beats.length ||
+      brief.recipes.some((row, i) => row.beatId !== request.beats[i].id || !row.recipe?.route?.primary_family)) {
     throw new Error("Current Skill design compiler returned an invalid brief");
   }
   return brief;
@@ -82,7 +87,7 @@ function page(text: string, offset: number, maxTokens: number) {
 
 export function registerAutopilotDesignTools(server: McpServer) {
   server.registerTool("get_autopilot_design_brief", {
-    description: "從目前私人 Video Autopilot Skill 的設計 DNA、學習記憶、影視颶風與資訊節奏編譯段落配方。分頁讀完 context 及每個 beat，將 identity、request、recipeSha256 與實際 commandIndexes 放入 v4 designEvidence。只讀，不認證美感。",
+    description: "從目前啟用的 Video Autopilot Skill 編譯段落設計配方；私人 Skill 可使用其學習記憶，公開 Kit 使用公開設計 DNA。分頁讀完 context 及每個 beat，將 identity、request、recipeSha256 與實際 commandIndexes 放入 v4 designEvidence。只讀，不認證美感。",
     inputSchema: z.object({ projectPath: z.string(), request: designRequestSchema,
       pageId: z.string().max(90).default("context"), offset: z.number().int().nonnegative().default(0),
       maxTokens: z.number().int().min(300).max(900).default(900) }),

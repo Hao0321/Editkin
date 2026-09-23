@@ -19,12 +19,13 @@ import { EFFECT_PRESETS, LOOK_PRESETS, TEXT_STYLE_PRESETS, TRANSITION_PRESETS, c
 import { DEFAULT_COLOR, DEFAULT_TRANSFORM } from "../domain/types";
 import { editorCommandSchema } from "./schemas";
 import { analyzeMotionTrack } from "../application/motionTracking";
+import type { EditorCommand } from "../domain/commands";
 import { createMotionGraphic } from "../motion/composition";
 import { compactMotionGraphicPresets, findMotionGraphicPreset, motionGraphicPresets } from "../creative/motionGraphicPresets";
 import { motionPresetVariantDescriptor } from "../application/motionPresetVariant";
 import { compactCinematicLanguageIndex, resolveCinematicRecipe } from "../creative/cinematicLanguage";
 import { SHORT_FORM_TEMPLATES } from "../application/shortFormTemplates";
-import { LONG_FORM_TEMPLATES } from "../application/longFormTemplates";
+import { LONG_FORM_TEMPLATES, LONG_FORM_WHITE_CAPTION_STYLE } from "../application/longFormTemplates";
 import { editorialProfile } from "../application/editorialProfiles";
 import { registerAutopilotTools } from "./autopilotTools";
 import { EDITKIN_MCP_INSTRUCTIONS, registerMaterialIntelligenceTools } from "./materialIntelligenceTools";
@@ -264,33 +265,86 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
     } catch (error) { return errorResult(error); }
   });
 
-  server.registerTool("track_subject_and_attach_label", {
-    description: "用 FFmpeg 取樣＋Rust 原生追蹤選定影片的自訂區域，保存 confidence/lost 狀態並綁定 hao.motion-composition/v1 標籤；手動修正可再用 apply_edit_commands 寫 set_motion_track_point。",
-    inputSchema: z.object({
-      projectPath: z.string(), clipId: z.string(), initialTime: z.number().nonnegative().default(0),
-      rect: z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), width: z.number().min(0.02).max(1), height: z.number().min(0.02).max(1) }),
-      label: z.string().min(1).max(120).default("追蹤重點"),
-    }),
+  server.registerTool("prepare_autopilot_template_package", {
+    description: "只讀編譯已選短片／長片模板的原生 Look 與長片半透明黑底白字字幕命令。需要明確 clipIds；不帶模板假文案、預設字卡、無證據 VFX／轉場或自動重剪。Agent 把回傳命令放入 v4 plan，根據設計 brief 選 Motion v2 圖卡並逐項 audit/apply。",
+    inputSchema: z.object({ projectPath: z.string(), format: z.enum(["short", "long"]), templateId: z.string().min(1),
+      clipIds: z.array(z.string().min(1)).min(1).max(64) }),
+  }, async ({ projectPath, format, templateId, clipIds }) => {
+    try {
+      if (new Set(clipIds).size !== clipIds.length) throw new Error("模板 clipIds 不可重複");
+      const template = format === "short"
+        ? SHORT_FORM_TEMPLATES.find(item => item.id === templateId)
+        : LONG_FORM_TEMPLATES.find(item => item.id === templateId);
+      if (!template) throw new Error(`未知 ${format} 模板：${templateId}`);
+      findLookPreset(template.lookPresetId);
+      const project = await readProject(projectPath);
+      for (const clipId of clipIds) {
+        const clip = findClip(project, clipId);
+        const track = findTrack(project, clip.trackId);
+        if (track.kind !== "video") throw new Error(`模板只能用於畫面軌：${clipId}`);
+      }
+      const commands: EditorCommand[] = clipIds.map(clipId => ({ type: "set_clip_creative", clipId,
+        patch: { lookPresetId: template.lookPresetId } }));
+      if (format === "long") commands.push({ type: "set_caption_style", patch: LONG_FORM_WHITE_CAPTION_STYLE });
+      return textResult({ status: "REVIEW_REQUIRED", projectId: project.id, projectRevision: project.revision,
+        templateId, format, commands, suggestions: { effectPresetIds: template.effectPresetIds,
+          transitionPresetId: "transitionPresetId" in template ? template.transitionPresetId : template.introTransitionPresetId,
+          captionPresetId: "captionPresetId" in template ? template.captionPresetId : LONG_FORM_WHITE_CAPTION_STYLE.presetId,
+          cinematicRecipeId: template.cinematicRecipeId },
+        instruction: "Only the Look and long-form caption style are precompiled. Add motivated effects/transitions and exact Motion v2 graphics after material and design evidence; bind every command to motionTreatment and audit/apply once." });
+    } catch (error) { return errorResult(error); }
+  });
+
+  const motionTrackInput = z.object({
+    projectPath: z.string(), clipId: z.string(), initialTime: z.number().nonnegative().default(0),
+    rect: z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), width: z.number().min(0.02).max(1), height: z.number().min(0.02).max(1) }),
+    label: z.string().min(1).max(120).default("追蹤重點"),
+  });
+  async function prepareMotionTrack(projectPath: string, clipId: string, initialTime: number,
+    rect: { x: number; y: number; width: number; height: number }, label: string) {
+    if (rect.x + rect.width > 1 || rect.y + rect.height > 1) throw new Error("追蹤框超出畫面");
+    const project = await readProject(projectPath);
+    const clip = findClip(project, clipId);
+    const asset = findAsset(project, clip.assetId);
+    if (asset.kind !== "video") throw new Error("動態追蹤只支援影片片段");
+    const creativeId = creativeAssetIdFromUri(asset.uri);
+    const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveWorkspaceMediaPath(asset.uri);
+    const result = await analyzeMotionTrack({ sourcePath, sourceStart: clip.sourceStart, duration: clip.duration, fps: project.fps,
+      sourceWidth: asset.width ?? project.width, sourceHeight: asset.height ?? project.height, initialTime, initialRect: rect,
+      sourceSha256: asset.derivatives?.sourceSha256 }, {
+      ffmpegPath: process.env.HAO_FFMPEG_PATH ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../vendor/ffmpeg/win32-x64/ffmpeg.exe") : "ffmpeg"),
+      nativeCorePath: process.env.HAO_NATIVE_CORE_PATH ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../native/bin/win32-x64/hao-core.exe") : "hao-core"),
+      cacheRoot: process.env.EDITKIN_CACHE_ROOT,
+    });
+    const trackId = `motion-track-${randomUUID()}`;
+    const command: EditorCommand = { type: "add_motion_track", track: { id: trackId, clipId, name: label,
+      engine: result.engine, analysisFps: result.analysisFps, initialRect: rect, points: result.points,
+      lostRatio: result.lostRatio, createdAt: new Date().toISOString() } };
+    return { project, clip, result, command, trackId };
+  }
+
+  server.registerTool("prepare_autopilot_motion_track", {
+    description: "只讀分析原生 Rust 追蹤並回傳 add_motion_track 精確命令；Agent 必須將它放入 v4 plan、綁定 tracking_masks 與設計 beat，再走 audit_autopilot_plan → apply_autopilot_plan。若要標籤，先用 list_creative_presets 選原生 Motion v2 preset，另寫受審核的 add_motion_graphic。此工具不修改專案。",
+    inputSchema: motionTrackInput,
   }, async ({ projectPath, clipId, initialTime, rect, label }) => {
     try {
-      if (rect.x + rect.width > 1 || rect.y + rect.height > 1) throw new Error("追蹤框超出畫面");
-      const project = await readProject(projectPath);
-      const clip = findClip(project, clipId);
-      const asset = findAsset(project, clip.assetId);
-      if (asset.kind !== "video") throw new Error("動態追蹤只支援影片片段");
-      const creativeId = creativeAssetIdFromUri(asset.uri);
-      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveWorkspaceMediaPath(asset.uri);
-      const result = await analyzeMotionTrack({ sourcePath, sourceStart: clip.sourceStart, duration: clip.duration, fps: project.fps,
-        sourceWidth: asset.width ?? project.width, sourceHeight: asset.height ?? project.height, initialTime, initialRect: rect,
-        sourceSha256: asset.derivatives?.sourceSha256 }, {
-        ffmpegPath: process.env.HAO_FFMPEG_PATH ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../vendor/ffmpeg/win32-x64/ffmpeg.exe") : "ffmpeg"),
-        nativeCorePath: process.env.HAO_NATIVE_CORE_PATH ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../native/bin/win32-x64/hao-core.exe") : "hao-core"),
-        cacheRoot: process.env.EDITKIN_CACHE_ROOT,
-      });
-      const trackId = `motion-track-${randomUUID()}`;
-      const graphic = createMotionGraphic(`motion-${randomUUID()}`, "tag", label, clip.timelineStart + initialTime, Math.max(0.5, clip.duration - initialTime), trackId);
-      const updated = await applyProjectCommands(projectPath, [{ type: "add_motion_track", track: { id: trackId, clipId, name: label, engine: result.engine, analysisFps: result.analysisFps, initialRect: rect, points: result.points, lostRatio: result.lostRatio, createdAt: new Date().toISOString() } }, { type: "add_motion_graphic", graphic }]);
-      return textResult({ status: "GREEN", trackId, graphicId: graphic.id, validPercent: Math.round((1 - result.lostRatio) * 100), cacheHit: result.cacheHit, summary: summarizeProject(updated) });
+      const prepared = await prepareMotionTrack(projectPath, clipId, initialTime, rect, label);
+      return textResult({ status: "REVIEW_REQUIRED", projectId: prepared.project.id, projectRevision: prepared.project.revision,
+        clipId, trackId: prepared.trackId, command: prepared.command,
+        validPercent: Math.round((1 - prepared.result.lostRatio) * 100), cacheHit: prepared.result.cacheHit,
+        instruction: "Bind this command to an actual narrative beat and tracking_masks decision in the same audited v4 plan." });
+    } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("track_subject_and_attach_label", {
+    description: "用 FFmpeg 取樣＋Rust 原生追蹤選定影片的自訂區域，保存 confidence/lost 狀態並綁定 hao.motion-composition/v1 標籤；手動修正可再用 apply_edit_commands 寫 set_motion_track_point。",
+    inputSchema: motionTrackInput,
+  }, async ({ projectPath, clipId, initialTime, rect, label }) => {
+    try {
+      const prepared = await prepareMotionTrack(projectPath, clipId, initialTime, rect, label);
+      const graphic = createMotionGraphic(`motion-${randomUUID()}`, "tag", label, prepared.clip.timelineStart + initialTime, Math.max(0.5, prepared.clip.duration - initialTime), prepared.trackId);
+      const updated = await applyProjectCommands(projectPath, [prepared.command, { type: "add_motion_graphic", graphic }]);
+      return textResult({ status: "GREEN", trackId: prepared.trackId, graphicId: graphic.id, validPercent: Math.round((1 - prepared.result.lostRatio) * 100), cacheHit: prepared.result.cacheHit, summary: summarizeProject(updated) });
     } catch (error) { return errorResult(error); }
   });
 

@@ -21,7 +21,7 @@ export function CaptionPresetGallery({ selected, onSelect }: { selected: string;
   useNativeWheelScroll(row, "horizontal");
   return <div ref={row} className="caption-preset-gallery" tabIndex={0} aria-label="字幕樣式預覽，可捲動瀏覽">
     {TEXT_STYLE_PRESETS.map((preset) => { const face = resolveBundledFontFace(preset.style.fontFamily, preset.style.bold ? 800 : 400); return <button key={preset.id} type="button" className={selected === preset.id ? "active" : ""} aria-pressed={selected === preset.id} onClick={() => onSelect(preset.id)}>
-      <span data-font-weight-substituted={face?.weightSubstituted} title={face?.weightSubstituted ? `字重 ${face.requestedWeight} → ${face.fontWeight}` : undefined} style={{ fontFamily: cssFontFamily(face?.fontFamily ?? preset.style.fontFamily), fontWeight: face?.fontWeight ?? (preset.style.bold ? 800 : 400), fontSynthesis: "style", color: preset.style.color, background: preset.style.backgroundColor, WebkitTextStroke: `${Math.max(1, preset.style.outlineWidth / 3)}px ${preset.style.outlineColor}` }}>字幕預覽</span><small>{preset.name}</small>
+      <span data-font-weight-substituted={face?.weightSubstituted} title={face?.weightSubstituted ? `字重 ${face.requestedWeight} → ${face.fontWeight}` : undefined} style={{ fontFamily: cssFontFamily(face?.fontFamily ?? preset.style.fontFamily), fontWeight: face?.fontWeight ?? (preset.style.bold ? 800 : 400), fontSynthesis: "style", color: preset.style.color, background: preset.style.backgroundColor, WebkitTextStroke: `${Math.min(1.25, preset.style.outlineWidth * 16 / preset.style.fontSize)}px ${preset.style.outlineColor}`, paintOrder: "stroke fill" }}>字幕預覽</span><small>{preset.name}</small>
     </button>; })}
   </div>;
 }

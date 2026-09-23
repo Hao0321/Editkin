@@ -150,7 +150,7 @@ export function registerAutopilotTools(server: McpServer): void {
   });
 
   server.registerTool("audit_autopilot_plan", {
-    description: "在不修改專案的情況下驗證當次 v4 plan，並綁定目前專案 revision、canonical Skill、workflow contract、匿名 knowledge 與已發現 plugin registry；v3/v2/v1 僅可匯入，產品路徑一律拒絕。",
+    description: "在不修改專案的情況下驗證當次 v4 plan，並綁定目前專案 revision、啟用中的 Video Autopilot Skill、workflow contract、匿名 knowledge 與已發現 plugin registry；v3/v2/v1 僅可匯入，產品路徑一律拒絕。",
     inputSchema: z.object({ projectPath: z.string(), plan: autopilotPlanSchema }),
   }, async ({ projectPath, plan: inputPlan }) => {
     try { return await auditAutopilotPlan(projectPath, inputPlan); }
@@ -158,7 +158,7 @@ export function registerAutopilotTools(server: McpServer): void {
   });
 
   server.registerTool("apply_autopilot_plan", {
-    description: "只套用已由目前 Editkin 程序的 audit_autopilot_plan 簽發、十分鐘內且尚未使用的 v4 receipt。apply 會重算專案、canonical Skill、workflow、knowledge、plugin registry 與素材 identity；任何偽造、重播、過期、竄改或 drift 都 fail-closed，通過後才單次原子寫入。",
+    description: "只套用已由目前 Editkin 程序的 audit_autopilot_plan 簽發、十分鐘內且尚未使用的 v4 receipt。apply 會重算專案、啟用中的 Skill、workflow、knowledge、plugin registry 與素材 identity；任何偽造、重播、過期、竄改或 drift 都 fail-closed，通過後才單次原子寫入。",
     inputSchema: z.object({ projectPath: z.string(), plan: autopilotPlanSchema, auditReceipt: autopilotAuditReceiptSchema }),
   }, async ({ projectPath, plan: inputPlan, auditReceipt: inputAuditReceipt }) => {
     try { return await applyAutopilotPlan(projectPath, inputPlan, inputAuditReceipt); }

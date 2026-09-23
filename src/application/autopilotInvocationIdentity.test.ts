@@ -16,10 +16,12 @@ import {
   verifyAcceptedAutopilotAuditReceipt,
 } from "./autopilotInvocationIdentity";
 
-async function skillFixture(input: { rule?: number; workflowRevision?: number; legacyPolicy?: string; planHashAlgorithm?: string } = {}) {
+async function skillFixture(input: { rule?: number; workflowRevision?: number; legacyPolicy?: string; planHashAlgorithm?: string; publicRules?: boolean } = {}) {
   const root = await mkdtemp(join(tmpdir(), "editkin-autopilot-identity-"));
   const skillPath = join(root, "SKILL.md");
-  await writeFile(skillPath, `---\nname: video-autopilot\n---\n- M1: base\n- M${input.rule ?? 12}: current\n`, "utf8");
+  await writeFile(skillPath, input.publicRules
+    ? "---\nname: video-autopilot\n---\n1. Inspect source material.\n2. Audit the edit plan.\n"
+    : `---\nname: video-autopilot\n---\n- M1: base\n- M${input.rule ?? 12}: current\n`, "utf8");
   await writeFile(join(root, "workflow_contract.json"), JSON.stringify({
     schema: "hao.video-autopilot.workflow-contract/v1",
     contract_revision: input.workflowRevision ?? 2,
@@ -33,6 +35,23 @@ async function skillFixture(input: { rule?: number; workflowRevision?: number; l
 }
 
 describe("live Video Autopilot invocation identity", () => {
+  it("uses an explicitly configured public Skill outside the Codex home and binds its drift", async () => {
+    const fixture = await skillFixture({ publicRules: true, workflowRevision: 5 });
+    const previous = process.env.EDITKIN_VIDEO_AUTOPILOT_SKILL;
+    try {
+      process.env.EDITKIN_VIDEO_AUTOPILOT_SKILL = fixture.skillPath;
+      const first = await readLiveAutopilotIdentity({ pluginRoots: [fixture.plugins] });
+      expect(first.skill).toMatchObject({ revision: 5, hardRuleCount: 2 });
+      await writeFile(fixture.skillPath, "---\nname: video-autopilot\n---\n1. Inspect real frames.\n2. Audit the edit plan.\n", "utf8");
+      const changed = await readLiveAutopilotIdentity({ pluginRoots: [fixture.plugins] });
+      expect(changed.bindingSha256).not.toBe(first.bindingSha256);
+      process.env.EDITKIN_VIDEO_AUTOPILOT_SKILL = "relative/SKILL.md";
+      await expect(readLiveAutopilotIdentity({ pluginRoots: [fixture.plugins] })).rejects.toThrow(/絕對路徑/);
+    } finally {
+      if (previous === undefined) delete process.env.EDITKIN_VIDEO_AUTOPILOT_SKILL;
+      else process.env.EDITKIN_VIDEO_AUTOPILOT_SKILL = previous;
+    }
+  });
   it("admits the shared plan hash algorithm and rejects an incompatible declared algorithm", async () => {
     const current = await skillFixture({ planHashAlgorithm: "sha256-canonical-json-utf8-keys-v1" });
     await expect(readLiveAutopilotIdentity({ skillPath: current.skillPath, pluginRoots: [current.plugins] })).resolves.toHaveProperty("bindingSha256");

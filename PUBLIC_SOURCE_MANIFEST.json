@@ -769,8 +769,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 2203,
-      "sha256": "9bea63b6f16cf8cd36e6e1952b7552081b46a217a9c5c93b19e89f8f9dae397d",
+      "bytes": 2202,
+      "sha256": "348d8cb8dc3d62d15cce8d4745de7688e506e7d40a32605a4a584986444d68ac",
       "origin": "open-source/README.md",
       "rights": "GPL-3.0-or-later"
     },
@@ -1077,8 +1077,8 @@
     },
     {
       "path": "scripts/autopilot-edit-quality-controlled-e2e.ts",
-      "bytes": 36662,
-      "sha256": "a999e5a878b0547c06317ad5dc54ddfd63cceba307848b91323189468ee54422",
+      "bytes": 40104,
+      "sha256": "03b4e351b664fb2f13773193bbfd78b7af2e496fb30bbf6b68fa9c0bd2d55a94",
       "origin": "scripts/autopilot-edit-quality-controlled-e2e.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -2392,6 +2392,13 @@
       "rights": "GPL-3.0-or-later"
     },
     {
+      "path": "scripts/lib/video-autopilot-workflow-integration.mjs",
+      "bytes": 6685,
+      "sha256": "1384dae6cf5d64706cb41364302a31aec6ff0ff2f63b2ab769a5a51a5d9ab080",
+      "origin": "scripts/lib/video-autopilot-workflow-integration.mjs",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
       "path": "scripts/macos-bundle-runtime-gate.mjs",
       "bytes": 15277,
       "sha256": "a62b9cdbda46f707c10d5767395fa4c2f0d5dd3f71f0035d5be1b5b8344bc0d3",
@@ -2932,8 +2939,8 @@
     },
     {
       "path": "scripts/roto-keyer-autopilot-integration.ts",
-      "bytes": 36892,
-      "sha256": "c04df55bce711ae72e7f08019359932352d6a3c426f53eda048277b688bb7ada",
+      "bytes": 37155,
+      "sha256": "6095a98cc04ed2fbfebaa228aea77cb006a948ec8509d7c7dc357410345d2e97",
       "origin": "scripts/roto-keyer-autopilot-integration.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -3093,8 +3100,8 @@
     },
     {
       "path": "scripts/stage-tauri-resources.mjs",
-      "bytes": 7975,
-      "sha256": "9fe487518871e7ccf5126b1b7930964404615bc5d4cc1de845329631f5a079fc",
+      "bytes": 9027,
+      "sha256": "077bcb81d64af35d9e0c52dabb73f59b06cad0cb1a34df3b17c46c8cf2f673ac",
       "origin": "scripts/stage-tauri-resources.mjs",
       "rights": "GPL-3.0-or-later"
     },
@@ -3338,8 +3345,8 @@
     },
     {
       "path": "scripts/video-autopilot-skill-integration-gate.mjs",
-      "bytes": 2122,
-      "sha256": "3a69e270765f6ebb4e360e39668c58c9fe0002bee77c62f4868d96b483061e46",
+      "bytes": 2723,
+      "sha256": "188dc627230802c7e7ada5d74f56b99a59706a2f1bb44af14d7c51069d3ef58c",
       "origin": "scripts/video-autopilot-skill-integration-gate.mjs",
       "rights": "GPL-3.0-or-later"
     },
@@ -4241,8 +4248,8 @@
     },
     {
       "path": "src/application/autopilotDesign.test.ts",
-      "bytes": 4410,
-      "sha256": "67670e1b446bdd9b78c44d8569f434e8ba772d8c7bd21db22020bd4da50b3a96",
+      "bytes": 6094,
+      "sha256": "7cd9d3bbeae53fc8185b39d372054deec2b8f9fe8ba70438b0c180086c314772",
       "origin": "src/application/autopilotDesign.test.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -4269,15 +4276,15 @@
     },
     {
       "path": "src/application/autopilotInvocationIdentity.test.ts",
-      "bytes": 8485,
-      "sha256": "d3f2ed3496f3f4c4a962de7ae9b43955935c051b28c2e5803e088fc0f4230383",
+      "bytes": 9786,
+      "sha256": "df4625e30c8d11d73a43cf8a367d8c1a51b43d6d438a87282892409090be6bab",
       "origin": "open-source/overrides/src/application/autopilotInvocationIdentity.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/application/autopilotInvocationIdentity.ts",
-      "bytes": 13676,
-      "sha256": "ecfb8a109b5dfb745e012bd9d4fd8bdddf1cfbb0356bf56bc7f567d5ac257e29",
+      "bytes": 13417,
+      "sha256": "245745442182c7e55c35d22a8b61604942033b7f4a5b90a29f164b7370ec5d33",
       "origin": "src/application/autopilotInvocationIdentity.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -6670,15 +6677,22 @@
     },
     {
       "path": "src/mcp/autopilotDesignTools.ts",
-      "bytes": 6823,
-      "sha256": "bc3dda4f5aef1926f5f340710ddea568be507eac7a42215236fc5487c4d28d90",
+      "bytes": 7408,
+      "sha256": "1b023084dd44148ea974254e551675f56d6b50c2267dfd699ceb214094877ad3",
       "origin": "src/mcp/autopilotDesignTools.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
+      "path": "src/mcp/autopilotMotionTrack.test.ts",
+      "bytes": 4839,
+      "sha256": "95fbab065d246e194747523f2791be131b4908457bf5f8ba207c8e58ee99cdb2",
+      "origin": "src/mcp/autopilotMotionTrack.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
       "path": "src/mcp/autopilotTools.ts",
-      "bytes": 18005,
-      "sha256": "a6c76d4c644c1d40bd29b5f6eec75b7cd53d847cdcfd1945ddcf4ba6a6f82fff",
+      "bytes": 18025,
+      "sha256": "6d0a6c9ffc4076987626cde5c40125651f79b7a96cf7e53b8399471d963ff1d1",
       "origin": "src/mcp/autopilotTools.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -6691,8 +6705,8 @@
     },
     {
       "path": "src/mcp/materialIntelligenceTools.ts",
-      "bytes": 19791,
-      "sha256": "53c13b63dab02eec0561686ae431045a70b8f233bd9f0f9db62ea8f9b3552c82",
+      "bytes": 20530,
+      "sha256": "531d0689b763a1670c0d6e2826ee0d4c97312c9c876cc66c9c7377dead80152d",
       "origin": "src/mcp/materialIntelligenceTools.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -6803,8 +6817,8 @@
     },
     {
       "path": "src/mcp/server.ts",
-      "bytes": 38901,
-      "sha256": "a29e108209de9d09d4d585234a463d5055c75025c1a1871bc2ff760e970d489d",
+      "bytes": 43023,
+      "sha256": "8432dc3a022a53c443ce6de3a45246c0c56c574b124fec412af0906abea3f198",
       "origin": "src/mcp/server.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -7776,8 +7790,8 @@
     },
     {
       "path": "src/styles.css",
-      "bytes": 44259,
-      "sha256": "ccf170793971e3207e761d021d9baa52b003e171bc5762439e46523a39a70e9e",
+      "bytes": 44288,
+      "sha256": "24023982360621a9490b0772a4c901b63d635f535ee9f23ba50750c2412a3891",
       "origin": "src/styles.css",
       "rights": "GPL-3.0-or-later"
     },
@@ -8322,15 +8336,15 @@
     },
     {
       "path": "src/ui/MotionOverlay.test.tsx",
-      "bytes": 3381,
-      "sha256": "5a6922603b5b1f62f1f6b5fe0f0be235ba67348a258c5a04a866f965c869ad9e",
+      "bytes": 7173,
+      "sha256": "51413507855a0fae8943ce2619fcc7cca67839c84b8b7ac6c5f8a983f36bde9d",
       "origin": "src/ui/MotionOverlay.test.tsx",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/ui/MotionOverlay.tsx",
-      "bytes": 5788,
-      "sha256": "99e267af4fd04b6c42a2aff6ae7066fcfb04d7a1d5d255999b66e3cc765ffd9c",
+      "bytes": 5926,
+      "sha256": "902b24c7c2916d408e0c97ac32a5bd4b8edacb11e69f4422d3dae5c768f5d9ed",
       "origin": "src/ui/MotionOverlay.tsx",
       "rights": "GPL-3.0-or-later"
     },
@@ -8462,8 +8476,8 @@
     },
     {
       "path": "src/ui/PresetPreviewGallery.tsx",
-      "bytes": 8929,
-      "sha256": "5abf291265171d72497a4d99bf86f2653c5253bc1e85103083370b711a7cc3aa",
+      "bytes": 8984,
+      "sha256": "4e5ad518d2390be1ee7ce4a5582d54537cadf23fdc3af2bce50d29e8e9f2d21a",
       "origin": "src/ui/PresetPreviewGallery.tsx",
       "rights": "GPL-3.0-or-later"
     },

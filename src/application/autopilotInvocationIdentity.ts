@@ -1,7 +1,7 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { readFile, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { basename, dirname, isAbsolute, resolve } from "node:path";
 import * as z from "zod/v4";
 import type { EditProject } from "../domain/types";
 import { discoverInstalledPlugins, pluginRegistryIdentity } from "../plugins/registry";
@@ -83,30 +83,20 @@ interface WorkflowContractIdentitySource {
   legacy_plan_policy?: unknown;
 }
 
-function comparableResolvedPath(path: string): string {
-  const resolved = resolve(path);
-  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
-}
-
-async function resolveLiveVideoAutopilotSkillPath(explicitTestPath?: string): Promise<string> {
-  if (explicitTestPath) return realpath(resolve(explicitTestPath));
-
-  const canonicalPath = await realpath(resolve(homedir(), ".codex", "skills", "video-autopilot", "SKILL.md"));
-  const configuredPath = process.env.EDITKIN_VIDEO_AUTOPILOT_SKILL?.trim();
-  if (!configuredPath) return canonicalPath;
-  if (!isAbsolute(configuredPath)) throw new Error("EDITKIN_VIDEO_AUTOPILOT_SKILL 必須指向 canonical 絕對路徑");
-
-  const configuredRealPath = await realpath(resolve(configuredPath));
-  if (comparableResolvedPath(configuredRealPath) !== comparableResolvedPath(canonicalPath)) {
-    throw new Error("EDITKIN_VIDEO_AUTOPILOT_SKILL 不可覆寫 canonical ~/.codex/skills/video-autopilot/SKILL.md");
+export async function resolveLiveVideoAutopilotSkillPath(explicitPath?: string): Promise<string> {
+  const configuredPath = explicitPath ?? process.env.EDITKIN_VIDEO_AUTOPILOT_SKILL?.trim();
+  const selectedPath = configuredPath || resolve(homedir(), ".codex", "skills", "video-autopilot", "SKILL.md");
+  if (!isAbsolute(selectedPath)) throw new Error("EDITKIN_VIDEO_AUTOPILOT_SKILL 必須是 SKILL.md 的絕對路徑");
+  const skillPath = await realpath(selectedPath);
+  if (basename(skillPath).toLowerCase() !== "skill.md") {
+    throw new Error("EDITKIN_VIDEO_AUTOPILOT_SKILL 必須指向 SKILL.md");
   }
-  return configuredRealPath;
+  return skillPath;
 }
 
 export async function readLiveAutopilotIdentity(options: { skillPath?: string; pluginRoots?: string[] } = {}): Promise<LiveAutopilotIdentity> {
-  // `skillPath` is a dependency-injection seam for hermetic tests only. Every
-  // production caller omits it, so a stale user/process environment cannot
-  // silently redefine which Video Autopilot trunk is authoritative.
+  // The configured Skill is the active agent profile. Its exact bytes and
+  // workflow contract are sealed into the plan and checked again at apply.
   const skillPath = await resolveLiveVideoAutopilotSkillPath(options.skillPath);
   const workflowPath = await realpath(resolve(dirname(skillPath), "workflow_contract.json"));
   const [skillText, workflowText, registry] = await Promise.all([
@@ -117,7 +107,8 @@ export async function readLiveAutopilotIdentity(options: { skillPath?: string; p
   if (!/^name:\s*video-autopilot\s*$/m.test(skillText)) throw new Error("目前 Skill 不是 video-autopilot");
   const ruleIds = [...new Set([...skillText.matchAll(/\bM(\d{1,4})(?:-[A-Z]+|A)?\b/g)].map((match) => match[0]))];
   const ruleNumbers = ruleIds.map((id) => Number(/^M(\d+)/.exec(id)?.[1] ?? 0));
-  if (ruleNumbers.length === 0) throw new Error("目前 video-autopilot Skill 沒有可辨識的穩定規則");
+  const publicRuleCount = [...skillText.matchAll(/^\d+\.\s+\S/gm)].length;
+  if (ruleNumbers.length === 0 && publicRuleCount === 0) throw new Error("目前 video-autopilot Skill 沒有可辨識的穩定規則");
 
   let workflow: WorkflowContractIdentitySource;
   try { workflow = JSON.parse(workflowText) as WorkflowContractIdentitySource; }
@@ -134,9 +125,9 @@ export async function readLiveAutopilotIdentity(options: { skillPath?: string; p
     schema: "editkin.video-autopilot.live-identity/v1" as const,
     skill: {
       id: "video-autopilot" as const,
-      revision: Math.max(...ruleNumbers),
+      revision: ruleNumbers.length ? Math.max(...ruleNumbers) : Number(workflow.contract_revision),
       sha256: sha256Text(skillText),
-      hardRuleCount: ruleIds.length,
+      hardRuleCount: ruleIds.length || publicRuleCount,
     },
     workflow: {
       schema: "hao.video-autopilot.workflow-contract/v1" as const,
