@@ -20,6 +20,7 @@ const REMOTE_SCHEMA = "editkin.remote-user-config/v1";
 const LEGACY_PENDING_SCHEMA = "editkin.remote-setup-confirmation/v1";
 const LEGACY_PROVIDER_PROPOSAL_SCHEMA = "editkin.remote-provider-proposal/v1";
 const PROVIDER_PROPOSAL_SCHEMA = "editkin.remote-provider-proposal/v2";
+class ProposalAlreadyExistsError extends Error {}
 const CANDIDATE_SCHEMA = "editkin.remote-config-candidate/v1";
 const RUNTIME_SCHEMA = "editkin.remote-runtime/v3";
 const VERIFICATION_SCHEMA = "editkin.remote-route-verification/v3";
@@ -404,7 +405,7 @@ async function writeJsonCreateNew(path: string, value: unknown): Promise<void> {
       published = true;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-        throw new Error("Remote provider proposal 已存在；atomic no-replace publish 拒絕覆寫");
+        throw new ProposalAlreadyExistsError("Remote provider proposal 已存在；atomic no-replace publish 拒絕覆寫");
       }
       throw error;
     }
@@ -1130,12 +1131,26 @@ export async function prepareRemoteSetup(input: PrepareRemoteSetupInput, environ
     await writeJsonCreateNew(paths.pending, proposal);
     return preparedProposalResult(proposal, true);
   } catch (error) {
-    const winnerValue = await readJson(paths.pending).catch(() => undefined);
-    if (isRecord(winnerValue) && winnerValue.schema === PROVIDER_PROPOSAL_SCHEMA) {
-      const winner = parseProviderProposal(winnerValue);
-      assertCompatibleProposalConsent(winner, lineage);
-      if (!proposalExpired(winner)) return preparedProposalResult(winner, false);
+    if (!(error instanceof ProposalAlreadyExistsError)) throw error;
+    // On APFS the winning hard-link publish and temporary-link cleanup can
+    // change ctime while another writer performs its bounded identity read.
+    // Retry only the no-replace collision; never skip the read's integrity checks.
+    let lastReadError: unknown;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      let winnerValue: unknown;
+      try { winnerValue = await readJson(paths.pending); }
+      catch (readError) { lastReadError = readError; }
+      if (winnerValue !== undefined) {
+        if (isRecord(winnerValue) && winnerValue.schema === PROVIDER_PROPOSAL_SCHEMA) {
+          const winner = parseProviderProposal(winnerValue);
+          assertCompatibleProposalConsent(winner, lineage);
+          if (!proposalExpired(winner)) return preparedProposalResult(winner, false);
+        }
+        throw error;
+      }
+      if (attempt < 9) await new Promise((resolve) => setTimeout(resolve, 10));
     }
+    if (lastReadError) throw lastReadError;
     throw error;
   }
 }

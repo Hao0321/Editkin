@@ -6747,8 +6747,8 @@
     },
     {
       "path": "src/mcp/remoteOnboardingTools.ts",
-      "bytes": 76983,
-      "sha256": "85e5d9eb8cf94429c7fd5aa26006a91ec8ecf7a8080967fec7d9fb7eb435c931",
+      "bytes": 77734,
+      "sha256": "269639428d5191391b8d8308a759a83d4083472e3aa79e24b3dacb90a4671762",
       "origin": "src/mcp/remoteOnboardingTools.ts",
       "rights": "GPL-3.0-or-later"
     },
