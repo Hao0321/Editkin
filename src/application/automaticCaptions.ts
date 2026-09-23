@@ -296,6 +296,30 @@ function parseTimestamp(value: string): number | undefined {
   return Number.isFinite(seconds) ? seconds : undefined;
 }
 
+function stripSrtMarkup(input: string): string {
+  const plain: string[] = [];
+  const incompleteTag: string[] = [];
+  let insideTag = false;
+  for (const char of input) {
+    if (char === "<") {
+      insideTag = true;
+      incompleteTag.push(char);
+    } else if (char === ">") {
+      if (insideTag) {
+        insideTag = false;
+        incompleteTag.length = 0;
+      }
+    } else if (insideTag) {
+      incompleteTag.push(char);
+    } else {
+      plain.push(char);
+    }
+  }
+  // An unfinished tag is caption text. Keep its words without markup delimiters.
+  for (const char of incompleteTag) if (char !== "<") plain.push(char);
+  return plain.join("");
+}
+
 export function parseWhisperSrt(input: string, duration = Number.POSITIVE_INFINITY): AutomaticCaptionCue[] {
   const normalized = input.replace(/^\uFEFF/, "").replaceAll("\r\n", "\n").trim();
   if (!normalized) return [];
@@ -310,9 +334,9 @@ export function parseWhisperSrt(input: string, duration = Number.POSITIVE_INFINI
     const [startText, endText] = timestamps;
     const start = parseTimestamp(startText ?? "");
     const end = parseTimestamp((endText ?? "").trim().split(/\s+/)[0]);
-    // Whisper SRT can contain formatting tags. Remove complete tags and any
-    // leftover angle delimiters so malformed markup remains plain caption text.
-    const text = lines.slice(timingIndex + 1).join(" ").replace(/<[^>]+>/g, "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
+    // Whisper SRT can contain formatting tags. A single pass removes complete
+    // tags without allowing removed fragments to form a new tag.
+    const text = stripSrtMarkup(lines.slice(timingIndex + 1).join(" ")).replace(/\s+/g, " ").trim();
     if (start === undefined || end === undefined || end <= start || !text) throw new AutomaticCaptionParseError(index + 1);
     // Preserve the existing exact marker policy; this is not a speech detector.
     // The complete original output is retained by parseWhisperRecognition.

@@ -109,6 +109,9 @@ describe("automatic captions", () => {
     expect(parseWhisperSrt("1\n00:00:00,000 --> 00:00:02,000\n<script", 2)).toEqual([
       { start: 0, end: 2, text: "script" },
     ]);
+    expect(parseWhisperSrt("1\n00:00:00,000 --> 00:00:02,000\n<scrip<script>t>alert(1)</script>", 2)).toEqual([
+      { start: 0, end: 2, text: "talert(1)" },
+    ]);
   });
 
   it("accepts only the pinned size and SHA-256", async () => {

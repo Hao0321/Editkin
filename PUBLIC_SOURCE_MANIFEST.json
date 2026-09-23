@@ -4199,15 +4199,15 @@
     },
     {
       "path": "src/application/automaticCaptions.test.ts",
-      "bytes": 6933,
-      "sha256": "dca85b5ab1c763597be371d0376bf37b2877714672f3264fe1746cd40b9ae7ac",
+      "bytes": 7100,
+      "sha256": "abedee0ce12a91581aa63da578fe1c6bc047b0ba7eb8f9477e0bf37ef1bee43c",
       "origin": "src/application/automaticCaptions.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/application/automaticCaptions.ts",
-      "bytes": 34417,
-      "sha256": "3762bada81005f99306ca0caa6b6309299bccd1e7acbd1fdec3c7054b00ffb40",
+      "bytes": 35039,
+      "sha256": "3ebf41d9f5935d8d8f6bd6fb8a5217d2e444a4cffc16944248b74393562f37ae",
       "origin": "src/application/automaticCaptions.ts",
       "rights": "GPL-3.0-or-later"
     },
