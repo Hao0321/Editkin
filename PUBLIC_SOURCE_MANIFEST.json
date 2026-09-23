@@ -769,15 +769,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 2202,
-      "sha256": "348d8cb8dc3d62d15cce8d4745de7688e506e7d40a32605a4a584986444d68ac",
+      "bytes": 3321,
+      "sha256": "aa3897518abe50ce644d1ad25bd8e9127638c8f3cf0950a0a51be8a68a7751a1",
       "origin": "open-source/README.md",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "README.zh-TW.md",
-      "bytes": 2197,
-      "sha256": "3a9435437485ab9661e1c7e636213fccf5b81b70fee02a9b0e5e85ba6a680751",
+      "bytes": 3129,
+      "sha256": "0d317745d0874e5a3537e95598650f65a26278deb8295e0d7805b6eecf0115e6",
       "origin": "open-source/README.zh-TW.md",
       "rights": "GPL-3.0-or-later"
     },
