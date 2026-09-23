@@ -139,8 +139,8 @@
     },
     {
       "path": "docs/SECURITY_MODEL.md",
-      "bytes": 2262,
-      "sha256": "48ba359230e4ffa477e957e7afcafdb0de223990344198e24734a04237d7cbcc",
+      "bytes": 2501,
+      "sha256": "844a7eabe91cf99a826172bb4cbbb01322c0e72aa1eba8738c1da8635b18dcde",
       "origin": "open-source/docs/SECURITY_MODEL.md",
       "rights": "GPL-3.0-or-later"
     },
