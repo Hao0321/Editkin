@@ -118,8 +118,8 @@
     },
     {
       "path": "docs/BUILDING.md",
-      "bytes": 3419,
-      "sha256": "29ef9cf768bd2b3ac696d62c2964afa35b80a0b884421e43c44495901975995b",
+      "bytes": 3524,
+      "sha256": "ae6932831a649e838947de26af0a738b84e8a778a65a35ff5f1ea0aecd12a1e2",
       "origin": "open-source/docs/BUILDING.md",
       "rights": "GPL-3.0-or-later"
     },
@@ -1483,8 +1483,8 @@
     },
     {
       "path": "scripts/creative-library-desktop-gate.mjs",
-      "bytes": 13147,
-      "sha256": "910199252cf72a57f610a7f39273fa7f74013044a5e0e5b6a20cbb027857820d",
+      "bytes": 13739,
+      "sha256": "9aaa6811f1fe6e7d207dad27df1511e125d5acdaffa9fd8b7f455e2a068d4537",
       "origin": "scripts/creative-library-desktop-gate.mjs",
       "rights": "GPL-3.0-or-later"
     },
@@ -3324,8 +3324,8 @@
     },
     {
       "path": "scripts/verify-public-source.mjs",
-      "bytes": 7618,
-      "sha256": "8f88ac5d57e740beedbf524da9c2797e5fbc3ea3d45bdcb1139801cc5d67c43a",
+      "bytes": 8462,
+      "sha256": "dccc747c809a65467305664daa5247a9bd3555e6827c372337680c8231de5e03",
       "origin": "open-source/verify-public-source.mjs",
       "rights": "GPL-3.0-or-later"
     },
@@ -4500,9 +4500,9 @@
     },
     {
       "path": "src/application/creativeLibrary.test.ts",
-      "bytes": 17798,
-      "sha256": "c7f8f0fb5965c0d992c89a7973ca49d099d127a09cc6b3b8156b5c3ed7df57c8",
-      "origin": "src/application/creativeLibrary.test.ts",
+      "bytes": 3055,
+      "sha256": "9418cb09872967abe719d8b91ccc70f93f09f526de6e82fe988493f4b7b11d9c",
+      "origin": "open-source/overrides/src/application/creativeLibrary.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -5619,6 +5619,13 @@
       "rights": "GPL-3.0-or-later"
     },
     {
+      "path": "src/creative/haoWave2Public.json",
+      "bytes": 44078,
+      "sha256": "862100215c96cfbceac964c1fd404df53a06f32c0cb63460211749b025d36b51",
+      "origin": "open-source/defaults/haoWave2Public.json",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
       "path": "src/creative/lowerThirdPresets.ts",
       "bytes": 3672,
       "sha256": "4c1c42cd72ef1e04268943f09cb02828c2a0b50445a529c66d77fbeabd8701ff",
@@ -5697,9 +5704,9 @@
     },
     {
       "path": "src/creative/wave2Registry.ts",
-      "bytes": 7191,
-      "sha256": "0d32081976a49b9a90fd09401897ac66fa46bf230bedf0c3e93e051aef224397",
-      "origin": "src/creative/wave2Registry.ts",
+      "bytes": 7120,
+      "sha256": "951771c71de53b98bdd1fcf4476d5d5abeaac616d28064690a774744fd2e6c44",
+      "origin": "src/creative/wave2Registry.ts + community import rewrite",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -7769,16 +7776,9 @@
     },
     {
       "path": "src/shared/visualAssetRights.mjs",
-      "bytes": 5042,
-      "sha256": "8c265af8df834a1bb85af038c8216104ef14a954e01a4396a12e59fa658a525a",
-      "origin": "src/shared/visualAssetRights.mjs",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/shared/visualAssetRights.test.mjs",
-      "bytes": 7507,
-      "sha256": "61f0b9464d60cce42a842927abcc6a809071f4abe6d8eee304428a250e41c4fc",
-      "origin": "src/shared/visualAssetRights.test.mjs",
+      "bytes": 2676,
+      "sha256": "fc74f56bcc00e0c031336e3f550df37777a3d765e76ceb6fa91c28c832ed024f",
+      "origin": "open-source/overrides/src/shared/visualAssetRights.mjs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -8609,8 +8609,8 @@
     },
     {
       "path": "src/ui/Timeline.tsx",
-      "bytes": 36054,
-      "sha256": "f6e2f6b693067e8078021a1fba2aed2a0f3feb9ba2a3f4b31a696b470c07b0a1",
+      "bytes": 36826,
+      "sha256": "e445094c2912a5e57fbd5737198ca15f9816b80e91aa012f715179f4c91d95c2",
       "origin": "src/ui/Timeline.tsx",
       "rights": "GPL-3.0-or-later"
     },
@@ -8832,5 +8832,5 @@
       "rights": "GPL-3.0-or-later"
     }
   ],
-  "exclusionsCount": 38
+  "exclusionsCount": 39
 }

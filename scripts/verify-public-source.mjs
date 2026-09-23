@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { lstat, readFile, readdir } from "node:fs/promises";
-import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const ignoredGeneratedDirs = new Set([".git", ".rd", "node_modules", "dist", "desktop-dist", ".web-public", "out", "release", "reports", "target"]);
@@ -35,6 +35,16 @@ function allowedBinary(path, rights) {
   return false;
 }
 function sensitivePattern(text) { return sensitive.some(pattern => pattern.test(text)); }
+function relativeModuleWithinRoot(sourcePath, specifier) {
+  const target = resolve(root, dirname(sourcePath), specifier);
+  const rel = relative(root, target);
+  return rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+function assertStaticModuleBoundary(sourcePath, content) {
+  for (const match of content.matchAll(/\b(?:from\s+|import\s*\(\s*|require\s*\(\s*)["'](\.\.?\/[^"']+)["']/g)) {
+    if (!relativeModuleWithinRoot(sourcePath, match[1])) throw new Error(`Module import leaves source root: ${sourcePath}`);
+  }
+}
 
 async function* walk(rel = "") {
   const full = resolve(root, rel);
@@ -65,6 +75,8 @@ if (process.argv.includes("--self-test")) {
     negativeControls++;
   }
   if (!forbiddenRootFiles.has("audit.config.json")) throw new Error("Internal-root negative control accepted");
+  negativeControls++;
+  if (relativeModuleWithinRoot("src/creative/wave2Registry.ts", "../../../../community/private.json")) throw new Error("External module import accepted");
   negativeControls++;
   process.stdout.write(`${JSON.stringify({ status: "GREEN", negativeControls })}\n`);
   process.exit(0);
@@ -105,6 +117,7 @@ for await (const entry of walk()) {
     try { content = new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
     catch { throw new Error(`Non-text file: ${entry.path}`); }
     if (bytes.includes(0) || sensitivePattern(content)) throw new Error(`Sensitive or binary text in ${entry.path}`);
+    if ([".ts", ".tsx", ".js", ".mjs", ".cjs"].includes(extension)) assertStaticModuleBoundary(entry.path, content);
   }
   seen.add(entry.path);
 }

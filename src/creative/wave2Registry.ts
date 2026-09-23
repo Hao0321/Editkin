@@ -1,4 +1,4 @@
-import rawWave2 from "../../../../community/hao-motion-kit/expansion_2026_wave2/hao-core-pack-wave2-additions.json";
+import rawWave2 from "./haoWave2Public.json";
 import { DEFAULT_CAPTION_STYLE, type ClipLayout, type MotionGraphicAnimation, type MotionGraphicKind, type MotionGraphicPresetSeed } from "../domain/types";
 import { registerCorePackExtension, type EffectPreset, type TemplatePreset, type TextStylePreset, type TransitionPreset } from "./corePack";
 

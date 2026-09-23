@@ -97,6 +97,22 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (!selectedClipId) return;
+    const node = scrollRef.current;
+    const clip = project.tracks.flatMap(track => track.clips).find(item => item.id === selectedClipId);
+    if (!node || !clip) return;
+    const contentWidth = Math.max(1, node.clientWidth - LABEL_WIDTH);
+    const clipStart = clip.timelineStart * pixelsPerSecond;
+    const focusWidth = Math.min(Math.max(12, clip.duration * pixelsPerSecond), 160);
+    const padding = 24;
+    if (clipStart < node.scrollLeft + padding) {
+      node.scrollLeft = Math.max(0, clipStart - padding);
+    } else if (clipStart + focusWidth > node.scrollLeft + contentWidth - padding) {
+      node.scrollLeft = Math.max(0, clipStart + focusWidth - contentWidth + padding);
+    }
+  }, [selectedClipId]);
+
   useEffect(() => () => {
     if (dragFrameRef.current !== undefined) cancelAnimationFrame(dragFrameRef.current);
     if (scrubFrameRef.current !== undefined) cancelAnimationFrame(scrubFrameRef.current);

@@ -2,7 +2,7 @@
 
 ## Verified source path
 
-Use Node.js 22.13+ and `npm ci`. Run `npm test` and `npm run build`; `npm run dev` starts the browser UI. The source repository includes neutral JSON presets, a tiny community knowledge example, synthetic MP4 fixtures, and the five pinned OFL font sources. It contains no prebuilt FFmpeg, whisper.cpp, ONNX Runtime, model weights, owner music, or creative library.
+Use Node.js 22.13+ and `npm ci`. Run `npm test` and `npm run build`; `npm run dev` starts the browser UI. The source repository includes neutral JSON presets, a neutral Wave 2 registry, a tiny community knowledge example, synthetic MP4 fixtures, and the five pinned OFL font sources. It contains no prebuilt FFmpeg, whisper.cpp, ONNX Runtime, model weights, owner music, or creative library. The owner visual grant is absent, and its claims fail closed in this edition.
 
 `npm test` runs the suites that can execute from this source checkout. [source-test-exclusions.json](../source-test-exclusions.json) names every retained integration suite that needs external binaries, generated font/color products, or official artifact fixtures. To attempt those suites after installing their prerequisites, set `EDITKIN_FULL_TESTS=1` and run `npm test`. A green default suite does not claim those excluded paths.
 

@@ -151,28 +151,32 @@ try {
   await writeFile(panelPath, Buffer.from(panel.data, "base64"));
   const importTiming = await evaluate(`(async()=>{
     const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-    const samples=[];
+    const samples=[],visibility=[];
     for(let sample=0;sample<11;sample+=1){
       for(let retry=0;retry<200&&!([...document.querySelectorAll('.library-add')].some(button=>!button.disabled));retry+=1)await wait(20);
       const button=[...document.querySelectorAll('.library-add')].find(candidate=>!candidate.disabled&&candidate.getBoundingClientRect().height>0);
       if(!button)return JSON.stringify({error:'no-enabled-library-add',samples});
-      const before=document.querySelectorAll('.timeline-clip:not(.caption)').length,start=performance.now();
+      const before=document.querySelector('.timeline-clip.selected:not(.caption)')?.dataset.testid??'',start=performance.now();
       button.click();
-      let visible=false;
+      let selected;
       for(let retry=0;retry<250;retry+=1){
-        if(document.querySelectorAll('.timeline-clip:not(.caption)').length>before){visible=true;break;}
+        const current=document.querySelector('.timeline-clip.selected:not(.caption)');
+        if(current?.dataset.testid&&current.dataset.testid!==before){selected=current;break;}
         await wait(20);
       }
-      if(!visible)return JSON.stringify({error:'timeline-clip-not-visible',samples,before});
+      if(!selected)return JSON.stringify({error:'new-clip-not-selected',samples,before,visibility});
+      const viewport=document.querySelector('[data-testid="timeline-scroll"]')?.getBoundingClientRect(),box=selected.getBoundingClientRect();
+      const inViewport=Boolean(viewport&&box.right>viewport.left+180&&box.left<viewport.right-16);
+      visibility.push({sample,id:selected.dataset.testid,inViewport,left:box.left,right:box.right,viewportRight:viewport?.right??0});
       samples.push(performance.now()-start);
     }
-    return JSON.stringify({samples,warmup:samples[0],measured:samples.slice(1)});
+    return JSON.stringify({samples,warmup:samples[0],measured:samples.slice(1),visibility});
   })()`, 75_000);
   const measured = importTiming.measured ?? [];
   const sortedImport = [...measured].sort((left, right) => left - right);
   const importP95 = sortedImport.length ? sortedImport[Math.ceil(sortedImport.length * 0.95) - 1] : Number.POSITIVE_INFINITY;
   const importMax = sortedImport.at(-1) ?? Number.POSITIVE_INFINITY;
-  const importGreen = !importTiming.error && measured.length === 10 && importP95 <= 1_200 && importMax <= 3_000;
+  const importGreen = !importTiming.error && measured.length === 10 && importP95 <= 1_200 && importMax <= 3_000 && importTiming.visibility?.every(item=>item.inViewport);
   const report = {
     schemaVersion: 1,
     evaluation: "editkin-creative-library-desktop-v1",
@@ -188,7 +192,7 @@ try {
     loadedMediaPreviews: before.loaded,
     failedPreviews: before.failed,
     scroll: { before: before.scrollTop, after: after.scrollTop, scrollHeight: before.scrollHeight, clientHeight: before.clientHeight, visibleLoadedAfterScroll: after.visibleLoaded },
-    timelineImport: { warmupMs: importTiming.warmup, samplesMs: measured, p95Ms: importP95, maxMs: importMax, threshold: { samples: 10, p95Ms: 1_200, maxMs: 3_000 }, error: importTiming.error ?? null, status: importGreen ? "GREEN" : "BLOCK" },
+    timelineImport: { warmupMs: importTiming.warmup, samplesMs: measured, visibility: importTiming.visibility, p95Ms: importP95, maxMs: importMax, threshold: { samples: 10, p95Ms: 1_200, maxMs: 3_000 }, error: importTiming.error ?? null, status: importGreen ? "GREEN" : "BLOCK" },
     simpleLabels: ["專案", "素材", "模板", "工具"].every((label) => before.visibleText.includes(label)),
     screenshots: { fullPath, panelPath },
   };
