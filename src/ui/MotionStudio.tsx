@@ -3,10 +3,19 @@ import { findMotionGraphicPreset, HOLOGRAM_MOTION_PRESETS } from "../creative/mo
 import type { MediaAsset, MotionGraphic, MotionGraphicKind, MotionGraphicPresetSeed, MotionTrack, NormalizedRect } from "../domain/types";
 import { formatTime } from "../lib/format";
 import { EDITKIN_MOTION } from "../motion/identity";
+import { FLOATING_VIDEO_FRAME_PRESETS, floatingVideoFramePreset } from "../motion/floatingVideoFrame";
+import { FLOATING_FRAME_SCENE_PRESETS, type FloatingFrameScenePresetId } from "../motion/floatingFrameScenes";
+import { MOTION_CLIP_PRESETS, type MotionClipPresetId } from "../motion/motionClipPresets";
+import type { FloatingVideoFrame, TimelineClip } from "../domain/types";
 import "./motionStudio.css";
 
 export interface MotionStudioProps {
   asset: MediaAsset;
+  clip?: TimelineClip;
+  onSetFloatingFrame?: (frame?: FloatingVideoFrame) => void;
+  onApplyFloatingScene?: (preset: FloatingFrameScenePresetId) => void;
+  portraitCanvas?: boolean;
+  onApplyClipMotionPreset?: (preset: MotionClipPresetId) => void;
   motionTracks: MotionTrack[];
   trackingBusy: boolean;
   trackingSelectionActive: boolean;
@@ -21,7 +30,7 @@ export interface MotionStudioProps {
   onDeleteMotionGraphic: (graphicId: string) => void;
 }
 
-export default function MotionStudio({ asset, motionTracks, trackingBusy, trackingSelectionActive, trackingSelection, onBeginMotionTrack, onCorrectMotionTrack, onDeleteMotionTrack, onAddMotionGraphic, wave2Presets, motionGraphics, onUpdateMotionGraphic, onDeleteMotionGraphic }: MotionStudioProps) {
+export default function MotionStudio({ asset, clip, onSetFloatingFrame, onApplyFloatingScene, portraitCanvas = false, onApplyClipMotionPreset, motionTracks, trackingBusy, trackingSelectionActive, trackingSelection, onBeginMotionTrack, onCorrectMotionTrack, onDeleteMotionTrack, onAddMotionGraphic, wave2Presets, motionGraphics, onUpdateMotionGraphic, onDeleteMotionGraphic }: MotionStudioProps) {
   return <div className="motion-controls" aria-label="動態圖卡與追蹤">
     <div className="creative-heading"><div><span className="eyebrow">{EDITKIN_MOTION.name}</span><strong>{EDITKIN_MOTION.label}</strong></div><small>文字可編輯</small></div>
     <div className="motion-quick-grid" data-testid="motion-template-previews">
@@ -30,6 +39,47 @@ export default function MotionStudio({ asset, motionTracks, trackingBusy, tracki
       <button type="button" className="motion-preset-card counter" onClick={() => onAddMotionGraphic("counter")}><span><b>01</b><i>spring</i></span><small>＋ 數字重點</small></button>
       <button type="button" className="motion-preset-card title" onClick={() => onAddMotionGraphic("title", undefined, findMotionGraphicPreset("v2-word-cascade").seed)}><span><b>逐詞登場</b><i>motion v2</i></span><small>＋ 彈性逐詞主標</small></button>
     </div>
+    {asset.kind === "video" && clip && <>
+      <details className="floating-video-frame-controls" data-testid="floating-video-frame-controls">
+        <summary>影片浮空框 <small>原片即時嵌入 · 2.5D 透視</small></summary>
+        <p>選一段自己的影片套用；框體、角度、大小可編輯，正式輸出保留原片畫面。</p>
+        <div className="motion-quick-grid">
+          {FLOATING_VIDEO_FRAME_PRESETS.map(preset => <button type="button" key={preset.id} className="motion-preset-card card"
+            onClick={() => onSetFloatingFrame?.(floatingVideoFramePreset(preset.id))}
+            disabled={!onSetFloatingFrame || (preset.id === "portrait_orbit" && !portraitCanvas)}
+            title={preset.id === "portrait_orbit" && !portraitCanvas ? "請先建立直式專案" : undefined}
+            data-testid={`floating-frame-${preset.id}`}><span><b>{preset.name}</b><i>{preset.yawDegrees}°</i></span><small>＋ 套用</small></button>)}
+          {FLOATING_FRAME_SCENE_PRESETS.map(preset => <button type="button" key={preset.id} className="motion-preset-card card"
+            title={portraitCanvas ? preset.description : "請先建立直式專案"}
+            onClick={() => onApplyFloatingScene?.(preset.id)} disabled={!portraitCanvas || !onApplyFloatingScene || Boolean(clip.floatingFrame)}
+            data-testid={`floating-scene-${preset.id}`}><span><b>{preset.name}</b><i>三層可編輯影片</i></span><small>＋ 套用</small></button>)}
+        </div>
+        {clip.floatingFrame && <div className="transform-grid">
+          <label>畫面大小<input type="range" min="0.3" max="0.82" step="0.01" value={clip.floatingFrame.size}
+            onChange={event => onSetFloatingFrame?.({ ...clip.floatingFrame!, size: Number(event.target.value) })} /><output>{Math.round(clip.floatingFrame.size * 100)}%</output></label>
+          <label>左右透視<input type="range" min="-35" max="35" step="1" value={clip.floatingFrame.yawDegrees}
+            onChange={event => onSetFloatingFrame?.({ ...clip.floatingFrame!, yawDegrees: Number(event.target.value) })} /><output>{clip.floatingFrame.yawDegrees}°</output></label>
+          <label>上下透視<input type="range" min="-25" max="25" step="1" value={clip.floatingFrame.pitchDegrees}
+            onChange={event => onSetFloatingFrame?.({ ...clip.floatingFrame!, pitchDegrees: Number(event.target.value) })} /><output>{clip.floatingFrame.pitchDegrees}°</output></label>
+          <label>水平位置<input type="range" min="0.2" max="0.8" step="0.01" value={clip.floatingFrame.centerX ?? .5}
+            onChange={event => onSetFloatingFrame?.({ ...clip.floatingFrame!, centerX: Number(event.target.value) })} /><output>{Math.round((clip.floatingFrame.centerX ?? .5) * 100)}%</output></label>
+          <label>垂直位置<input type="range" min="0.2" max="0.8" step="0.01" value={clip.floatingFrame.centerY ?? .5}
+            onChange={event => onSetFloatingFrame?.({ ...clip.floatingFrame!, centerY: Number(event.target.value) })} /><output>{Math.round((clip.floatingFrame.centerY ?? .5) * 100)}%</output></label>
+          {clip.floatingFrame.orbit && <><label>環繞角度<input type="range" min="0" max="30" step="1" value={clip.floatingFrame.orbit.amplitudeDegrees}
+            onChange={event => onSetFloatingFrame?.({ ...clip.floatingFrame!, orbit: { ...clip.floatingFrame!.orbit!, amplitudeDegrees: Number(event.target.value) } })} /><output>{clip.floatingFrame.orbit.amplitudeDegrees}°</output></label>
+          <label>旋轉週期<input type="range" min="2" max="8" step="0.1" value={clip.floatingFrame.orbit.periodSeconds}
+            onChange={event => onSetFloatingFrame?.({ ...clip.floatingFrame!, orbit: { ...clip.floatingFrame!.orbit!, periodSeconds: Number(event.target.value) } })} /><output>{clip.floatingFrame.orbit.periodSeconds}s</output></label></>}
+          <button type="button" onClick={() => onSetFloatingFrame?.(undefined)}>移除浮空框</button>
+        </div>}
+      </details>
+      <details className="motion-clip-preset-controls" data-testid="motion-clip-preset-controls">
+        <summary>2D 片段動態 <small>逐格關鍵幀 · 可復原</small></summary>
+        <div className="motion-quick-grid">{MOTION_CLIP_PRESETS.map(preset => <button type="button" key={preset.id}
+          className="motion-preset-card title" title={preset.description} disabled={!onApplyClipMotionPreset || clip.keyframes.length > 0 || clip.duration < .5}
+          onClick={() => onApplyClipMotionPreset?.(preset.id)}><span><b>{preset.name}</b><i>2D motion</i></span><small>＋ 關鍵幀</small></button>)}</div>
+        {clip.keyframes.length > 0 && <small>此片段已有關鍵幀，為保留既有動畫，預設按鈕已停用。</small>}
+      </details>
+    </>}
     <details className="hologram-motion-library" data-testid="hologram-motion-library">
       <summary>全息／追蹤文字 <small>{HOLOGRAM_MOTION_PRESETS.length} 款 · 可即時改字</small></summary>
       <div className="hologram-motion-grid">

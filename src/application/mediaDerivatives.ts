@@ -8,14 +8,14 @@ import { inspectMedia } from "./inspectMedia";
 import { BROWSER_PROXY_COLOR_CONTRACT, CURRENT_MEDIA_PREVIEW_RECIPE, browserProxyColorPlan, browserProxyFilters, browserThumbnailFilters, type BrowserProxyColorPlan } from "./mediaDerivativeColor";
 import { withMediaCachePublishLock } from "./mediaCachePublishLock";
 
-// v6 JPEGs copied display-referred Rec.709 values without the sRGB viewing
-// transform. A v7 generation must not silently warm-hit those old thumbnails.
+// Cache v8 changes the HLG preview resize order. Old proxies remain on disk
+// but must not silently warm-hit this color/performance recipe.
 // Bump this schema whenever a transform/encoder/metadata recipe changes.
-const CACHE_SCHEMA = 7;
+const CACHE_SCHEMA = 8;
 const CACHE_RECIPE = CURRENT_MEDIA_PREVIEW_RECIPE;
 
 interface CacheManifest {
-  schemaVersion: 7;
+  schemaVersion: 8;
   recipe: typeof CACHE_RECIPE;
   kind: AssetKind;
   producer: typeof BROWSER_PROXY_COLOR_CONTRACT;

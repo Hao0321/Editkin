@@ -8,14 +8,17 @@ import { autopilotPlanSha256, parseAutopilotPlan } from "../application/autopilo
 import { createAutopilotProjectAuditIdentity } from "../application/autopilotInvocationIdentity";
 import { autopilotBatchManifestSchema, executeAutopilotBatch, readAutopilotBatchState, summarizeAutopilotBatch,
   type AutopilotBatchManifest, type AutopilotBatchItem, type AutopilotBatchRuntime } from "../application/autopilotBatchExecution";
+import { AutopilotBatchJobManager } from "../application/autopilotBatchJobs";
 import { batchFileSha256 } from "../application/editorialBatchResume";
 import { projectDuration } from "../domain/editGraph";
 import { inspectMedia } from "../application/inspectMedia";
-import { runProcess } from "../render/ffmpegMedia";
+import { runAnalysisProcess } from "../application/analysisProcess";
 import { auditAutopilotPlan, applyAutopilotPlan } from "./autopilotTools";
 import { renderAutopilotProject } from "./renderTools";
 import { errorResult, textResult } from "./toolRuntime";
 import { readProject, resolveProjectPath, resolveRenderPath, resolveWorkspaceMediaPath, workspaceRoot } from "./storage";
+
+const batchJobs = new AutopilotBatchJobManager();
 
 async function boundedJson(path: string, limit = 4 * 1024 * 1024) {
   if ((await stat(path)).size > limit) throw new Error("批次或計畫超出有界檔案大小");
@@ -103,12 +106,41 @@ function createRuntime(batch: Awaited<ReturnType<typeof loadBatch>>, preferGpu: 
     async verifyRender(item, candidate) {
       const project = await readProject(item.projectPath);
       const probe = await inspectMedia(candidate, process.env.HAO_FFPROBE_PATH);
-      if (!probe.hasVideo || !probe.hasAudio || Math.abs(probe.duration - projectDuration(project)) > Math.max(0.15, 2 / project.fps)) throw new Error("批次成片音畫／時長驗證失敗");
-      await runProcess(process.env.HAO_FFMPEG_PATH ?? "ffmpeg", ["-v", "error", "-xerror", "-i", candidate, "-map", "0:v:0", "-map", "0:a:0", "-f", "null", "-"], 20 * 60_000);
+      if (!probe.hasVideo || !probe.hasAudio || probe.width !== project.width || probe.height !== project.height
+        || Math.abs(probe.duration - projectDuration(project)) > Math.max(0.15, 2 / project.fps)) {
+        throw new Error("批次成片音畫／尺寸／時長驗證失敗");
+      }
+      await runAnalysisProcess(process.env.HAO_FFMPEG_PATH ?? "ffmpeg", ["-v", "error", "-xerror", "-i", candidate, "-map", "0:v:0", "-map", "0:a:0", "-f", "null", "-"], {
+        timeoutMs: 20 * 60_000, label: "批次成片完整解碼", maximumStdout: 100_000, maximumStderr: 100_000,
+      });
     },
   };
 }
 export function registerAutopilotBatchTools(server: McpServer) {
+  server.registerTool("start_autopilot_batch_job", {
+    description: "快速啟動 current-v4 audit→apply→render→全片解碼批次，回傳此 MCP 行程的 jobId；用 get_autopilot_batch_job 輪詢。工作中斷或 MCP 重啟後，以同一清單的持久 state 透過 get_autopilot_batch_status 查詢，再重新啟動續跑。人工審片仍需另行完成。",
+    inputSchema: z.object({ batchPath: z.string(), itemId: z.string().optional(), through: z.enum(["apply", "render"]).default("render"), preferGpu: z.boolean().default(true) }),
+  }, async ({ batchPath, itemId, through, preferGpu }) => {
+    try {
+      const batch = await loadBatch(batchPath);
+      if (itemId && !batch.manifest.items.some(item => item.id === itemId)) throw new Error("未知批次項目");
+      return textResult(batchJobs.start(batch.manifest, batch.statePath, createRuntime(batch, preferGpu), { itemId, through }));
+    } catch (error) { return errorResult(error); }
+  });
+  server.registerTool("get_autopilot_batch_job", {
+    description: "查詢目前 MCP 行程內的非同步批次工作；持久進度請另用 get_autopilot_batch_status。",
+    inputSchema: z.object({ jobId: z.string().uuid() }),
+  }, async ({ jobId }) => {
+    try { return textResult(batchJobs.get(jobId)); }
+    catch (error) { return errorResult(error); }
+  });
+  server.registerTool("cancel_autopilot_batch_job", {
+    description: "要求非同步批次在目前項目完成後、開始下一支影片前停止；不會中斷或刪除正在輸出的檔案。之後可用同一清單續跑。",
+    inputSchema: z.object({ jobId: z.string().uuid() }),
+  }, async ({ jobId }) => {
+    try { return textResult(batchJobs.cancel(jobId)); }
+    catch (error) { return errorResult(error); }
+  });
   server.registerTool("run_autopilot_batch", {
     description: "執行完整 current-v4 批次的 audit→atomic apply→render→全片解碼。AI 必須先逐支判讀素材、取得 current designEvidence 並封存 v4 plan；本工具不代替 AI 判讀。batchPath JSON schema=editkin.autopilot-batch/v1，含 batchId、expectedDeliverableCount、items[{id,projectPath,planPath,outputPath}]。各支保留独立時間軸與收據；失敗不阻擋其他項目、相同清單可續跑、人工修改與既有輸出不覆蓋。through=apply 可先停在套用。永遠不代簽人審。",
     inputSchema: z.object({ batchPath: z.string(), itemId: z.string().optional(), through: z.enum(["apply", "render"]).default("render"), preferGpu: z.boolean().default(true) }),

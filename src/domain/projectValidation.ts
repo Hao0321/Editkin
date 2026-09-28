@@ -2,6 +2,7 @@ import type { ColorAdjustments, EditComposition, EditProject, MediaAsset, RotoMa
 import { DEFAULT_CAPTION_STYLE, DEFAULT_CLIP_LAYER, DEFAULT_COLOR, DEFAULT_COLOR_MANAGEMENT, DEFAULT_TRANSFORM } from "./types";
 import { assertHaoExpression } from "./expression";
 import { isTransformMotionBlurInstance, transformMotionBlurParameters } from "./transformMotionBlur";
+import { assertFloatingVideoFrame, floatingFrameGeometry } from "../motion/floatingVideoFrame";
 import { EditGraphError } from "./editGraphError";
 import { validateParticleSimulationProductContract, validateScene25dProductContract } from "./sceneValidation";
 import { projectFromComposition } from "./projectComposition";
@@ -62,6 +63,26 @@ export function validateClipForTrack(project: EditProject, track: TimelineTrack,
     || clip.transform3d.rotationDegrees.some((value) => Math.abs(value) > 3_600)
     || clip.transform3d.position.some((value) => Math.abs(value) > 100_000))) {
     throw new EditGraphError(`片段 ${clip.id} 的 2.5D transform 不合法`);
+  }
+  if (clip.floatingFrame) {
+    try {
+      assertFloatingVideoFrame(clip.floatingFrame);
+      floatingFrameGeometry(clip.floatingFrame, project.width, project.height);
+    } catch (error) {
+      throw new EditGraphError(`片段 ${clip.id} 的浮空影片框不合法：${error instanceof Error ? error.message : String(error)}`);
+    }
+    const frameAsset = project.assets.find(asset => asset.id === clip.assetId);
+    if (clip.floatingFrame.aspect === "portrait" && project.height <= project.width) {
+      throw new EditGraphError(`片段 ${clip.id} 的直式浮空框需要直式畫布`);
+    }
+    if (track.kind !== "video" || frameAsset?.kind !== "video" || frameAsset.compositionId
+      || project.scene25d?.enabled || project.colorManagement?.mode === "aces2" || clip.transform3d
+      || clip.layout || clip.masks?.some(mask => mask.enabled) || clip.chromaKey?.enabled
+      || clip.layer?.trackMatte || (clip.layer?.role ?? "content") !== "content"
+      || clip.creative?.nativeEffectInstances?.some(instance => instance.enabled)
+      || ![undefined, "auto", "rec709"].includes(frameAsset.color?.interpretation)) {
+      throw new EditGraphError(`片段 ${clip.id} 的浮空影片框目前只支援一般 Rec.709 影片圖層，不能與 2.5D 場景、版面、遮罩或原生效果混用`);
+    }
   }
   const layer = { ...DEFAULT_CLIP_LAYER, ...clip.layer };
   if (!["normal", "add", "screen", "multiply", "overlay", "soft_light", "hard_light", "difference", "darken", "lighten", "color_dodge", "color_burn"].includes(layer.blendMode)) throw new EditGraphError(`片段 ${clip.id} 的圖層混合模式不合法`);

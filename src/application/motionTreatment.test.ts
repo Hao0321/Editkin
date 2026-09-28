@@ -4,6 +4,10 @@ import { autopilotPlanCoverage, compactAutopilotContract, parseAutopilotPlan } f
 import { MOTION_TREATMENT_FAMILIES, motionTreatmentSchema, type MotionTreatment } from "./motionTreatment";
 import { createMotionGraphic } from "../motion/composition";
 import { findMotionGraphicPreset } from "../creative/motionGraphicPresets";
+import { createEmptyProject } from "../domain/editGraph";
+import { applyCommand } from "../domain/commands";
+import { DEFAULT_COLOR, DEFAULT_TRANSFORM } from "../domain/types";
+import { floatingFrameSceneCommands } from "../motion/floatingFrameScenes";
 
 function fixture() {
   const plan = createAutopilotV4Fixture();
@@ -46,5 +50,29 @@ describe("Editkin Motion treatment in the existing v4 workflow", () => {
     expect(() => parseAutopilotPlan(unknown)).toThrow(/不存在/);
     const hidden = fixture(); hidden.editorial.motionTreatment.decisions[0].action = "omit"; hidden.editorial.motionTreatment.decisions[0].commandIndexes = [];
     expect(() => parseAutopilotPlan(hidden)).toThrow(/未交代用途/);
+  });
+  it("binds every visible layer of the portrait trio to the v4 motion treatment", () => {
+    let project = createEmptyProject("portrait", { width: 360, height: 640, fps: 30 });
+    project = applyCommand(project, { type: "import_asset", asset: {
+      id: "own-video", name: "Own video", kind: "video", uri: "own.mp4", duration: 2, width: 360, height: 640,
+      color: { interpretation: "rec709" },
+    } });
+    project = applyCommand(project, { type: "add_clip", clip: {
+      id: "own-clip", assetId: "own-video", trackId: "video-main", timelineStart: 0, sourceStart: 0, duration: 2,
+      volume: 1, transform: { ...DEFAULT_TRANSFORM }, color: { ...DEFAULT_COLOR }, keyframes: [],
+    } });
+    const sceneCommands = floatingFrameSceneCommands(project, "own-clip", "portrait_duo");
+    const base = createAutopilotV4Fixture();
+    const visualIndexes = [2, 4, 6];
+    const treatment: MotionTreatment = { schema: "editkin.motion-treatment/v1", decisions: MOTION_TREATMENT_FAMILIES.map(family => ({
+      family, action: family === "vfx" || family === "transitions_camera" ? "use" : "omit",
+      reason: "以真實影片建立可編輯直式透視舞台",
+      beatIds: ["promise"], commandIndexes: family === "vfx" || family === "transitions_camera" ? visualIndexes : [],
+    })) };
+    const plan = { ...base, editorial: { ...base.editorial, motionTreatment: treatment }, commands: [...base.commands, ...sceneCommands] };
+    const parsed = parseAutopilotPlan(plan);
+    const families = autopilotPlanCoverage(parsed).motionTreatment?.families;
+    expect(families?.find(row => row.family === "vfx")?.commandIndexes).toEqual(visualIndexes);
+    expect(families?.find(row => row.family === "sound")?.commandIndexes).toEqual([]);
   });
 });

@@ -148,6 +148,9 @@ export class ResidentAudioTransport {
     if (this.retired || this.failed || status.schema !== "editkin.desktop-audio-status/v1") return;
     if (this.owner === undefined || this.replacing) { this.early = status; return; }
     if (status.ownerId !== this.owner || !Number.isSafeInteger(status.sequence) || status.sequence <= this.sequence) return;
+    // The owner survives seeks. A delayed failure from the retired stream must
+    // not tear down the replacement or admit compatible playback over it.
+    if (status.generation !== this.generation) return;
     if (status.failed) {
       // Queue teardown on the same serialized pump; never race a replacement.
       this.failed = true;
@@ -156,7 +159,7 @@ export class ResidentAudioTransport {
         catch {this.view("failed", "原生音訊清理未確認；相容播放已阻擋");}});
       return;
     }
-    if (status.generation !== this.generation || this.key !== (this.desired && keyOf(this.desired))) return;
+    if (this.key !== (this.desired && keyOf(this.desired))) return;
     const p = status.playback;
     if (p.schema !== "editkin.native-audio-session-event/v1" || p.streamGeneration !== this.generation
       || p.sampleMasterRate !== 48000 || !Number.isSafeInteger(p.timelineFrame) || !Number.isSafeInteger(p.presentedFrame)

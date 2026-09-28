@@ -556,6 +556,13 @@ impl AudioSessionHost {
             "generation":s.active,"playback":s.latest,"failed":s.failure.is_some(),"error":s.failure,"cleanup":s.cleanup}),
         )
     }
+    /// A generation remains live until the native decoder-closed/superseded
+    /// receipt removes it. Desktop stage cleanup must never infer this from a
+    /// seek request or a paused playback snapshot alone.
+    pub fn live_generations(&self) -> Result<BTreeSet<u64>, String> {
+        self.shared.state.lock().map(|state| state.generations.clone())
+            .map_err(|_| "Audio broker state poisoned".into())
+    }
     pub fn cleanup_confirmed(&self) -> bool {
         self.shared
             .state

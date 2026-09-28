@@ -23,4 +23,18 @@ if (!compiled.featureFamilies.includes("caption_rendering") || !compiled.feature
 const source = graph.nodes.find((node) => node.id === "source:clip-demo");
 const sourceTimeline = source?.timeline as { durationFrames?: number } | undefined;
 if (sourceTimeline?.durationFrames !== 360) throw new Error("片段 exact frame range 沒有進入 native graph contract");
-process.stdout.write(`${JSON.stringify({ status: "GREEN", graphId: compiled.graphId, passes: compiled.passes.length, audioNodes: compiled.audioNodeCount, features: compiled.featureFamilies })}\n`);
+const fractionalTimebases = [
+  { fps: 120_000 / 1_001, expected: { numerator: 1_001, denominator: 120_000 } },
+  { fps: 25.5, expected: { numerator: 2, denominator: 51 } },
+];
+for (const { fps, expected } of fractionalTimebases) {
+  const fractionalProject = createDemoProject();
+  fractionalProject.fps = fps;
+  const fractionalGraph = buildEngineRenderGraph(fractionalProject);
+  const native = await compileNativeEngineGraph(fractionalGraph, executable);
+  if (JSON.stringify(fractionalGraph.timebase) !== JSON.stringify(expected)
+    || JSON.stringify(native.timebase) !== JSON.stringify(expected)) {
+    throw new Error(`跨語言 engine graph FPS/timebase 漂移：${fps}`);
+  }
+}
+process.stdout.write(`${JSON.stringify({ status: "GREEN", graphId: compiled.graphId, passes: compiled.passes.length, audioNodes: compiled.audioNodeCount, features: compiled.featureFamilies, fractionalTimebases: fractionalTimebases.map(({ fps, expected }) => ({ fps, timebase: expected })) })}\n`);

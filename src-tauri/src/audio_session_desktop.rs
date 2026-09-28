@@ -9,6 +9,7 @@ use crate::{
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     fs,
@@ -157,6 +158,7 @@ fn no_link(path: &Path) -> Result<(), String> {
     Ok(())
 }
 struct Stage {
+    generation: u64,
     path: PathBuf,
     root: PathBuf,
     sha: String,
@@ -238,6 +240,7 @@ impl Stage {
             public.insert(key.into(), value[key].clone());
         }
         Ok(Self {
+            generation,
             path,
             root,
             sha,
@@ -249,6 +252,12 @@ impl Stage {
             no_link(p)?;
         }
         no_link(&self.path)?;
+        let entries = fs::read_dir(&self.root).map_err(|e| e.to_string())?
+            .map(|entry| entry.map(|item| item.file_name()).map_err(|e| e.to_string()))
+            .collect::<Result<Vec<_>, _>>()?;
+        if entries.len() != 1 || entries[0] != "project-audio.json" {
+            return Err("Changed audio stage directory retained".into());
+        }
         if hash_file(&self.path, 4 * 1024 * 1024)?.0 != self.sha {
             return Err("Changed stage retained".into());
         }
@@ -256,6 +265,18 @@ impl Stage {
         // Empty generated UUID only. Never recurse through cache/user media.
         fs::remove_dir(&self.root).map_err(|e| e.to_string())
     }
+}
+fn retire_inactive_stages(stages: &mut Vec<Stage>, live: &BTreeSet<u64>, current: u64) -> usize {
+    let mut retired = 0;
+    stages.retain(|stage| {
+        if stage.generation == current || live.contains(&stage.generation) || stage.remove().is_err() {
+            true
+        } else {
+            retired += 1;
+            false
+        }
+    });
+    retired
 }
 fn close_state(state: &mut State, owner: u64) -> Result<Value, String> {
     let result = state.registry.close(owner)?; // ownership/actual tree closure first
@@ -390,17 +411,18 @@ impl DesktopAudio {
         let state = self.state.clone();
         self.worker.submit(move || {
             let mut s = state.lock().map_err(|_| "Audio desktop state poisoned")?;
+            let live = s.registry.live_generations(owner)?;
             let e = s
                 .current
                 .as_mut()
                 .filter(|e| e.owner == owner)
                 .ok_or("Stale audio owner")?;
+            retire_inactive_stages(&mut e.stages, &live, e.generation);
             if e.stages.len() >= 32 {
                 return Err("Audio plan retention bound reached; close and reopen owner".into());
             }
             let previous = e.generation;
-            e.generation += 1;
-            let generation = e.generation;
+            let generation = previous.checked_add(1).ok_or("Audio generation exhausted")?;
             let root = e.runtime.plans.clone();
             if previous > 0 {
                 s.registry.submit(owner, Action::Pause(previous))?;
@@ -431,16 +453,21 @@ impl DesktopAudio {
                     value["frameCount"].as_u64().ok_or("Clock count missing")?,
                 )?;
             let public = owned.public.clone();
-            s.current.as_mut().unwrap().stages.push(owned);
             let clock = plan.clock();
-            s.registry.submit(
+            if let Err(error) = s.registry.submit(
                 owner,
                 Action::Replace {
                     plan,
                     autoplay: false,
                 },
-            )?;
-            s.current.as_mut().unwrap().clock = clock;
+            ) {
+                let _ = owned.remove();
+                return Err(error);
+            }
+            let current = s.current.as_mut().unwrap();
+            current.generation = generation;
+            current.stages.push(owned);
+            current.clock = clock;
             Ok(json!({"ownerId":owner,"generation":generation,"stage":public}))
         })
     }

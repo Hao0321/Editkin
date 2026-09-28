@@ -141,4 +141,3 @@ describe("live Video Autopilot invocation identity", () => {
     consumeAcceptedAutopilotAuditReceipt(pending.at(-1)!);
   });
 });
-

@@ -21,6 +21,9 @@ import { editorCommandSchema } from "./schemas";
 import { analyzeMotionTrack } from "../application/motionTracking";
 import type { EditorCommand } from "../domain/commands";
 import { createMotionGraphic } from "../motion/composition";
+import { FLOATING_VIDEO_FRAME_PRESETS, floatingVideoFramePreset } from "../motion/floatingVideoFrame";
+import { FLOATING_FRAME_SCENE_PRESETS, floatingFrameSceneCommands } from "../motion/floatingFrameScenes";
+import { MOTION_CLIP_PRESETS, motionClipPresetCommands } from "../motion/motionClipPresets";
 import { compactMotionGraphicPresets, findMotionGraphicPreset, motionGraphicPresets } from "../creative/motionGraphicPresets";
 import { motionPresetVariantDescriptor } from "../application/motionPresetVariant";
 import { compactCinematicLanguageIndex, resolveCinematicRecipe } from "../creative/cinematicLanguage";
@@ -90,7 +93,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
   registerRemoteOnboardingTools(server);
 
   server.registerTool("list_creative_presets", {
-    description: "列出 Editkin 原生可輸出的調色、特效、轉場、字幕文字、動態圖文與鏡頭語言 presets。動態圖文預設回低 Token 索引；傳 motionPresetId 只展開單一 seed，不重送整份動態圖文索引。鏡頭語言與子彈時間會附真實能力前置與降級標示。",
+    description: "列出 Editkin 可輸出的調色、特效、轉場、字幕、動態圖文、2D 片段動態、2.5D 浮空影片框與鏡頭語言 presets。動態圖文回低 Token 索引；motionPresetId 只展開單一 seed。",
     inputSchema: z.object({
       kind: z.enum(["all", "look", "effect", "transition", "text", "motion", "template", "cinematic"]).default("all"),
       motionPresetId: z.string().min(1).max(128).optional(),
@@ -108,6 +111,17 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       transitions: kind === "all" || kind === "transition" ? compact(TRANSITION_PRESETS) : undefined,
       textStyles: kind === "all" || kind === "text" ? compact(TEXT_STYLE_PRESETS) : undefined,
       motionGraphics: !motionPresetId && (kind === "all" || kind === "motion") ? compactMotionGraphicPresets() : undefined,
+        floatingVideoFrames: !motionPresetId && (kind === "all" || kind === "motion") ? FLOATING_VIDEO_FRAME_PRESETS.map(preset => ({
+          id: preset.id, name: preset.name, capability: "editable_2.5d_perspective_video_frame", frame: floatingVideoFramePreset(preset.id),
+          commandType: "set_clip_floating_frame", requires: ["rec709_video_clip", "no_scene25d", "no_mask_or_layout", ...(preset.id === "portrait_orbit" ? ["portrait_project"] : [])],
+        })) : undefined,
+        floatingFrameScenes: !motionPresetId && (kind === "all" || kind === "motion") ? FLOATING_FRAME_SCENE_PRESETS.map(preset => ({
+          ...preset, capability: "editable_portrait_three_layer_video_scene", prepareTool: "prepare_floating_frame_scene",
+          requires: ["portrait_project", "rec709_video_clip", "clean_clip_transform", "no_existing_keyframes"],
+        })) : undefined,
+      motionClipPresets: !motionPresetId && (kind === "all" || kind === "motion") ? MOTION_CLIP_PRESETS.map(preset => ({
+        ...preset, prepareTool: "prepare_clip_motion_preset", commandType: "add_keyframe", requires: ["clip_without_existing_keyframes", "at_least_12_frames"],
+      })) : undefined,
       formatTemplates: kind === "all" || kind === "template" ? {
         shortForm: SHORT_FORM_TEMPLATES.map(({ id, name, category, bestFor, rhythm, lookPresetId, effectPresetIds, transitionPresetId, captionPresetId, cinematicRecipeId }) => ({ id, name, category, bestFor, rhythm, lookPresetId, effectPresetIds, transitionPresetId, captionPresetId, cinematicRecipeId, executionBoundary: "visual_package_now_recipe_requires_evidence_gate" })),
         longForm: LONG_FORM_TEMPLATES.map(({ id, name, category, bestFor, lookPresetId, effectPresetIds, introTransitionPresetId, cinematicRecipeId, cadence }) => ({ id, name, category, bestFor, lookPresetId, effectPresetIds, introTransitionPresetId, cinematicRecipeId, cadence, captionColorPolicy: "white_only", executionBoundary: "visual_package_now_recipe_requires_evidence_gate" })),
@@ -116,6 +130,30 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       selectedMotionPreset,
       motionPresetVariant: selectedMotionPreset ? motionPresetVariantDescriptor(selectedMotionPreset) : undefined,
     } });
+  });
+
+  server.registerTool("prepare_clip_motion_preset", {
+    description: "只讀：依專案 fps 與片段時長產生浮空入場或緩推鏡頭的精確 add_keyframe commands。將結果放入同一份 v4 plan，再 audit/apply；本工具不修改專案。",
+    inputSchema: z.object({ projectPath: z.string().min(1), clipId: z.string().min(1), presetId: z.enum(["float_in", "slow_push"]) }),
+  }, async ({ projectPath, clipId, presetId }) => {
+    try {
+      const project = await readProject(projectPath);
+      const clip = findClip(project, clipId);
+      return textResult({ status: "GREEN", clipId, projectRevision: project.revision, presetId,
+        commands: motionClipPresetCommands(clip, project.fps, presetId), readOnly: true, next: "bind commands to v4 motionTreatment and designEvidence, then audit/apply" });
+    } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_floating_frame_scene", {
+    description: "只讀：為直式專案中的使用者影片編譯前景環繞旋轉 + 後方兩片大型直式影片的五個 EditGraph commands。結果可編輯、可 Undo；放入 v4 plan 後 audit/apply，本工具不改專案。",
+    inputSchema: z.object({ projectPath: z.string().min(1), clipId: z.string().min(1), presetId: z.literal("portrait_duo") }),
+  }, async ({ projectPath, clipId, presetId }) => {
+    try {
+      const project = await readProject(projectPath);
+      return textResult({ status: "GREEN", clipId, projectRevision: project.revision, presetId,
+        commands: floatingFrameSceneCommands(project, clipId, presetId), readOnly: true,
+        next: "bind commands to v4 motionTreatment and designEvidence, then audit/apply" });
+    } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("resolve_cinematic_recipe", {

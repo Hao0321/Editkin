@@ -8,13 +8,15 @@ import {createDemoProject} from "../domain/demo";
 import {CURRENT_MEDIA_PREVIEW_RECIPE} from "../application/mediaDerivativeColor";
 function nodes(value:unknown):ReactElement<Record<string,any>>[]{if(Array.isArray(value))return value.flatMap(nodes);if(!value||typeof value!=="object"||!("props"in value))return[];const element=value as ReactElement<Record<string,any>>;return[element,...nodes(element.props.children)];}
 describe("ordinary preview decode errors (actual handlers, explicit hook-state harness)",()=>{
- it("does not treat an audio-only MOV decode as a video frame and prepares an absent proxy once",()=>{
+ it("does not treat an audio-only MOV decode as a video frame and flags it for serialized repair",()=>{
   hooks.values=[];const project=createDemoProject(),clip=project.tracks[0]!.clips[0]!,asset=project.assets[0]!,rebuild=vi.fn(async()=>{}),pause=vi.fn();delete asset.derivatives;
   const props={layers:[{clip,asset,source:"camera.mov"}],audioLayers:[],projectWidth:project.width,projectHeight:project.height,playhead:0,projectDuration:12,projectFps:project.fps,captions:[],captionStyle:project.captionStyle,project,playing:true,onPlayingChange:pause,onPlayheadChange:()=>{},onRebuildPreview:rebuild};
   const render=()=>{hooks.index=0;return nodes(Preview(props));};const video=render().find(n=>n.type==="video")!;
   video.props.onLoadedData({currentTarget:{readyState:4,videoWidth:0,videoHeight:0}});
   video.props.onLoadedData({currentTarget:{readyState:4,videoWidth:0,videoHeight:0}});
-  expect(rebuild).toHaveBeenCalledExactlyOnceWith(asset.id);expect(pause).toHaveBeenCalledWith(false);
+  // This hook-state harness omits effects; automatic repair is admitted by the
+  // separate queue effect after the named decode failure becomes visible.
+  expect(rebuild).not.toHaveBeenCalled();expect(pause).toHaveBeenCalledWith(false);
   expect(render().some(n=>n.props["data-testid"]==="preview-media-error")).toBe(true);
   video.props.onLoadedData({currentTarget:{readyState:4,videoWidth:1080,videoHeight:1920}});
   expect(render().some(n=>n.props["data-testid"]==="preview-media-error")).toBe(false);

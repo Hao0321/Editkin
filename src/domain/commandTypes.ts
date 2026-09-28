@@ -28,6 +28,7 @@ import type {
   TimelineTrack,
   Transform2D,
   Transform3D,
+  FloatingVideoFrame,
   Scene25dSettings,
   ParticleSimulationSettings,
   TemplateApplicationState,
@@ -59,6 +60,7 @@ export type EditorCommand =
   | { type: "configure_scene_25d"; enabled: boolean }
   | { type: "set_scene_25d_settings"; settings: Scene25dSettings }
   | { type: "update_clip_transform_3d"; clipId: string; patch: Partial<Transform3D> }
+  | { type: "set_clip_floating_frame"; clipId: string; frame?: FloatingVideoFrame }
   | { type: "configure_particle_simulation"; enabled: boolean }
   | { type: "set_particle_simulation_settings"; settings: ParticleSimulationSettings }
   | { type: "set_clip_color"; clipId: string; patch: Partial<ColorAdjustments> }

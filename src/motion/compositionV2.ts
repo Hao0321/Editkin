@@ -30,6 +30,7 @@ export interface MotionGraphicV2LayoutSegment {
 export interface MotionGraphicV2LayoutReceipt {
   schema: "hao.motion-layout-receipt/v2";
   receiptId: string;
+  sourceSignature: string;
   graphicId: string;
   projectWidth: number;
   projectHeight: number;
@@ -73,6 +74,22 @@ function receiptIdentity(value: unknown): string {
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
   return `motion-v2-${hash.toString(16).padStart(8, "0")}`;
+}
+
+/** Frozen authored inputs; never retain a mutable reference to the EditGraph. */
+function layoutSourceSignature(project: EditProject, graphic: MotionGraphic): string {
+  const layout = graphic.layoutV2!;
+  return JSON.stringify({
+    projectWidth: project.width, projectHeight: project.height, graphicId: graphic.id,
+    text: graphic.text, x: graphic.x, y: graphic.y, width: graphic.width,
+    fontSize: graphic.fontSize, fontFamily: graphic.fontFamily ?? "Noto Sans TC",
+    fontWeight: graphic.fontWeight ?? 700, letterSpacing: graphic.letterSpacing ?? 0,
+    sequenceUnit: graphic.motionV2!.sequence.unit,
+    layout: {safeArea: {top: layout.safeArea.top, right: layout.safeArea.right,
+      bottom: layout.safeArea.bottom, left: layout.safeArea.left},
+      maxLines: layout.maxLines, minFontSize: layout.minFontSize,
+      lineGap: layout.lineGap, align: layout.align, widthMode: layout.widthMode ?? "fixed"},
+  });
 }
 
 function glyphAdvance(character: string, fontSize: number, letterSpacing: number): number {
@@ -216,6 +233,7 @@ export function motionGraphicV2LayoutReceipt(project: EditProject, graphic: Moti
     if (!segments.length) continue;
     const base = {
       schema: "hao.motion-layout-receipt/v2" as const,
+      sourceSignature: layoutSourceSignature(project, graphic),
       graphicId: graphic.id,
       projectWidth: project.width,
       projectHeight: project.height,
@@ -295,7 +313,11 @@ function phaseProgress(frame: number, delay: number, durationFrames: number): nu
 export function motionGraphicV2FrameReceipt(project: EditProject, graphic: MotionGraphic, timelineFrame: number, layout = motionGraphicV2LayoutReceipt(project, graphic)): MotionGraphicV2FrameReceipt {
   assertMotionGraphicV2Contract(graphic, project.fps);
   if (graphic.schema !== "hao.motion-composition/v2" || !Number.isInteger(timelineFrame)) throw new Error("v2 frame evaluator 只接受整數 timeline frame");
-  if (layout.graphicId !== graphic.id || layout.projectWidth !== project.width || layout.projectHeight !== project.height) throw new Error("v2 layout receipt 與 project/graphic 不一致");
+  const {receiptId, ...layoutBody} = layout;
+  if (layout.graphicId !== graphic.id || layout.projectWidth !== project.width || layout.projectHeight !== project.height
+    || layout.sourceSignature !== layoutSourceSignature(project, graphic) || receiptId !== receiptIdentity(layoutBody)) {
+    throw new Error("v2 layout receipt 與 project/graphic 不一致");
+  }
   const startFrame = Math.round(graphic.timelineStart * project.fps);
   const durationFrames = Math.max(1, Math.round(graphic.duration * project.fps));
   const localFrame = timelineFrame - startFrame;

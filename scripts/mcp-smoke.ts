@@ -1,6 +1,6 @@
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
-import { copyFile, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { copyFile, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { strict as assert } from "node:assert";
@@ -25,6 +25,18 @@ async function main() {
   const workspace = await mkdtemp(join(tmpdir(), "editkin-mcp-"));
   const tsxCli = resolve(appRoot, "node_modules/tsx/dist/cli.mjs");
   const client = new Client({ name: "editkin-smoke", version: "0.15.0" });
+  if (process.env.EDITKIN_MCP_SMOKE_TRACE === "1") {
+    client.callTool = new Proxy(client.callTool, {
+      apply(target, thisArg, args) {
+        const name = String((args[0] as { name?: string })?.name ?? "unknown");
+        console.error(`MCP smoke call: ${name}`);
+        return Promise.resolve(Reflect.apply(target, thisArg, args)).then((result: { isError?: boolean; content?: unknown }) => {
+          if (result.isError) console.error(`MCP smoke error: ${name} ${JSON.stringify(result.content).slice(0, 2000)}`);
+          return result;
+        });
+      },
+    });
+  }
   const packagedCommand = process.env.HAO_MCP_COMMAND;
   const packagedArgs = process.env.HAO_MCP_ARGS_JSON ? JSON.parse(process.env.HAO_MCP_ARGS_JSON) as string[] : undefined;
   const ffmpegPath = process.env.HAO_FFMPEG_PATH ?? resolve(appRoot, "vendor/ffmpeg/win32-x64/ffmpeg.exe");
@@ -102,7 +114,30 @@ async function main() {
     await client.connect(transport);
     const listed = await client.listTools();
     const names = listed.tools.map((tool) => tool.name).sort();
-    assert.deepEqual(names, ["add_creative_asset_to_timeline", "apply_autopilot_plan", "apply_creative_preset", "apply_edit_commands", "audit_autopilot_plan", "audit_editorial_batch_plan", "auto_add_music", "auto_cut_silence", "auto_edit_highlights", "auto_split_scenes", "auto_transcribe_captions", "build_autopilot_roto_keyer_decision", "cancel_material_preparation_job", "compile_beat_montage", "compile_plugin_application", "configure_remote_access", "create_editorial_batch_projects", "create_project", "direct_podcast_speakers", "get_autopilot_batch_status", "get_autopilot_contract", "get_autopilot_design_brief", "get_editkin_skill_pack", "get_editkin_workflow_profile", "get_material_context", "get_material_preparation_job", "get_plugin_capability", "get_project_summary", "get_remote_setup_status", "get_timeline_window", "inspect_roto_keyer_capabilities", "list_community_editing_knowledge", "list_creative_assets", "list_creative_presets", "list_installed_editkin_skills", "list_installed_plugins", "list_remote_provider_connectors", "prepare_ai_material", "prepare_autopilot_auto_roto", "prepare_remote_setup", "propose_auto_color_exposure", "propose_reference_white_balance", "read_community_editing_knowledge", "record_autopilot_outcome", "record_material_semantics", "record_roto_keyer_evidence", "render_editorial_batch", "render_project", "resolve_autopilot_inference_route", "resolve_cinematic_recipe", "resolve_editkin_skill_workflow", "run_autopilot_batch", "start_ai_editing_session", "track_subject_and_attach_label", "validate_project", "verify_remote_access", "view_material_keyframes"]);
+    assert.deepEqual(names, ["add_creative_asset_to_timeline", "apply_autopilot_plan", "apply_creative_preset", "apply_edit_commands", "audit_autopilot_plan", "audit_editorial_batch_plan", "auto_add_music", "auto_cut_silence", "auto_edit_highlights", "auto_split_scenes", "auto_transcribe_captions", "build_autopilot_roto_keyer_decision", "cancel_autopilot_batch_job", "cancel_material_preparation_job", "compile_beat_montage", "compile_plugin_application", "configure_remote_access", "create_editorial_batch_projects", "create_project", "direct_podcast_speakers", "get_autopilot_batch_job", "get_autopilot_batch_status", "get_autopilot_contract", "get_autopilot_design_brief", "get_editkin_skill_pack", "get_editkin_workflow_profile", "get_material_context", "get_material_preparation_job", "get_plugin_capability", "get_project_summary", "get_remote_setup_status", "get_timeline_window", "inspect_roto_keyer_capabilities", "list_community_editing_knowledge", "list_creative_assets", "list_creative_presets", "list_installed_editkin_skills", "list_installed_plugins", "list_remote_provider_connectors", "prepare_ai_material", "prepare_autopilot_auto_roto", "prepare_autopilot_motion_track", "prepare_autopilot_template_package", "prepare_clip_motion_preset", "prepare_floating_frame_scene", "prepare_remote_setup", "propose_auto_color_exposure", "propose_reference_white_balance", "read_community_editing_knowledge", "record_autopilot_outcome", "record_material_semantics", "record_roto_keyer_evidence", "render_editorial_batch", "render_project", "resolve_autopilot_inference_route", "resolve_cinematic_recipe", "resolve_editkin_skill_workflow", "run_autopilot_batch", "start_ai_editing_session", "start_autopilot_batch_job", "track_subject_and_attach_label", "validate_project", "verify_remote_access", "view_material_keyframes"]);
+
+    const asyncBatchPath = join(workspace, "async-batch.json");
+    await writeFile(asyncBatchPath, JSON.stringify({
+      schema: "editkin.autopilot-batch/v1", batchId: "mcp-smoke-async", expectedDeliverableCount: 1,
+      items: [{ id: "missing-input", projectPath: join(workspace, "missing.editkin.json"),
+        planPath: join(workspace, "missing.plan.json"), outputPath: join(workspace, "missing.mp4") }],
+    }));
+    const startedBatch = await client.callTool({ name: "start_autopilot_batch_job", arguments: { batchPath: asyncBatchPath } });
+    assert.equal(startedBatch.isError, undefined);
+    const startedBatchPayload = JSON.parse(String((startedBatch.content[0] as { text?: string })?.text ?? "{}"));
+    assert.equal(startedBatchPayload.status, "RUNNING");
+    let asyncBatchStatus: Record<string, unknown> = {};
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const response = await client.callTool({ name: "get_autopilot_batch_job", arguments: { jobId: startedBatchPayload.jobId } });
+      assert.equal(response.isError, undefined);
+      asyncBatchStatus = JSON.parse(String((response.content[0] as { text?: string })?.text ?? "{}"));
+      if (asyncBatchStatus.status !== "RUNNING") break;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.equal(asyncBatchStatus.status, "PARTIAL");
+    const persistentBatch = await client.callTool({ name: "get_autopilot_batch_status", arguments: { batchPath: asyncBatchPath } });
+    assert.equal(persistentBatch.isError, undefined);
+    assert.equal(JSON.parse(String((persistentBatch.content[0] as { text?: string })?.text ?? "{}")).completed, 0);
 
     const autopilotContract = await client.callTool({ name: "get_autopilot_contract", arguments: {} });
     assert.equal(autopilotContract.isError, undefined);
@@ -156,6 +191,8 @@ async function main() {
     assert.equal(presetsPayload.presets.formatTemplates.longForm.every((template: Record<string, unknown>) => template.captionColorPolicy === "white_only"), true);
     assert.equal(presetsPayload.presets.formatTemplates.shortForm.every((template: Record<string, unknown>) => template.executionBoundary === "visual_package_now_recipe_requires_evidence_gate"), true);
     assert.equal(presetsPayload.presets.motionGraphics.every((preset: Record<string, unknown>) => !Object.hasOwn(preset, "seed")), true);
+    assert.equal(presetsPayload.presets.floatingVideoFrames.some((preset: { id: string }) => preset.id === "portrait_orbit"), true);
+    assert.equal(presetsPayload.presets.floatingFrameScenes[0].id, "portrait_duo");
     const compoundTransition = presetsPayload.presets.transitions.find((preset: { id: string }) => preset.id === "cine_proof_flash_push");
     assert.deepEqual(compoundTransition.renderers, ["transition-flash", "transition-zoom"]);
     const cinematicDraft = await client.callTool({ name: "resolve_cinematic_recipe", arguments: { recipeId: "rhythmic_crescendo", availableCapabilities: ["enough_distinct_shots", "beat_grid_or_event_peaks"] } });
@@ -202,6 +239,30 @@ async function main() {
     });
     assert.equal(legacyApply.isError, true, "legacy v3 must be rejected by the product apply path");
 
+    const rejectedBatchPath = join(workspace, "rejected-plan-batch.json");
+    const rejectedPlanPath = join(workspace, "rejected-v3-plan.json");
+    await writeFile(rejectedPlanPath, JSON.stringify(autopilotPlan));
+    await writeFile(rejectedBatchPath, JSON.stringify({
+      schema: "editkin.autopilot-batch/v1", batchId: "mcp-smoke-rejected-v3", expectedDeliverableCount: 1,
+      items: [{ id: "rejected-v3", projectPath: join(workspace, "smoke.editkin.json"),
+        planPath: rejectedPlanPath, outputPath: join(workspace, "rejected-v3.mp4") }],
+    }));
+    const rejectedBatchStart = await client.callTool({ name: "start_autopilot_batch_job", arguments: { batchPath: rejectedBatchPath } });
+    assert.equal(rejectedBatchStart.isError, undefined);
+    const rejectedBatchJobId = JSON.parse(String((rejectedBatchStart.content[0] as { text?: string })?.text ?? "{}")).jobId;
+    let rejectedBatchJobStatus: Record<string, unknown> = {};
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const response = await client.callTool({ name: "get_autopilot_batch_job", arguments: { jobId: rejectedBatchJobId } });
+      assert.equal(response.isError, undefined);
+      rejectedBatchJobStatus = JSON.parse(String((response.content[0] as { text?: string })?.text ?? "{}"));
+      if (rejectedBatchJobStatus.status !== "RUNNING") break;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.equal(rejectedBatchJobStatus.status, "PARTIAL");
+    const rejectedBatchState = JSON.parse(await readFile(`${rejectedBatchPath}.state.json`, "utf8"));
+    assert.equal(rejectedBatchState.items[0].phase, "queued", "rejected audit must never enter uncertain apply");
+    assert.match(rejectedBatchState.items[0].error, /v3/);
+
     const mediaPath = join(workspace, "demo-source.mp4");
     const speechPath = join(workspace, "speech.wav");
     const scenePath = join(workspace, "scenes.mp4");
@@ -241,6 +302,30 @@ async function main() {
       },
     });
     assert.equal(changed.isError, undefined, JSON.stringify(changed.content));
+
+    const portraitCreated = await client.callTool({ name: "create_project", arguments: {
+      projectPath: "portrait-motion.editkin.json", name: "Portrait Motion", width: 360, height: 640, fps: 30,
+    } });
+    assert.equal(portraitCreated.isError, undefined);
+    const portraitChanged = await client.callTool({ name: "apply_edit_commands", arguments: {
+      projectPath: "portrait-motion.editkin.json", commands: [
+        { type: "import_asset", asset: { id: "portrait-own", name: "Own video", kind: "video", uri: mediaPath, duration: 12, width: 960, height: 540 } },
+        { type: "add_clip", clip: { id: "portrait-clip", assetId: "portrait-own", trackId: "video-main", timelineStart: 0, sourceStart: 0, duration: 2,
+          volume: 1, transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+          color: { brightness: 0, contrast: 1, saturation: 1, hue: 0, exposure: 0, temperature: 0, tint: 0, pivot: 0.5, shadows: 0, highlights: 0, blacks: 0, whites: 0 }, keyframes: [] } },
+      ],
+    } });
+    assert.equal(portraitChanged.isError, undefined, JSON.stringify(portraitChanged.content));
+    const portraitPath = join(workspace, "portrait-motion.editkin.json");
+    const portraitBytesBefore = await readFile(portraitPath);
+    const scenePrepared = await client.callTool({ name: "prepare_floating_frame_scene", arguments: {
+      projectPath: "portrait-motion.editkin.json", clipId: "portrait-clip", presetId: "portrait_duo",
+    } });
+    assert.equal(scenePrepared.isError, undefined, JSON.stringify(scenePrepared.content));
+    const floatingScenePayload = JSON.parse(String((scenePrepared.content[0] as { text?: string })?.text ?? "{}"));
+    assert.equal(floatingScenePayload.commands.length, 5);
+    assert.equal(floatingScenePayload.commands.filter((command: { type: string }) => command.type === "add_clip").length, 2);
+    assert.deepEqual(await readFile(portraitPath), portraitBytesBefore, "scene preparation must not mutate project bytes");
 
     const montageProjectPath = join(workspace, "smoke.editkin.json");
     const montageBytesBefore = await readFile(montageProjectPath);

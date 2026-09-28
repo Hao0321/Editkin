@@ -10,6 +10,10 @@ Editkin is a local-first video editor with an editable timeline, a shared EditGr
 
 For integration development, install or clone the Kit and set `EDITKIN_VIDEO_AUTOPILOT_SKILL` to the absolute path of its `codex-skill/video-autopilot/SKILL.md` before starting Editkin with `npm run mcp` in your agent's MCP configuration. Use the same Kit in the agent session. Editkin binds the selected Skill and its workflow contract to the plan and checks for changes again before applying it. The public Kit works without the maintainer's private design profile; real footage and visual quality still need review.
 
+## Motion and timeline source
+
+Motion presets include an editable floating video frame with softened outer edges, portrait perspective orbit, and a scene with two larger portrait panels behind the main clip. `prepare_floating_frame_scene` compiles that scene into commands for the audited v4 plan. The effect uses a 2.5D perspective plane; it is not a 3D mesh. Timeline asset drops snap to editing anchors and clips can be moved in frame increments. Rendering and preview performance depend on the media runtime and machine; these source features do not certify the visual result for every project.
+
 ## Build the source
 
 Use Node.js 22.13 or newer. From a fresh checkout:

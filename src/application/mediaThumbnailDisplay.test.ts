@@ -75,9 +75,9 @@ describe("actual thumbnail display endpoint (not native GUI or HDR art approval)
     const actual = centerRgb(thumbnail, false), expected = centerRgb(first.derivatives.proxyUri!, true).map(display);
     actual.forEach((value, channel) => expect(Math.abs(value - expected[channel])).toBeLessThanOrEqual(TOLERANCE));
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-    expect(manifest.schemaVersion).toBe(7); expect(manifest.recipe).toBe(RECIPE);
+    expect(manifest.schemaVersion).toBe(8); expect(manifest.recipe).toBe(RECIPE);
     // Retain a complete historical v6-shaped cache with genuinely old scale-only
-    // JPEG bytes. It must remain untouched, never become the v7 warm winner.
+    // JPEG bytes. It must remain untouched, never become the v8 warm winner.
     const old = join(f.request.cacheRoot, "v6", f.sourceSha); await cp(directory, old, { recursive: true });
     const oldJpeg = join(old, "thumbnail.jpg");
     ff(["-y", "-i", first.derivatives.proxyUri!, "-vf", "scale=480:-2,setsar=1", "-frames:v", "1", "-q:v", "3", oldJpeg]);

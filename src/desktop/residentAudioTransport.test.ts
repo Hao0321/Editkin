@@ -21,7 +21,9 @@ function fixture(){
   const clock=vi.fn();const transport=new ResidentAudioTransport(api,view=>views.push(view),clock);
   const send=(seq:number,g:number,time:number,ownerId=7,event="progress")=>listener({schema:"editkin.desktop-audio-status/v1",ownerId,sequence:seq,generation:g,ready:true,closing:false,failed:false,
     playback:{schema:"editkin.native-audio-session-event/v1",event,streamGeneration:g,state:event==="ended"?"ended":"playing",timelineStartFrame:0,timelineFrame:time*48000,presentedFrame:time*48000,sampleMasterFrame:time*48000,sampleMasterRate:48000}});
-  return{api,intent,views,transport,clock,send,stage};
+  const sendFailure=(seq:number,g:number)=>listener({schema:"editkin.desktop-audio-status/v1",ownerId:7,sequence:seq,generation:g,
+    ready:true,closing:false,failed:true,error:"device failed",playback:{}});
+  return{api,intent,views,transport,clock,send,sendFailure,stage};
 }
 describe("retained resident audio transport",()=>{
   it("retains one owner and plan across pause/resume and telemetry renders",async()=>{
@@ -63,6 +65,18 @@ describe("retained resident audio transport",()=>{
     f.send(1,1,2,8);f.send(2,9,2);f.send(3,1,2,7,"ended");expect(f.clock).not.toHaveBeenCalled();
     f.send(4,1,35);f.send(3,1,20);expect(f.clock.mock.calls).toEqual([[35,false]]);
     f.send(5,1,60,7,"ended");expect(f.clock).toHaveBeenLastCalledWith(60,true);await f.transport.dispose();
+  });
+  it("ignores a late failed status from a replaced generation but closes on the current failure",async()=>{
+    const f=fixture();f.transport.update(f.intent);await flush();
+    f.transport.update({...f.intent,seekRevision:1,timelineStartSeconds:10});await flush();
+    expect(f.api.replace).toHaveBeenCalledTimes(2);
+    f.sendFailure(1,1);await flush();
+    expect(f.api.close).not.toHaveBeenCalled();
+    expect(f.views.at(-1)?.mode).not.toBe("compatible");
+    f.sendFailure(2,2);await flush();
+    expect(f.api.close).toHaveBeenCalledTimes(1);
+    expect(f.views.at(-1)?.mode).toBe("compatible");
+    await f.transport.dispose();
   });
   it("only enters fallback after confirmed native close; refuses close failure",async()=>{
     const f=fixture();const close=deferred<Awaited<ReturnType<ResidentAudioApi["close"]>>>();f.api.close.mockReturnValueOnce(close.promise);

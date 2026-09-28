@@ -3,7 +3,7 @@
 //! replacement processes. Owner IDs are correlation, not authentication tokens.
 use super::audio_session_host::{Action, AudioSessionHost, PlanBinding};
 use serde_json::{json, Value};
-use std::{path::Path, time::Duration};
+use std::{collections::BTreeSet, path::Path, time::Duration};
 
 struct Entry {
     owner: u64,
@@ -75,6 +75,9 @@ impl AudioSessionRegistry {
     }
     pub fn snapshot(&self, owner: u64) -> Result<Value, String> {
         Ok(json!({"ownerId":owner,"state":self.entry(owner)?.host.snapshot()?}))
+    }
+    pub fn live_generations(&self, owner: u64) -> Result<BTreeSet<u64>, String> {
+        self.entry(owner)?.host.live_generations()
     }
     pub fn close(&mut self, owner: u64) -> Result<Value, String> {
         let entry = self

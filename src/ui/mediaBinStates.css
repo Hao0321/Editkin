@@ -1,4 +1,6 @@
 .asset-list-empty { display: grid; gap: 4px; padding: 12px; border: 1px dashed var(--line-strong); border-radius: 12px; background: var(--surface-2); text-align: left; }
+.asset-row[draggable="true"] { cursor: grab; }
+.asset-row[draggable="true"]:active { cursor: grabbing; }
 .asset-list-empty b { color: var(--soft); font-size: 10px; }
 .asset-list-empty span { color: var(--muted); font-size: 9px; line-height: 1.45; }
 

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { TimelineClip, TimelineTrack } from "../domain/types";
 import { formatTime } from "../lib/format";
-import { alignTimelineTime, nudgeTimelineTime, resolveTimelineDrag, resolveTimelineDropTarget, resolveTimelineTrim, timelineAutoScrollDelta, timelineFrameLabel, timelineTimeAtPointer } from "./timelineInteraction";
+import { TIMELINE_MAGNET_THRESHOLD_PX, alignTimelineTime, nudgeTimelineTime, resolveTimelineDrag, resolveTimelineDropTarget, resolveTimelineTrim, timelineAutoScrollDelta, timelineFrameLabel, timelineTimeAtPointer } from "./timelineInteraction";
+import { EDITKIN_ASSET_DRAG_TYPE, resolveTimelineAssetDrop, timelineAssetDuration } from "./timelineAssetDrop";
 import { buildTimelineSnapIndex, queryTimelineSnapTimes } from "./timelineSnapping";
 import { buildTimelineIntervalIndex, queryTimelineIntervalIndex, timelineRulerStep } from "./timelineViewport";
 import { retainTimelineSelection } from "./timelineViewport";
@@ -11,7 +12,7 @@ import { TrackOptions } from "./TrackOptions";
 import { DRAG_HELP, LOCKED_HELP, MAX_PIXELS_PER_SECOND, MIN_PIXELS_PER_SECOND, TIMELINE_LABEL_WIDTH as LABEL_WIDTH, type DragKind, type DragSession, type ScrubSession, type TimelineProps, type TrimSession } from "./timelineContract";
 import "./timelineDirectManipulation.css";
 
-export function Timeline({ project, duration, playhead, selectedClipId, selectedCaptionId, runtimeUrls, onSeek, onSelect, onSelectCaption, onMoveClip, onMoveCaption, onTrimClip, onTrimCaption, onAddCaption, onAddTrack, onRenameTrack, onToggleTrackLock, onDeleteTrack, onMakePictureInPicture, onPrecompose, onToggleMute, onSplit, onDelete }: TimelineProps) {
+export function Timeline({ project, duration, playhead, selectedClipId, selectedCaptionId, runtimeUrls, draggingAssetId, onInsertAsset, onSeek, onSelect, onSelectCaption, onMoveClip, onMoveCaption, onTrimClip, onTrimCaption, onAddCaption, onAddTrack, onRenameTrack, onToggleTrackLock, onDeleteTrack, onMakePictureInPicture, onPrecompose, onToggleMute, onSplit, onDelete }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragSession | undefined>(undefined);
   const dragFrameRef = useRef<number | undefined>(undefined);
@@ -23,6 +24,7 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
   const latestScrollLeftRef = useRef(0);
   const suppressClickRef = useRef<string | undefined>(undefined);
   const guideRef = useRef<HTMLDivElement>(null);
+  const assetDropPreviewRef = useRef<HTMLDivElement>(null);
   const positionRef = useRef<HTMLOutputElement>(null);
   const [snapEnabled, setSnapEnabled] = useState(() => {
     try { return localStorage.getItem("editkin.timeline.snap") !== "off"; } catch { return true; }
@@ -30,7 +32,8 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
   const [pixelsPerSecond, setPixelsPerSecond] = useState(80);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [viewportWidth, setViewportWidth] = useState(900);
-  const visualDuration = Math.max(12, duration);
+  const draggingAsset = project.assets.find((asset) => asset.id === draggingAssetId);
+  const visualDuration = Math.max(12, duration + (draggingAsset ? timelineAssetDuration(draggingAsset, project.fps) + 1 : 4));
   const timelineWidth = Math.max(720, visualDuration * pixelsPerSecond);
   const assetMap = useMemo(() => new Map(project.assets.map((asset) => [asset.id, asset])), [project.assets]);
   const clipIndexes = useMemo(() => new Map(project.tracks.map((track) => [track.id, buildTimelineIntervalIndex(track.clips, (clip) => ({ start: clip.timelineStart, end: clip.timelineStart + clip.duration }))])), [project.tracks]);
@@ -130,6 +133,74 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
     const next = Math.max(MIN_PIXELS_PER_SECOND, Math.min(MAX_PIXELS_PER_SECOND, pixelsPerSecond * factor));
     setPixelsPerSecond(next);
     requestAnimationFrame(() => { node.scrollLeft = Math.max(0, anchorTime * next - anchorViewportX); });
+  };
+  const zoomToFrames = () => {
+    const node = scrollRef.current;
+    const anchorTime = pinnedClip?.clip.timelineStart ?? playhead;
+    const position = anchorTime * pixelsPerSecond - (node?.scrollLeft ?? 0);
+    const anchorClientX = node && position >= 0 && position <= node.clientWidth - LABEL_WIDTH
+      ? node.getBoundingClientRect().left + LABEL_WIDTH + position : undefined;
+    zoom(Math.max(1, Math.min(MAX_PIXELS_PER_SECOND, project.fps * 8) / pixelsPerSecond), anchorClientX);
+  };
+
+  const clearAssetDropVisual = () => {
+    if (assetDropPreviewRef.current) assetDropPreviewRef.current.hidden = true;
+    if (scrollRef.current?.dataset.dropState?.startsWith("asset-")) delete scrollRef.current.dataset.dropState;
+    showEditPosition();
+  };
+
+  useEffect(() => { if (!draggingAssetId) clearAssetDropVisual(); }, [draggingAssetId]);
+
+  const assetDropAt = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!draggingAsset || !onInsertAsset) return undefined;
+    const lane = event.currentTarget;
+    const trackId = lane.dataset.trackId;
+    const track = project.tracks.find((item) => item.id === trackId);
+    if (!track || track.locked || track.kind !== (draggingAsset.kind === "audio" ? "audio" : "video")) return undefined;
+    const rawTime = Math.max(0, (event.clientX - lane.getBoundingClientRect().left) / pixelsPerSecond);
+    const assetDuration = timelineAssetDuration(draggingAsset, project.fps);
+    const margin = TIMELINE_MAGNET_THRESHOLD_PX / pixelsPerSecond + 1 / project.fps;
+    const occupied = queryTimelineIntervalIndex(clipIndexes.get(track.id)!, Math.max(0, rawTime - margin), rawTime + assetDuration + margin);
+    const preliminary = alignTimelineTime(rawTime, project.fps);
+    const candidates = queryTimelineSnapTimes(snapIndex, `asset:${draggingAsset.id}`, [preliminary, preliminary + assetDuration], pixelsPerSecond, project.fps, playhead);
+    return { trackId: track.id, result: resolveTimelineAssetDrop({ rawTime, duration: assetDuration, fps: project.fps, pixelsPerSecond, snapCandidates: candidates, occupied, magnetEnabled: snapEnabled && !event.altKey }) };
+  };
+
+  const previewAssetDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!draggingAssetId || !event.dataTransfer.types.includes(EDITKIN_ASSET_DRAG_TYPE)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const placement = assetDropAt(event);
+    event.dataTransfer.dropEffect = placement?.result.allowed ? "copy" : "none";
+    if (scrollRef.current) scrollRef.current.dataset.dropState = !placement ? "asset-incompatible" : placement.result.allowed ? "asset-valid" : "asset-overlap";
+    const ghost = assetDropPreviewRef.current;
+    if (!ghost || !placement) { if (ghost) ghost.hidden = true; showEditPosition(); return; }
+    const { result } = placement;
+    ghost.hidden = false;
+    ghost.style.left = `${LABEL_WIDTH + result.start * pixelsPerSecond}px`;
+    ghost.style.top = `${event.currentTarget.offsetTop + 5}px`;
+    ghost.style.width = `${Math.max(12, result.duration * pixelsPerSecond)}px`;
+    ghost.style.height = `${Math.max(12, event.currentTarget.clientHeight - 10)}px`;
+    ghost.dataset.timelineStart = String(result.start);
+    ghost.dataset.targetTrackId = placement.trackId;
+    ghost.dataset.allowed = String(result.allowed);
+    ghost.dataset.snapTime = result.snappedTo === undefined ? "" : String(result.snappedTo);
+    showEditPosition(result.start, result.allowed ? result.snappedTo : undefined);
+  };
+
+  const leaveAssetDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+    clearAssetDropVisual();
+  };
+
+  const commitAssetDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!draggingAssetId || !event.dataTransfer.types.includes(EDITKIN_ASSET_DRAG_TYPE)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const placement = assetDropAt(event);
+    clearAssetDropVisual();
+    if (event.dataTransfer.getData(EDITKIN_ASSET_DRAG_TYPE) !== draggingAssetId || !placement?.result.allowed) return;
+    onInsertAsset?.(draggingAssetId, placement.trackId, placement.result.start);
   };
 
   const handleWheel = (event: WheelEvent) => {
@@ -501,6 +572,7 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
       <div className="timeline-actions">
         <div className="timeline-quick-actions" aria-label="常用時間軸操作">
           <button type="button" className="timeline-snap-toggle" onClick={toggleSnap} aria-pressed={snapEnabled} data-testid="timeline-snap-toggle" title="吸附片段、字幕、播放頭與標記；Alt 暫停吸附，始終逐幀移動">吸附{snapEnabled ? " 開" : " 關"}</button>
+          <button type="button" onClick={zoomToFrames} data-testid="timeline-frame-zoom" title="放大到每幀至少 8 像素，方便逐幀拖放與查看刻度">逐幀</button>
           <button type="button" onClick={onSplit} disabled={!selectedClipId} data-testid="split-button" title="在播放頭切開片段（B）">切開</button>
           <button type="button" className="danger-action" onClick={onDelete} disabled={!selectedClipId && !selectedCaptionId} data-testid="delete-button" title="刪除並自動補空隙（Delete／Backspace）">刪除</button>
           <button type="button" onClick={() => onAddTrack("video")} data-testid="add-video-track-button">＋ 軌道</button>
@@ -532,13 +604,14 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
         </div>
         {project.tracks.map((track) => <div className="timeline-row" key={track.id}>
           <div className="track-label" data-drop-zone="blocked" title="這裡是軌道名稱，不是片段投放區"><div className={`track-kind ${track.kind}`}>{track.kind === "video" ? "V" : track.kind === "audio" ? "A" : "T"}</div><div className="track-copy"><strong>{track.name}</strong><span>{track.locked ? "已鎖定" : track.kind === "video" ? "畫面" : track.kind === "audio" ? "聲音" : "文字"}</span></div><button type="button" className={`track-mute ${track.muted ? "active" : ""}`} onClick={() => onToggleMute(track.id)} aria-label={`${track.name} 靜音`}>{track.muted ? "M" : "●"}</button><TrackOptions track={track} onRename={onRenameTrack} onToggleLock={onToggleTrackLock} onDelete={onDeleteTrack} /></div>
-          <div className={`track-lane ${track.kind}`} data-track-id={track.id} data-track-kind={track.kind} data-track-locked={track.locked} onPointerDown={beginScrub} onPointerMove={moveScrub} onPointerUp={endScrub} onPointerCancel={cancelScrub} onClick={seekFromClick}>
+          <div className={`track-lane ${track.kind}`} data-track-id={track.id} data-track-kind={track.kind} data-track-locked={track.locked} onPointerDown={beginScrub} onPointerMove={moveScrub} onPointerUp={endScrub} onPointerCancel={cancelScrub} onClick={seekFromClick} onDragOver={previewAssetDrop} onDragLeave={leaveAssetDrop} onDrop={commitAssetDrop}>
             {track.kind === "caption" && visibleCaptions.map((caption) => <button type="button" key={caption.id} className={`timeline-clip caption ${selectedCaptionId === caption.id ? "selected" : ""} ${track.locked ? "locked" : ""}`} style={{ left: caption.start * pixelsPerSecond, width: Math.max(12, caption.duration * pixelsPerSecond) }} onPointerDown={(event) => beginItemDrag(event, { kind: "caption", id: caption.id, trackId: track.id, trackKind: track.kind, start: caption.start, duration: caption.duration, locked: track.locked })} onPointerMove={moveItemDrag} onPointerUp={endItemDrag} onPointerCancel={cancelItemDrag} onLostPointerCapture={cancelItemDrag} onClick={(event) => activateItem(event, "caption", caption.id, caption.start)} onKeyDown={(event) => nudgeItem(event, "caption", caption.id, track.id, caption.start)} data-testid={`timeline-caption-${caption.id}`} data-timeline-start={caption.start} data-duration={caption.duration} aria-label={`${caption.text}${caption.translation ? `，英文 ${caption.translation.text}` : ""}，${formatTime(caption.start)}，可拖曳移動或修剪邊緣`} aria-disabled={track.locked} title={track.locked ? LOCKED_HELP : DRAG_HELP}><span className="clip-pattern" /><strong>{caption.text}{caption.translation && <em>EN</em>}</strong><small>{formatTime(caption.duration)}</small>{trimHandles({ kind: "caption", id: caption.id, start: caption.start, duration: caption.duration, locked: track.locked })}</button>)}
             {(visibleClips.get(track.id) ?? []).map((clip) => renderClip(clip, track))}
             <div className="playhead" style={{ left: playhead * pixelsPerSecond }} data-testid="timeline-playhead"><span /></div>
           </div>
         </div>)}
         <div ref={guideRef} className="timeline-snap-guide" data-testid="timeline-snap-guide" hidden aria-hidden="true" />
+        <div ref={assetDropPreviewRef} className="timeline-asset-drop-preview" data-testid="timeline-asset-drop-preview" hidden aria-hidden="true" />
       </div>
     </div>
   </section>;

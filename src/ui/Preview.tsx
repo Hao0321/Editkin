@@ -6,6 +6,7 @@ import { isMediaPreviewCurrent } from "../application/mediaDerivativeColor";
 import { compileClipAlphaPlan, type ClipAlphaPlan } from "../domain/clipAlphaPlan";
 import { animatedClipState } from "../domain/editGraph";
 import { isTransformMotionBlurInstance } from "../domain/transformMotionBlur";
+import { FLOATING_FRAME_BACKDROP_CSS, FLOATING_FRAME_MEDIA_FIT, floatingFrameCssMatrix, floatingFrameFeatherPixels, floatingFrameGeometry } from "../motion/floatingVideoFrame";
 import type { CaptionCue, CaptionStyle, ColorAdjustments, EditProject, LayerBlendMode, NormalizedRect, Transform2D } from "../domain/types";
 import { combineLookColor, previewEffectFilter, previewTransitionState } from "../creative/corePack";
 import { formatTime } from "../lib/format";
@@ -13,6 +14,7 @@ import { previewPrimaryFilter } from "../color/previewGrade";
 import OcioGpuMedia from "./OcioGpuMedia";
 import AlphaProcessedPreviewMedia, { AlphaPreviewUnavailable, alphaPreviewFailureMessage } from "./AlphaProcessedPreviewMedia";
 import { clipLocalProjectFrame } from "./alphaPlanPreview";
+import { nextAutomaticPreviewRepair } from "./previewRepairQueue";
 import { useNativeAudioPreviewPlayback, type NativeAudioTransportState } from "../desktop/useNativeAudioPreviewPlayback";
 import "./captionPreview.css";
 
@@ -157,15 +159,9 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
         ? current : { ...current, [key]: { name: asset.name, detail } };
     });
     onPlayingChange(false);
-    const key = JSON.stringify([project.id, asset.id, asset.uri, source]);
-    if (onRebuildPreview && !asset.derivatives?.proxyUri && previewRepair?.phase !== "preparing" && !attemptedVideoPreparation.current.has(key)) {
-      attemptedVideoPreparation.current.add(key);
-      void onRebuildPreview(asset.id);
-    }
   };
   // A cached local source can finish loading before React commits its event
-  // handlers. Reconcile the actual node on mount and when a busy repair ends;
-  // repeated checks are idempotent and preparation remains once per source.
+  // handlers. Reconcile the actual node on mount and when a busy repair ends.
   useEffect(() => {
     for (const layer of layers) {
       const media = mediaRefs.current.get(layer.clip.id);
@@ -175,8 +171,32 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
       }
     }
   }, [layers, project.id, previewRepair?.phase, onRebuildPreview]);
+  // prepareMedia admits one operation per project session. Start exactly one
+  // failed source at a time, then revisit the remaining sources on settlement.
+  // Calling repair from each loadeddata event loses the concurrent requests.
+  useEffect(() => {
+    if (!onRebuildPreview || previewRepair?.phase === "preparing") return;
+    const next = nextAutomaticPreviewRepair(project.id, layers, new Set(Object.keys(mediaFailures)), attemptedVideoPreparation.current);
+    if (!next) return;
+    attemptedVideoPreparation.current.add(next.attemptKey);
+    void onRebuildPreview(next.assetId);
+  }, [layers, mediaFailures, onRebuildPreview, previewRepair?.phase, project.id]);
   useEffect(()=>{const active=new Set(layers.map(layer=>failureKey(layer.clip.id,layer.source)));setMediaFailures(current=>{const entries=Object.entries(current).filter(([key])=>active.has(key));return entries.length===Object.keys(current).length?current:Object.fromEntries(entries);});},[layers]);
   const stageRef = useRef<HTMLDivElement>(null);
+  const [stageDimensions, setStageDimensions] = useState({ width: projectWidth, height: projectHeight });
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      const width = stage.clientWidth;
+      const height = stage.clientHeight;
+      if (width > 0 && height > 0) setStageDimensions(current => current.width === width && current.height === height ? current : { width, height });
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(stage);
+    measure();
+    return () => observer.disconnect();
+  }, [projectWidth, projectHeight]);
   const lastRepairReload = useRef<{token:string;nodes:WeakSet<HTMLMediaElement>} | undefined>(undefined);
   useEffect(() => {
     if (previewRepair?.phase !== "prepared" || !previewRepair.isCurrent?.()) return;
@@ -340,7 +360,7 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
       <div
         ref={stageRef}
         className={`preview-stage${trackingSelectionEnabled ? " tracking-selecting" : ""}`}
-        style={{ aspectRatio: `${projectWidth} / ${projectHeight}`, containerType: "size" }}
+        style={{ aspectRatio: `${projectWidth} / ${projectHeight}`, containerType: "size", ...(project.tracks.some(track => track.clips.some(clip => clip.floatingFrame)) ? { background: FLOATING_FRAME_BACKDROP_CSS } : {}) }}
         data-canvas-width={projectWidth}
         data-canvas-height={projectHeight}
         data-gpu-preview-admission={gpuPreviewAdmission}
@@ -432,6 +452,31 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
           const blockedReason = alphaPlanFailure ?? trackMatteFailure ?? unsupportedAlphaCombination;
           const testId = asset.kind === "image" ? "preview-image" : "preview-video";
           if (blockedReason || !alphaPlan) return <AlphaPreviewUnavailable key={`${clip.id}:alpha-blocked`} assetName={asset.name} reason={blockedReason ?? "Alpha plan 無法建立"} className="preview-layer" style={style} testId={testId} />;
+          if (displayClip.floatingFrame) {
+            const frame = displayClip.floatingFrame;
+            const geometry = floatingFrameGeometry(frame, displayProject.width, displayProject.height, localTime);
+            const prism = frame.style === "prism";
+            const feather = `${floatingFrameFeatherPixels(displayProject.width, displayProject.height) / displayProject.width * 100}cqw`;
+            const featherMask = `linear-gradient(to right, transparent 0, black ${feather}, black calc(100% - ${feather}), transparent 100%), linear-gradient(to bottom, transparent 0, black ${feather}, black calc(100% - ${feather}), transparent 100%)`;
+            return <div key={clip.id} className="preview-layer" style={style} data-testid="preview-floating-video-frame">
+              <div style={{ position: "absolute", inset: 0, transformOrigin: "0 0",
+                transform: floatingFrameCssMatrix(geometry.quad, stageDimensions.width, stageDimensions.height) }}>
+                <div style={{ position: "absolute", boxSizing: "border-box", overflow: "hidden",
+                  left: `${geometry.left / displayProject.width * 100}%`, top: `${geometry.top / displayProject.height * 100}%`,
+                  width: `${geometry.outerWidth / displayProject.width * 100}%`, height: `${geometry.outerHeight / displayProject.height * 100}%`,
+                  maskImage: featherMask, WebkitMaskImage: featherMask, maskComposite: "intersect", WebkitMaskComposite: "source-in",
+                  borderRadius: `${Math.max(5, Math.round(geometry.border * 1.6)) / displayProject.width * 100}cqw`,
+                  border: `${geometry.border / displayProject.width * 100}cqw solid ${prism ? "#101D32" : "#16181D"}`,
+                  borderTopColor: prism ? "#96CCD3" : "#D4C3A5", borderRightColor: prism ? "#456C78" : "#66645E",
+                  boxShadow: `inset 0 0 ${geometry.border / displayProject.width * 80}cqw ${prism ? "rgba(150,204,211,.10)" : "rgba(212,195,165,.10)"}, ${geometry.border / displayProject.width * 80}cqw ${geometry.border / displayProject.width * 120}cqw ${geometry.border / displayProject.width * 220}cqw ${prism ? "rgba(23,56,73,.30)" : "rgba(71,68,62,.30)"}, 0 ${geometry.border / displayProject.width * 210}cqw ${geometry.border / displayProject.width * 360}cqw rgba(0,0,0,.32)` }}>
+                  <video key={`${clip.id}:${source}`} ref={node => { if (node) mediaRefs.current.set(clip.id, node); else mediaRefs.current.delete(clip.id); }}
+                    src={source} playsInline muted={nativeAudio.mode === "native" || clip.volume <= 0} preload="auto"
+                    style={{ display: "block", width: "100%", height: "100%", objectFit: FLOATING_FRAME_MEDIA_FIT }} data-testid="preview-video"
+                    onError={event => failMedia(clip.id, source, asset.name, event.currentTarget.error)} onLoadedData={event => videoLoaded(clip.id, source, asset, event.currentTarget)} />
+                </div>
+              </div>
+            </div>;
+          }
           if (displayClip.layout) {
             const { crop, viewport } = displayClip.layout;
             const wrapperStyle = {

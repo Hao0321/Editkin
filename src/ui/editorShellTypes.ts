@@ -72,7 +72,7 @@ export interface EditorShellProps {
   addMotionGraphic: (kind: MotionGraphicKind, trackId?: string, seed?: MotionGraphicPresetSeed) => void;
   addCaption: () => void;
   addTrack: (kind: "video" | "audio") => void;
-  addAssetToTimeline: (assetId: string, mode?: "timeline" | "pip") => void;
+  addAssetToTimeline: (assetId: string, mode?: "timeline" | "pip", placement?: { trackId: string; timelineStart: number }) => void;
   makeSelectedPictureInPicture: (layout?: ClipLayout, name?: string) => void;
   precomposeSelected: () => void;
   applyShortFormTemplate: (templateId: string) => Promise<void>;

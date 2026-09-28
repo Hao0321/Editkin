@@ -8,6 +8,7 @@ import type { MotionGraphic } from "../domain/types";
 import { formatTime } from "../lib/format";
 import { libraryWindow } from "./creativeLibraryPreview";
 import { useNativeWheelScroll } from "./wheelScroll";
+import { EDITKIN_ASSET_DRAG_TYPE } from "./timelineAssetDrop";
 import "./mediaBinStates.css";
 
 interface MediaBinProps {
@@ -28,6 +29,8 @@ interface MediaBinProps {
   onOpenBatch?: () => void;
   onAddAssetToTimeline?: (assetId: string) => void;
   onAddAssetAsPictureInPicture?: (assetId: string) => void;
+  onAssetDragStart?: (assetId: string) => void;
+  onAssetDragEnd?: () => void;
   onApplyShortTemplate?: (templateId: string) => void;
   onApplyLongTemplate?: (templateId: string) => void;
   onAddLowerThird?: (presetId: LowerThirdPresetId, personName: string, organization: string) => void;
@@ -62,7 +65,7 @@ const KIND_LABEL: Record<MediaAsset["kind"], string> = {
 const KIND_FALLBACK: Record<MediaAsset["kind"], string> = { video: "影片", audio: "聲音", image: "圖片" };
 export const PROJECT_ASSET_ROW_HEIGHT = 76;
 
-export function MediaBin({ assets, runtimeUrls, onImport, onDesktopImport, creativeLibrary, creativeLoading, onCreativeImport, creativeImportingId, creativePreviewingId, onCreativePreview, onCreativeResolve, onAutoMusic, onBatchAutoEdit, batchSummary, onOpenBatch, onAddAssetToTimeline, onAddAssetAsPictureInPicture, onApplyShortTemplate, onApplyLongTemplate, onAddLowerThird, motionGraphics, captions, directorMarkers, templateApplication, onDeleteMotionGraphic, onDeleteCaption, onDeleteDirectorMarker, onClearTemplateApplication, pluginRegistry, pluginLoading, pluginBusyId, hasSelectedClip = false, onApplyPlugin, onOpenPluginFolder, onRefreshPlugins, workflowProfile, onWorkflowProfileChange }: MediaBinProps) {
+export function MediaBin({ assets, runtimeUrls, onImport, onDesktopImport, creativeLibrary, creativeLoading, onCreativeImport, creativeImportingId, creativePreviewingId, onCreativePreview, onCreativeResolve, onAutoMusic, onBatchAutoEdit, batchSummary, onOpenBatch, onAddAssetToTimeline, onAddAssetAsPictureInPicture, onAssetDragStart, onAssetDragEnd, onApplyShortTemplate, onApplyLongTemplate, onAddLowerThird, motionGraphics, captions, directorMarkers, templateApplication, onDeleteMotionGraphic, onDeleteCaption, onDeleteDirectorMarker, onClearTemplateApplication, pluginRegistry, pluginLoading, pluginBusyId, hasSelectedClip = false, onApplyPlugin, onOpenPluginFolder, onRefreshPlugins, workflowProfile, onWorkflowProfileChange }: MediaBinProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const assetScrollRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<"project" | "library" | "templates" | "plugins">("project");
@@ -142,10 +145,14 @@ export function MediaBin({ assets, runtimeUrls, onImport, onDesktopImport, creat
         {userAssets.length === 0 && <div className="asset-list-empty"><b>這裡只放你的素材</b><span>上方的彩色畫面是操作示範，不會算進專案，也不能誤輸出。</span></div>}
         {assetWindow.before > 0 && <div aria-hidden="true" className="library-spacer" style={{ height: assetWindow.before }} />}
         {assetWindow.items.map((asset) => (
-          <div className="asset-row" key={asset.id}>
+          <div className="asset-row" key={asset.id} draggable={true} data-asset-id={asset.id} title="拖到時間軸的空白軌道；落點逐幀對齊，靠近片段邊緣會吸附" onDragStart={(event) => {
+            event.dataTransfer.setData(EDITKIN_ASSET_DRAG_TYPE, asset.id);
+            event.dataTransfer.effectAllowed = "copy";
+            onAssetDragStart?.(asset.id);
+          }} onDragEnd={() => onAssetDragEnd?.()}>
             <div className={`asset-thumb ${asset.kind}`}>
               {runtimeUrls[`${asset.id}:thumbnail`] || runtimeUrls[`${asset.id}:waveform`]
-                ? <img src={runtimeUrls[`${asset.id}:thumbnail`] ?? runtimeUrls[`${asset.id}:waveform`]} alt="" loading="lazy" decoding="async" />
+                ? <img src={runtimeUrls[`${asset.id}:thumbnail`] ?? runtimeUrls[`${asset.id}:waveform`]} alt="" loading="lazy" decoding="async" draggable={false} />
                 : <span className="asset-thumb-fallback">{KIND_FALLBACK[asset.kind]}</span>}
             </div>
             <div className="asset-copy">

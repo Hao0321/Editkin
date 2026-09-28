@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { autopilotBatchManifestSchema, executeAutopilotBatch, readAutopilotBatchState, type AutopilotBatchManifest, type AutopilotBatchRuntime } from "./autopilotBatchExecution";
+import { AutopilotBatchJobManager } from "./autopilotBatchJobs";
 const roots: string[] = [];
 const sha = (value: string) => createHash("sha256").update(value).digest("hex");
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -127,5 +128,46 @@ describe("current v4 batch transactional runner", () => {
     f.runtime.render = async (item, output) => { const result = await render(item, output); if (item.id === "one") await writeFile(item.projectPath, "user edited while rendering"); return result; };
     expect((await f.run()).completed).toBe(1);
     await expect(readFile(f.manifest.items[0].outputPath)).rejects.toThrow();
+  });
+  it("returns an async job before render completes, stops at an item boundary and resumes from the journal", async () => {
+    const f = await fixture();
+    const manager = new AutopilotBatchJobManager();
+    const originalRender = f.runtime.render;
+    let releaseRender!: () => void;
+    let enteredRender!: () => void;
+    const entered = new Promise<void>(resolve => { enteredRender = resolve; });
+    const held = new Promise<void>(resolve => { releaseRender = resolve; });
+    f.runtime.render = async (...args) => {
+      if (args[0].id === "one") { enteredRender(); await held; }
+      return originalRender(...args);
+    };
+    const started = manager.start(f.manifest, f.statePath, f.runtime);
+    expect(started.status).toBe("RUNNING");
+    expect(() => manager.start(f.manifest, f.statePath, f.runtime)).toThrow("已有進行中的工作");
+    if (process.platform === "win32") {
+      expect(() => manager.start(f.manifest, f.statePath.toUpperCase(), f.runtime)).toThrow("已有進行中的工作");
+    }
+    await entered;
+    expect(manager.get(started.jobId).status).toBe("RUNNING");
+    expect(manager.cancel(started.jobId).status).toBe("CANCEL_REQUESTED");
+    releaseRender();
+    await vi.waitFor(() => expect(manager.get(started.jobId).status).toBe("STOPPED"));
+    expect(f.counts).toEqual({ audit: 1, apply: 1, render: 1, verify: 1 });
+    expect(await readFile(f.manifest.items[0].outputPath, "utf8")).toBe("video:one");
+    await expect(readFile(f.manifest.items[1].outputPath)).rejects.toThrow();
+    expect(manager.cancel(started.jobId).status).toBe("STOPPED");
+    const restarted = new AutopilotBatchJobManager();
+    const resumed = restarted.start(f.manifest, f.statePath, f.runtime);
+    await vi.waitFor(() => expect(restarted.get(resumed.jobId).status).toBe("REVIEW_REQUIRED"));
+    expect(f.counts).toEqual({ audit: 2, apply: 2, render: 2, verify: 2 });
+  });
+  it("reports a fatal async job failure without claiming completion", async () => {
+    const f = await fixture();
+    f.runtime.validatePaths = async () => { throw new Error("invalid batch path"); };
+    const manager = new AutopilotBatchJobManager();
+    const started = manager.start(f.manifest, f.statePath, f.runtime);
+    await vi.waitFor(() => expect(manager.get(started.jobId).status).toBe("FAILED"));
+    expect(manager.get(started.jobId).error).toContain("invalid batch path");
+    await expect(readAutopilotBatchState(f.statePath, f.manifest)).resolves.toBeUndefined();
   });
 });

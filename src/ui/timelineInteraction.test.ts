@@ -35,6 +35,14 @@ describe("timeline direct manipulation", () => {
     expect(resolveTimelineDrag({ ...common, magnetEnabled: false }).start).toBe(1.9666666666666666);
   });
 
+  it("does not let an origin magnet swallow an intentional one-frame drag", () => {
+    const result = resolveTimelineDrag({ originStart: 0, duration: 2, originClientX: 100, currentClientX: 108,
+      originScrollLeft: 0, currentScrollLeft: 0, pixelsPerSecond: 240, fps: 30, snapCandidates: [0] });
+    expect(result.start).toBeCloseTo(1 / 30);
+    expect(result.moved).toBe(true);
+    expect(result.snappedTo).toBeUndefined();
+  });
+
   it("distinguishes a click from an intentional drag", () => {
     const result = resolveTimelineDrag({
       originStart: 0,

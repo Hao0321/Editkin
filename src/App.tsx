@@ -14,7 +14,7 @@ import { useDesktopActions } from "./desktop/useDesktopActions";
 import type { OpenProjectResult } from "./desktop/types";
 import { compileAgentInstruction, isAutomaticCaptionInstruction, isSceneSplitInstruction, isSemanticAutoEditInstruction, isSmartCutInstruction } from "./domain/agent";
 import type { EditorCommand } from "./domain/commands";
-import { activeVideoClip, animatedClipState, createEmptyProject, findCaption, findClip, projectDuration } from "./domain/editGraph";
+import { activeVideoClip, alignTime, animatedClipState, createEmptyProject, findCaption, findClip, projectDuration } from "./domain/editGraph";
 import { createUiDemoProject } from "./domain/demo";
 import { dispatchCommandSafely, redo, undo } from "./domain/history";
 import { DEFAULT_CLIP_LAYER, DEFAULT_COLOR, DEFAULT_TRANSFORM, type ClipLayout, type MotionGraphicKind, type MotionGraphicPresetSeed, type NormalizedRect } from "./domain/types";
@@ -25,6 +25,7 @@ import { buildLoopingMusicPlan } from "./application/loopingMusic";
 import { makeId } from "./lib/format";
 import { useEditorTheme } from "./ui/useEditorTheme";
 import { usePlayheadTransport } from "./ui/playheadTransport";
+import { timelineAssetDuration } from "./ui/timelineAssetDrop";
 import { createMotionGraphic } from "./motion/composition";
 import type { TrackingMode } from "./ui/EditorShell";
 import type { MotionTrack } from "./domain/types";
@@ -206,7 +207,7 @@ function App() {
       track: { id: makeId(`${kind}-track`), name: `${label}軌 ${existing + 1}`, kind, locked: false, muted: false, clips: [] },
     }, `已新增一條${label}軌，可重新命名、鎖定或刪除。`);
   };
-  const addAssetToTimeline = (assetId: string, mode: "timeline" | "pip" = "timeline") => {
+  const addAssetToTimeline = (assetId: string, mode: "timeline" | "pip" = "timeline", placement?: { trackId: string; timelineStart: number }) => {
     const asset = project.assets.find((item) => item.id === assetId);
     if (!asset) return setStatus("找不到要加入的素材。");
     if (mode === "pip" && asset.kind === "audio") return setStatus("畫中畫需要影片或圖片素材。");
@@ -217,23 +218,34 @@ function App() {
       const existing = project.tracks.find((track) => track.kind === "video" && track.name.startsWith("畫中畫"));
       trackId = existing?.id ?? makeId("pip-track");
       if (!existing) commands.push({ type: "add_track", track: { id: trackId, name: `畫中畫 ${project.tracks.filter((track) => track.name.startsWith("畫中畫")).length + 1}`, kind: "video", locked: false, muted: false, clips: [] } });
-      timelineStart = playhead;
+      timelineStart = alignTime(playhead, project.fps);
     } else {
-      const target = project.tracks.find((track) => track.kind === (asset.kind === "audio" ? "audio" : "video"));
+      const kind = asset.kind === "audio" ? "audio" : "video";
+      const target = placement
+        ? project.tracks.find((track) => track.id === placement.trackId && track.kind === kind && !track.locked)
+        : project.tracks.find((track) => track.kind === kind && !track.locked);
       if (!target) return setStatus("找不到相容的時間軸軌道。");
       trackId = target.id;
-      timelineStart = target.clips.reduce((end, clip) => Math.max(end, clip.timelineStart + clip.duration), 0);
+      timelineStart = alignTime(placement ? placement.timelineStart : target.clips.reduce((end, clip) => Math.max(end, clip.timelineStart + clip.duration), 0), project.fps);
     }
     const clipId = makeId(mode === "pip" ? "pip-clip" : "clip");
     const available = duration > timelineStart ? duration - timelineStart : Math.max(asset.duration || 3, 1);
-    const clipDuration = asset.kind === "image" ? Math.min(3, available) : Math.min(asset.duration, available);
+    const clipDuration = placement ? timelineAssetDuration(asset, project.fps)
+      : Math.max(1 / project.fps, alignTime(asset.kind === "image" ? Math.min(3, available) : Math.min(asset.duration || 3, available), project.fps));
+    if (placement) {
+      const target = project.tracks.find((track) => track.id === trackId);
+      if (target?.clips.some((clip) => timelineStart + clipDuration > clip.timelineStart + 1e-6
+        && timelineStart < clip.timelineStart + clip.duration - 1e-6)) {
+        return setStatus("目標軌道已有片段；請拖到空白處或另一條相容軌道。");
+      }
+    }
     commands.push({ type: "add_clip", clip: {
-      id: clipId, assetId: asset.id, trackId, timelineStart, sourceStart: 0, duration: Math.max(1 / project.fps, clipDuration), volume: 1,
+      id: clipId, assetId: asset.id, trackId, timelineStart, sourceStart: 0, duration: clipDuration, volume: 1,
       transform: { ...DEFAULT_TRANSFORM }, color: { ...DEFAULT_COLOR }, keyframes: [],
       layout: mode === "pip" ? structuredClone(DEFAULT_PIP_LAYOUT) : undefined,
       layer: { ...DEFAULT_CLIP_LAYER },
     } });
-    runCommand({ type: "batch", commands }, mode === "pip" ? "已加入真正的畫中畫軌道；可拖曳片段並切換角落版型。" : "已把素材加入時間軸尾端。");
+    runCommand({ type: "batch", commands }, mode === "pip" ? "已加入真正的畫中畫軌道；可拖曳片段並切換角落版型。" : placement ? "已將素材放到指定影格，可復原。" : "已把素材加入時間軸尾端。");
     setSelectedCaptionId(undefined);
     setSelectedClipId(clipId);
     setPlayhead(timelineStart);

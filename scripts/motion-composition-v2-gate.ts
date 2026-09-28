@@ -12,7 +12,9 @@ import { buildEngineRenderGraph } from "../src/render/engineGraph";
 import { commonVideoMotionGraphicsSupported } from "../src/render/gpuCompositorAdmission";
 
 const appRoot = resolve(".");
-const reportRoot = resolve(appRoot, ".rd/benchmarks/editkin-motion-composition-v2");
+const reportName = process.env.EDITKIN_MOTION_V2_REPORT_NAME ?? "editkin-motion-composition-v2";
+if (!/^[a-z0-9-]{1,64}$/.test(reportName)) throw new Error("Motion v2 report name must be one bounded benchmark directory name");
+const reportRoot = resolve(appRoot, ".rd/benchmarks", reportName);
 const ffmpeg = resolve(appRoot, "vendor/ffmpeg/win32-x64/ffmpeg.exe");
 const ffprobe = resolve(appRoot, "vendor/ffmpeg/win32-x64/ffprobe.exe");
 const nativeCore = resolve(appRoot, "native/bin/win32-x64/hao-core.exe");
@@ -152,7 +154,7 @@ if (process.argv.includes("--self-test")) {
   const ass = writeAssContent(candidateProject, candidateProject.captionStyle);
   const baselinePath = resolve(reportRoot, "baseline.mp4");
   const candidatePath = resolve(reportRoot, "candidate.mp4");
-  const options = { ffmpegPath: ffmpeg, ffprobePath: ffprobe, nativeCorePath: nativeCore, preferGpu: false, timeoutMs: 120_000 };
+  const options = { ffmpegPath: ffmpeg, ffprobePath: ffprobe, nativeCorePath: nativeCore, fontRoot: resolve(appRoot, "public/fonts"), preferGpu: false, timeoutMs: 120_000 };
   const baseline = await renderProject(baselineProject, baselinePath, options);
   const candidate = await renderProject(candidateProject, candidatePath, options);
   const decodedProbe = JSON.parse((await run(ffprobe, ["-v", "error", "-show_streams", "-of", "json", candidatePath])).stdout) as { streams?: Array<{ codec_type?: string; width?: number; height?: number }> };

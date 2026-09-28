@@ -8,6 +8,10 @@ Editkin 是以本機為主的影片剪輯器，提供可修改的時間軸、共
 
 開發整合功能時，先安裝或 clone Kit，在啟動 Editkin 的 `npm run mcp` 前，將 `EDITKIN_VIDEO_AUTOPILOT_SKILL` 設為 Kit 中 `codex-skill/video-autopilot/SKILL.md` 的絕對路徑，並讓 Agent 讀取同一份 Kit。Editkin 會將選用的 Skill 與工作流程契約綁定計畫，套用前再檢查變動。公開 Kit 不依賴維護者私人美感資料；真實素材與成片品質仍須審查。
 
+## Motion 與時間軸原始碼
+
+Motion 預設包含外緣羽化的可編輯浮空影片框、直式透視環繞，以及主片後方兩片大型直式影片框。`prepare_floating_frame_scene` 會將場景編譯為可放進已審核 v4 計畫的指令。此效果使用 2.5D 透視平面，尚非立體網格。素材拖入時間軸可吸附剪輯定位點，片段也能依影格移動。預覽與輸出效能取決於媒體執行環境和機器，原始碼功能不代表每支影片的美術品質已通過驗收。
+
 ## 從原始碼開始
 
 安裝 Node.js 22.13 以上，於新的 checkout 執行：

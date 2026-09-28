@@ -7,6 +7,8 @@ import { applyCommand } from "../src/domain/commands";
 import { createEmptyProject } from "../src/domain/editGraph";
 import { DEFAULT_COLOR, DEFAULT_TRANSFORM, type EditProject, type TimelineClip } from "../src/domain/types";
 import { resolveTimelineDrag } from "../src/ui/timelineInteraction";
+import { resolveTimelineAssetDrop } from "../src/ui/timelineAssetDrop";
+import { buildTimelineSnapIndex, queryTimelineSnapTimes } from "../src/ui/timelineSnapping";
 import { buildTimelineIntervalIndex, queryTimelineIntervalIndex } from "../src/ui/timelineViewport";
 
 const percentile = (samples: number[], ratio: number) => [...samples].sort((a, b) => a - b)[Math.min(samples.length - 1, Math.ceil(samples.length * ratio) - 1)];
@@ -54,6 +56,7 @@ async function main() {
   const evidencePath = resolve(process.argv[2] ?? "../../.rd/benchmarks/editkin-timeline-interaction-windows-x64-20260822.json");
   const project = fixture();
   const indexes = project.tracks.map((track) => buildTimelineIntervalIndex(track.clips, (clip) => ({ start: clip.timelineStart, end: clip.timelineStart + clip.duration })));
+  const snapIndex = buildTimelineSnapIndex(project);
   let maximumVisible = 0;
   const viewportSamples = measure(1_000, 100, (index) => {
     const visibleStart = (index * 7.13) % 480;
@@ -86,6 +89,12 @@ async function main() {
     fps: 30,
     snapCandidates: [240, 250, 260, 270],
   }));
+  const assetDropSamples = measure(2_000, 200, (index) => {
+    const rawTime = 250 + (index % 61) / 30;
+    const occupied = queryTimelineIntervalIndex(indexes[49], rawTime - 0.2, rawTime + 1.2);
+    const snapCandidates = queryTimelineSnapTimes(snapIndex, "asset:synthetic", [rawTime, rawTime + 1], 120, 30, 251);
+    return resolveTimelineAssetDrop({ rawTime, duration: 1, fps: 30, pixelsPerSecond: 120, snapCandidates, occupied, magnetEnabled: true });
+  });
   const edited = applyCommand(project, { type: "set_clip_color", clipId: target, patch: { exposure: 1.5 } });
   const originalTarget = project.tracks[49].clips[500];
   const editedTarget = edited.tracks[49].clips[500];
@@ -96,6 +105,7 @@ async function main() {
     move: { p50Ms: round(percentile(moveSamples, 0.5)), p95Ms: round(percentile(moveSamples, 0.95)) },
     trim: { p50Ms: round(percentile(trimSamples, 0.5)), p95Ms: round(percentile(trimSamples, 0.95)) },
     pointerResolution: { p50Ms: round(percentile(pointerSamples, 0.5)), p95Ms: round(percentile(pointerSamples, 0.95)) },
+    assetDropResolution: { p50Ms: round(percentile(assetDropSamples, 0.5)), p95Ms: round(percentile(assetDropSamples, 0.95)) },
   };
   const assertions = {
     viewportQueryP95Under2ms: metrics.viewportQuery.p95Ms <= 2,
@@ -104,13 +114,14 @@ async function main() {
     moveP95Under16Point7ms: metrics.move.p95Ms <= 16.7,
     trimP95Under16Point7ms: metrics.trim.p95Ms <= 16.7,
     pointerResolutionP95Under0Point2ms: metrics.pointerResolution.p95Ms <= 0.2,
+    assetDropResolutionP95Under0Point2ms: metrics.assetDropResolution.p95Ms <= 0.2,
     onlyViewportItemsMaterialized: maximumVisible <= 1_850,
     inputIsImmutable: originalTarget.color.exposure === 0 && editedTarget.color.exposure === 1.5,
     untouchedBranchesShared: edited.assets === project.assets && edited.tracks[0] === project.tracks[0] && edited.tracks[48] === project.tracks[48],
   };
   const payload = {
     status: Object.values(assertions).every(Boolean) ? "GREEN" : "BLOCK",
-    protocol: { id: "editkin-timeline-interaction-v2", dataset: "50 tracks × 1,000 clips", totalClips: 50_000, viewportSeconds: 18, warmups: { viewport: 100, property: 50, structural: 30, pointer: 200 }, scope: "domain command, viewport materialization and pointer-resolution math; delivered WebView input-to-visible evidence remains a separate journey" },
+    protocol: { id: "editkin-timeline-interaction-v3", dataset: "50 tracks × 1,000 clips", totalClips: 50_000, viewportSeconds: 18, warmups: { viewport: 100, property: 50, structural: 30, pointer: 200 }, scope: "domain command, viewport materialization, clip pointer math and indexed asset-drop resolution; delivered WebView input-to-visible evidence remains a separate journey" },
     evaluator: { path: "scripts/timeline-interaction-benchmark.ts", sha256: await sha256(resolve(import.meta.filename)) },
     environment: { hostname: hostname(), platform: platform(), release: release(), arch: process.arch, node: process.version, cpu: cpus()[0]?.model, logicalCpus: cpus().length, totalMemoryBytes: totalmem() },
     metrics,

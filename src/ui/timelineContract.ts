@@ -7,6 +7,8 @@ export interface TimelineProps {
   selectedClipId?: string;
   selectedCaptionId?: string;
   runtimeUrls: Record<string, string>;
+  draggingAssetId?: string;
+  onInsertAsset?: (assetId: string, trackId: string, timelineStart: number) => void;
   onSeek: (time: number) => void;
   onSelect: (clipId: string) => void;
   onSelectCaption: (captionId: string) => void;
@@ -88,6 +90,6 @@ export interface TrimSession {
 
 export const TIMELINE_LABEL_WIDTH = 188;
 export const MIN_PIXELS_PER_SECOND = 18;
-export const MAX_PIXELS_PER_SECOND = 480;
+export const MAX_PIXELS_PER_SECOND = 1920;
 export const DRAG_HELP = "逐幀拖曳 · Alt 暫停吸附 · ← → 1 幀 · Shift 10 幀";
 export const LOCKED_HELP = "軌道已鎖定";

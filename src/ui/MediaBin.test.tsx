@@ -32,4 +32,10 @@ describe("compact project media bin", () => {
     expect(html).toContain(`aria-label="把 ${first.name} 加入時間軸"`);
     expect(html).toContain(`aria-label="把 ${first.name} 加入畫中畫"`);
   });
+
+  it("lets a project asset be dragged onto a chosen timeline frame", () => {
+    const html = renderToStaticMarkup(<MediaBin assets={[assets[1]]} runtimeUrls={{}} onImport={vi.fn()} onAddAssetToTimeline={vi.fn()} onAssetDragStart={vi.fn()} />);
+    expect(html).toContain(`data-asset-id="${assets[1].id}"`);
+    expect(html).toContain('draggable="true"');
+  });
 });
