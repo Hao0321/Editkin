@@ -515,16 +515,27 @@ export async function renderComposite(
       filters.push(`[voicemix]atrim=duration=${finite(plan.duration)},asetpts=PTS-STARTPTS[aout]`);
     }
   }
+  const filterGraph = filters.join(";");
+  // Windows CreateProcess rejects a long command line before FFmpeg can start.
+  // Keep the graph in a short-lived file while retaining the same filter content.
+  const filterScriptPath = filterGraph.length > 8_192
+    ? join(dirname(output), `.${basename(output)}.${process.pid}.filtergraph.txt`)
+    : undefined;
+  if (filterScriptPath) await writeFile(filterScriptPath, filterGraph, "utf8");
   args.push(
     // The illustrated MV image graph benefits from a bounded worker pool.
     // Three full-HD floating video frames need FFmpeg's normal parallelism;
     // constraining that perspective/alpha graph slowed the delivered render.
     ...(floatingBackdrop ? [] : ["-filter_complex_threads", String(Math.max(1, Math.min(12, availableParallelism())))]),
-    "-filter_complex", filters.join(";"), "-map", "[vout]", "-map", "[aout]",
+    ...(filterScriptPath ? ["-filter_complex_script", filterScriptPath] : ["-filter_complex", filterGraph]), "-map", "[vout]", "-map", "[aout]",
     ...encoderArgs(encoder), "-pix_fmt", pixelFormat,
     ...outputColorMetadataArgs(encoder, !preserveHighBitDepthAlpha && project.colorManagement?.mode === "aces2" ? project.colorManagement.outputTransform : "rec709_sdr"),
     "-c:a", preserveHighBitDepthAlpha ? "pcm_s24le" : "aac", ...(preserveHighBitDepthAlpha ? [] : ["-b:a", "192k"]), "-ar", "48000", "-ac", "2",
     "-t", finite(plan.duration), "-video_track_timescale", "90000", "-movflags", "+faststart", output,
   );
-  await runProcess(ffmpegPath, args, timeoutMs);
+  try {
+    await runProcess(ffmpegPath, args, timeoutMs);
+  } finally {
+    if (filterScriptPath) await rm(filterScriptPath, { force: true });
+  }
 }
