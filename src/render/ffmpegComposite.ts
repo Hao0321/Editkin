@@ -516,10 +516,10 @@ export async function renderComposite(
     }
   }
   args.push(
-    // Bound filter graph worker pools on high-core hosts without raising the
-    // thread count on smaller machines. The source MV benchmark retained the
-    // same encoded output while reducing FFmpeg's peak working set.
-    "-filter_complex_threads", String(Math.max(1, Math.min(12, availableParallelism()))),
+    // The illustrated MV image graph benefits from a bounded worker pool.
+    // Three full-HD floating video frames need FFmpeg's normal parallelism;
+    // constraining that perspective/alpha graph slowed the delivered render.
+    ...(floatingBackdrop ? [] : ["-filter_complex_threads", String(Math.max(1, Math.min(12, availableParallelism())))]),
     "-filter_complex", filters.join(";"), "-map", "[vout]", "-map", "[aout]",
     ...encoderArgs(encoder), "-pix_fmt", pixelFormat,
     ...outputColorMetadataArgs(encoder, !preserveHighBitDepthAlpha && project.colorManagement?.mode === "aces2" ? project.colorManagement.outputTransform : "rec709_sdr"),
