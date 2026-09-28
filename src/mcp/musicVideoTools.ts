@@ -50,7 +50,7 @@ export const prepareIllustratedMusicVideoInputSchema = z.strictObject({
     backgroundEffect: z.enum(["none", "night_depth", "dawn_bloom"]).optional(),
     beatAccentFrames: z.array(z.number().int().min(0).max(900)).max(8).optional(),
     beatAccentEvidenceRefs: z.array(evidenceRef).max(8).optional(),
-    entryTransition: z.enum(["cut", "character_slide_left", "character_slide_right", "accent_flash"]).optional(),
+    entryTransition: z.enum(["cut", "soft_fade", "character_slide_left", "character_slide_right", "accent_flash"]).optional(),
     transitionEvidenceRefs: z.tuple([evidenceRef, evidenceRef]).optional(),
     foregroundAccent: z.strictObject({ assetId: id, startFrame: z.number().int().min(0).max(900),
       durationFrames: z.number().int().min(12).max(60), evidenceRef }).optional(),

@@ -29,7 +29,7 @@ export interface IllustratedMvSection {
   /** Verified beat offsets within this section; each gets editable actor hit/release keys. */
   beatAccentFrames?: number[];
   beatAccentEvidenceRefs?: string[];
-  entryTransition?: "cut" | "character_slide_left" | "character_slide_right" | "accent_flash";
+  entryTransition?: "cut" | "soft_fade" | "character_slide_left" | "character_slide_right" | "accent_flash";
   transitionEvidenceRefs?: [string, string];
   /** Short transparent foreground flourish, timed to an observed musical accent. */
   foregroundAccent?: { assetId: string; startFrame: number; durationFrames: number; evidenceRef: string };
@@ -214,7 +214,12 @@ export function compileIllustratedMusicVideo(project: EditProject, request: Illu
     const bgBase = { ...DEFAULT_TRANSFORM, scale: close ? 1.08 : 1.03, x: -8 * sway };
     const actorBase = { ...DEFAULT_TRANSFORM, scale: characterFrame?.scale ?? (close ? 1.13 : 1.0),
       x: characterFrame?.x ?? (close ? -30 : -8 * sway) };
-    if (entryTransition === "accent_flash") {
+    if (entryTransition === "soft_fade") {
+      initializeStudioCreativeAssets();
+      const preset = findTransitionPreset("cine_short_fade_through_base");
+      commands.push({ type: "set_clip_creative", clipId: bg.id,
+        patch: { transitionIn: { presetId: preset.id, duration: Math.min(6, Math.floor(frames / 4)) / project.fps } } });
+    } else if (entryTransition === "accent_flash") {
       initializeStudioCreativeAssets();
       const preset = findTransitionPreset("cine_proof_flash");
       commands.push({ type: "set_clip_creative", clipId: bg.id,
@@ -244,13 +249,15 @@ export function compileIllustratedMusicVideo(project: EditProject, request: Illu
     if (revealFrames) {
       const silhouette = makeClip(`mv-silhouette-${section.id}`, character.id, request.silhouetteTrackId);
       silhouette.duration = revealFrames / project.fps;
-      // Keep the source artwork's soft alpha edge while reducing its RGB to a
-      // dark silhouette. Contrast 0.1 is the lowest legal Editkin value.
-      silhouette.color = { ...DEFAULT_COLOR, brightness: -1, contrast: 0.1, saturation: 0 };
+      // Preserve source drawing/alpha detail so the reveal reads as a shaded
+      // character, rather than a solid black cutout against a bright scene.
+      silhouette.color = { ...DEFAULT_COLOR, brightness: -.72, contrast: .32, saturation: .15 };
+      silhouette.transform = { ...silhouette.transform, opacity: .82 };
+      const silhouetteBase = { ...actorBase, opacity: .82 };
       commands.push({ type: "add_clip", clip: silhouette },
-        keyframe(silhouette, 0, project.fps, { ...actorBase, y: energetic ? 18 : 10 }, "ease_out"),
-        keyframe(silhouette, Math.max(1, revealFrames - 4), project.fps, { ...actorBase, y: -5 }, "ease_out"),
-        keyframe(silhouette, revealFrames, project.fps, { ...actorBase, y: -5, opacity: 0 }, "ease_out"));
+        keyframe(silhouette, 0, project.fps, { ...silhouetteBase, y: energetic ? 18 : 10 }, "ease_out"),
+        keyframe(silhouette, Math.max(1, revealFrames - 4), project.fps, { ...silhouetteBase, y: -5 }, "ease_out"),
+        keyframe(silhouette, revealFrames, project.fps, { ...silhouetteBase, y: -5, opacity: 0 }, "ease_out"));
     }
     if (accent && foreground) {
       const flourish = makeClip(`mv-foreground-${section.id}`, foreground.id, foregroundTrackId);

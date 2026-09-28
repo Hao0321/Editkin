@@ -51,6 +51,9 @@ describe("illustrated music video compiler", () => {
     expect(plan.videoLayers.filter(layer => layer.segments.some(segment => segment.kind === "clip"))).toHaveLength(3);
     expect(updated.tracks.find(track => track.id === "mv-character")?.clips).toHaveLength(2);
     expect(updated.tracks.find(track => track.id === "mv-silhouette")?.clips).toHaveLength(1);
+    expect(updated.tracks.find(track => track.id === "mv-silhouette")?.clips[0]).toMatchObject({
+      color: { brightness: -.72, contrast: .32, saturation: .15 }, transform: { opacity: .82 },
+    });
     expect(plan.audioClips.map(item => item.clip.id)).toEqual(["song-bed"]);
     expect(updated.motionGraphics[0].backgroundColor).toBe("#00000000");
   });
@@ -149,6 +152,16 @@ describe("illustrated music video compiler", () => {
     const project = applyCommand(fixture(), { type: "batch", commands: structuredClone(draft.commands) });
     expect(project.motionGraphics[0].motionV2?.sequence).toMatchObject({ unit: "character", order: "center_out" });
     expect(project.tracks.find(track => track.id === "video-main")?.clips[1].creative?.transitionIn?.presetId).toBe("cine_proof_flash");
+  });
+
+  it("offers a short background fade on a verified section boundary", () => {
+    const input = request();
+    input.sections = [input.sections[0], { ...input.sections[1], entryTransition: "soft_fade",
+      transitionEvidenceRefs: ["song:verse:exit", "song:chorus:entry"] }];
+    const draft = compileIllustratedMusicVideo(fixture(), input);
+    expect(draft.commands).toContainEqual({ type: "set_clip_creative", clipId: "mv-bg-chorus",
+      patch: { transitionIn: { presetId: "cine_short_fade_through_base", duration: 6 / 30 } } });
+    expect(() => applyCommand(fixture(), { type: "batch", commands: draft.commands })).not.toThrow();
   });
 
   it("keeps a short foreground flourish on its own editable alpha track", () => {
