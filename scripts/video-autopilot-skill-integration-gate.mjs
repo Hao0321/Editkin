@@ -2,8 +2,14 @@ import assert from "node:assert/strict";
 import { access, readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { selfTestWorkflowBundle, workflowIntegrationStatus } from "./lib/video-autopilot-workflow-integration.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const fixtures = selfTestWorkflowBundle();
+if (process.argv.includes("--self-test")) {
+  console.log(JSON.stringify(fixtures));
+  process.exit(0);
+}
 const skillRoot = process.env.CODEX_SKILLS_ROOT ?? path.join(process.env.USERPROFILE ?? "", ".codex", "skills");
 const skillPath = path.join(skillRoot, "video-autopilot", "SKILL.md");
 const skillText = await readFile(skillPath, "utf8");
@@ -25,4 +31,7 @@ for (const row of ledger.dependencies) {
   assert.ok(Array.isArray(row.evidence) && row.evidence.length > 0, `${row.skillId} 缺 evidence`);
   for (const evidence of row.evidence) await access(path.join(root, evidence));
 }
-console.log(JSON.stringify({ status: "GREEN", directDependencyCount: mapped.length, dependencies: ledger.dependencies.map(({ skillId, integration }) => ({ skillId, integration })) }));
+const kitRoot = process.env.VIDEO_AUTOPILOT_KIT_ROOT ?? path.resolve(root, "..", "..", "video-autopilot-kit");
+const workflow = await workflowIntegrationStatus(skillRoot, kitRoot);
+console.log(JSON.stringify({ status: workflow.kitStatus === "GREEN" ? "GREEN" : "REVIEW", directDependencyCount: mapped.length, dependencies: ledger.dependencies.map(({ skillId, integration }) => ({ skillId, integration })), ...workflow, fixtureCount: fixtures.fixtures.length }));
+if (workflow.kitStatus !== "GREEN") process.exitCode = 1;

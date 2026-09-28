@@ -47,6 +47,8 @@ export interface TimelineClip {
   transform: Transform2D;
   /** Present only when the containing project/composition enables the bounded 2.5D scene. */
   transform3d?: Transform3D;
+  /** Editable perspective video card rendered from this clip's live source. */
+  floatingFrame?: FloatingVideoFrame;
   color: ColorAdjustments;
   keyframes: ClipKeyframe[];
   creative?: ClipCreativeState;
@@ -55,6 +57,18 @@ export interface TimelineClip {
   chromaKey?: ChromaKeySettings;
   layer?: ClipLayerState;
   expressions?: ClipExpressionBindings;
+}
+
+export interface FloatingVideoFrame {
+  schema: "editkin.floating-video-frame/v1";
+  style: "prism" | "graphite";
+  size: number;
+  yawDegrees: number;
+  pitchDegrees: number;
+  aspect?: "canvas" | "portrait";
+  centerX?: number;
+  centerY?: number;
+  orbit?: { amplitudeDegrees: number; periodSeconds: number };
 }
 
 export interface TimelineTrack {

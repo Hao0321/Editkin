@@ -236,6 +236,7 @@ async function renderResolvedProject(project: EditProject, outputPath: string, o
   const preserveHighBitDepthAlpha = alphaIntermediate || alphaDelivery;
   if (alphaDelivery) assertHighBitDepthAlphaDeliveryProject(project, outputPath);
   const hasMotionCompositionV2 = project.motionGraphics.some((graphic) => graphic.schema === "hao.motion-composition/v2");
+  const hasFloatingVideoFrame = project.tracks.some(track => track.clips.some(clip => clip.floatingFrame));
   if (hasMotionCompositionV2 && (preserveHighBitDepthAlpha || containsSceneLinearMedia(project) || project.colorManagement?.mode === "aces2" || isHdrOutput(project))) {
     throw new Error("motion-composition/v2 本輪只支援一般 Rec.709 正式輸出；預合成 alpha、ACES 2 與 HDR 必須等待共享原生／scene-linear evaluator，禁止 silently downgrade。");
   }
@@ -257,9 +258,13 @@ async function renderResolvedProject(project: EditProject, outputPath: string, o
     }
     residentAcesPreview = buildGpuEngineVideoPreviewGraph(nativeProject, 0);
   }
+  // This perspective/alpha graph runs on the CPU. On the measured Windows
+  // 1080×1920 three-plane path, x264 avoids the NVENC probe and transfer cost.
+  const preferGpuEncoder = options.preferGpu !== false
+    && !(hasFloatingVideoFrame && process.platform === "win32" && !sceneLinear && !isHdrOutput(project));
   const encoder: VideoEncoder = preserveHighBitDepthAlpha ? "prores_ks" : sceneLinear && isHdrOutput(project)
     ? "libx265"
-    : await chooseEncoder(ffmpegPath, options.preferGpu !== false, timeoutMs, isHdrOutput(project));
+    : await chooseEncoder(ffmpegPath, preferGpuEncoder, timeoutMs, isHdrOutput(project));
   if (sceneLinear) {
     if (preserveHighBitDepthAlpha) throw new Error("Scene-linear 預合成／Alpha 主檔目前必須先輸出 OpenEXR；不可提早套用 SDR Output Transform。");
     return renderSceneLinearAces2DisplayProject(project, outputPath, plan, options, encoder, timeoutMs);
@@ -269,9 +274,9 @@ async function renderResolvedProject(project: EditProject, outputPath: string, o
       runProcess, renderAudioBed, probeMedia, encoderArgs, finite,
     });
   }
-  let planner = hasMotionCompositionV2 ? "typescript-motion-composition-v2-ass-frame-receipt/v2" : "typescript-fallback";
+  let planner = hasFloatingVideoFrame ? "editkin-floating-video-frame-ffmpeg/v1" : hasMotionCompositionV2 ? "typescript-motion-composition-v2-ass-frame-receipt/v2" : "typescript-fallback";
   const nativeCoreReady = await nativeCoreAvailable(options.nativeCorePath);
-  if (nativeCoreReady && !hasMotionCompositionV2) {
+  if (nativeCoreReady && !hasMotionCompositionV2 && !hasFloatingVideoFrame) {
     await compileNativeEngineGraph(buildEngineRenderGraph(project), options.nativeCorePath!);
     const native = await createNativePlan(project, options.nativeCorePath!);
     const expectedFrames = Math.round(plan.duration * project.fps);

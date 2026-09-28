@@ -19,6 +19,17 @@ const templateElementOwnerSchema = z.strictObject({
 });
 const finiteVec3Schema = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
 const transform3dSchema = z.object({ position: finiteVec3Schema, rotationDegrees: finiteVec3Schema, scale: finiteVec3Schema });
+const floatingVideoFrameSchema = z.strictObject({
+  schema: z.literal("editkin.floating-video-frame/v1"),
+  style: z.enum(["prism", "graphite"]),
+  size: z.number().finite().min(.3).max(.82),
+  yawDegrees: z.number().finite().min(-35).max(35),
+  pitchDegrees: z.number().finite().min(-25).max(25),
+  aspect: z.enum(["canvas", "portrait"]).optional(),
+  centerX: z.number().finite().min(.2).max(.8).optional(),
+  centerY: z.number().finite().min(.2).max(.8).optional(),
+  orbit: z.strictObject({ amplitudeDegrees: z.number().finite().min(0).max(30), periodSeconds: z.number().finite().min(2).max(8) }).optional(),
+});
 const easingSchema = z.enum(["linear", "hold", "ease_in", "ease_out", "ease_in_out", "spring_soft"]);
 const scene25dCameraKeyframeSchema = z.object({
   id: z.string(), time: z.number().finite().positive(), position: finiteVec3Schema, target: finiteVec3Schema,
@@ -250,7 +261,7 @@ const chromaKeySchema = z.object({
 });
 const clipSchema = z.object({
   id: z.string(), assetId: z.string(), trackId: z.string(), timelineStart: z.number(), sourceStart: z.number(), duration: z.number(),
-  volume: z.number(), transform: transformSchema, transform3d: transform3dSchema.optional(), color: colorSchema, keyframes: z.array(keyframeSchema), creative: clipCreativeSchema.optional(), layout: clipLayoutSchema.optional(), masks: z.array(clipMaskSchema).optional(), chromaKey: chromaKeySchema.optional(),
+  volume: z.number(), transform: transformSchema, transform3d: transform3dSchema.optional(), floatingFrame: floatingVideoFrameSchema.optional(), color: colorSchema, keyframes: z.array(keyframeSchema), creative: clipCreativeSchema.optional(), layout: clipLayoutSchema.optional(), masks: z.array(clipMaskSchema).optional(), chromaKey: chromaKeySchema.optional(),
   layer: clipLayerSchema.optional(), expressions: clipExpressionsSchema.optional(),
 });
 const captionSchema = z.object({
@@ -470,6 +481,7 @@ export const editorCommandSchema: z.ZodType<EditorCommand> = z.lazy(() => z.disc
   z.object({ type: z.literal("configure_scene_25d"), enabled: z.boolean() }),
   z.object({ type: z.literal("set_scene_25d_settings"), settings: scene25dSchema }),
   z.object({ type: z.literal("update_clip_transform_3d"), clipId: z.string(), patch: transform3dSchema.partial() }),
+  z.object({ type: z.literal("set_clip_floating_frame"), clipId: z.string(), frame: floatingVideoFrameSchema.optional() }),
   z.object({ type: z.literal("configure_particle_simulation"), enabled: z.boolean() }),
   z.object({ type: z.literal("set_particle_simulation_settings"), settings: particleSimulationSchema }),
   z.object({ type: z.literal("set_clip_color"), clipId: z.string(), patch: rawColorSchema.partial() }),

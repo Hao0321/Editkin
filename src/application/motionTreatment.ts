@@ -42,13 +42,18 @@ export function motionCommandFamilies(command: EditorCommand): MotionTreatmentFa
   }
   if (["add_caption", "update_caption", "set_caption_style"].includes(command.type)) families.add("subtitles");
   if (["add_motion_track", "set_motion_track_point", "add_clip_mask", "update_clip_mask", "set_clip_mask_track", "set_clip_mask_keyframe", "freeze_clip_mask_range", "set_clip_chroma_key"].includes(command.type)) families.add("tracking_masks");
-  if (["configure_scene_25d", "set_scene_25d_settings", "configure_particle_simulation", "set_particle_simulation_settings", "add_native_effect", "update_native_effect"].includes(command.type)) families.add("vfx");
-  if (["update_clip_transform", "update_clip_transform_3d", "add_keyframe", "update_keyframe", "set_clip_expression", "set_clip_layout"].includes(command.type)) families.add("transitions_camera");
+  if (["configure_scene_25d", "set_scene_25d_settings", "configure_particle_simulation", "set_particle_simulation_settings", "set_clip_floating_frame", "add_native_effect", "update_native_effect"].includes(command.type)) families.add("vfx");
+  if (["update_clip_transform", "update_clip_transform_3d", "set_clip_floating_frame", "add_keyframe", "update_keyframe", "set_clip_expression", "set_clip_layout"].includes(command.type)) families.add("transitions_camera");
   if (["set_clip_color", "set_asset_color_interpretation", "set_project_color_management"].includes(command.type)) families.add("color");
   if (command.type === "set_clip_volume" || (command.type === "add_track" && command.track.kind === "audio")) families.add("sound");
   if (command.type === "add_clip") {
-    // Every clip carries audio gain; this does not claim the source has audible sound.
-    if (command.clip.volume !== 1) families.add("sound");
+    if (command.clip.floatingFrame) {
+      families.add("vfx");
+      families.add("transitions_camera");
+    }
+    // A silent visual duplicate does not create a sound treatment; explicit
+    // mutes on ordinary clips still need a sound decision in the plan.
+    if (command.clip.volume !== 1 && !(command.clip.volume === 0 && command.clip.floatingFrame)) families.add("sound");
   }
   if (command.type === "set_clip_creative") {
     if (command.patch.lookPresetId !== undefined) families.add("color");

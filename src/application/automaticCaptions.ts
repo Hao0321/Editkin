@@ -7,8 +7,10 @@ import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { analyzeSegmentedCaptions, type CaptionSegmentation } from "./segmentedCaptions";
+import { analyzeSegmentedCaptions } from "./segmentedCaptions";
 import { runAnalysisProcess } from "./analysisProcess";
+import type { AutomaticCaptionAnalysisResult, AutomaticCaptionCue, AutomaticCaptionRequest, AutomaticCaptionResult, AutomaticCaptionRuntime, RawWhisperTranscript } from "./automaticCaptionTypes";
+export type { AutomaticCaptionAnalysisResult, AutomaticCaptionCue, AutomaticCaptionRequest, AutomaticCaptionResult, AutomaticCaptionRecognition, AutomaticCaptionRuntime, RawWhisperTranscript } from "./automaticCaptionTypes";
 
 export interface WhisperModelDescriptor {
   id: string;
@@ -27,56 +29,6 @@ export const PINNED_WHISPER_MODEL: WhisperModelDescriptor = {
   sha256: "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
   license: "MIT",
 };
-
-export interface AutomaticCaptionRequest {
-  sourcePath: string;
-  sourceStart: number;
-  duration: number;
-  sourceSha256?: string;
-  language?: string;
-  translationTarget?: "en";
-}
-
-export interface AutomaticCaptionCue {
-  start: number;
-  end: number;
-  text: string;
-  translation?: { text: string; language: "en" };
-}
-
-export interface AutomaticCaptionResult {
-  cues: AutomaticCaptionCue[];
-  engine: string;
-  modelId: string;
-  modelSha256: string;
-  language: string;
-  translationTarget?: "en";
-  analyzedSeconds: number;
-  elapsedMs: number;
-  modelDownloaded: boolean;
-  cacheHit: boolean;
-  acceleration: "gpu" | "cpu";
-}
-
-export interface RawWhisperTranscript {
-  format: "srt";
-  text: string;
-  sha256: string;
-}
-
-export interface AutomaticCaptionRecognition {
-  status: "usable-cues" | "empty";
-  /** Recognition is not VAD or verification of what is physically audible. */
-  audioContent: "unverified";
-  reason?: "recognition-completed-without-usable-cues";
-}
-
-export interface AutomaticCaptionAnalysisResult extends AutomaticCaptionResult {
-  recognition: AutomaticCaptionRecognition;
-  rawTranscript: RawWhisperTranscript;
-  rawTranslation?: RawWhisperTranscript;
-  segmentation?: CaptionSegmentation;
-}
 
 export class EmptyAutomaticCaptionError extends Error {
   readonly code = "AUTOMATIC_CAPTION_EMPTY";
@@ -106,17 +58,6 @@ interface ModelInspection {
   valid: boolean;
   bytes: number;
   sha256: string;
-}
-
-export interface AutomaticCaptionRuntime {
-  ffmpegPath: string;
-  modelRoot: string;
-  cacheRoot?: string;
-  modelPath?: string;
-  whisperCliPath?: string;
-  signal?: AbortSignal;
-  segmentTimeoutMs?: number;
-  onProgress?: (progress: { phase: "transcript"; completedSegments: number; totalSegments: number; analyzedSeconds: number; totalSeconds: number; cachedSegments: number }) => void | Promise<void>;
 }
 
 type CaptionRuntimeProbe = (

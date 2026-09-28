@@ -23,12 +23,14 @@ describe("browser display proxies preserve original interpretation boundaries", 
     const filters = browserProxyFilters(browserProxyColorPlan(hdr), 540);
     expect(filters.indexOf("zscale=p=bt709")).toBeLessThan(filters.indexOf("tonemap="));
   });
-  it("large HLG preview uses a float 2x intermediate, never full reduction to 8-bit before tone mapping", () => {
+  it("large HLG preview scales tagged YUV early, then keeps float gamut and tone mapping", () => {
     const stages = browserProxyFilters(browserProxyColorPlan(hdr), 540, undefined, 1920).split(",");
-    const reduce = stages.indexOf("zscale=w=-2:h=1080:p=bt709:filter=bilinear");
-    expect(reduce).toBeGreaterThan(stages.indexOf("format=gbrpf32le"));
-    expect(stages[reduce + 1]).toBe("format=gbrpf32le");
+    const reduce = stages.indexOf("zscale=w=-2:h=1080:filter=bilinear");
+    expect(reduce).toBe(0);
+    expect(reduce).toBeLessThan(stages.indexOf("zscale=t=linear:npl=100:agamma=0"));
+    expect(stages.indexOf("format=gbrpf32le")).toBeLessThan(stages.indexOf("zscale=p=bt709"));
     expect(reduce).toBeLessThan(stages.findIndex(stage => stage.startsWith("tonemap=")));
+    expect(stages.at(-1)).toBe("format=yuv420p");
     expect(browserProxyFilters(browserProxyColorPlan(hdr), 540, undefined, 720)).not.toContain("w=-2:h=1080");
     expect(browserProxyFilters(browserProxyColorPlan({ ...hdr, colorTransfer: "smpte2084" }), 540, undefined, 1920)).not.toContain("w=-2:h=1080");
   });

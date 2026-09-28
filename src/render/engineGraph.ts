@@ -75,15 +75,43 @@ function currentSdrVideoProfileEligible(project: EditProject, clips: TimelineCli
 }
 
 function timebaseForFps(fps: number): { numerator: number; denominator: number } {
+  if (!Number.isFinite(fps) || fps <= 0 || fps > 240) throw new Error("專案 FPS 無法轉為 rational timebase");
   const ntsc = [
     { fps: 24_000 / 1_001, numerator: 1_001, denominator: 24_000 },
     { fps: 30_000 / 1_001, numerator: 1_001, denominator: 30_000 },
     { fps: 60_000 / 1_001, numerator: 1_001, denominator: 60_000 },
+    { fps: 120_000 / 1_001, numerator: 1_001, denominator: 120_000 },
+    { fps: 240_000 / 1_001, numerator: 1_001, denominator: 240_000 },
   ].find((candidate) => Math.abs(candidate.fps - fps) < 0.001);
   if (ntsc) return { numerator: ntsc.numerator, denominator: ntsc.denominator };
-  const rounded = Math.round(fps);
-  if (!Number.isFinite(fps) || fps <= 0 || rounded <= 0) throw new Error("專案 FPS 無法轉為 rational timebase");
-  return { numerator: 1, denominator: rounded };
+
+  // The native graph accepts an integer seconds-per-frame fraction with a
+  // denominator no larger than 1,000,000. Never silently round fractional FPS.
+  const target = 1 / fps;
+  let value = target;
+  let previousNumerator = 0;
+  let numerator = 1;
+  let previousDenominator = 1;
+  let denominator = 0;
+  for (let iteration = 0; iteration < 32; iteration += 1) {
+    const whole = Math.floor(value);
+    if (!Number.isSafeInteger(whole)) break;
+    const nextNumerator = whole * numerator + previousNumerator;
+    const nextDenominator = whole * denominator + previousDenominator;
+    if (!Number.isSafeInteger(nextNumerator) || !Number.isSafeInteger(nextDenominator)
+      || nextNumerator > 0xffffffff || nextDenominator > 1_000_000) break;
+    if (nextNumerator > 0 && Math.abs(nextDenominator / nextNumerator - fps) <= Math.max(1e-9, fps * 1e-9)) {
+      return { numerator: nextNumerator, denominator: nextDenominator };
+    }
+    previousNumerator = numerator;
+    numerator = nextNumerator;
+    previousDenominator = denominator;
+    denominator = nextDenominator;
+    const fractional = value - whole;
+    if (fractional <= Number.EPSILON) break;
+    value = 1 / fractional;
+  }
+  throw new Error("專案 FPS 無法在原生引擎的 rational timebase 範圍內表示");
 }
 
 function safeId(value: string): string {
@@ -429,6 +457,9 @@ function appendParticleSimulation(project: EditProject, nodes: EngineNode[], cur
 }
 
 export function buildEngineRenderGraph(project: EditProject, options: EngineGraphBuildOptions = {}): EngineRenderGraph {
+  if (project.tracks.some(track => track.clips.some(clip => clip.floatingFrame))) {
+    throw new Error("浮空影片框尚未進入原生 EngineGraph；請使用 Editkin 的正式 FFmpeg 合成路徑");
+  }
   if (options.rec709PrimaryVersion !== undefined && ![1, 2].includes(options.rec709PrimaryVersion)) throw new Error("Unsupported Rec.709 primary processor version");
   const visibleClips = project.tracks.filter((track) => track.kind === "video" && !track.muted).flatMap((track) => track.clips);
   // Never turn an invalidated authored matte into an unmasked executable graph.

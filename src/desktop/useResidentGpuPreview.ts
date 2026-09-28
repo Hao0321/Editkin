@@ -332,8 +332,9 @@ export function useResidentGpuPreview(
                     onActive: active => { if (generation.active) { publishAutonomousPlayback(active); publishNativePlaybackPreparing(false); } },
                     onClock: time => { if (generation.active) intent.transport.onClock(time); },
                     onEnded: event => {
-                      // Native audio owns its 30-second window renewal and
-                      // project-end decision. A window end is not movie end.
+                      // Resident audio owns the full timeline; older desktop
+                      // adapters renew bounded windows. Video ends only on a
+                      // confirmed native-monotonic project-end event.
                       if (generation.active && event.clock === "native-monotonic") {
                         intent.transport.onClock(intent.transport.duration);
                         intent.transport.onEnded();

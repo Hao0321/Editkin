@@ -1,6 +1,6 @@
 import { constants as fsConstants } from "node:fs";
 import { copyFile, cp, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { assertSelfAuthoredProductResourceRoots, assertSelfAuthoredProductResources } from "./lib/self-authored-product-resources.mjs";
 import { assertPinnedWindowsProductRuntime } from "./lib/pinned-product-runtime.mjs";
 import { assertTauriStageReplacementTarget, resolveTauriStageTarget } from "./lib/tauri-stage-target-policy.mjs";
@@ -9,12 +9,20 @@ import { stageMaterialColorRuntimePair } from "./lib/material-color-runtime-pair
 import {
   assertExactReleaseRuntimeFileSet,
   EDITKIN_RELEASE_RUNTIME_FILES,
+  SNAPSHOT_TOP_LEVEL_DIRECTORIES,
 } from "./lib/editkin-mcp-generation-contract.mjs";
 
 const { appRoot, targetRoot, envelopeRoot, candidateTarget } = resolveTauriStageTarget(resolve("."), process.argv[2]);
 const isolatedCandidateStage = process.argv.includes("--isolated-candidate-stage");
+const mcpCandidateStage = process.argv.includes("--mcp-candidate-stage");
 if (isolatedCandidateStage && !candidateTarget) {
   throw new Error("--isolated-candidate-stage is restricted to a new product-release-candidates envelope");
+}
+if (mcpCandidateStage && !isolatedCandidateStage) {
+  throw new Error("--mcp-candidate-stage requires --isolated-candidate-stage");
+}
+if (mcpCandidateStage && !/^candidate-[a-f0-9]{16}$/u.test(basename(envelopeRoot))) {
+  throw new Error("MCP candidate stage requires candidate-<16 lowercase hex> envelope");
 }
 const resources = [
   ["desktop-dist/service.mjs", "service.mjs"],
@@ -42,7 +50,7 @@ const resources = [
   ["public/demo-source.mp4", "demo-source.mp4"],
   ["public/editkin-demo-preview.mp4", "editkin-demo-preview.mp4"],
 ];
-const agentResources = [
+const agentResources = mcpCandidateStage ? [] : [
   ["scripts/editkin-product-mcp-launcher.mjs", "launcher.mjs"],
   ["src/shared/agentSetupContract.json", "agent-setup-contract.json"],
 ];
@@ -80,7 +88,7 @@ const stagedColor = resolve(stagingRoot, "color/aces2");
 const stagedPlugins = resolve(stagingRoot, "plugins");
 const replacements = [
   [stagedRuntime, targetRoot],
-  [stagedAgentRuntime, resolve(envelopeRoot, "agent-runtime-v3")],
+  ...(mcpCandidateStage ? [] : [[stagedAgentRuntime, resolve(envelopeRoot, "agent-runtime-v3")]]),
   [stagedCreativePack, resolve(envelopeRoot, "creative-packs/hao-creator-library")],
   [stagedPersonalMusicPack, resolve(envelopeRoot, "personal-packs/hao-music-library")],
   [stagedFontPack, resolve(envelopeRoot, "font-packs/editkin-open-fonts")],
@@ -108,12 +116,14 @@ try {
     await mkdir(dirname(output), { recursive: true });
     await copyFile(resolve(source), output, fsConstants.COPYFILE_EXCL);
   }
-  const agentEntries = await readdir(stagedAgentRuntime, { withFileTypes: true });
-  const expectedAgentFiles = agentResources.map(([, destination]) => destination).sort();
-  const actualAgentFiles = agentEntries.map((entry) => entry.name).sort();
-  if (agentEntries.some((entry) => !entry.isFile())
-    || JSON.stringify(actualAgentFiles) !== JSON.stringify(expectedAgentFiles)) {
-    throw new Error("Tauri staged Agent runtime must contain exactly the launcher and embedded contract");
+  if (!mcpCandidateStage) {
+    const agentEntries = await readdir(stagedAgentRuntime, { withFileTypes: true });
+    const expectedAgentFiles = agentResources.map(([, destination]) => destination).sort();
+    const actualAgentFiles = agentEntries.map((entry) => entry.name).sort();
+    if (agentEntries.some((entry) => !entry.isFile())
+      || JSON.stringify(actualAgentFiles) !== JSON.stringify(expectedAgentFiles)) {
+      throw new Error("Tauri staged Agent runtime must contain exactly the launcher and embedded contract");
+    }
   }
   const runtimeEntries = await readdir(stagedRuntime, { withFileTypes: true });
   if (runtimeEntries.some((entry) => !entry.isFile())) throw new Error("Tauri staged runtime must contain only regular top-level files");
@@ -127,6 +137,13 @@ try {
   await cp(resolve("public/fonts"), stagedFontPack, { recursive: true, force: false, errorOnExist: true });
   await cp(resolve("public/color/aces2"), stagedColor, { recursive: true, force: false, errorOnExist: true });
   await cp(resolve("plugins"), stagedPlugins, { recursive: true, force: false, errorOnExist: true });
+  if (mcpCandidateStage) {
+    const topLevel = (await readdir(stagingRoot, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name, "en"));
+    if (topLevel.some((entry) => !entry.isDirectory())
+      || JSON.stringify(topLevel.map((entry) => entry.name).sort()) !== JSON.stringify([...SNAPSHOT_TOP_LEVEL_DIRECTORIES].sort())) {
+      throw new Error("Isolated MCP candidate stage must have the exact snapshot top-level directory set");
+    }
+  }
   await assertSelfAuthoredProductResourceRoots([stagingRoot], "Tauri staged product envelope", appRoot);
   transaction = isolatedCandidateStage
     ? { status: "ISOLATED_CANDIDATE_STAGED", replacements: replacements.length, cleanupPending: null }
@@ -140,7 +157,7 @@ try {
 
 process.stdout.write(`${JSON.stringify({
   status: isolatedCandidateStage
-    ? "GREEN_ISOLATED_CANDIDATE_STAGE"
+    ? mcpCandidateStage ? "GREEN_ISOLATED_MCP_CANDIDATE_STAGE" : "GREEN_ISOLATED_CANDIDATE_STAGE"
     : transaction.cleanupPending ? "GREEN_TRANSACTIONAL_STAGE_BACKUP_RETAINED" : "GREEN_CLEAN_STAGE",
   targetRoot,
   resources: resources.length + agentResources.length,

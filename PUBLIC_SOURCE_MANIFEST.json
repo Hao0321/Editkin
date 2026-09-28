@@ -1,7 +1,7 @@
 {
   "schema": "editkin.public-source-manifest/v1",
   "sourceEdition": "community",
-  "sourceDate": "2026-09-23",
+  "sourceDate": "2026-09-28",
   "sourceRoot": "apps/hao-editor (owner workspace; not copied as a Git history)",
   "files": [
     {
@@ -68,18 +68,60 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "assets/editkin-icon.svg",
-      "bytes": 1383,
-      "sha256": "540f5f4bfd9af75d62b73c47a14becad56b3189227acf16d82badd9155ec3ce2",
-      "origin": "assets/editkin-icon.svg",
-      "rights": "Editkin visual identity; see TRADEMARKS.md"
-    },
-    {
       "path": "CODE_OF_CONDUCT.md",
       "bytes": 484,
       "sha256": "0dc3c50c9d3869d703a403f01f5f68631b9795cfff636427efd65420b3750f34",
       "origin": "open-source/CODE_OF_CONDUCT.md",
       "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "bytes": 1613,
+      "sha256": "8d3441da732f900e6cee672544f428b3a7fa70025b257f86ec579a9c05bc80a4",
+      "origin": "open-source/CONTRIBUTING.md",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "origin": "open-source/LICENSE",
+      "rights": "GPL-3.0-or-later license text"
+    },
+    {
+      "path": "README.md",
+      "bytes": 3921,
+      "sha256": "18cbb4f969f03fe626bb7feeb31f3aba172519f7d31cedb1ff522c6daa823061",
+      "origin": "open-source/README.md",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "README.zh-TW.md",
+      "bytes": 3650,
+      "sha256": "d64e97d71ae49666a0e41ea89971e61d36bbf67f898e9b32ae3afcb3ce1011af",
+      "origin": "open-source/README.zh-TW.md",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "SECURITY.md",
+      "bytes": 1091,
+      "sha256": "6d40b78dc9a3ad317c5810e6b69e209b0417142e0760adf215a8ea1eb02273cc",
+      "origin": "open-source/SECURITY.md",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "TRADEMARKS.md",
+      "bytes": 843,
+      "sha256": "8c9c9b332ea1853edeb43f7cd826877a390cec5b386b90988e5a8d7f0aaa9ea9",
+      "origin": "open-source/TRADEMARKS.md",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "assets/editkin-icon.svg",
+      "bytes": 1383,
+      "sha256": "540f5f4bfd9af75d62b73c47a14becad56b3189227acf16d82badd9155ec3ce2",
+      "origin": "assets/editkin-icon.svg",
+      "rights": "Editkin visual identity; see TRADEMARKS.md"
     },
     {
       "path": "config/auto-roto-hardcase-benchmark.json",
@@ -100,13 +142,6 @@
       "bytes": 9409,
       "sha256": "6d5c97172ff177404f4262e756812952bb5ab4462367aececbf1db4d7d4bc50c",
       "origin": "config/retired-product-surfaces.json",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "CONTRIBUTING.md",
-      "bytes": 1613,
-      "sha256": "8d3441da732f900e6cee672544f428b3a7fa70025b257f86ec579a9c05bc80a4",
-      "origin": "open-source/CONTRIBUTING.md",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -201,11 +236,11 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "LICENSE",
-      "bytes": 35149,
-      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
-      "origin": "open-source/LICENSE",
-      "rights": "GPL-3.0-or-later license text"
+      "path": "native/README.md",
+      "bytes": 1134,
+      "sha256": "96b7baffea2b13835d9178cb2d849f3312c7316435eda9300442613e85b418d4",
+      "origin": "native/README.md",
+      "rights": "GPL-3.0-or-later"
     },
     {
       "path": "native/effect-sdk/editkin_effect_plugin_v1.h",
@@ -264,6 +299,13 @@
       "rights": "GPL-3.0-or-later"
     },
     {
+      "path": "native/hao-core/src/engine/audio.rs",
+      "bytes": 21442,
+      "sha256": "e3286b55ab6af0f9c1085fe34298c3e3ea6b1779e2dc8688fb285714709ad455",
+      "origin": "native/hao-core/src/engine/audio.rs",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
       "path": "native/hao-core/src/engine/audio_codec_pipe.rs",
       "bytes": 13574,
       "sha256": "0918d97d02e047f7084a5d3a8b694479c0d2b7e61f44462f57d89a695612f1f0",
@@ -296,6 +338,13 @@
       "bytes": 16482,
       "sha256": "65937725a8e4fafb386d095ee5ce2c50ee1efcc13f5d05a5fb6d154d1f1da938",
       "origin": "native/hao-core/src/engine/audio_preview.rs",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "native/hao-core/src/engine/audio_session.rs",
+      "bytes": 6592,
+      "sha256": "7ab31650875f1bdb27c3347a09a3553329e116c25a43539bbca0fa6c6876e6f3",
+      "origin": "native/hao-core/src/engine/audio_session.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -334,10 +383,10 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "native/hao-core/src/engine/audio_session.rs",
-      "bytes": 6592,
-      "sha256": "7ab31650875f1bdb27c3347a09a3553329e116c25a43539bbca0fa6c6876e6f3",
-      "origin": "native/hao-core/src/engine/audio_session.rs",
+      "path": "native/hao-core/src/engine/audio_stream.rs",
+      "bytes": 17669,
+      "sha256": "3c49b5486fbc5c2e9f5264c87101999a1f4762c0fc24fca2e3d839d91fa2c989",
+      "origin": "native/hao-core/src/engine/audio_stream.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -355,17 +404,17 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "native/hao-core/src/engine/audio_stream_pull_tests.rs",
-      "bytes": 5076,
-      "sha256": "e48caf0c8efc2dd4a23b6f5141b0d6ccb3920a6cb8d456bfde082794363cd40a",
-      "origin": "native/hao-core/src/engine/audio_stream_pull_tests.rs",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "native/hao-core/src/engine/audio_stream_pull.rs",
       "bytes": 8061,
       "sha256": "1109a10bbb0b0db7a21208e7782422da6a83ca73499dcc8620dece1178a2b9fe",
       "origin": "native/hao-core/src/engine/audio_stream_pull.rs",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "native/hao-core/src/engine/audio_stream_pull_tests.rs",
+      "bytes": 5076,
+      "sha256": "e48caf0c8efc2dd4a23b6f5141b0d6ccb3920a6cb8d456bfde082794363cd40a",
+      "origin": "native/hao-core/src/engine/audio_stream_pull_tests.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -376,13 +425,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "native/hao-core/src/engine/audio_stream_transport_tests.rs",
-      "bytes": 4732,
-      "sha256": "034b116e7cb0470f63b7ceecbbf80a5d971904af9259727c9332c134865a5572",
-      "origin": "native/hao-core/src/engine/audio_stream_transport_tests.rs",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "native/hao-core/src/engine/audio_stream_transport.rs",
       "bytes": 7396,
       "sha256": "6cbab90b23e5974af907f1d946ed4add2bc2cdb10ec6ecaaecf368913242eb4b",
@@ -390,24 +432,10 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "native/hao-core/src/engine/audio_stream.rs",
-      "bytes": 17669,
-      "sha256": "3c49b5486fbc5c2e9f5264c87101999a1f4762c0fc24fca2e3d839d91fa2c989",
-      "origin": "native/hao-core/src/engine/audio_stream.rs",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "native/hao-core/src/engine/audio.rs",
-      "bytes": 21442,
-      "sha256": "e3286b55ab6af0f9c1085fe34298c3e3ea6b1779e2dc8688fb285714709ad455",
-      "origin": "native/hao-core/src/engine/audio.rs",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "native/hao-core/src/engine/auto_roto_onnx.rs",
-      "bytes": 12510,
-      "sha256": "2b69f3271b1593a425ac901344b6d6cd6719734b6d796356947b3f6dd99866c6",
-      "origin": "native/hao-core/src/engine/auto_roto_onnx.rs",
+      "path": "native/hao-core/src/engine/audio_stream_transport_tests.rs",
+      "bytes": 4732,
+      "sha256": "034b116e7cb0470f63b7ceecbbf80a5d971904af9259727c9332c134865a5572",
+      "origin": "native/hao-core/src/engine/audio_stream_transport_tests.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -415,6 +443,13 @@
       "bytes": 52429,
       "sha256": "03eac4be677cb78f66dde4e4b8a8b86b9dd7d0bf57635954501b8a3f6b82ed12",
       "origin": "native/hao-core/src/engine/auto_roto.rs",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "native/hao-core/src/engine/auto_roto_onnx.rs",
+      "bytes": 12510,
+      "sha256": "2b69f3271b1593a425ac901344b6d6cd6719734b6d796356947b3f6dd99866c6",
+      "origin": "native/hao-core/src/engine/auto_roto_onnx.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -544,13 +579,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "native/README.md",
-      "bytes": 1134,
-      "sha256": "96b7baffea2b13835d9178cb2d849f3312c7316435eda9300442613e85b418d4",
-      "origin": "native/README.md",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "native/shared/owned_process.rs",
       "bytes": 4816,
       "sha256": "2c1a547c5ea0f4b15f453fa3ab398b1d90b4ab8ff6e49e5c279c720a10d48964",
@@ -593,6 +621,13 @@
       "rights": "GPL-3.0-or-later"
     },
     {
+      "path": "plugins/README.md",
+      "bytes": 5485,
+      "sha256": "bd8f07f9c529a9b563c0d5e88831bed56c4ad87e52c99c3fb7e090256194da4e",
+      "origin": "plugins/README.md",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
       "path": "plugins/creator-accelerators/editkin-plugin.json",
       "bytes": 15343,
       "sha256": "28c55cf2e0fe5f29e2c6e56ff20a1cb81d7893a2cfd03191f27e3a101c4c363a",
@@ -618,13 +653,6 @@
       "bytes": 3060,
       "sha256": "522686ab96e8ee8fd831789f53a001752cc0ed10b18c1350129a6ae25d612e9c",
       "origin": "plugins/gpu-color-lab/editkin-plugin.json",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "plugins/README.md",
-      "bytes": 5485,
-      "sha256": "bd8f07f9c529a9b563c0d5e88831bed56c4ad87e52c99c3fb7e090256194da4e",
-      "origin": "plugins/README.md",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -656,17 +684,17 @@
       "rights": "GPL-3.0-or-later; synthetic FFmpeg lavfi fixture"
     },
     {
-      "path": "public/color/aces2/editkin-aces2.json",
-      "bytes": 5602,
-      "sha256": "2a917523c777d158ba70717043aa8443b7148203e41f1aa9ede9bd6cbd6dde0e",
-      "origin": "public/color/aces2/editkin-aces2.json",
-      "rights": "OpenColorIO upstream license in public/color/aces2/LICENSE.txt"
-    },
-    {
       "path": "public/color/aces2/LICENSE.txt",
       "bytes": 1485,
       "sha256": "82a40c52065ee968aa62015735e84378ac11425db7a233e6a2dcd2c83fc24276",
       "origin": "public/color/aces2/LICENSE.txt",
+      "rights": "OpenColorIO upstream license in public/color/aces2/LICENSE.txt"
+    },
+    {
+      "path": "public/color/aces2/editkin-aces2.json",
+      "bytes": 5602,
+      "sha256": "2a917523c777d158ba70717043aa8443b7148203e41f1aa9ede9bd6cbd6dde0e",
+      "origin": "public/color/aces2/editkin-aces2.json",
       "rights": "OpenColorIO upstream license in public/color/aces2/LICENSE.txt"
     },
     {
@@ -691,31 +719,10 @@
       "rights": "GPL-3.0-or-later; synthetic FFmpeg lavfi fixture"
     },
     {
-      "path": "public/fonts/bebas-neue-OFL.txt",
-      "bytes": 4337,
-      "sha256": "72082f6cb4d04be2ecf7cc7d9e1e7d73787f0af8a5a278a47cade70c16b78341",
-      "origin": "public/fonts/bebas-neue-OFL.txt",
-      "rights": "SIL-OFL-1.1; pinned Google Fonts source"
-    },
-    {
       "path": "public/fonts/BebasNeue-Regular.ttf",
       "bytes": 61400,
       "sha256": "08e4623805102d819f58601e46e345648846075e363b2ceb23313c2d1c83ec73",
       "origin": "public/fonts/BebasNeue-Regular.ttf",
-      "rights": "SIL-OFL-1.1; pinned Google Fonts source"
-    },
-    {
-      "path": "public/fonts/editkin-open-fonts.json",
-      "bytes": 23580,
-      "sha256": "ff9ba35a4faf5db5388a187ee527ee524b39e9971792e85b1bb9d6a2a5ec42d6",
-      "origin": "public/fonts/editkin-open-fonts.json",
-      "rights": "GPL-3.0-or-later; Editkin metadata"
-    },
-    {
-      "path": "public/fonts/fredoka-OFL.txt",
-      "bytes": 4388,
-      "sha256": "5c9e7eee5c6b25f4b05b8d53b2e470ea4962f9ced742d044a98f7d95d1375bab",
-      "origin": "public/fonts/fredoka-OFL.txt",
       "rights": "SIL-OFL-1.1; pinned Google Fonts source"
     },
     {
@@ -726,31 +733,10 @@
       "rights": "SIL-OFL-1.1; pinned Google Fonts source"
     },
     {
-      "path": "public/fonts/lxgw-wenkai-mono-tc-OFL.txt",
-      "bytes": 4390,
-      "sha256": "4fff27d35db0e22cd81d58da6f20e09f415cf354a3338e3cf1fc0eb9222c7174",
-      "origin": "public/fonts/lxgw-wenkai-mono-tc-OFL.txt",
-      "rights": "SIL-OFL-1.1; pinned Google Fonts source"
-    },
-    {
       "path": "public/fonts/LXGWWenKaiMonoTC-Regular.ttf",
       "bytes": 13122932,
       "sha256": "ea6707f71c862f4f255cbe510148b676ca8f5360872633de88694f8004f3f8b3",
       "origin": "public/fonts/LXGWWenKaiMonoTC-Regular.ttf",
-      "rights": "SIL-OFL-1.1; pinned Google Fonts source"
-    },
-    {
-      "path": "public/fonts/noto-sans-tc-OFL.txt",
-      "bytes": 4388,
-      "sha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9",
-      "origin": "public/fonts/noto-sans-tc-OFL.txt",
-      "rights": "SIL-OFL-1.1; pinned Google Fonts source"
-    },
-    {
-      "path": "public/fonts/noto-serif-tc-OFL.txt",
-      "bytes": 4350,
-      "sha256": "5e0da210fb04058a8c0087985d2d456b931c2579811a49655721d3cf0c36b6d6",
-      "origin": "public/fonts/noto-serif-tc-OFL.txt",
       "rights": "SIL-OFL-1.1; pinned Google Fonts source"
     },
     {
@@ -768,18 +754,46 @@
       "rights": "SIL-OFL-1.1; pinned Google Fonts source"
     },
     {
-      "path": "README.md",
-      "bytes": 2203,
-      "sha256": "9bea63b6f16cf8cd36e6e1952b7552081b46a217a9c5c93b19e89f8f9dae397d",
-      "origin": "open-source/README.md",
-      "rights": "GPL-3.0-or-later"
+      "path": "public/fonts/bebas-neue-OFL.txt",
+      "bytes": 4337,
+      "sha256": "72082f6cb4d04be2ecf7cc7d9e1e7d73787f0af8a5a278a47cade70c16b78341",
+      "origin": "public/fonts/bebas-neue-OFL.txt",
+      "rights": "SIL-OFL-1.1; pinned Google Fonts source"
     },
     {
-      "path": "README.zh-TW.md",
-      "bytes": 2197,
-      "sha256": "3a9435437485ab9661e1c7e636213fccf5b81b70fee02a9b0e5e85ba6a680751",
-      "origin": "open-source/README.zh-TW.md",
-      "rights": "GPL-3.0-or-later"
+      "path": "public/fonts/editkin-open-fonts.json",
+      "bytes": 23580,
+      "sha256": "ff9ba35a4faf5db5388a187ee527ee524b39e9971792e85b1bb9d6a2a5ec42d6",
+      "origin": "public/fonts/editkin-open-fonts.json",
+      "rights": "GPL-3.0-or-later; Editkin metadata"
+    },
+    {
+      "path": "public/fonts/fredoka-OFL.txt",
+      "bytes": 4388,
+      "sha256": "5c9e7eee5c6b25f4b05b8d53b2e470ea4962f9ced742d044a98f7d95d1375bab",
+      "origin": "public/fonts/fredoka-OFL.txt",
+      "rights": "SIL-OFL-1.1; pinned Google Fonts source"
+    },
+    {
+      "path": "public/fonts/lxgw-wenkai-mono-tc-OFL.txt",
+      "bytes": 4390,
+      "sha256": "4fff27d35db0e22cd81d58da6f20e09f415cf354a3338e3cf1fc0eb9222c7174",
+      "origin": "public/fonts/lxgw-wenkai-mono-tc-OFL.txt",
+      "rights": "SIL-OFL-1.1; pinned Google Fonts source"
+    },
+    {
+      "path": "public/fonts/noto-sans-tc-OFL.txt",
+      "bytes": 4388,
+      "sha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9",
+      "origin": "public/fonts/noto-sans-tc-OFL.txt",
+      "rights": "SIL-OFL-1.1; pinned Google Fonts source"
+    },
+    {
+      "path": "public/fonts/noto-serif-tc-OFL.txt",
+      "bytes": 4350,
+      "sha256": "5e0da210fb04058a8c0087985d2d456b931c2579811a49655721d3cf0c36b6d6",
+      "origin": "public/fonts/noto-serif-tc-OFL.txt",
+      "rights": "SIL-OFL-1.1; pinned Google Fonts source"
     },
     {
       "path": "scripts/aces-color-gate.py",
@@ -1077,8 +1091,8 @@
     },
     {
       "path": "scripts/autopilot-edit-quality-controlled-e2e.ts",
-      "bytes": 36662,
-      "sha256": "a999e5a878b0547c06317ad5dc54ddfd63cceba307848b91323189468ee54422",
+      "bytes": 40104,
+      "sha256": "03b4e351b664fb2f13773193bbfd78b7af2e496fb30bbf6b68fa9c0bd2d55a94",
       "origin": "scripts/autopilot-edit-quality-controlled-e2e.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -1616,8 +1630,8 @@
     },
     {
       "path": "scripts/engine-graph-integration.ts",
-      "bytes": 2173,
-      "sha256": "51350056dc0976b3d963866941bab0f0ffdc06afee8e7b782eeb01d993adebf3",
+      "bytes": 2961,
+      "sha256": "027c1070df956543b528c94ae5ea2569b7316437fdb76e0ad2cec4f76c1e2868",
       "origin": "scripts/engine-graph-integration.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -1752,6 +1766,13 @@
       "bytes": 15847,
       "sha256": "6ad5017e7abba7a0f17c4af76b0d2de65cd81378af42b8618f9c628859bb8088",
       "origin": "scripts/fixtures/workspace-popover-browser.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "scripts/floating-video-frame-gate.ts",
+      "bytes": 8829,
+      "sha256": "719dd25279d302bce348991050d1f51673287e38e9d1e8c648f40c3adb4d9992",
+      "origin": "scripts/floating-video-frame-gate.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -2392,6 +2413,13 @@
       "rights": "GPL-3.0-or-later"
     },
     {
+      "path": "scripts/lib/video-autopilot-workflow-integration.mjs",
+      "bytes": 6685,
+      "sha256": "1384dae6cf5d64706cb41364302a31aec6ff0ff2f63b2ab769a5a51a5d9ab080",
+      "origin": "scripts/lib/video-autopilot-workflow-integration.mjs",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
       "path": "scripts/macos-bundle-runtime-gate.mjs",
       "bytes": 15277,
       "sha256": "a62b9cdbda46f707c10d5767395fa4c2f0d5dd3f71f0035d5be1b5b8344bc0d3",
@@ -2428,8 +2456,8 @@
     },
     {
       "path": "scripts/mcp-smoke.ts",
-      "bytes": 49329,
-      "sha256": "039ec6c63940b0db3c9f6e8da7c80f95c4dd0e349f56aae9c1a82119cf4b91aa",
+      "bytes": 55736,
+      "sha256": "25792c47623e7f7e9d8d843913b4dad8613b1cec26a6569500cf86d52bcaf4a9",
       "origin": "scripts/mcp-smoke.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -2463,8 +2491,8 @@
     },
     {
       "path": "scripts/motion-composition-v2-gate.ts",
-      "bytes": 13267,
-      "sha256": "c2a476a0cfb15baf5d6be5d91c9ef77703842dc71ab1bc2fbc8dd03174140b2c",
+      "bytes": 13520,
+      "sha256": "a8fa2e1383f0091821a5013042b2e418c01de2a41ba7d8e9fea6bf88400987ce",
       "origin": "scripts/motion-composition-v2-gate.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -2932,8 +2960,8 @@
     },
     {
       "path": "scripts/roto-keyer-autopilot-integration.ts",
-      "bytes": 36892,
-      "sha256": "c04df55bce711ae72e7f08019359932352d6a3c426f53eda048277b688bb7ada",
+      "bytes": 37155,
+      "sha256": "6095a98cc04ed2fbfebaa228aea77cb006a948ec8509d7c7dc357410345d2e97",
       "origin": "scripts/roto-keyer-autopilot-integration.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -3093,8 +3121,8 @@
     },
     {
       "path": "scripts/stage-tauri-resources.mjs",
-      "bytes": 7975,
-      "sha256": "9fe487518871e7ccf5126b1b7930964404615bc5d4cc1de845329631f5a079fc",
+      "bytes": 9027,
+      "sha256": "077bcb81d64af35d9e0c52dabb73f59b06cad0cb1a34df3b17c46c8cf2f673ac",
       "origin": "scripts/stage-tauri-resources.mjs",
       "rights": "GPL-3.0-or-later"
     },
@@ -3268,8 +3296,8 @@
     },
     {
       "path": "scripts/timeline-interaction-benchmark.ts",
-      "bytes": 7222,
-      "sha256": "59693caab6a576eeef9d540964e5c55ab90d6e804d2a58a3c946706047aeb851",
+      "bytes": 8140,
+      "sha256": "58c27db0aea95f1a9802eda91b4ae00decaa633984b3c629aac5d4f2d931e9ce",
       "origin": "scripts/timeline-interaction-benchmark.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -3338,8 +3366,8 @@
     },
     {
       "path": "scripts/video-autopilot-skill-integration-gate.mjs",
-      "bytes": 2122,
-      "sha256": "3a69e270765f6ebb4e360e39668c58c9fe0002bee77c62f4868d96b483061e46",
+      "bytes": 2723,
+      "sha256": "188dc627230802c7e7ada5d74f56b99a59706a2f1bb44af14d7c51069d3ef58c",
       "origin": "scripts/video-autopilot-skill-integration-gate.mjs",
       "rights": "GPL-3.0-or-later"
     },
@@ -3351,24 +3379,10 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "SECURITY.md",
-      "bytes": 1091,
-      "sha256": "6d40b78dc9a3ad317c5810e6b69e209b0417142e0760adf215a8ea1eb02273cc",
-      "origin": "open-source/SECURITY.md",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "source-test-exclusions.json",
       "bytes": 6766,
       "sha256": "df6acdd4b25fac05b9b21951dbbceb94f2591417d6a25463e1c44457cd0ce05e",
       "origin": "open-source/source-test-exclusions.json",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "spikes/gpu-compositor/build.rs",
-      "bytes": 659,
-      "sha256": "ed1184de0e9e17e2e4ee2677d97ac2378b1ae276075d45a84fad2f858d8a05c3",
-      "origin": "spikes/gpu-compositor/build.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -3386,34 +3400,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "spikes/gpu-compositor/fixtures/layer-stack.json",
-      "bytes": 3599,
-      "sha256": "a4495549bd30afe16a3e530b39bcfd7e72818b16a6fac78812820487c2c2c71c",
-      "origin": "spikes/gpu-compositor/fixtures/layer-stack.json",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "spikes/gpu-compositor/fixtures/software-video/ffmpeg-lgpl-runtime-rd.json",
-      "bytes": 1902,
-      "sha256": "51d1b965925aa6e4dfe7b3ffc724e2e03cd59f73709873104ccc867dff990ee2",
-      "origin": "spikes/gpu-compositor/fixtures/software-video/ffmpeg-lgpl-runtime-rd.json",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "spikes/gpu-compositor/fixtures/software-video/FIXTURE-SOURCE.json",
-      "bytes": 1461,
-      "sha256": "cc103165d1f512296fe19ade43018e5a590e60c1b2ee968b26719214bf2ed44e",
-      "origin": "spikes/gpu-compositor/fixtures/software-video/FIXTURE-SOURCE.json",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "spikes/gpu-compositor/integration/editkinGpuCompositorAdapter.ts",
-      "bytes": 1628,
-      "sha256": "a64d440387020a8d939a77fb33f7ac4f20ed5cbfdbecc5406cdbdf3836eef5f1",
-      "origin": "spikes/gpu-compositor/integration/editkinGpuCompositorAdapter.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "spikes/gpu-compositor/MERGE_PLAN.md",
       "bytes": 2143,
       "sha256": "bc6acb150b5c8af187cc0033a7a83a86dbd5c4b52f3bd056b7268d2a26dadd86",
@@ -3428,10 +3414,38 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "spikes/gpu-compositor/src/caption_font_tests.rs",
-      "bytes": 21160,
-      "sha256": "848a82682dee40c24fbdd5e15fc51d1d091dd569d45cc364a8f10a1c24587196",
-      "origin": "spikes/gpu-compositor/src/caption_font_tests.rs",
+      "path": "spikes/gpu-compositor/build.rs",
+      "bytes": 659,
+      "sha256": "ed1184de0e9e17e2e4ee2677d97ac2378b1ae276075d45a84fad2f858d8a05c3",
+      "origin": "spikes/gpu-compositor/build.rs",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "spikes/gpu-compositor/fixtures/layer-stack.json",
+      "bytes": 3599,
+      "sha256": "a4495549bd30afe16a3e530b39bcfd7e72818b16a6fac78812820487c2c2c71c",
+      "origin": "spikes/gpu-compositor/fixtures/layer-stack.json",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "spikes/gpu-compositor/fixtures/software-video/FIXTURE-SOURCE.json",
+      "bytes": 1461,
+      "sha256": "cc103165d1f512296fe19ade43018e5a590e60c1b2ee968b26719214bf2ed44e",
+      "origin": "spikes/gpu-compositor/fixtures/software-video/FIXTURE-SOURCE.json",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "spikes/gpu-compositor/fixtures/software-video/ffmpeg-lgpl-runtime-rd.json",
+      "bytes": 1902,
+      "sha256": "51d1b965925aa6e4dfe7b3ffc724e2e03cd59f73709873104ccc867dff990ee2",
+      "origin": "spikes/gpu-compositor/fixtures/software-video/ffmpeg-lgpl-runtime-rd.json",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "spikes/gpu-compositor/integration/editkinGpuCompositorAdapter.ts",
+      "bytes": 1628,
+      "sha256": "a64d440387020a8d939a77fb33f7ac4f20ed5cbfdbecc5406cdbdf3836eef5f1",
+      "origin": "spikes/gpu-compositor/integration/editkinGpuCompositorAdapter.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -3439,6 +3453,20 @@
       "bytes": 35103,
       "sha256": "f42d94545f3b27af16884bc5090c0a0219f715fc87c4c91bec65a3305a1de21a",
       "origin": "spikes/gpu-compositor/src/caption.rs",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "spikes/gpu-compositor/src/caption_font_tests.rs",
+      "bytes": 21160,
+      "sha256": "848a82682dee40c24fbdd5e15fc51d1d091dd569d45cc364a8f10a1c24587196",
+      "origin": "spikes/gpu-compositor/src/caption_font_tests.rs",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "spikes/gpu-compositor/src/compositor.wgsl",
+      "bytes": 9596,
+      "sha256": "94b8573e6983f1a1f62cd4c9e9c62a64577e8bec8000cb570db7de0d0d4ea7ab",
+      "origin": "spikes/gpu-compositor/src/compositor.wgsl",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -3453,13 +3481,6 @@
       "bytes": 9602,
       "sha256": "32283cc659c9f8c0abb35fe87c737c6455696f747eb40b8dc32e7089e1167726",
       "origin": "spikes/gpu-compositor/src/compositor_packed.wgsl",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "spikes/gpu-compositor/src/compositor.wgsl",
-      "bytes": 9596,
-      "sha256": "94b8573e6983f1a1f62cd4c9e9c62a64577e8bec8000cb570db7de0d0d4ea7ab",
-      "origin": "spikes/gpu-compositor/src/compositor.wgsl",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -3540,13 +3561,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "spikes/gpu-compositor/src/software_video_bridge.h",
-      "bytes": 1842,
-      "sha256": "4b3729b03415ab494dc6e5a82a7a26bee9194ba62705ca4ad1065216bca0057f",
-      "origin": "spikes/gpu-compositor/src/software_video_bridge.h",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "spikes/gpu-compositor/src/software_video.rs",
       "bytes": 33334,
       "sha256": "17afb74f8d91c224026f73b6d0d2934ed215875cc7686ec7fca52cb8a6d1731d",
@@ -3554,10 +3568,10 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "spikes/gpu-compositor/src/windows_video_white_balance_tests.rs",
-      "bytes": 20899,
-      "sha256": "a43fc2b418c21ec637c4a6dcea89cfd5abd4f4b633c931ba0615bed58e786e2d",
-      "origin": "spikes/gpu-compositor/src/windows_video_white_balance_tests.rs",
+      "path": "spikes/gpu-compositor/src/software_video_bridge.h",
+      "bytes": 1842,
+      "sha256": "4b3729b03415ab494dc6e5a82a7a26bee9194ba62705ca4ad1065216bca0057f",
+      "origin": "spikes/gpu-compositor/src/software_video_bridge.h",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -3568,13 +3582,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "spikes/gpu-compositor/src/windows_video/scene_depth_of_field.rs",
-      "bytes": 6585,
-      "sha256": "49b47726a47d4bacc02cb47c2d03b0c440913eb9c5ddb326dc2cb759294fc52a",
-      "origin": "spikes/gpu-compositor/src/windows_video/scene_depth_of_field.rs",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "spikes/gpu-compositor/src/windows_video/scene_depth.rs",
       "bytes": 9362,
       "sha256": "50c98dcb3d430fc743ba4248d25aecfd7a54fef7619171c476fa0ab70b4037be",
@@ -3582,17 +3589,17 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src-tauri/build.rs",
-      "bytes": 2872,
-      "sha256": "1263b8e1c2b6941b0fbac86038080cab034c2770c94334fcfd0c48ef2a675355",
-      "origin": "src-tauri/build.rs",
+      "path": "spikes/gpu-compositor/src/windows_video/scene_depth_of_field.rs",
+      "bytes": 6585,
+      "sha256": "49b47726a47d4bacc02cb47c2d03b0c440913eb9c5ddb326dc2cb759294fc52a",
+      "origin": "spikes/gpu-compositor/src/windows_video/scene_depth_of_field.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src-tauri/capabilities/main-window-events.json",
-      "bytes": 250,
-      "sha256": "4dd02450f84bc1fb7cbcda6201132532b5d2451a59885c86001a41eac5037ebf",
-      "origin": "src-tauri/capabilities/main-window-events.json",
+      "path": "spikes/gpu-compositor/src/windows_video_white_balance_tests.rs",
+      "bytes": 20899,
+      "sha256": "a43fc2b418c21ec637c4a6dcea89cfd5abd4f4b633c931ba0615bed58e786e2d",
+      "origin": "spikes/gpu-compositor/src/windows_video_white_balance_tests.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -3607,6 +3614,20 @@
       "bytes": 1521,
       "sha256": "be58cb7b9bed07e375aa37e283eaa9ab43bec4e733ebe85c331ddc00556ac11c",
       "origin": "src-tauri/Cargo.toml",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src-tauri/build.rs",
+      "bytes": 2872,
+      "sha256": "1263b8e1c2b6941b0fbac86038080cab034c2770c94334fcfd0c48ef2a675355",
+      "origin": "src-tauri/build.rs",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src-tauri/capabilities/main-window-events.json",
+      "bytes": 250,
+      "sha256": "4dd02450f84bc1fb7cbcda6201132532b5d2451a59885c86001a41eac5037ebf",
+      "origin": "src-tauri/capabilities/main-window-events.json",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -3635,27 +3656,6 @@
       "bytes": 3112,
       "sha256": "d01385879285b01e961ca15cb51abbbe98fc5ef62ead2f313cc8cbc78b473fb8",
       "origin": "src-tauri/icons/64x64.png",
-      "rights": "Editkin visual identity; see TRADEMARKS.md"
-    },
-    {
-      "path": "src-tauri/icons/icon.icns",
-      "bytes": 210257,
-      "sha256": "e9907688d559c095faa50836c90133c20c1762496a3436db734360aa6a73b501",
-      "origin": "src-tauri/icons/icon.icns",
-      "rights": "Editkin visual identity; see TRADEMARKS.md"
-    },
-    {
-      "path": "src-tauri/icons/icon.ico",
-      "bytes": 27923,
-      "sha256": "8a9f7b8448f5f21dc1bd100921e2979997621cab6abfb3f9d5a15edf4d429865",
-      "origin": "src-tauri/icons/icon.ico",
-      "rights": "Editkin visual identity; see TRADEMARKS.md"
-    },
-    {
-      "path": "src-tauri/icons/icon.png",
-      "bytes": 36946,
-      "sha256": "93c999aa282d1046a27c2907175ce743675f4220df089b657a5db38f29c9ef19",
-      "origin": "src-tauri/icons/icon.png",
       "rights": "Editkin visual identity; see TRADEMARKS.md"
     },
     {
@@ -3729,6 +3729,27 @@
       "rights": "Editkin visual identity; see TRADEMARKS.md"
     },
     {
+      "path": "src-tauri/icons/icon.icns",
+      "bytes": 210257,
+      "sha256": "e9907688d559c095faa50836c90133c20c1762496a3436db734360aa6a73b501",
+      "origin": "src-tauri/icons/icon.icns",
+      "rights": "Editkin visual identity; see TRADEMARKS.md"
+    },
+    {
+      "path": "src-tauri/icons/icon.ico",
+      "bytes": 27923,
+      "sha256": "8a9f7b8448f5f21dc1bd100921e2979997621cab6abfb3f9d5a15edf4d429865",
+      "origin": "src-tauri/icons/icon.ico",
+      "rights": "Editkin visual identity; see TRADEMARKS.md"
+    },
+    {
+      "path": "src-tauri/icons/icon.png",
+      "bytes": 36946,
+      "sha256": "93c999aa282d1046a27c2907175ce743675f4220df089b657a5db38f29c9ef19",
+      "origin": "src-tauri/icons/icon.png",
+      "rights": "Editkin visual identity; see TRADEMARKS.md"
+    },
+    {
       "path": "src-tauri/src/agent_runtime_probe.rs",
       "bytes": 10260,
       "sha256": "7825245c94e1da9d68ef47c02205b8aadb048446fb90f6d22c6053c7025729a9",
@@ -3743,13 +3764,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src-tauri/src/audio_device_clock_tests.rs",
-      "bytes": 6274,
-      "sha256": "915cd32609f49a9b7982de4bfd515d31a75190ff35d0090731866a60ae0e8a21",
-      "origin": "src-tauri/src/audio_device_clock_tests.rs",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src-tauri/src/audio_device_clock.rs",
       "bytes": 8949,
       "sha256": "068f1f4400dc548dc10dfd808221866fe240263672de67e2f59e4e170080dc21",
@@ -3757,10 +3771,10 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src-tauri/src/audio_preview_events_device_tests.rs",
-      "bytes": 7611,
-      "sha256": "cb690ccb80d454ee3d411394ee0e8290eda829d169bcb842b8ff1c293611bde1",
-      "origin": "src-tauri/src/audio_preview_events_device_tests.rs",
+      "path": "src-tauri/src/audio_device_clock_tests.rs",
+      "bytes": 6274,
+      "sha256": "915cd32609f49a9b7982de4bfd515d31a75190ff35d0090731866a60ae0e8a21",
+      "origin": "src-tauri/src/audio_device_clock_tests.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -3771,10 +3785,10 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src-tauri/src/audio_session_clock_tests.rs",
-      "bytes": 7038,
-      "sha256": "527ee7438a3616a9cc15b1ee0f408a7c1457a0e30233c6b83d4a436661dc6ddb",
-      "origin": "src-tauri/src/audio_session_clock_tests.rs",
+      "path": "src-tauri/src/audio_preview_events_device_tests.rs",
+      "bytes": 7611,
+      "sha256": "cb690ccb80d454ee3d411394ee0e8290eda829d169bcb842b8ff1c293611bde1",
+      "origin": "src-tauri/src/audio_preview_events_device_tests.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -3785,17 +3799,31 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src-tauri/src/audio_session_desktop_tests.rs",
-      "bytes": 9732,
-      "sha256": "43cdaf5fb6fd21b8422a840d01311ca8232250f4e3be923e0bb6d5a190307c7f",
-      "origin": "src-tauri/src/audio_session_desktop_tests.rs",
+      "path": "src-tauri/src/audio_session_clock_tests.rs",
+      "bytes": 7038,
+      "sha256": "527ee7438a3616a9cc15b1ee0f408a7c1457a0e30233c6b83d4a436661dc6ddb",
+      "origin": "src-tauri/src/audio_session_clock_tests.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src-tauri/src/audio_session_desktop.rs",
-      "bytes": 19089,
-      "sha256": "5155e3731ffc0612f720d08ee85b94604b3c2977cea5f600243aaa24efcc5f92",
+      "bytes": 20211,
+      "sha256": "d30810708f340a6c4ed9332346d58c1b2f8093e32b30097f041a02f5f3ef4fd2",
       "origin": "src-tauri/src/audio_session_desktop.rs",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src-tauri/src/audio_session_desktop_tests.rs",
+      "bytes": 15465,
+      "sha256": "f213947f4ab7f1adbab98ad56d8b65b0b2866c7efa7889f508362aec7bf54214",
+      "origin": "src-tauri/src/audio_session_desktop_tests.rs",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src-tauri/src/audio_session_host.rs",
+      "bytes": 29128,
+      "sha256": "7d6e9986ad5961a42660871ec7ab3b6068406e9326c40399d39f3a1e0d0ffc16",
+      "origin": "src-tauri/src/audio_session_host.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -3806,16 +3834,9 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src-tauri/src/audio_session_host.rs",
-      "bytes": 28703,
-      "sha256": "5d951c82561ffdadcf525709b6fda28a033ff7e5741c22b83e939c475e089356",
-      "origin": "src-tauri/src/audio_session_host.rs",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src-tauri/src/audio_session_registry.rs",
-      "bytes": 6953,
-      "sha256": "c5185e9b8d493fe0d670dd5a5e9f10a925a62a073e6052314fa7bd56d629e822",
+      "bytes": 7115,
+      "sha256": "f497ed9ffcddc88e059c5845010bfc9f587762cd0b4c039dfc7e376418e4acb4",
       "origin": "src-tauri/src/audio_session_registry.rs",
       "rights": "GPL-3.0-or-later"
     },
@@ -3834,13 +3855,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src-tauri/src/gpu_preview_cache_tests.rs",
-      "bytes": 14752,
-      "sha256": "913f997bac44b189900dc7208508c8f8406896ec9846a9ae1d7a35d2354ca4bc",
-      "origin": "src-tauri/src/gpu_preview_cache_tests.rs",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src-tauri/src/gpu_preview_cache.rs",
       "bytes": 11571,
       "sha256": "7fc7d5a57c9eadd20250a717ff00d483e5b3d396938fc78fbc5a5acb1e920973",
@@ -3848,10 +3862,10 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src-tauri/src/gpu_preview_owner_tests.rs",
-      "bytes": 6391,
-      "sha256": "73b0803e453bc60e27055d2bd8688ecd919148c9fcdcd1420465f1eab5925264",
-      "origin": "src-tauri/src/gpu_preview_owner_tests.rs",
+      "path": "src-tauri/src/gpu_preview_cache_tests.rs",
+      "bytes": 14752,
+      "sha256": "913f997bac44b189900dc7208508c8f8406896ec9846a9ae1d7a35d2354ca4bc",
+      "origin": "src-tauri/src/gpu_preview_cache_tests.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -3862,10 +3876,10 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src-tauri/src/gpu_resident_process_tests.rs",
-      "bytes": 12720,
-      "sha256": "25cfb0eb756b697c12196b8a3decba6fdc9fdc6bf2bbbb492ed886ef294193c7",
-      "origin": "src-tauri/src/gpu_resident_process_tests.rs",
+      "path": "src-tauri/src/gpu_preview_owner_tests.rs",
+      "bytes": 6391,
+      "sha256": "73b0803e453bc60e27055d2bd8688ecd919148c9fcdcd1420465f1eab5925264",
+      "origin": "src-tauri/src/gpu_preview_owner_tests.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -3873,6 +3887,13 @@
       "bytes": 13961,
       "sha256": "93df24bcff4086efb1956fd4330ab2e17c65f0ff30ab97499981bcd0f5a453b0",
       "origin": "src-tauri/src/gpu_resident_process.rs",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src-tauri/src/gpu_resident_process_tests.rs",
+      "bytes": 12720,
+      "sha256": "25cfb0eb756b697c12196b8a3decba6fdc9fdc6bf2bbbb492ed886ef294193c7",
+      "origin": "src-tauri/src/gpu_resident_process_tests.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -3890,17 +3911,17 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src-tauri/src/native_preview_playback_tests.rs",
-      "bytes": 16776,
-      "sha256": "e3b5457ae63ef7b61b27dbcf38cb1e320ab07e72f2374395b439f0c471965354",
-      "origin": "src-tauri/src/native_preview_playback_tests.rs",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src-tauri/src/native_preview_playback.rs",
       "bytes": 16816,
       "sha256": "ec8474e5969f3e83e4fe5d91ff8e8dc61c638cd809505c13e84aa05607ec4e89",
       "origin": "src-tauri/src/native_preview_playback.rs",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src-tauri/src/native_preview_playback_tests.rs",
+      "bytes": 16776,
+      "sha256": "e3b5457ae63ef7b61b27dbcf38cb1e320ab07e72f2374395b439f0c471965354",
+      "origin": "src-tauri/src/native_preview_playback_tests.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -3939,17 +3960,17 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src-tauri/src/resident_service_tests.rs",
-      "bytes": 13067,
-      "sha256": "6e03129c43cf6222b7de3425c40433ab516a8fdb11888a1af7ecfe2fae7d7a5a",
-      "origin": "src-tauri/src/resident_service_tests.rs",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src-tauri/src/resident_service.rs",
       "bytes": 22849,
       "sha256": "c72627e9c3e833183618a67a31a4cda92e2070d0efa67ca299789244942b136a",
       "origin": "src-tauri/src/resident_service.rs",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src-tauri/src/resident_service_tests.rs",
+      "bytes": 13067,
+      "sha256": "6e03129c43cf6222b7de3425c40433ab516a8fdb11888a1af7ecfe2fae7d7a5a",
+      "origin": "src-tauri/src/resident_service_tests.rs",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -4010,8 +4031,8 @@
     },
     {
       "path": "src/App.tsx",
-      "bytes": 35624,
-      "sha256": "8cb815a114102bf039c7a5e2c10f04da891250cdb97b67ea7a8ad7adbadc8818",
+      "bytes": 36548,
+      "sha256": "d0b5c91173949cc3cbe9edbc047f1f28fcaff92d137436c459bccd0884df75cf",
       "origin": "src/App.tsx",
       "rights": "GPL-3.0-or-later"
     },
@@ -4184,153 +4205,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/application/automaticCaptionAnalysis.test.ts",
-      "bytes": 7834,
-      "sha256": "59a5ad0ee12b93c9b2a1d9e5015d65f50ece56b3a0010c5a1cc0319a615f70cf",
-      "origin": "src/application/automaticCaptionAnalysis.test.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/automaticCaptionCommands.ts",
-      "bytes": 1739,
-      "sha256": "ec3894b7d18e77e804efde2d23d9f9d89082c9f1cffe81a53d3655919cc07359",
-      "origin": "src/application/automaticCaptionCommands.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/automaticCaptions.test.ts",
-      "bytes": 7100,
-      "sha256": "abedee0ce12a91581aa63da578fe1c6bc047b0ba7eb8f9477e0bf37ef1bee43c",
-      "origin": "src/application/automaticCaptions.test.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/automaticCaptions.ts",
-      "bytes": 35039,
-      "sha256": "3ebf41d9f5935d8d8f6bd6fb8a5217d2e444a4cffc16944248b74393562f37ae",
-      "origin": "src/application/automaticCaptions.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/automaticUpdates.test.ts",
-      "bytes": 1566,
-      "sha256": "8c42a0be11644334c0c593e418f75b65d8fdb6fa3613f23c45f9bd41fee651ca",
-      "origin": "src/application/automaticUpdates.test.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/automaticUpdates.ts",
-      "bytes": 1196,
-      "sha256": "d8dfb7a08fc9b961ff4dd392fa673a749e36c3f2b33e40553b9f79bc1413a05e",
-      "origin": "src/application/automaticUpdates.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/autopilotBatchExecution.test.ts",
-      "bytes": 9605,
-      "sha256": "f9bb6a324e861a4cf8e1b66b5b57edb137c15097363158a276383a750e3eca80",
-      "origin": "src/application/autopilotBatchExecution.test.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/autopilotBatchExecution.ts",
-      "bytes": 12524,
-      "sha256": "8a7b42ebf544dceee3ed45257e70ac45b5d7fb02c289c2c3bd9ca74dc2ed9669",
-      "origin": "src/application/autopilotBatchExecution.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/autopilotDesign.test.ts",
-      "bytes": 4410,
-      "sha256": "67670e1b446bdd9b78c44d8569f434e8ba772d8c7bd21db22020bd4da50b3a96",
-      "origin": "src/application/autopilotDesign.test.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/autopilotDesignContract.ts",
-      "bytes": 3105,
-      "sha256": "19682d16ef610861ba76c351740eded00aaee72eafb9d43a5b6a793fb1c8a0ff",
-      "origin": "src/application/autopilotDesignContract.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/autopilotEvidence.test.ts",
-      "bytes": 1068,
-      "sha256": "2b59a17b7529c32ac9ee0452c66ad2d56c39b9730b908c7969cd18caccba28bb",
-      "origin": "src/application/autopilotEvidence.test.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/autopilotEvidence.ts",
-      "bytes": 2793,
-      "sha256": "f15c8120d2b4aa4b95abca9bcc38b1d5d831dc2f869e1d68ffff108f09299c8a",
-      "origin": "src/application/autopilotEvidence.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/autopilotInvocationIdentity.test.ts",
-      "bytes": 8485,
-      "sha256": "d3f2ed3496f3f4c4a962de7ae9b43955935c051b28c2e5803e088fc0f4230383",
-      "origin": "open-source/overrides/src/application/autopilotInvocationIdentity.test.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/autopilotInvocationIdentity.ts",
-      "bytes": 13676,
-      "sha256": "ecfb8a109b5dfb745e012bd9d4fd8bdddf1cfbb0356bf56bc7f567d5ac257e29",
-      "origin": "src/application/autopilotInvocationIdentity.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/autopilotMaterialEvidence.test.ts",
-      "bytes": 13385,
-      "sha256": "53efbca5af28bc856e0c0f996f756504bb90a902bb27e386ae110c26d848ee82",
-      "origin": "src/application/autopilotMaterialEvidence.test.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/autopilotMaterialEvidence.ts",
-      "bytes": 7099,
-      "sha256": "75590a7115fea7694640baeee2443fa4e5191255d8b5ce810ee6495eb5ab8d06",
-      "origin": "src/application/autopilotMaterialEvidence.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/autopilotMotionVariant.test.ts",
-      "bytes": 5691,
-      "sha256": "cc10e2d4f8dc9c05b9a6c3a65a69876b79c35ca0da1e482f41c9add02844df4b",
-      "origin": "src/application/autopilotMotionVariant.test.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/autopilotPlan.test.ts",
-      "bytes": 13985,
-      "sha256": "d61edee9b06bbb57455cbe0f027e4ff7a7f95427096fa18dd916fc716a426a22",
-      "origin": "src/application/autopilotPlan.test.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/autopilotPlan.ts",
-      "bytes": 33409,
-      "sha256": "1f87b7b08c98d958d71330949f7abd0886d6d4e34bcc7f60987c84d6572a9d62",
-      "origin": "src/application/autopilotPlan.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/autopilotPlanFixture.ts",
-      "bytes": 6671,
-      "sha256": "d9cdc865c3229e3f29571d716456085123dc30cfcabfb72c355672bf307f2157",
-      "origin": "src/application/autopilotPlanFixture.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/application/autopilotPlanHash.integration.test.ts",
-      "bytes": 2909,
-      "sha256": "11d69748591b5318e76dcc9433ac1a0e0397a84434de3a1dc60593079debf397",
-      "origin": "src/application/autopilotPlanHash.integration.test.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/application/autoRoto.ts",
       "bytes": 20709,
       "sha256": "645133c006fd69208cc34e5580e4fca3f65bab480ec7905d6e4a9c12ce187b52",
@@ -4433,6 +4307,167 @@
       "bytes": 7999,
       "sha256": "69be5a9ccaa257380c75cccc9320cd664c6cc2de7c597fc3ec68215741874842",
       "origin": "src/application/autoWhiteBalanceFloatSurface.integration.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/automaticCaptionAnalysis.test.ts",
+      "bytes": 7834,
+      "sha256": "59a5ad0ee12b93c9b2a1d9e5015d65f50ece56b3a0010c5a1cc0319a615f70cf",
+      "origin": "src/application/automaticCaptionAnalysis.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/automaticCaptionCommands.ts",
+      "bytes": 1739,
+      "sha256": "ec3894b7d18e77e804efde2d23d9f9d89082c9f1cffe81a53d3655919cc07359",
+      "origin": "src/application/automaticCaptionCommands.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/automaticCaptionTypes.ts",
+      "bytes": 2274,
+      "sha256": "1a7dfb4b8338e88b7ee6301a2436ddc96b9f725ea2a2da9350f1e4786567a4df",
+      "origin": "src/application/automaticCaptionTypes.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/automaticCaptions.test.ts",
+      "bytes": 7100,
+      "sha256": "abedee0ce12a91581aa63da578fe1c6bc047b0ba7eb8f9477e0bf37ef1bee43c",
+      "origin": "src/application/automaticCaptions.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/automaticCaptions.ts",
+      "bytes": 33797,
+      "sha256": "4e39a9d2a930c577a3d5410be761b77bb4e001a8fa7025d8616d1b45683326bc",
+      "origin": "src/application/automaticCaptions.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/automaticUpdates.test.ts",
+      "bytes": 1566,
+      "sha256": "8c42a0be11644334c0c593e418f75b65d8fdb6fa3613f23c45f9bd41fee651ca",
+      "origin": "src/application/automaticUpdates.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/automaticUpdates.ts",
+      "bytes": 1196,
+      "sha256": "d8dfb7a08fc9b961ff4dd392fa673a749e36c3f2b33e40553b9f79bc1413a05e",
+      "origin": "src/application/automaticUpdates.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotBatchExecution.test.ts",
+      "bytes": 12159,
+      "sha256": "494e190d9278b87a4a4ba2b4658499b86fa50544e4e47ad68141442145ea8a5d",
+      "origin": "src/application/autopilotBatchExecution.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotBatchExecution.ts",
+      "bytes": 12647,
+      "sha256": "2e9414a220da70a01cbb7a0ef98ece96f25956e4f3f6a6d8f806f9988b597c77",
+      "origin": "src/application/autopilotBatchExecution.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotBatchJobs.ts",
+      "bytes": 3586,
+      "sha256": "de1571187f9a5202756811465b3c328d5ba0de1a23a2c5cf6458249aa1f2006d",
+      "origin": "src/application/autopilotBatchJobs.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotDesign.test.ts",
+      "bytes": 6094,
+      "sha256": "7cd9d3bbeae53fc8185b39d372054deec2b8f9fe8ba70438b0c180086c314772",
+      "origin": "src/application/autopilotDesign.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotDesignContract.ts",
+      "bytes": 3132,
+      "sha256": "4dd881e12c2872ae49e6cd0131d87e9001f65cad7610f4edafecd4dcf4dd4775",
+      "origin": "src/application/autopilotDesignContract.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotEvidence.test.ts",
+      "bytes": 1068,
+      "sha256": "2b59a17b7529c32ac9ee0452c66ad2d56c39b9730b908c7969cd18caccba28bb",
+      "origin": "src/application/autopilotEvidence.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotEvidence.ts",
+      "bytes": 2793,
+      "sha256": "f15c8120d2b4aa4b95abca9bcc38b1d5d831dc2f869e1d68ffff108f09299c8a",
+      "origin": "src/application/autopilotEvidence.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotInvocationIdentity.test.ts",
+      "bytes": 9784,
+      "sha256": "6abbe9f41d98624219d53577679a9bbbd3a5ca37b4bcdc9b4cd4bbe36b51564c",
+      "origin": "open-source/overrides/src/application/autopilotInvocationIdentity.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotInvocationIdentity.ts",
+      "bytes": 13417,
+      "sha256": "245745442182c7e55c35d22a8b61604942033b7f4a5b90a29f164b7370ec5d33",
+      "origin": "src/application/autopilotInvocationIdentity.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotMaterialEvidence.test.ts",
+      "bytes": 13385,
+      "sha256": "53efbca5af28bc856e0c0f996f756504bb90a902bb27e386ae110c26d848ee82",
+      "origin": "src/application/autopilotMaterialEvidence.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotMaterialEvidence.ts",
+      "bytes": 7099,
+      "sha256": "75590a7115fea7694640baeee2443fa4e5191255d8b5ce810ee6495eb5ab8d06",
+      "origin": "src/application/autopilotMaterialEvidence.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotMotionVariant.test.ts",
+      "bytes": 5691,
+      "sha256": "cc10e2d4f8dc9c05b9a6c3a65a69876b79c35ca0da1e482f41c9add02844df4b",
+      "origin": "src/application/autopilotMotionVariant.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotPlan.test.ts",
+      "bytes": 13985,
+      "sha256": "d61edee9b06bbb57455cbe0f027e4ff7a7f95427096fa18dd916fc716a426a22",
+      "origin": "src/application/autopilotPlan.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotPlan.ts",
+      "bytes": 33409,
+      "sha256": "1f87b7b08c98d958d71330949f7abd0886d6d4e34bcc7f60987c84d6572a9d62",
+      "origin": "src/application/autopilotPlan.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotPlanFixture.ts",
+      "bytes": 6671,
+      "sha256": "d9cdc865c3229e3f29571d716456085123dc30cfcabfb72c355672bf307f2157",
+      "origin": "src/application/autopilotPlanFixture.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/autopilotPlanHash.integration.test.ts",
+      "bytes": 2909,
+      "sha256": "11d69748591b5318e76dcc9433ac1a0e0397a84434de3a1dc60593079debf397",
+      "origin": "src/application/autopilotPlanHash.integration.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -4878,15 +4913,15 @@
     },
     {
       "path": "src/application/mediaDerivativeColor.test.ts",
-      "bytes": 4288,
-      "sha256": "7ce7da09c53b2b591292c65119aeac227c2bec8fd418f0d8e11b4f97662c937c",
+      "bytes": 4394,
+      "sha256": "dc03124eb5cc390545c0aebddf5395b59736027c857e7d4099f654f4a2f062fa",
       "origin": "src/application/mediaDerivativeColor.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/application/mediaDerivativeColor.ts",
-      "bytes": 5404,
-      "sha256": "9fb8901aed92deec015a6a8416b453b976458d596cd11e73700ddc3af637d569",
+      "bytes": 5467,
+      "sha256": "dc8d69696de6c5229b22cf5a87999a5c69fd560f12e1d09a8117367cd75903b8",
       "origin": "src/application/mediaDerivativeColor.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -4906,22 +4941,22 @@
     },
     {
       "path": "src/application/mediaDerivatives.ts",
-      "bytes": 18487,
-      "sha256": "74559dbdd691b257cf83373792f9a9d87221a69401d0b09945d0da34062ed02a",
+      "bytes": 18474,
+      "sha256": "a412fd297f54329c0b5cc0397bfeea5fd6b70735bfdd96737cbb6de9664f7f40",
       "origin": "src/application/mediaDerivatives.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/application/mediaDerivativesHighBit.test.ts",
       "bytes": 5226,
-      "sha256": "f924f7837bf76e677cc806f48b1085f30b1adfabb4f8e6c8666bdc283ee00262",
+      "sha256": "42e21624f306a71ffdddfa7613dc9158980ba7467fdc5b0d589cc0b778b0f0e9",
       "origin": "src/application/mediaDerivativesHighBit.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/application/mediaThumbnailDisplay.test.ts",
       "bytes": 8375,
-      "sha256": "0a123b69e1102800a0f10e376a8b87d27f716c43c8d5822158bfc2fee7eaf83c",
+      "sha256": "cf7e8bbd5cc9140aed5e5b7118fe03473855b44523963568b5d5bccb84d5e715",
       "origin": "src/application/mediaThumbnailDisplay.test.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -4941,15 +4976,15 @@
     },
     {
       "path": "src/application/motionTreatment.test.ts",
-      "bytes": 3867,
-      "sha256": "23065e6b80ac733a11b5eb298e58d517ce491fd32415b0748c645089290a7321",
+      "bytes": 5863,
+      "sha256": "85f0d0f89b08a5680efed1bfb947ca964a21af52649676fbc0c9f75a38e559ae",
       "origin": "src/application/motionTreatment.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/application/motionTreatment.ts",
-      "bytes": 5958,
-      "sha256": "cd22ffc9b7fcfd8b9bac481d4b1d0c5e020404ec1dacf62552aff6c10602945f",
+      "bytes": 6248,
+      "sha256": "9e73f20cc6c11a3254749baaf0b537f5d68cb5484dc057d19b8974bad3f446bb",
       "origin": "src/application/motionTreatment.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -5270,8 +5305,8 @@
     },
     {
       "path": "src/application/segmentedCaptions.ts",
-      "bytes": 5777,
-      "sha256": "6701956032861707362002d3daaddafc84a03325e42082ecc674f32d7d9ae6ab",
+      "bytes": 5393,
+      "sha256": "b8303c371f0b29f2f6cd5ebf73893d1a66bdd088a268ae319c5ec390e4079555",
       "origin": "src/application/segmentedCaptions.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -5626,6 +5661,13 @@
       "rights": "GPL-3.0-or-later"
     },
     {
+      "path": "src/creative/motionGraphicPresetTypes.ts",
+      "bytes": 607,
+      "sha256": "f81acefc56d4fecc5535cb396014af07443909f7d627a41ac18c1bc9cca7bdee",
+      "origin": "src/creative/motionGraphicPresetTypes.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
       "path": "src/creative/motionGraphicPresets.test.ts",
       "bytes": 10048,
       "sha256": "34e1efecfde62e57d64dc4b4902a9725be017c56ae2c689e3b6c96d9af53c3c1",
@@ -5637,13 +5679,6 @@
       "bytes": 13849,
       "sha256": "112111607de6527389f764cdfb5ec9b35107b63fc4a9609ebdda6657b1423143",
       "origin": "src/creative/motionGraphicPresets.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/creative/motionGraphicPresetTypes.ts",
-      "bytes": 607,
-      "sha256": "f81acefc56d4fecc5535cb396014af07443909f7d627a41ac18c1bc9cca7bdee",
-      "origin": "src/creative/motionGraphicPresetTypes.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -5809,15 +5844,15 @@
     },
     {
       "path": "src/desktop/residentAudioTransport.test.ts",
-      "bytes": 7250,
-      "sha256": "dbb8dbf0f0eb35a185873cba89f35bf3e46249a7c5ebcac78637033632df24df",
+      "bytes": 8112,
+      "sha256": "b766abed8e098414679f5bda7f7dfb116eff383f2ef8a874d24396875f75fe87",
       "origin": "src/desktop/residentAudioTransport.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/desktop/residentAudioTransport.ts",
-      "bytes": 10133,
-      "sha256": "e608a01cc7416972bfce8bca67c804dd8816e6e0b7b3e54e16d756209af5475e",
+      "bytes": 10302,
+      "sha256": "c2a1a925ad000b05fd2638ce8926cfa842e0c96c1f84ca4b412147a9bd68f296",
       "origin": "src/desktop/residentAudioTransport.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -5837,8 +5872,8 @@
     },
     {
       "path": "src/desktop/residentGpuGraphPreparation.test.ts",
-      "bytes": 2634,
-      "sha256": "dd5d25e7742e97693924bd056cc408d5ade085a588175408a9f35a2fc24d9e47",
+      "bytes": 3316,
+      "sha256": "d517fe15e40dc366b1704b8c498b551c1bf4cdcde508f26dfa9b65ce01be0a2f",
       "origin": "src/desktop/residentGpuGraphPreparation.test.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -6215,8 +6250,8 @@
     },
     {
       "path": "src/desktop/useResidentGpuPreview.ts",
-      "bytes": 28795,
-      "sha256": "4774722514c1178172959bd5d4f7bcc2b429a69dd0f01d257167285c699a5f28",
+      "bytes": 28868,
+      "sha256": "a801303ed9d6179ef8306215c223621597e97f3fa62b21d94b34a8cac4bd1c7f",
       "origin": "src/desktop/useResidentGpuPreview.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -6375,6 +6410,13 @@
       "rights": "GPL-3.0-or-later"
     },
     {
+      "path": "src/domain/commandTypes.ts",
+      "bytes": 6351,
+      "sha256": "311f416644e144f8b64e88e0fc7060cdd1d18a4aabaff4ed1560e691379c61fe",
+      "origin": "src/domain/commandTypes.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
       "path": "src/domain/commands.test.ts",
       "bytes": 26152,
       "sha256": "81ad961fdf64dba38fb815a47b15509467c4e3cea98325f7784abba27ac49b33",
@@ -6383,16 +6425,9 @@
     },
     {
       "path": "src/domain/commands.ts",
-      "bytes": 28610,
-      "sha256": "e663213a21956e0e7a77fe992b7a0be556c0eba90ac6fa2a296c267f052679e6",
+      "bytes": 28808,
+      "sha256": "76b865145e1259511fe755dbc5dcda52afc3b1375413623ca63d6ef1d3f30709",
       "origin": "src/domain/commands.ts",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/domain/commandTypes.ts",
-      "bytes": 6245,
-      "sha256": "a58a2b56df7058e62baf6e1eb370d6f3cafbbfa6b07e54830acdc97e01b0182e",
-      "origin": "src/domain/commandTypes.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -6523,8 +6558,8 @@
     },
     {
       "path": "src/domain/projectValidation.ts",
-      "bytes": 41518,
-      "sha256": "1fac54e795213dae1076f12a0a17b25cf4015d15c55b7c951878c80bafcbfdc2",
+      "bytes": 42933,
+      "sha256": "8a640f5259a06301d9c96992523a5a3757aa7cb47397cef00831fbdab7424ab0",
       "origin": "src/domain/projectValidation.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -6544,8 +6579,8 @@
     },
     {
       "path": "src/domain/schema.ts",
-      "bytes": 40550,
-      "sha256": "fc15a35b5cd3c03763ce306c61ece8d963eb8ff61f1a83c5945134982d71962f",
+      "bytes": 41343,
+      "sha256": "c461342baa2489ce6931012a5b95a4f90619c1560de2943cfe5829459753e853",
       "origin": "src/domain/schema.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -6593,8 +6628,8 @@
     },
     {
       "path": "src/domain/visualTypes.ts",
-      "bytes": 14987,
-      "sha256": "72b9f58cca7214252d7cb2a10327c846af9401f86446b17db60f32f0d11ae711",
+      "bytes": 15421,
+      "sha256": "bb4bab35b35035ba20d14e5846b367e7663301288b90922adde01ddb66d4ad71",
       "origin": "src/domain/visualTypes.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -6663,22 +6698,29 @@
     },
     {
       "path": "src/mcp/autopilotBatchTools.ts",
-      "bytes": 9488,
-      "sha256": "e8e69061642b36fb151b3e06af0c435f4943f921d35d4233f24ceae1c9e4f180",
+      "bytes": 11631,
+      "sha256": "1ec68cd380e9ecd984eceb3942db7d2cc002174063e7fc6a43f7acc15cfc1eaf",
       "origin": "src/mcp/autopilotBatchTools.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/mcp/autopilotDesignTools.ts",
-      "bytes": 6823,
-      "sha256": "bc3dda4f5aef1926f5f340710ddea568be507eac7a42215236fc5487c4d28d90",
+      "bytes": 7408,
+      "sha256": "1b023084dd44148ea974254e551675f56d6b50c2267dfd699ceb214094877ad3",
       "origin": "src/mcp/autopilotDesignTools.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
+      "path": "src/mcp/autopilotMotionTrack.test.ts",
+      "bytes": 4839,
+      "sha256": "95fbab065d246e194747523f2791be131b4908457bf5f8ba207c8e58ee99cdb2",
+      "origin": "src/mcp/autopilotMotionTrack.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
       "path": "src/mcp/autopilotTools.ts",
-      "bytes": 18005,
-      "sha256": "a6c76d4c644c1d40bd29b5f6eec75b7cd53d847cdcfd1945ddcf4ba6a6f82fff",
+      "bytes": 18025,
+      "sha256": "6d0a6c9ffc4076987626cde5c40125651f79b7a96cf7e53b8399471d963ff1d1",
       "origin": "src/mcp/autopilotTools.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -6691,8 +6733,8 @@
     },
     {
       "path": "src/mcp/materialIntelligenceTools.ts",
-      "bytes": 19791,
-      "sha256": "53c13b63dab02eec0561686ae431045a70b8f233bd9f0f9db62ea8f9b3552c82",
+      "bytes": 21291,
+      "sha256": "650843fd65154de5a258c94ad0088aff1d3113d63ce75a8806bc606b526192e9",
       "origin": "src/mcp/materialIntelligenceTools.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -6803,8 +6845,8 @@
     },
     {
       "path": "src/mcp/server.ts",
-      "bytes": 38901,
-      "sha256": "a29e108209de9d09d4d585234a463d5055c75025c1a1871bc2ff760e970d489d",
+      "bytes": 46181,
+      "sha256": "c4972ac436e9f9eefd86472e73722ad313d8ba2774cc23538f1d2821167632b9",
       "origin": "src/mcp/server.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -6845,15 +6887,15 @@
     },
     {
       "path": "src/motion/compositionV2.test.ts",
-      "bytes": 4968,
-      "sha256": "c3ca6297f2236921673f236568116f3d75eccceabce7d0920c0170ba781cb24b",
+      "bytes": 6119,
+      "sha256": "0f76003615a65f3c6ab0491d3d6cc525edc2a7fd3a0ab1b49fc04d52edd67d08",
       "origin": "src/motion/compositionV2.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/motion/compositionV2.ts",
-      "bytes": 15927,
-      "sha256": "70ef4b6f9d5c563f1b2f8f7c9cb48ed5635ff51850417cf62a5377e8a632e241",
+      "bytes": 17118,
+      "sha256": "1e70272eea4a08861d5cf3d326ae5b6b02d0fdae35a836c9c0e9d1674a9aeeef",
       "origin": "src/motion/compositionV2.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -6865,10 +6907,38 @@
       "rights": "GPL-3.0-or-later"
     },
     {
+      "path": "src/motion/floatingFrameScenes.ts",
+      "bytes": 3508,
+      "sha256": "e21949f08ebedbb839404d0c75786c4cba57d2d40d3c22cc4aeba3a5c6158137",
+      "origin": "src/motion/floatingFrameScenes.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/motion/floatingVideoFrame.test.ts",
+      "bytes": 2629,
+      "sha256": "fbe89c575688979b3cab590d0061b50fcc7c9876f4fac96409da530de8ae9328",
+      "origin": "src/motion/floatingVideoFrame.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/motion/floatingVideoFrame.ts",
+      "bytes": 10308,
+      "sha256": "8b6371d4fb161b7462e9dbc5c45c6d333845fbcc4a58b218bef0cddbc0c8696e",
+      "origin": "src/motion/floatingVideoFrame.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
       "path": "src/motion/identity.ts",
       "bytes": 315,
       "sha256": "436e875e64f9424e03c83f877d263bc2106fe48a33a0f54d22ba39f4a29b2579",
       "origin": "src/motion/identity.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/motion/motionClipPresets.ts",
+      "bytes": 1808,
+      "sha256": "a3970a1f137586b91cdab69578131ba7be190c610aba54c14f554a5afce3f57d",
+      "origin": "src/motion/motionClipPresets.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -7146,15 +7216,15 @@
     },
     {
       "path": "src/render/engineGraph.test.ts",
-      "bytes": 15422,
-      "sha256": "b4b4e5e427e1327e5fb839b5501cc14baa1baff985d968af32570db3a6e3b902",
+      "bytes": 16043,
+      "sha256": "c75840e07bf829ef9399e7a4360cc5d4e7f1f86b33adeafad472015bf84d5bd9",
       "origin": "src/render/engineGraph.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/render/engineGraph.ts",
-      "bytes": 30435,
-      "sha256": "1f3615c053e569e423a33b4375c5d08eb9df7fd891ffc96d0319ce72dcea2491",
+      "bytes": 31980,
+      "sha256": "cc4e2df7d169dd5aa4295ab34abb216d743f0e8badb9a072fb603b9c8cf07bfe",
       "origin": "src/render/engineGraph.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -7174,15 +7244,15 @@
     },
     {
       "path": "src/render/ffmpeg.ts",
-      "bytes": 24216,
-      "sha256": "51a0ffd119316d437ad1975bc62d36f762b5d2199ccc5b4f8fc767c12aed99b7",
+      "bytes": 24723,
+      "sha256": "b6ce72655c19aa4a62811e6c714c63ab5070a0ce860a25af6c8107c77b467fcd",
       "origin": "src/render/ffmpeg.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/render/ffmpegComposite.ts",
-      "bytes": 31955,
-      "sha256": "e02d7cdab68f8ba718d2dbcf6ab34e83a784c9a62d2c733a8cdcedab7139d9d8",
+      "bytes": 32478,
+      "sha256": "ed640063553a4d9be0aaa237bc40dc9d818451b636f3fa7755001fd83b95332b",
       "origin": "src/render/ffmpegComposite.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -7244,8 +7314,8 @@
     },
     {
       "path": "src/render/gpuCompositor.ts",
-      "bytes": 26660,
-      "sha256": "8943ea7a2901d3e1e5b305796103ffe64d162738133016ffdb99e33c62c28143",
+      "bytes": 27038,
+      "sha256": "4b6d8ed369f062c8fa16011c6d48eeab64adefdcc3c9a0eb5eb1bfa82231d95b",
       "origin": "src/render/gpuCompositor.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -7776,8 +7846,8 @@
     },
     {
       "path": "src/styles.css",
-      "bytes": 44259,
-      "sha256": "ccf170793971e3207e761d021d9baa52b003e171bc5762439e46523a39a70e9e",
+      "bytes": 44288,
+      "sha256": "24023982360621a9490b0772a4c901b63d635f535ee9f23ba50750c2412a3891",
       "origin": "src/styles.css",
       "rights": "GPL-3.0-or-later"
     },
@@ -7810,13 +7880,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/aestheticReviewPanel.css",
-      "bytes": 5209,
-      "sha256": "440ad91eefd4360421bb6056306652725a106dbd7ff70319b6d7c34551e30fad",
-      "origin": "src/ui/aestheticReviewPanel.css",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/AestheticReviewPanel.test.tsx",
       "bytes": 10651,
       "sha256": "9e725d81f5e1f12b7a5b5de4ab5dc23e261fe8e1c3d16097fa1177d38d8ffa9c",
@@ -7828,13 +7891,6 @@
       "bytes": 18581,
       "sha256": "86dfea17bd4dd1e49f9ce766ea9931c26ddd2cb0be0a895df1a6d07558015d9f",
       "origin": "src/ui/AestheticReviewPanel.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/agentConnectModal.css",
-      "bytes": 5544,
-      "sha256": "a8cf426fe1c62740b67e317878dad574d30d124f00f2d5710812021f2db341f0",
-      "origin": "src/ui/agentConnectModal.css",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -7856,6 +7912,454 @@
       "bytes": 6225,
       "sha256": "a63ec59398f26ae97ef4ad5ba33a61677b523a4f9ee9e0b501ef845f87551df7",
       "origin": "src/ui/AgentPanel.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/AlphaProcessedPreviewMedia.test.tsx",
+      "bytes": 3156,
+      "sha256": "97b826a810691e5b88ea05305fe76519ed474c323df845b68bfd4495d3231218",
+      "origin": "src/ui/AlphaProcessedPreviewMedia.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/AlphaProcessedPreviewMedia.tsx",
+      "bytes": 13221,
+      "sha256": "6119205903630f3bb7114b538d169a4135bfa8ae3702503be38d20da7b3b21b1",
+      "origin": "src/ui/AlphaProcessedPreviewMedia.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/AutoEditDialog.tsx",
+      "bytes": 2722,
+      "sha256": "7b250c5b38f5b4ff319f65e5a0f8bb17eb65df045bb7e6407c423dae5cfd5ce1",
+      "origin": "src/ui/AutoEditDialog.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/BatchAutoEditPanel.tsx",
+      "bytes": 3120,
+      "sha256": "55c85c380d3f50bb0a194b072c92688c20ce458a3ffb59b058eb349e45e0741e",
+      "origin": "src/ui/BatchAutoEditPanel.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/BeginnerGuide.tsx",
+      "bytes": 3632,
+      "sha256": "d040dc47b25086f93c2ff551bfabba91beee9474509c7b8d470f89403d8ed2a1",
+      "origin": "src/ui/BeginnerGuide.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/CinematicLanguageExplorer.test.tsx",
+      "bytes": 3031,
+      "sha256": "92dc60236a83261e9a75e14b7a2c3432147e3bfad7e5b04f6d0a5769bc72559f",
+      "origin": "src/ui/CinematicLanguageExplorer.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/CinematicLanguageExplorer.tsx",
+      "bytes": 7997,
+      "sha256": "3f2bdfa18ed179ff482282da5a09cf1e72ada3229198e86204e161dfca5a7626",
+      "origin": "src/ui/CinematicLanguageExplorer.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/ColorWorkspace.tsx",
+      "bytes": 14789,
+      "sha256": "3764401cc57219e51e92a96c78ffd3c5b2410243b796fee7b91076de91e62822",
+      "origin": "src/ui/ColorWorkspace.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/ColorWorkspace.whiteBalance.test.tsx",
+      "bytes": 2646,
+      "sha256": "f0a5d2e2cd617419e3326763a276fd14a9b26f7473df6ae5c54a3183cb5be2a0",
+      "origin": "src/ui/ColorWorkspace.whiteBalance.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/CreativeLibraryBrowser.test.tsx",
+      "bytes": 5290,
+      "sha256": "1656073e07af77496a3129f2c874a6bb30eb0b3dbf9b3084c5a43a1753c7ad1b",
+      "origin": "src/ui/CreativeLibraryBrowser.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/CreativeLibraryBrowser.tsx",
+      "bytes": 6018,
+      "sha256": "466e52156afeac636ef0711be02554b294ea481149fcad8271fd542b912041da",
+      "origin": "src/ui/CreativeLibraryBrowser.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/CreativePreviewTile.retry.test.tsx",
+      "bytes": 6176,
+      "sha256": "f5a55e2b7a02c2aca388a6095f45cf2c526c75728fb87327ecd944ab435fc036",
+      "origin": "src/ui/CreativePreviewTile.retry.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/CreativePreviewTile.tsx",
+      "bytes": 5633,
+      "sha256": "dec9454da6c7e97215c943d3884408fb9b135dac5e7edef0462e64ae3f5e1ffa",
+      "origin": "src/ui/CreativePreviewTile.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/DirectorConsole.test.tsx",
+      "bytes": 5434,
+      "sha256": "94dc69ab775fc272912efb027bd0fe2152c8c5f91e582c91cd6fdfa78cbdfabc",
+      "origin": "src/ui/DirectorConsole.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/DirectorConsole.tsx",
+      "bytes": 12925,
+      "sha256": "4f6f11b0145e465da3552511a271431db64957b97635f2c3cf809cda64d16012",
+      "origin": "src/ui/DirectorConsole.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/EditingProfilePicker.tsx",
+      "bytes": 2268,
+      "sha256": "274adb23514145a533ac5c30ac6a412f3af4f6061180a35d9162a2ef29395600",
+      "origin": "src/ui/EditingProfilePicker.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/EditorShell.tsx",
+      "bytes": 44434,
+      "sha256": "430f5fc40958ad13d96699b8deeee0869c1ec440d177b42739a485bdd9aa7d67",
+      "origin": "open-source/overrides/src/ui/EditorShell.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/FirstProjectStart.tsx",
+      "bytes": 3430,
+      "sha256": "e7f4bf18afeece19358a70ff3893002b467a2604ef0cd11bb967ac7ce0878459",
+      "origin": "src/ui/FirstProjectStart.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/Inspector.tsx",
+      "bytes": 59585,
+      "sha256": "8c30bb6eb92da53ab1634a8d82a31979ffdf2df7c4c4350bcbe9034b2ac79485",
+      "origin": "src/ui/Inspector.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/KeyedPreviewMedia.test.tsx",
+      "bytes": 3791,
+      "sha256": "019b22b0c560a957be9f280ed3aab2239edfa791691a48216fdcd02b078b62c2",
+      "origin": "src/ui/KeyedPreviewMedia.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/KeyedPreviewMedia.tsx",
+      "bytes": 7771,
+      "sha256": "13cf5204d634b1f7ce3b2fe660a3d6ba78adb5f65565482630fee2085bf5e027",
+      "origin": "src/ui/KeyedPreviewMedia.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/LayerExpressionPanel.tsx",
+      "bytes": 6838,
+      "sha256": "b3328f7a2fc5d3696e8335a5047258599f039bfc7aa1c237e911edabd02b2ac7",
+      "origin": "src/ui/LayerExpressionPanel.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/MaskStudio.test.tsx",
+      "bytes": 4748,
+      "sha256": "b73633173711c20f9868d3248ea6d9e621c0f530d72038f6fdc26653044e41f6",
+      "origin": "src/ui/MaskStudio.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/MaskStudio.timeStale.test.tsx",
+      "bytes": 8531,
+      "sha256": "a8e0ad07bcebd7c644994d89b3d0ff0e7bac9590ca7aba801ab96555bb854e6c",
+      "origin": "src/ui/MaskStudio.timeStale.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/MaskStudio.tsx",
+      "bytes": 20179,
+      "sha256": "3220ad34c197a12afa902c40a3c0b51b8882c38a5f8d1d2d016204c64045f302",
+      "origin": "src/ui/MaskStudio.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/MediaBin.test.tsx",
+      "bytes": 2312,
+      "sha256": "f056774277515a9b8e5cd5cc73d7542e29025d828d775271afc34bd9649637ed",
+      "origin": "src/ui/MediaBin.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/MediaBin.tsx",
+      "bytes": 12794,
+      "sha256": "455115a48f4fd20f371ad027a0cd7182a29aa412b793b43f8f212f1d1e167659",
+      "origin": "src/ui/MediaBin.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/MediaImportStatus.test.tsx",
+      "bytes": 1959,
+      "sha256": "ee1d4c144300618f1032526e28e4477bc5e57298aaa350560781dc63f07176c8",
+      "origin": "src/ui/MediaImportStatus.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/MediaImportStatus.tsx",
+      "bytes": 1412,
+      "sha256": "a3ef026deb8b3dee30fed92926725a3874d6da05c520a67013a9e879010c6cc4",
+      "origin": "src/ui/MediaImportStatus.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/MobileConnectModal.test.tsx",
+      "bytes": 15926,
+      "sha256": "2512252de522b933b4eed76c074cb117da913f26d51c7461fc22c143ec3c0be6",
+      "origin": "src/ui/MobileConnectModal.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/MobileConnectModal.tsx",
+      "bytes": 35943,
+      "sha256": "ea6bab7a2c98e4430b753c591e724d0af24349f5df2df7b19c2963d689fbc879",
+      "origin": "src/ui/MobileConnectModal.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/MotionOverlay.test.tsx",
+      "bytes": 7173,
+      "sha256": "51413507855a0fae8943ce2619fcc7cca67839c84b8b7ac6c5f8a983f36bde9d",
+      "origin": "src/ui/MotionOverlay.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/MotionOverlay.tsx",
+      "bytes": 5926,
+      "sha256": "902b24c7c2916d408e0c97ac32a5bd4b8edacb11e69f4422d3dae5c768f5d9ed",
+      "origin": "src/ui/MotionOverlay.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/MotionStudio.floatingFrame.test.tsx",
+      "bytes": 2638,
+      "sha256": "0f80304fa26282440391f657bd00031098fbe58974cbdda4c6d5addb322c86a4",
+      "origin": "src/ui/MotionStudio.floatingFrame.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/MotionStudio.tsx",
+      "bytes": 12675,
+      "sha256": "57fde53d22d1c29d9dd38c4c9b3c4a8e0284f719ac2811e994d9008415719a3f",
+      "origin": "src/ui/MotionStudio.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/MotionStudio.widthMode.test.tsx",
+      "bytes": 2202,
+      "sha256": "886cc35e73fa96972dd6c5129ed73286d51dd0be1b7ba1e29434e34d8d3e5c1d",
+      "origin": "src/ui/MotionStudio.widthMode.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/OcioGpuMedia.tsx",
+      "bytes": 10404,
+      "sha256": "05492be45d158580d8f134b36403ff74943009b0176d6b90500c17de555d8667",
+      "origin": "src/ui/OcioGpuMedia.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/OperationStatus.test.tsx",
+      "bytes": 6426,
+      "sha256": "3dfb86782b3a2e557cb3909c681c19e998e469e6b1585936e80c46c80f4de7c2",
+      "origin": "src/ui/OperationStatus.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/OperationStatus.tsx",
+      "bytes": 1533,
+      "sha256": "fd85a3f700e11e8f115b0f0eeb99c0d0d9ac0a7f1f8511f740280c1807c38cab",
+      "origin": "src/ui/OperationStatus.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/PluginBrowser.test.tsx",
+      "bytes": 7512,
+      "sha256": "bc82593fe29bc639608861b497119ae0db8a40dc7d84c55a99a38d27e9f71b5b",
+      "origin": "src/ui/PluginBrowser.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/PluginBrowser.tsx",
+      "bytes": 15519,
+      "sha256": "05aab4011792911eb2788f3f1f9f6c67abfc96bf42af3ad8b3e7a07cc1ed0389",
+      "origin": "src/ui/PluginBrowser.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/PresetPreviewGallery.controls.test.tsx",
+      "bytes": 2170,
+      "sha256": "3af736b48db2e5cc9ef633f64ca0112e95b7f59741f5780a5b4a697815949ccd",
+      "origin": "src/ui/PresetPreviewGallery.controls.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/PresetPreviewGallery.test.tsx",
+      "bytes": 953,
+      "sha256": "c707de0751053fe40c78694b2580832b79d4519c052eac1cc3ecc77206421a8f",
+      "origin": "src/ui/PresetPreviewGallery.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/PresetPreviewGallery.tsx",
+      "bytes": 8984,
+      "sha256": "4e5ad518d2390be1ee7ce4a5582d54537cadf23fdc3af2bce50d29e8e9f2d21a",
+      "origin": "src/ui/PresetPreviewGallery.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/Preview.aspectRatio.test.tsx",
+      "bytes": 1770,
+      "sha256": "0c52df40bd364b1fd9476bc1d1a3cab25017f4ed3437ad187f1e51307501747f",
+      "origin": "src/ui/Preview.aspectRatio.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/Preview.displayProxy.test.tsx",
+      "bytes": 4763,
+      "sha256": "9fbb649990ec45b1d40635f6a277195786382e2221950e57684d3dc7651c9ba7",
+      "origin": "src/ui/Preview.displayProxy.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/Preview.mediaError.test.tsx",
+      "bytes": 5631,
+      "sha256": "3bb0e426c0f7d214bb20ddf365c3f2d12ff9ec35c685753e4f9323df364e005f",
+      "origin": "src/ui/Preview.mediaError.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/Preview.test.tsx",
+      "bytes": 7941,
+      "sha256": "8354f97970db57b89767961c01af5f4cef74ccc62d0ecb89bca90294bafaeaa1",
+      "origin": "src/ui/Preview.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/Preview.tsx",
+      "bytes": 45724,
+      "sha256": "97adbb6f071b312b53b747393d1307cc81459407bef681c8497a85baefe465b2",
+      "origin": "src/ui/Preview.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/Preview.whiteBalance.test.tsx",
+      "bytes": 2012,
+      "sha256": "de15926c8b61dbe75586d817bf80a75f935d688de275f31a468682257bcadebf",
+      "origin": "src/ui/Preview.whiteBalance.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/ProgressiveEditingControls.test.tsx",
+      "bytes": 2001,
+      "sha256": "990e35358807fdad0ac2a10ca1ae0136e7f83ab17b850f2369f24456273d4efd",
+      "origin": "src/ui/ProgressiveEditingControls.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/Scene25dLightControls.tsx",
+      "bytes": 4919,
+      "sha256": "db0731fe92c22584caa5749582fede739f1eb4c7e3762ba6a599abd25264572d",
+      "origin": "src/ui/Scene25dLightControls.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/ShortFormTemplateBrowser.test.tsx",
+      "bytes": 3119,
+      "sha256": "c2f0a85b213902f88a0a5bb1cfa0ba5c41e97b65c0183452b4a8dc12d59c10c1",
+      "origin": "src/ui/ShortFormTemplateBrowser.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/ShortFormTemplateBrowser.tsx",
+      "bytes": 8902,
+      "sha256": "b3f73d4a82c6fa6979db225be97022fa0553bdde39f7990b5030cfbad1630bd7",
+      "origin": "src/ui/ShortFormTemplateBrowser.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/Timeline.tsx",
+      "bytes": 41861,
+      "sha256": "b7b2dd9ba2f1038990b7c18cfa5e0555dc3d6fffdf8b3e9fc84364ecf1b26061",
+      "origin": "src/ui/Timeline.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/Timeline.visibility.test.tsx",
+      "bytes": 2311,
+      "sha256": "1e1e4deaba5770de75eab7c805895b1dbe4f3fa4097ff8488b323d6b84989778",
+      "origin": "src/ui/Timeline.visibility.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/Toolbar.director.test.tsx",
+      "bytes": 1762,
+      "sha256": "310f2cb4b8148391a819ef8ecededdc9a0e4ee1cc0c112f40458f351d3547a73",
+      "origin": "src/ui/Toolbar.director.test.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/Toolbar.tsx",
+      "bytes": 7948,
+      "sha256": "eb595f98e98b3efe8a9c7d04fbd54a961d4d7cc33768923293677c901769e15e",
+      "origin": "src/ui/Toolbar.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/TrackOptions.tsx",
+      "bytes": 3993,
+      "sha256": "39974386605811b1a98ddccaf3ac037051f00ee9b24e22eab4498b102af5957b",
+      "origin": "src/ui/TrackOptions.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/WorkspaceControls.tsx",
+      "bytes": 2720,
+      "sha256": "9153362f2de5f6d236f1ed70fd1f7dcb24c386657dbe9314db989a254701fd94",
+      "origin": "src/ui/WorkspaceControls.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/WorkspaceDropImport.tsx",
+      "bytes": 3753,
+      "sha256": "e2df13a26c12f3f8c9681abe979ef1eaf19e1c8946c772f7aa2fdad50e9134c2",
+      "origin": "src/ui/WorkspaceDropImport.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/WorkspaceResizeHandle.tsx",
+      "bytes": 1205,
+      "sha256": "708c1fcdfce0a48a4536fa5c57899faa41c92a990524276eafa54a3d0c662540",
+      "origin": "src/ui/WorkspaceResizeHandle.tsx",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/aestheticReviewPanel.css",
+      "bytes": 5209,
+      "sha256": "440ad91eefd4360421bb6056306652725a106dbd7ff70319b6d7c34551e30fad",
+      "origin": "src/ui/aestheticReviewPanel.css",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/ui/agentConnectModal.css",
+      "bytes": 5544,
+      "sha256": "a8cf426fe1c62740b67e317878dad574d30d124f00f2d5710812021f2db341f0",
+      "origin": "src/ui/agentConnectModal.css",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -7887,31 +8391,10 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/AlphaProcessedPreviewMedia.test.tsx",
-      "bytes": 3156,
-      "sha256": "97b826a810691e5b88ea05305fe76519ed474c323df845b68bfd4495d3231218",
-      "origin": "src/ui/AlphaProcessedPreviewMedia.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/AlphaProcessedPreviewMedia.tsx",
-      "bytes": 13221,
-      "sha256": "6119205903630f3bb7114b538d169a4135bfa8ae3702503be38d20da7b3b21b1",
-      "origin": "src/ui/AlphaProcessedPreviewMedia.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/autoEditDialog.css",
       "bytes": 2309,
       "sha256": "e9e42eb71b7244bfef897bc9835cdf3810c4c478349b9fb68235ee55ee2ac369",
       "origin": "src/ui/autoEditDialog.css",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/AutoEditDialog.tsx",
-      "bytes": 2722,
-      "sha256": "7b250c5b38f5b4ff319f65e5a0f8bb17eb65df045bb7e6407c423dae5cfd5ce1",
-      "origin": "src/ui/AutoEditDialog.tsx",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -7936,24 +8419,10 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/BatchAutoEditPanel.tsx",
-      "bytes": 3120,
-      "sha256": "55c85c380d3f50bb0a194b072c92688c20ce458a3ffb59b058eb349e45e0741e",
-      "origin": "src/ui/BatchAutoEditPanel.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/beginnerGuide.css",
       "bytes": 3229,
       "sha256": "f91dd5df9eefc14b3884be892b7edd2e67af172986b6b0f5e0e0f58226ce648f",
       "origin": "src/ui/beginnerGuide.css",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/BeginnerGuide.tsx",
-      "bytes": 3632,
-      "sha256": "d040dc47b25086f93c2ff551bfabba91beee9474509c7b8d470f89403d8ed2a1",
-      "origin": "src/ui/BeginnerGuide.tsx",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -7985,20 +8454,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/CinematicLanguageExplorer.test.tsx",
-      "bytes": 3031,
-      "sha256": "92dc60236a83261e9a75e14b7a2c3432147e3bfad7e5b04f6d0a5769bc72559f",
-      "origin": "src/ui/CinematicLanguageExplorer.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/CinematicLanguageExplorer.tsx",
-      "bytes": 7997,
-      "sha256": "3f2bdfa18ed179ff482282da5a09cf1e72ada3229198e86204e161dfca5a7626",
-      "origin": "src/ui/CinematicLanguageExplorer.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/colorWorkspace.css",
       "bytes": 4329,
       "sha256": "862f4e1e1b8d569bb7dd05a252c7224d7f83bee519a65bbae83ed0756278719d",
@@ -8006,38 +8461,10 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/ColorWorkspace.tsx",
-      "bytes": 14789,
-      "sha256": "3764401cc57219e51e92a96c78ffd3c5b2410243b796fee7b91076de91e62822",
-      "origin": "src/ui/ColorWorkspace.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/ColorWorkspace.whiteBalance.test.tsx",
-      "bytes": 2646,
-      "sha256": "f0a5d2e2cd617419e3326763a276fd14a9b26f7473df6ae5c54a3183cb5be2a0",
-      "origin": "src/ui/ColorWorkspace.whiteBalance.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/creativeLibraryBrowser.css",
       "bytes": 3347,
       "sha256": "efd4f7a7d07c171f94bf8412754c4209e360350b265d5363df69f2a84ea21d66",
       "origin": "src/ui/creativeLibraryBrowser.css",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/CreativeLibraryBrowser.test.tsx",
-      "bytes": 5290,
-      "sha256": "1656073e07af77496a3129f2c874a6bb30eb0b3dbf9b3084c5a43a1753c7ad1b",
-      "origin": "src/ui/CreativeLibraryBrowser.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/CreativeLibraryBrowser.tsx",
-      "bytes": 6018,
-      "sha256": "466e52156afeac636ef0711be02554b294ea481149fcad8271fd542b912041da",
-      "origin": "src/ui/CreativeLibraryBrowser.tsx",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -8069,20 +8496,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/CreativePreviewTile.retry.test.tsx",
-      "bytes": 6176,
-      "sha256": "f5a55e2b7a02c2aca388a6095f45cf2c526c75728fb87327ecd944ab435fc036",
-      "origin": "src/ui/CreativePreviewTile.retry.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/CreativePreviewTile.tsx",
-      "bytes": 5633,
-      "sha256": "dec9454da6c7e97215c943d3884408fb9b135dac5e7edef0462e64ae3f5e1ffa",
-      "origin": "src/ui/CreativePreviewTile.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/creatorToolSurface.css",
       "bytes": 6639,
       "sha256": "45b4b936ff1178c792f6ad341ccdb52fd63c97dcbfb6e5a100c3746b7173b5d2",
@@ -8094,20 +8507,6 @@
       "bytes": 9735,
       "sha256": "c466893760e2d53742925f8660694a3bb7cbc387ae4eac72669bf608be497b71",
       "origin": "src/ui/directorConsole.css",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/DirectorConsole.test.tsx",
-      "bytes": 5434,
-      "sha256": "94dc69ab775fc272912efb027bd0fe2152c8c5f91e582c91cd6fdfa78cbdfabc",
-      "origin": "src/ui/DirectorConsole.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/DirectorConsole.tsx",
-      "bytes": 12925,
-      "sha256": "4f6f11b0145e465da3552511a271431db64957b97635f2c3cf809cda64d16012",
-      "origin": "src/ui/DirectorConsole.tsx",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -8125,20 +8524,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/EditingProfilePicker.tsx",
-      "bytes": 2268,
-      "sha256": "274adb23514145a533ac5c30ac6a412f3af4f6061180a35d9162a2ef29395600",
-      "origin": "src/ui/EditingProfilePicker.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/EditorShell.tsx",
-      "bytes": 42829,
-      "sha256": "8a6e27476c633c08eaa9952d255a588abd5c633798d7a5bb1674329d297200ce",
-      "origin": "open-source/overrides/src/ui/EditorShell.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/editorShellLazy.tsx",
       "bytes": 1961,
       "sha256": "e670b39ae28a435791c5971dd2a02957d99d58c7f54d603084bc010bfcab75d2",
@@ -8147,8 +8532,8 @@
     },
     {
       "path": "src/ui/editorShellTypes.ts",
-      "bytes": 4219,
-      "sha256": "a33503da68609cc5dffb40109564e1cbef31ba9dbc4abdf431f15f6ebfc1c852",
+      "bytes": 4275,
+      "sha256": "aec5e9555cc79cf99165ee1abeb5fc523592a54390075188f671e78a02e0d106",
       "origin": "src/ui/editorShellTypes.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -8157,20 +8542,6 @@
       "bytes": 6067,
       "sha256": "2fc28716ec45196d69ac2884cef81cedadfaf4194f657664c184d09b7844f988",
       "origin": "src/ui/firstProjectStart.css",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/FirstProjectStart.tsx",
-      "bytes": 3430,
-      "sha256": "e7f4bf18afeece19358a70ff3893002b467a2604ef0cd11bb967ac7ce0878459",
-      "origin": "src/ui/FirstProjectStart.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/Inspector.tsx",
-      "bytes": 59015,
-      "sha256": "148a9ed10bbbf27a45ba1d072dc2f094eef1ec651d0fb1f58854583eb5bb6a27",
-      "origin": "src/ui/Inspector.tsx",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -8188,27 +8559,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/KeyedPreviewMedia.test.tsx",
-      "bytes": 3791,
-      "sha256": "019b22b0c560a957be9f280ed3aab2239edfa791691a48216fdcd02b078b62c2",
-      "origin": "src/ui/KeyedPreviewMedia.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/KeyedPreviewMedia.tsx",
-      "bytes": 7771,
-      "sha256": "13cf5204d634b1f7ce3b2fe660a3d6ba78adb5f65565482630fee2085bf5e027",
-      "origin": "src/ui/KeyedPreviewMedia.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/LayerExpressionPanel.tsx",
-      "bytes": 6838,
-      "sha256": "b3328f7a2fc5d3696e8335a5047258599f039bfc7aa1c237e911edabd02b2ac7",
-      "origin": "src/ui/LayerExpressionPanel.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/layoutHardening.css",
       "bytes": 2619,
       "sha256": "c42b6f604c77e1a0b01e3af176fd8fe139fde08d5dd953a151d2837d47367072",
@@ -8223,44 +8573,9 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/MaskStudio.test.tsx",
-      "bytes": 4748,
-      "sha256": "b73633173711c20f9868d3248ea6d9e621c0f530d72038f6fdc26653044e41f6",
-      "origin": "src/ui/MaskStudio.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/MaskStudio.timeStale.test.tsx",
-      "bytes": 8531,
-      "sha256": "a8e0ad07bcebd7c644994d89b3d0ff0e7bac9590ca7aba801ab96555bb854e6c",
-      "origin": "src/ui/MaskStudio.timeStale.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/MaskStudio.tsx",
-      "bytes": 20179,
-      "sha256": "3220ad34c197a12afa902c40a3c0b51b8882c38a5f8d1d2d016204c64045f302",
-      "origin": "src/ui/MaskStudio.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/MediaBin.test.tsx",
-      "bytes": 1949,
-      "sha256": "5b437e969753c5b331167e4956616ef4520971e312d8e5ad9603f9394521cba7",
-      "origin": "src/ui/MediaBin.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/MediaBin.tsx",
-      "bytes": 12220,
-      "sha256": "ddef2a206011fb378a41c1028ea017b08a84597f08b24384819556ff3e1e48bd",
-      "origin": "src/ui/MediaBin.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/mediaBinStates.css",
-      "bytes": 2085,
-      "sha256": "4d083c54dfb94440f6f3b18dbc7366020a76d1afff8c8dd89f6ccb0da105d4a7",
+      "bytes": 2190,
+      "sha256": "74f19049f005363863eae978f4b6276232eafd2c4bb742f527dc8de76353e09e",
       "origin": "src/ui/mediaBinStates.css",
       "rights": "GPL-3.0-or-later"
     },
@@ -8286,52 +8601,10 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/MediaImportStatus.test.tsx",
-      "bytes": 1959,
-      "sha256": "ee1d4c144300618f1032526e28e4477bc5e57298aaa350560781dc63f07176c8",
-      "origin": "src/ui/MediaImportStatus.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/MediaImportStatus.tsx",
-      "bytes": 1412,
-      "sha256": "a3ef026deb8b3dee30fed92926725a3874d6da05c520a67013a9e879010c6cc4",
-      "origin": "src/ui/MediaImportStatus.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/mobileConnect.css",
       "bytes": 12687,
       "sha256": "730e3896b3f3b7542b51d19cd931fac8640797e48189cae447bcf51c8b7a3637",
       "origin": "src/ui/mobileConnect.css",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/MobileConnectModal.test.tsx",
-      "bytes": 15926,
-      "sha256": "2512252de522b933b4eed76c074cb117da913f26d51c7461fc22c143ec3c0be6",
-      "origin": "src/ui/MobileConnectModal.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/MobileConnectModal.tsx",
-      "bytes": 35943,
-      "sha256": "ea6bab7a2c98e4430b753c591e724d0af24349f5df2df7b19c2963d689fbc879",
-      "origin": "src/ui/MobileConnectModal.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/MotionOverlay.test.tsx",
-      "bytes": 3381,
-      "sha256": "5a6922603b5b1f62f1f6b5fe0f0be235ba67348a258c5a04a866f965c869ad9e",
-      "origin": "src/ui/MotionOverlay.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/MotionOverlay.tsx",
-      "bytes": 5788,
-      "sha256": "99e267af4fd04b6c42a2aff6ae7066fcfb04d7a1d5d255999b66e3cc765ffd9c",
-      "origin": "src/ui/MotionOverlay.tsx",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -8342,45 +8615,10 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/MotionStudio.tsx",
-      "bytes": 7163,
-      "sha256": "05b43ab85d0803b24be88d51bd57ff3c6b3f03cf355a4c4444df5fece54bab6a",
-      "origin": "src/ui/MotionStudio.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/MotionStudio.widthMode.test.tsx",
-      "bytes": 2202,
-      "sha256": "886cc35e73fa96972dd6c5129ed73286d51dd0be1b7ba1e29434e34d8d3e5c1d",
-      "origin": "src/ui/MotionStudio.widthMode.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/OcioGpuMedia.tsx",
-      "bytes": 10404,
-      "sha256": "05492be45d158580d8f134b36403ff74943009b0176d6b90500c17de555d8667",
-      "origin": "src/ui/OcioGpuMedia.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/operationStatus.css",
       "bytes": 2552,
       "sha256": "d9ede4ffc7160c8ef8c10eb7d1db07ffc262be32766224194ae733654ff6b46d",
       "origin": "src/ui/operationStatus.css",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/OperationStatus.test.tsx",
-      "bytes": 6426,
-      "sha256": "3dfb86782b3a2e557cb3909c681c19e998e469e6b1585936e80c46c80f4de7c2",
-      "origin": "src/ui/OperationStatus.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/OperationStatus.tsx",
-      "bytes": 1533,
-      "sha256": "fd85a3f700e11e8f115b0f0eeb99c0d0d9ac0a7f1f8511f740280c1807c38cab",
-      "origin": "src/ui/OperationStatus.tsx",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -8426,27 +8664,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/PluginBrowser.test.tsx",
-      "bytes": 7512,
-      "sha256": "bc82593fe29bc639608861b497119ae0db8a40dc7d84c55a99a38d27e9f71b5b",
-      "origin": "src/ui/PluginBrowser.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/PluginBrowser.tsx",
-      "bytes": 15519,
-      "sha256": "05aab4011792911eb2788f3f1f9f6c67abfc96bf42af3ad8b3e7a07cc1ed0389",
-      "origin": "src/ui/PluginBrowser.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/PresetPreviewGallery.controls.test.tsx",
-      "bytes": 2170,
-      "sha256": "3af736b48db2e5cc9ef633f64ca0112e95b7f59741f5780a5b4a697815949ccd",
-      "origin": "src/ui/PresetPreviewGallery.controls.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/presetPreviewGallery.css",
       "bytes": 6421,
       "sha256": "f74939450c7f5d3a9fb6a77c1bbb030fb201a4a676a638c7fee76bb051798cb2",
@@ -8454,66 +8671,17 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/PresetPreviewGallery.test.tsx",
-      "bytes": 953,
-      "sha256": "c707de0751053fe40c78694b2580832b79d4519c052eac1cc3ecc77206421a8f",
-      "origin": "src/ui/PresetPreviewGallery.test.tsx",
+      "path": "src/ui/previewRepairQueue.test.ts",
+      "bytes": 2137,
+      "sha256": "e3d1e59075c3627bd67b1765ceeca13e43b3be115ce5dff0eea0b153e0c492e5",
+      "origin": "src/ui/previewRepairQueue.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/PresetPreviewGallery.tsx",
-      "bytes": 8929,
-      "sha256": "5abf291265171d72497a4d99bf86f2653c5253bc1e85103083370b711a7cc3aa",
-      "origin": "src/ui/PresetPreviewGallery.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/Preview.aspectRatio.test.tsx",
-      "bytes": 1770,
-      "sha256": "0c52df40bd364b1fd9476bc1d1a3cab25017f4ed3437ad187f1e51307501747f",
-      "origin": "src/ui/Preview.aspectRatio.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/Preview.displayProxy.test.tsx",
-      "bytes": 4763,
-      "sha256": "9fbb649990ec45b1d40635f6a277195786382e2221950e57684d3dc7651c9ba7",
-      "origin": "src/ui/Preview.displayProxy.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/Preview.mediaError.test.tsx",
-      "bytes": 5494,
-      "sha256": "fae2b26f9d24e73cf8e7fce2542ca4caea9e317ea484b2f42bdeb1fec27fc69c",
-      "origin": "src/ui/Preview.mediaError.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/Preview.test.tsx",
-      "bytes": 7941,
-      "sha256": "8354f97970db57b89767961c01af5f4cef74ccc62d0ecb89bca90294bafaeaa1",
-      "origin": "src/ui/Preview.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/Preview.tsx",
-      "bytes": 41399,
-      "sha256": "8bc171baad0a118c7664b6f4c70272965202c49d6362cbe015fe7f33ffa0873e",
-      "origin": "src/ui/Preview.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/Preview.whiteBalance.test.tsx",
-      "bytes": 2012,
-      "sha256": "de15926c8b61dbe75586d817bf80a75f935d688de275f31a468682257bcadebf",
-      "origin": "src/ui/Preview.whiteBalance.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/ProgressiveEditingControls.test.tsx",
-      "bytes": 2001,
-      "sha256": "990e35358807fdad0ac2a10ca1ae0136e7f83ab17b850f2369f24456273d4efd",
-      "origin": "src/ui/ProgressiveEditingControls.test.tsx",
+      "path": "src/ui/previewRepairQueue.ts",
+      "bytes": 669,
+      "sha256": "59184a08acec4c130131c889c7122d735533db28411277e7dfa4910d684998eb",
+      "origin": "src/ui/previewRepairQueue.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -8538,31 +8706,10 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/Scene25dLightControls.tsx",
-      "bytes": 4919,
-      "sha256": "db0731fe92c22584caa5749582fede739f1eb4c7e3762ba6a599abd25264572d",
-      "origin": "src/ui/Scene25dLightControls.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/shortFormTemplateBrowser.css",
       "bytes": 9919,
       "sha256": "70dfb2ec7d023efa3dee26f2222d99435b26771b8f96e9b02d60525630195f9e",
       "origin": "src/ui/shortFormTemplateBrowser.css",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/ShortFormTemplateBrowser.test.tsx",
-      "bytes": 3119,
-      "sha256": "c2f0a85b213902f88a0a5bb1cfa0ba5c41e97b65c0183452b4a8dc12d59c10c1",
-      "origin": "src/ui/ShortFormTemplateBrowser.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/ShortFormTemplateBrowser.tsx",
-      "bytes": 8902,
-      "sha256": "b3f73d4a82c6fa6979db225be97022fa0553bdde39f7990b5030cfbad1630bd7",
-      "origin": "src/ui/ShortFormTemplateBrowser.tsx",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -8601,44 +8748,44 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/Timeline.tsx",
-      "bytes": 36826,
-      "sha256": "e445094c2912a5e57fbd5737198ca15f9816b80e91aa012f715179f4c91d95c2",
-      "origin": "src/ui/Timeline.tsx",
+      "path": "src/ui/timelineAssetDrop.test.ts",
+      "bytes": 1834,
+      "sha256": "752ee60a427e03e5bfd1194f1f4693658309ad7be196d6c396a41b5e253b3bcc",
+      "origin": "src/ui/timelineAssetDrop.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/Timeline.visibility.test.tsx",
-      "bytes": 2311,
-      "sha256": "1e1e4deaba5770de75eab7c805895b1dbe4f3fa4097ff8488b323d6b84989778",
-      "origin": "src/ui/Timeline.visibility.test.tsx",
+      "path": "src/ui/timelineAssetDrop.ts",
+      "bytes": 1912,
+      "sha256": "5b5a2deaf82152f28760bd85894c4a7181ea0ef5dc362f1a6aa851f2b6e21518",
+      "origin": "src/ui/timelineAssetDrop.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/ui/timelineContract.ts",
-      "bytes": 2588,
-      "sha256": "746c60fe622e098a11230748ff7149a86d07f975919f9eebbdfc7fd5a1c803ba",
+      "bytes": 2702,
+      "sha256": "feb62d52c6a819ab0b646404673d12884f7e1b3ef9605771dd74978a2a09b8d6",
       "origin": "src/ui/timelineContract.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/ui/timelineDirectManipulation.css",
-      "bytes": 14072,
-      "sha256": "ce4a01fc6605105b708e429bab9adcfaaa0e4245071d50241cb645c190696479",
+      "bytes": 15357,
+      "sha256": "a9a1cc6ecb2d32f00a9243d2cbaf3291eee2e78ce67403e1649f6747c7b49fc6",
       "origin": "src/ui/timelineDirectManipulation.css",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/ui/timelineInteraction.test.ts",
-      "bytes": 7146,
-      "sha256": "b7e422a8852155c49b5eab16baed85581af2ec4371ad100f23a6f8e443962385",
+      "bytes": 7581,
+      "sha256": "8651b2ad0885a6cbf61159e5d873aa770f72687bb8eb2a0ca932503c79a5a3b0",
       "origin": "src/ui/timelineInteraction.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/ui/timelineInteraction.ts",
-      "bytes": 6666,
-      "sha256": "164f8a3368c631b47799953837c42bada3df06ec9908a085ab1e49c8f336c12b",
+      "bytes": 6984,
+      "sha256": "7cfae973548b9fe7a406ca5085e0d3af7027c7e0543a31d412b935f0849d370c",
       "origin": "src/ui/timelineInteraction.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -8671,20 +8818,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/Toolbar.director.test.tsx",
-      "bytes": 1762,
-      "sha256": "310f2cb4b8148391a819ef8ecededdc9a0e4ee1cc0c112f40458f351d3547a73",
-      "origin": "src/ui/Toolbar.director.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/Toolbar.tsx",
-      "bytes": 7948,
-      "sha256": "eb595f98e98b3efe8a9c7d04fbd54a961d4d7cc33768923293677c901769e15e",
-      "origin": "src/ui/Toolbar.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/trackMenuKeyboard.test.ts",
       "bytes": 1038,
       "sha256": "77d92ec58d446362d5c0bb7843710ac1a001ef259ccbbb4a748d9a1f978c2779",
@@ -8713,13 +8846,6 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/TrackOptions.tsx",
-      "bytes": 3993,
-      "sha256": "39974386605811b1a98ddccaf3ac037051f00ee9b24e22eab4498b102af5957b",
-      "origin": "src/ui/TrackOptions.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/useEditorTheme.ts",
       "bytes": 704,
       "sha256": "4eb091b1fe6e016191fec4cb5a20e1eaefec0b38d619e54fd11d8a7dbdb217d1",
@@ -8741,24 +8867,10 @@
       "rights": "GPL-3.0-or-later"
     },
     {
-      "path": "src/ui/WorkspaceControls.tsx",
-      "bytes": 2720,
-      "sha256": "9153362f2de5f6d236f1ed70fd1f7dcb24c386657dbe9314db989a254701fd94",
-      "origin": "src/ui/WorkspaceControls.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
       "path": "src/ui/workspaceDropImport.css",
       "bytes": 910,
       "sha256": "f8dbe4bbae89d81ea2801b6a6a38cf9f9a670e765043b47160fc22c77cef1324",
       "origin": "src/ui/workspaceDropImport.css",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/WorkspaceDropImport.tsx",
-      "bytes": 3753,
-      "sha256": "e2df13a26c12f3f8c9681abe979ef1eaf19e1c8946c772f7aa2fdad50e9134c2",
-      "origin": "src/ui/WorkspaceDropImport.tsx",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -8787,20 +8899,6 @@
       "bytes": 8093,
       "sha256": "fe441099caa10006c958f2607884291cd4744b183cef8c2c7fdf9b9f4b2e8396",
       "origin": "src/ui/workspacePopoverLayout.test.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "src/ui/WorkspaceResizeHandle.tsx",
-      "bytes": 1205,
-      "sha256": "708c1fcdfce0a48a4536fa5c57899faa41c92a990524276eafa54a3d0c662540",
-      "origin": "src/ui/WorkspaceResizeHandle.tsx",
-      "rights": "GPL-3.0-or-later"
-    },
-    {
-      "path": "TRADEMARKS.md",
-      "bytes": 843,
-      "sha256": "8c9c9b332ea1853edeb43f7cd826877a390cec5b386b90988e5a8d7f0aaa9ea9",
-      "origin": "open-source/TRADEMARKS.md",
       "rights": "GPL-3.0-or-later"
     },
     {

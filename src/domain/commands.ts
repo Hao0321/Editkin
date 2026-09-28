@@ -114,6 +114,11 @@ function commandInternal(project: EditProject, command: EditorCommand, context?:
       clip.transform3d = { ...(clip.transform3d ?? structuredClone(DEFAULT_TRANSFORM_3D)), ...structuredClone(command.patch) };
       break;
     }
+    case "set_clip_floating_frame": {
+      const clip = findClip(project, command.clipId);
+      clip.floatingFrame = command.frame ? structuredClone(command.frame) : undefined;
+      break;
+    }
     case "configure_particle_simulation": {
       if (!command.enabled) {
         project.particleSimulation = undefined;

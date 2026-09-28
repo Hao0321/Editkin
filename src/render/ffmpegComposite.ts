@@ -50,6 +50,7 @@ import { hasLinearWhiteBalance } from "../color/linearWhiteBalance";
 import { whiteBalanceAssetWithMetadata } from "./sourceLinearWhiteBalance";
 import { assertStaticSourceWhiteBalance } from "./linearWhiteBalanceSupport";
 import { compositeFrameClock } from "./compositeFrameClock";
+import { floatingFrameBackdropLavfi, floatingFrameFfmpegFilters } from "../motion/floatingVideoFrame";
 import { pixelMatteSamplingFilters } from "./pixelMatteSampling";
 
 export function encoderArgs(encoder: VideoEncoder): string[] {
@@ -160,6 +161,7 @@ function compositorVideoFilters(input: CompositeInput, outputLabel: string, plan
     ...(eqNeeded ? [`eq=brightness='${brightness}':contrast='${contrast}':saturation='${saturation}':eval=frame`] : []),
     ...(hueNeeded ? [`hue=h='${hue}'`] : []),
     ...effects,
+    ...(clip.floatingFrame ? floatingFrameFfmpegFilters(clip.floatingFrame, plan.width, plan.height, plan.fps) : []),
     ...alphaAwareGeometry([
       ...(scaleNeeded ? [`scale='iw*(${scale})':'ih*(${scale})':eval=frame`] : []),
       ...(rotationNeeded ? [rotateWithUnclippedBounds(rotation)] : []),
@@ -331,9 +333,13 @@ export async function renderComposite(
 ): Promise<void> {
   for (const segment of videoSegments(plan)) assertStaticSourceWhiteBalance(segment.clip, project.assets.find(asset => asset.id === segment.clip.assetId));
   const pixels = compositePixelContract(preserveHighBitDepthAlpha);
+  const floatingBackdrop = !preserveHighBitDepthAlpha && videoSegments(plan).some(segment => Boolean(segment.clip.floatingFrame));
+  const baseInput = floatingBackdrop
+    ? floatingFrameBackdropLavfi(plan.width, plan.height, compositeFrameClock(plan.fps).rate, finite(plan.duration))
+    : `color=c=${preserveHighBitDepthAlpha ? "black@0" : "black"}:s=${plan.width}x${plan.height}:r=${compositeFrameClock(plan.fps).rate}${preserveHighBitDepthAlpha ? `,format=${pixels.rgba}` : ""}`;
   const args = [
     "-y", "-hide_banner", "-loglevel", "error",
-    "-f", "lavfi", "-t", finite(plan.duration), "-i", `color=c=${preserveHighBitDepthAlpha ? "black@0" : "black"}:s=${plan.width}x${plan.height}:r=${compositeFrameClock(plan.fps).rate}${preserveHighBitDepthAlpha ? `,format=${pixels.rgba}` : ""}`,
+    "-f", "lavfi", "-t", finite(plan.duration), "-i", baseInput,
     "-f", "lavfi", "-t", finite(plan.duration), "-i", "anullsrc=r=48000:cl=stereo",
   ];
   const inputs: CompositeInput[] = [];

@@ -86,6 +86,20 @@ describe("native engine render graph", () => {
     expect(buildEngineRenderGraph(project).timebase).toEqual({ numerator: 1_001, denominator: 30_000 });
   });
 
+  it("preserves high-frame-rate NTSC and fractional project timebases", () => {
+    const project = createDemoProject();
+    project.fps = 120_000 / 1_001;
+    expect(buildEngineRenderGraph(project).timebase).toEqual({ numerator: 1_001, denominator: 120_000 });
+    project.fps = 25.5;
+    expect(buildEngineRenderGraph(project).timebase).toEqual({ numerator: 2, denominator: 51 });
+  });
+
+  it("rejects a non-finite project frame rate before creating a native graph", () => {
+    const project = createDemoProject();
+    project.fps = Number.NaN;
+    expect(() => buildEngineRenderGraph(project)).toThrow(/FPS/);
+  });
+
   it("fails closed instead of lowering motion-composition/v2 to the v1 native node", () => {
     const project = createDemoProject();
     const preset = findMotionGraphicPreset("v2-word-cascade");

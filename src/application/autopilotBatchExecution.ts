@@ -78,7 +78,7 @@ export function summarizeAutopilotBatch(state: AutopilotBatchState) {
 
 /** Uses the single-edit gates through the runtime. Journals never infer an uncertain apply succeeded. */
 export async function executeAutopilotBatch(manifest: AutopilotBatchManifest, statePath: string, runtime: AutopilotBatchRuntime,
-  options: { itemId?: string; through?: "apply" | "render" } = {}) {
+  options: { itemId?: string; through?: "apply" | "render"; shouldStop?: () => boolean } = {}) {
   if (options.itemId && !manifest.items.some(item => item.id === options.itemId)) throw new Error("未知批次項目");
   await runtime.validatePaths();
   const unlock = await acquireProjectLock(statePath);
@@ -106,7 +106,9 @@ export async function executeAutopilotBatch(manifest: AutopilotBatchManifest, st
     }
     const save = async () => { state.updatedAt = new Date().toISOString(); await atomicJson(statePath, state); };
     await save();
+    let stopped = false;
     for (const [index, item] of manifest.items.entries()) {
+      if (options.shouldStop?.()) { stopped = true; break; }
       if (options.itemId && options.itemId !== item.id) continue;
       const progress = state.items[index];
       let releaseItem: (() => Promise<void>) | undefined;
@@ -158,7 +160,7 @@ export async function executeAutopilotBatch(manifest: AutopilotBatchManifest, st
         await save(); // An independent item is still allowed to run.
       } finally { await releaseItem?.(); }
     }
-    return { ...summarizeAutopilotBatch(state), statePath };
+    return { ...summarizeAutopilotBatch(state), statePath, stopped };
   } finally { await unlock(); }
 }
 async function assertAppliedProject(item: AutopilotBatchItem, progress: AutopilotBatchItemState) {

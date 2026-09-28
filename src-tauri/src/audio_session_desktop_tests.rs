@@ -97,6 +97,114 @@ fn make_stage(root: &Path, source: &Path, generation: u64, start: u64, project: 
         "audioFingerprintSha256":"b".repeat(64)})
 }
 #[test]
+fn retired_stage_cleanup_requires_native_retirement_and_exact_owned_bytes() {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+    let root = std::env::temp_dir().join(format!("editkin-audio-stage-retire-{}-{nonce}", std::process::id()));
+    fs::create_dir(&root).unwrap();
+    let create = |generation: u64| {
+        let folder = root.join(format!("g{generation}"));
+        fs::create_dir(&folder).unwrap();
+        let path = folder.join("project-audio.json");
+        fs::write(&path, format!("{{\"generation\":{generation}}}")).unwrap();
+        Stage {generation, path: path.clone(), root: folder, sha: hash_file(&path, 1024).unwrap().0, public: Value::Null}
+    };
+    let mut stages = (1..=5).map(create).collect::<Vec<_>>();
+    fs::write(&stages[2].path, b"changed").unwrap();
+    fs::write(stages[4].root.join("unowned.txt"), b"keep").unwrap();
+    assert_eq!(retire_inactive_stages(&mut stages, &[1, 2, 4].into(), 4), 0);
+    assert_eq!(retire_inactive_stages(&mut stages, &[2, 4].into(), 4), 1);
+    assert_eq!(stages.iter().map(|stage| stage.generation).collect::<Vec<_>>(), vec![2, 3, 4, 5]);
+    assert!(!root.join("g1").exists());
+    assert!(stages.iter().all(|stage| stage.path.exists()));
+    // Forty serialized seeks with a decoder retirement between each one do
+    // not consume the 32-stage safety bound or delete the latest plan.
+    let mut successive = Vec::new();
+    for generation in 6..=45 {
+        successive.push(create(generation));
+        retire_inactive_stages(&mut successive, &[generation].into(), generation);
+        assert_eq!(successive.len(), 1);
+        assert!(successive[0].path.exists());
+    }
+    successive.pop().unwrap().remove().unwrap();
+    for stage in stages {
+        fs::remove_file(&stage.path).unwrap();
+        if stage.generation == 5 { fs::remove_file(stage.root.join("unowned.txt")).unwrap(); }
+        fs::remove_dir(&stage.root).unwrap();
+    }
+    fs::remove_dir(root).unwrap();
+}
+fn exercise_actual_audio_owner_36_seeks(play_each_generation: bool) {
+    let input: Value = serde_json::from_slice(
+        &fs::read(std::env::var("EDITKIN_DESKTOP_TRANSPORT_RUNTIME").unwrap()).unwrap(),
+    ).unwrap();
+    let plans = PathBuf::from(input["plans"].as_str().unwrap());
+    let source = PathBuf::from(input["fixture"].as_str().unwrap());
+    let desktop = DesktopAudio::default();
+    let opened = wait(desktop.open(Runtime {
+        core: PathBuf::from(input["core"].as_str().unwrap()),
+        decoder: PathBuf::from(input["decoder"].as_str().unwrap()),
+        plans: plans.clone(),
+    }, Box::new(|_| Ok(())), || Ok(())).unwrap()).unwrap();
+    let owner = opened["ownerId"].as_u64().unwrap();
+    let project = json!({"id":"seek-stage-endurance","revision":1,"updatedAt":"2026-09-23T00:00:00.000Z"});
+    let mut maximum_retained = 0;
+    for generation in 1..=36 {
+        let root = plans.clone();
+        let fixture = source.clone();
+        let identity = project.clone();
+        let start = (generation - 1) * 4_800;
+        let replaced = wait(desktop.replace(owner, project.clone(), move |next| {
+            Ok(make_stage(&root, &fixture, next, start, &identity))
+        }).unwrap()).unwrap();
+        assert_eq!(replaced["generation"], generation);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let state = desktop.state.lock().unwrap();
+            let broker = state.registry.snapshot(owner).unwrap();
+            let playback = &broker["state"]["playback"];
+            assert_eq!(broker["state"]["failed"], false, "{broker}");
+            if playback["streamGeneration"] == generation && playback["event"] == "prepared" {
+                maximum_retained = maximum_retained.max(state.current.as_ref().unwrap().stages.len());
+                break;
+            }
+            drop(state);
+            assert!(Instant::now() < deadline, "generation {generation} did not prepare");
+            thread::sleep(Duration::from_millis(5));
+        }
+        if play_each_generation {
+            wait(desktop.control(owner, generation, true).unwrap()).unwrap();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                let broker = desktop.state.lock().unwrap().registry.snapshot(owner).unwrap();
+                let playback = &broker["state"]["playback"];
+                assert_eq!(broker["state"]["failed"], false, "{broker}");
+                if playback["streamGeneration"] == generation && playback["event"] == "progress"
+                    && playback["presentedFrame"].as_u64().unwrap_or(0) > 0 { break; }
+                assert!(Instant::now() < deadline, "generation {generation} did not play");
+                thread::sleep(Duration::from_millis(5));
+            }
+        }
+    }
+    assert!(maximum_retained < 32, "retained {maximum_retained} stages");
+    let closed = wait(desktop.close(owner).unwrap()).unwrap();
+    assert_eq!(closed["retainedStageFiles"], 0);
+    assert_eq!(fs::read_dir(&plans).unwrap().count(), 0);
+    assert!(desktop.shutdown());
+    println!("DESKTOP_AUDIO_36_SEEKS {}", json!({"ownerId":owner,"playingEachGeneration":play_each_generation,
+        "maximumRetainedStages":maximum_retained,"closed":closed}));
+}
+#[test]
+#[ignore = "requires explicit isolated plan fixture and real Windows audio owner"]
+fn actual_audio_owner_recycles_more_than_32_paused_seek_stages() {
+    exercise_actual_audio_owner_36_seeks(false);
+}
+#[test]
+#[ignore = "requires explicit isolated plan fixture and real Windows audio owner"]
+fn actual_audio_owner_recycles_more_than_32_playing_seek_stages() {
+    exercise_actual_audio_owner_36_seeks(true);
+}
+#[test]
 #[ignore = "explicit isolated desktop fixture and actual WASAPI output required"]
 fn actual_desktop_admission_pause_resume_seek_cleanup_and_legacy_rejection() {
     let input: Value = serde_json::from_slice(

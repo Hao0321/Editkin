@@ -40,6 +40,26 @@ describe("hao.motion-composition/v2 shared evaluator", () => {
     expect(frame.layoutReceiptId).toBe(layout.receiptId);
   });
 
+  it("rejects a stale or modified layout receipt before frame sampling", () => {
+    const project = createEmptyProject("Motion v2", { width: 1920, height: 1080, fps: 30 });
+    const graphic = v2Graphic("ONE TWO THREE");
+    const layout = motionGraphicV2LayoutReceipt(project, graphic);
+    expect(motionGraphicV2FrameReceipt(project, graphic, 4, layout).visible).toBe(true);
+    const changedInputs = [
+      { ...graphic, text: "NEW TITLE" },
+      { ...graphic, x: graphic.x + .1 },
+      { ...graphic, fontSize: graphic.fontSize - 4 },
+      { ...graphic, layoutV2: { ...graphic.layoutV2!, safeArea: { ...graphic.layoutV2!.safeArea, left: .12 } } },
+      { ...graphic, motionV2: { ...graphic.motionV2!, sequence: { ...graphic.motionV2!.sequence, unit: "character" as const } } },
+    ];
+    for (const changed of changedInputs) {
+      expect(() => motionGraphicV2FrameReceipt(project, changed, 4, layout)).toThrow(/layout receipt.*不一致/);
+    }
+    const moved = structuredClone(layout);
+    moved.segments[0].x += 12;
+    expect(() => motionGraphicV2FrameReceipt(project, graphic, 4, moved)).toThrow(/layout receipt.*不一致/);
+  });
+
   it("supports character center-out sequencing and parameterized spring curves", () => {
     const project = createEmptyProject("Motion v2", { width: 1920, height: 1080, fps: 30 });
     const graphic = v2Graphic("ABC");

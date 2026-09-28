@@ -18,6 +18,8 @@ import { animatedClipState } from "../domain/editGraph";
 import { createClipMask, resolveMaskPath } from "../domain/masks";
 import type { EditorHistory } from "../domain/history";
 import { DEFAULT_COLOR_MANAGEMENT } from "../domain/types";
+import { motionClipPresetCommands } from "../motion/motionClipPresets";
+import { floatingFrameSceneCommands } from "../motion/floatingFrameScenes";
 import type { CaptionCue, ClipLayout, EditProject, MotionGraphicKind, MotionGraphicPresetSeed, MotionTrack, NormalizedRect, TimelineClip } from "../domain/types";
 import { makeId } from "../lib/format";
 import type { EditorTheme } from "./theme";
@@ -46,6 +48,7 @@ export function EditorShell(props: EditorShellProps) {
   const [agentConnectOpened, setAgentConnectOpened] = useState(false);
   const [returnToRemoteAfterAgent, setReturnToRemoteAfterAgent] = useState(false);
   const [autoEditOpened, setAutoEditOpened] = useState(false);
+  const [draggingAssetId, setDraggingAssetId] = useState<string>();
   const autoEditTarget = useRef<{ task: ProjectTask; clipId: string } | undefined>(undefined);
   const [autoRotoBusy, setAutoRotoBusy] = useState(false);
   const autoRotoBusyRef = useRef(false);
@@ -241,6 +244,8 @@ export function EditorShell(props: EditorShellProps) {
           onOpenBatch={() => batchAutoEdit.setShow(true)}
           onAddAssetToTimeline={(assetId) => addAssetToTimeline(assetId, "timeline")}
           onAddAssetAsPictureInPicture={(assetId) => addAssetToTimeline(assetId, "pip")}
+          onAssetDragStart={setDraggingAssetId}
+          onAssetDragEnd={() => setDraggingAssetId(undefined)}
           onApplyShortTemplate={(templateId) => void applyShortFormTemplate(templateId)}
           onApplyLongTemplate={(templateId) => void applyLongFormTemplate(templateId)}
           onAddLowerThird={addLowerThird}
@@ -364,6 +369,22 @@ export function EditorShell(props: EditorShellProps) {
           onTransform3dChange={(patch) => {
             if (selectedClip) runCommand({ type: "update_clip_transform_3d", clipId: selectedClip.id, patch }, "已更新 2.5D 平面位置。 ");
           }}
+          onSetFloatingFrame={(frame) => {
+            if (selectedClip) runCommand({ type: "set_clip_floating_frame", clipId: selectedClip.id, frame }, frame ? "已套用可編輯浮空影片框。" : "已移除浮空影片框。");
+          }}
+          portraitCanvas={project.height > project.width}
+          onApplyFloatingScene={(preset) => {
+            if (!selectedClip) return;
+            try {
+              runCommand({ type: "batch", commands: floatingFrameSceneCommands(project, selectedClip.id, preset) }, "已建立三層可編輯直式浮空框舞台，可復原。");
+            } catch (error) { setStatus(error instanceof Error ? error.message : "浮空框舞台套用失敗"); }
+          }}
+          onApplyClipMotionPreset={(preset) => {
+            if (!selectedClip) return;
+            try {
+              runCommand({ type: "batch", commands: motionClipPresetCommands(selectedClip, project.fps, preset) }, "已套用逐格 Motion 動畫，可復原。");
+            } catch (error) { setStatus(error instanceof Error ? error.message : "Motion 動畫套用失敗"); }
+          }}
           particleSimulation={project.particleSimulation}
           onParticleSimulationToggle={(enabled) => runCommand({ type: "configure_particle_simulation", enabled }, enabled ? "已啟用原生 GPU 粒子 VFX；預覽與輸出會使用同一個 fixed-seed 模擬。" : "已移除粒子 VFX。")}
           onParticleSimulationChange={(settings) => runCommand({ type: "set_particle_simulation_settings", settings }, "已更新粒子 VFX。")}
@@ -378,7 +399,7 @@ export function EditorShell(props: EditorShellProps) {
           }}
           onColorChange={(patch) => updateAnimatedClipProperty("color", patch)}
           onCreativeChange={(patch) => {
-            if (selectedClip) runCommand({ type: "set_clip_creative", clipId: selectedClip.id, patch }, "已套用 Editkin 社群預設，預覽與輸出會使用同一設定。");
+            if (selectedClip) runCommand({ type: "set_clip_creative", clipId: selectedClip.id, patch }, "已套用 Hao Creator Pack，預覽與輸出會使用同一設定。");
           }}
           onNativeEffectAdd={(instance) => {
             if (selectedClip) runCommand({ type: "add_native_effect", clipId: selectedClip.id, instance }, "已加入原生 GPU 動態模糊；預覽與輸出共用 shutter sampling。 ");
@@ -496,6 +517,8 @@ export function EditorShell(props: EditorShellProps) {
         selectedClipId={selectedClipId}
         selectedCaptionId={selectedCaptionId}
         runtimeUrls={runtimeUrls}
+        draggingAssetId={draggingAssetId}
+        onInsertAsset={(assetId, trackId, timelineStart) => addAssetToTimeline(assetId, "timeline", { trackId, timelineStart })}
         onSeek={(time) => setPlayhead(Math.max(0, Math.min(Math.max(duration, 12), time)))}
         onSelect={(clipId) => { setSelectedCaptionId(undefined); setSelectedClipId(clipId); }}
         onSelectCaption={(captionId) => { setSelectedClipId(undefined); setSelectedCaptionId(captionId); }}
@@ -564,4 +587,3 @@ export function EditorShell(props: EditorShellProps) {
     </main>
   );
 }
-

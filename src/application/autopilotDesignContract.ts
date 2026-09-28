@@ -32,7 +32,7 @@ export type DesignEvidence = z.infer<typeof designEvidenceSchema>;
 const visibleTypes = new Set([
   "add_clip", "move_clip", "trim_clip", "split_clip", "delete_clip", "apply_smart_cut",
   "add_caption", "update_caption", "set_caption_style", "add_motion_graphic",
-  "update_clip_transform", "update_clip_transform_3d", "set_clip_layout", "set_clip_creative",
+  "update_clip_transform", "update_clip_transform_3d", "set_clip_floating_frame", "set_clip_layout", "set_clip_creative",
   "set_clip_volume", "set_clip_color", "add_native_effect", "update_native_effect",
   "add_keyframe", "update_keyframe", "add_clip_mask", "update_clip_mask", "set_clip_chroma_key",
   "add_motion_track", "set_motion_track_point", "set_clip_mask_track", "set_clip_mask_keyframe",

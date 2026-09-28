@@ -438,7 +438,11 @@ async function run() {
       assert.equal(configuredCanonicalIdentity.bindingSha256, liveIdentity.bindingSha256,
         "canonical agent-setup environment path changed the live invocation identity");
       process.env.EDITKIN_VIDEO_AUTOPILOT_SKILL = staleSkillPath;
-      await reject("noncanonical-video-autopilot-env-override", () => readLiveAutopilotIdentity());
+      const selectedIdentity = await readLiveAutopilotIdentity();
+      assert.notEqual(selectedIdentity.bindingSha256, liveIdentity.bindingSha256,
+        "switching the active Skill must change the invocation identity");
+      await reject("active-video-autopilot-skill-drift", () =>
+        assertAutopilotPlanSourceCurrent(livePlanSource, selectedIdentity));
     } finally {
       if (previousSkillOverride === undefined) delete process.env.EDITKIN_VIDEO_AUTOPILOT_SKILL;
       else process.env.EDITKIN_VIDEO_AUTOPILOT_SKILL = previousSkillOverride;

@@ -1,19 +1,8 @@
-import type { AutomaticCaptionAnalysisResult, AutomaticCaptionCue, AutomaticCaptionRequest, AutomaticCaptionRuntime } from "./automaticCaptions";
+import type { AutomaticCaptionAnalysisResult, AutomaticCaptionCue, AutomaticCaptionRequest, AutomaticCaptionRuntime, CaptionWindow, CaptionWindowEvidence } from "./automaticCaptionTypes";
+export type { CaptionSegmentation, CaptionWindow, CaptionWindowEvidence } from "./automaticCaptionTypes";
 
 export const CAPTION_WINDOW_SECONDS = 30;
 const CONTEXT_SECONDS = 2;
-export interface CaptionWindow {
-  index: number; coreStart: number; coreEnd: number; start: number; duration: number;
-}
-export interface CaptionWindowEvidence extends CaptionWindow {
-  rawTranscript: AutomaticCaptionAnalysisResult["rawTranscript"];
-  rawTranslation?: AutomaticCaptionAnalysisResult["rawTranslation"];
-}
-export interface CaptionSegmentation {
-  schema: "editkin.segmented-caption-analysis/v1";
-  coreSeconds: number; contextSeconds: number; windows: CaptionWindowEvidence[];
-  boundaryCuesRequireReview: boolean;
-}
 export function captionWindows(duration: number): CaptionWindow[] {
   if (!Number.isFinite(duration) || duration <= 0 || duration > 86400) throw new Error("字幕分段時長不合法");
   return Array.from({ length: Math.ceil(duration / CAPTION_WINDOW_SECONDS) }, (_, index) => {

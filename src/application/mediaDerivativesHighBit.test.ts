@@ -60,7 +60,7 @@ describe("real 10-bit source -> browser proxy cache", () => {
     if (!hdr) {
       const manifestPath = join(dirname(repaired.derivatives.proxyUri!), "manifest.json");
       const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-      expect(manifest.schemaVersion).toBe(7);
+      expect(manifest.schemaVersion).toBe(8);
       expect(manifest.recipe).toBe(CURRENT_MEDIA_PREVIEW_RECIPE);
       manifest.recipe = "retired-full-resolution-experiment";
       await writeFile(manifestPath, JSON.stringify(manifest));

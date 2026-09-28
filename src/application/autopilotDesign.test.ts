@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
+import { cp, mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { createEmptyProject } from "../domain/editGraph";
 import { createAutopilotV4Fixture } from "./autopilotPlanFixture";
 import { parseAutopilotPlan, type CurrentAutopilotPlan } from "./autopilotPlan";
 import { designEvidenceSchema, designRequestSchema } from "./autopilotDesignContract";
 import { MOTION_TREATMENT_FAMILIES } from "./motionTreatment";
 import { sha256Canonical } from "./autopilotInvocationIdentity";
-import { designIdentity, verifyAutopilotDesign, type CurrentDesignBrief } from "../mcp/autopilotDesignTools";
+import { compileCurrentDesign, designIdentity, verifyAutopilotDesign, type CurrentDesignBrief } from "../mcp/autopilotDesignTools";
+
+const publicSkillSource = resolve(import.meta.dirname, "../../../../video-autopilot-kit/codex-skill/video-autopilot");
 
 function fixture() {
   const project = createEmptyProject();
@@ -35,6 +41,23 @@ function fixture() {
 }
 
 describe("live private design execution binding", () => {
+  it.skipIf(!existsSync(join(publicSkillSource, "editkin_design_bridge.py")))("compiles an installed public Kit without the private profile and detects design drift", async () => {
+    const root = await mkdtemp(join(tmpdir(), "editkin-public-design-"));
+    const skillRoot = join(root, "video-autopilot");
+    const plugins = join(root, "plugins");
+    await cp(publicSkillSource, skillRoot, { recursive: true });
+    await mkdir(plugins);
+    const request = designRequestSchema.parse({ format: "vlog", domain: "travel", topic: "陶藝旅行", duration: 15,
+      beats: [{ id: "opening", role: "first_frame", energy: 0.65, subject: "做陶的手" }] });
+    const first = await compileCurrentDesign(request, { skillPath: join(skillRoot, "SKILL.md"), pluginRoots: [plugins] });
+    expect(first.recipes[0].recipe.route.primary_family).toBe("travel_scrapbook");
+    expect(first.sources.length).toBeGreaterThanOrEqual(7);
+    expect(JSON.stringify(first.context)).not.toContain("Hao0321");
+    const reference = join(skillRoot, "references", "design-reference-dna-v6.md");
+    await writeFile(reference, `${await readFile(reference, "utf8")}\n`, "utf8");
+    const changed = await compileCurrentDesign(request, { skillPath: join(skillRoot, "SKILL.md"), pluginRoots: [plugins] });
+    expect(changed.sourceSha256).not.toBe(first.sourceSha256);
+  });
   it("keeps historical v4 plans readable without pretending they meet the current execution gate", async () => {
     const old = parseAutopilotPlan(createAutopilotV4Fixture()) as CurrentAutopilotPlan;
     await expect(verifyAutopilotDesign(old, createEmptyProject())).rejects.toThrow(/designEvidence/);

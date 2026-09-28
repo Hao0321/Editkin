@@ -34,4 +34,15 @@ describe("resident graph preparation versus native frame sampling", () => {
     expect(sampleResidentGpuGraph(prepared, 1)!.timelineFrame).toBe(30);
     expect(prepared.timelineFrame).toBe(0);
   });
+  it("samples fractional native preview frames from the project timebase", () => {
+    const project = createDemoProject(); project.width = 960; project.height = 540;
+    project.fps = 120_000 / 1_001;
+    const highRate = prepareResidentGpuGraphs(project).video!;
+    expect(highRate.graph.timebase).toEqual({ numerator: 1_001, denominator: 120_000 });
+    expect(sampleResidentGpuGraph(highRate, 10)!.timelineFrame).toBe(1199);
+    project.fps = 25.5;
+    const fractional = prepareResidentGpuGraphs(project).video!;
+    expect(fractional.graph.timebase).toEqual({ numerator: 2, denominator: 51 });
+    expect(sampleResidentGpuGraph(fractional, 2)!.timelineFrame).toBe(51);
+  });
 });

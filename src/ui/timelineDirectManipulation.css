@@ -61,6 +61,10 @@
 .timeline-snap-guide::before { content: ""; position: absolute; top: 0; left: -4px; width: 9px; height: 9px; background: var(--accent); transform: rotate(45deg); }
 .timeline-edit-position { position: absolute; z-index: 40; top: 70px; right: 24px; max-width: calc(100% - 32px); padding: 7px 10px; border: 1px solid var(--accent); border-radius: 6px; background: var(--surface); color: var(--ink); font-size: 12px; font-variant-numeric: tabular-nums; pointer-events: none; }
 .timeline-snap-guide[hidden], .timeline-edit-position[hidden] { display: none; }
+.timeline-asset-drop-preview { position: absolute; z-index: 22; box-sizing: border-box; border: 2px solid var(--accent); border-radius: 8px; background: color-mix(in srgb, var(--accent) 25%, transparent); pointer-events: none; }
+.timeline-asset-drop-preview[data-allowed="false"] { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 20%, transparent); }
+.timeline-asset-drop-preview[data-allowed="true"][data-snap-time]:not([data-snap-time=""]) { border-color: var(--hot); background: color-mix(in srgb, var(--hot) 22%, transparent); }
+.timeline-asset-drop-preview[hidden] { display: none; }
 .ruler-label > span { font-size: 13px; font-variant-numeric: tabular-nums; }
 .ruler-label small { display: block; margin-top: 3px; font-size: 10px; text-align: center; font-weight: normal; }
 .timeline-ruler > i.timeline-frame-tick { position: absolute; top: auto; bottom: 0; width: 1px; height: 5px; margin: 0; background: var(--line-strong); pointer-events: none; }
@@ -69,6 +73,8 @@
 .timeline-quick-actions > button { flex-shrink: 0; }
 .timeline-more { flex-shrink: 0; }
 .timeline-scroll[data-drop-state="overlap"]::after { content: "同軌片段不能重疊，可拖到空白處或另一軌"; position: sticky; z-index: 50; left: 196px; bottom: 12px; display: inline-flex; margin-left: 196px; padding: 9px 12px; border-radius: 8px; background: var(--danger); color: #fff; font-size: 12px; pointer-events: none; }
+.timeline-scroll[data-drop-state="asset-overlap"]::after { content: "這裡已有片段，請拖到空白處"; position: sticky; z-index: 50; left: 196px; bottom: 12px; display: inline-flex; margin-left: 196px; padding: 9px 12px; border-radius: 8px; background: var(--danger); color: #fff; font-size: 12px; pointer-events: none; }
+.timeline-scroll[data-drop-state="asset-incompatible"]::after { content: "請拖到未鎖定且類型相符的軌道"; position: sticky; z-index: 50; left: 196px; bottom: 12px; display: inline-flex; margin-left: 196px; padding: 9px 12px; border-radius: 8px; background: var(--danger); color: #fff; font-size: 12px; pointer-events: none; }
 @media (max-width: 1100px) {
   .timeline-toolbar > div:first-child > small { display: none; }
   .timeline-toolbar { gap: 8px; }

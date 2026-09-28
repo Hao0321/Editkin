@@ -87,6 +87,7 @@ export function timelineFrameLabel(time: number, fps: number): string {
 
 export function resolveTimelineDrag(input: TimelineDragInput): TimelineDragResult {
   const pixelsPerSecond = Math.max(1, input.pixelsPerSecond);
+  const fps = Number.isFinite(input.fps) && input.fps > 0 ? input.fps : 30;
   const deltaPixels = input.currentClientX - input.originClientX + input.currentScrollLeft - input.originScrollLeft;
   let start = alignTimelineTime(input.originStart + deltaPixels / pixelsPerSecond, input.fps);
   let snappedTo: number | undefined;
@@ -101,6 +102,9 @@ export function resolveTimelineDrag(input: TimelineDragInput): TimelineDragResul
         const desiredStart = target - offset;
         if (desiredStart < -1e-7) continue;
         const alignedStart = alignTimelineTime(desiredStart, input.fps);
+        // A playhead/origin magnet must not eat a deliberate one-frame move.
+        if (Math.abs(alignedStart - alignTimelineTime(input.originStart, fps)) < 1e-7
+          && Math.abs(deltaPixels) >= pixelsPerSecond / fps * 0.75) continue;
         // Never show an alignment guide that the final frame-rounded move cannot reach.
         if (Math.abs(alignedStart + offset - target) > 1e-7) continue;
         if (input.isStartAllowed && !input.isStartAllowed(alignedStart)) continue;
