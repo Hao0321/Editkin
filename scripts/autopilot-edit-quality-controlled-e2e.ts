@@ -13,7 +13,7 @@ import {
   parseAutopilotPlan,
   type CurrentAutopilotPlan,
 } from "../src/application/autopilotPlan";
-import { parseProject } from "../src/application/projectFiles";
+import { parseProject } from "../src/application/parseProject";
 import { findMotionGraphicPreset } from "../src/creative/motionGraphicPresets";
 import { DEFAULT_COLOR, DEFAULT_TRANSFORM, type EditProject } from "../src/domain/types";
 import { createMotionGraphic } from "../src/motion/composition";

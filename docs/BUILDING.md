@@ -10,6 +10,12 @@ With an independently installed FFmpeg and ffprobe on `PATH`, run `npm run test:
 
 `npm run source:verify:self-test` checks the source verifier's negative controls. `npm run source:verify` checks the exact initial publication snapshot and its hash manifest. `npm run source:scan` checks the current checkout, including pull requests, for private paths, unexpected binaries, key patterns, and the CI permission boundary while allowing ordinary text source changes. New binary assets need maintainer review and a refreshed rights record. These checks support maintainer review; they cannot decide whether arbitrary contributor code is malicious.
 
+## Browser projects
+
+Without the desktop bridge, the browser build treats a project as a file you manage. **Save** downloads `<name>.editkin.json`; **Open** picks that file and, optionally, the original media in the same dialog, and links media to the project by file name (browser imports store only `local://<name>`). **Re-link media** in the project menu does the same for an already open project, and assets without a matching file stay listed as unlinked instead of failing the open. Project files are validated with the same parser as the desktop app (`src/application/parseProject.ts`), and an invalid file leaves the current project untouched.
+
+Edits are also autosaved to this browser's IndexedDB (`editkin-web`) as project JSON only, never media, and offered for restore on the next load; saving clears it. There is one autosave slot per origin, so two tabs on the same origin overwrite each other's slot. A saved project needs its media re-linked after a reload because blob URLs do not survive it.
+
 ## Desktop and release path
 
 The Rust and Tauri source is included for development. The desktop media pipeline needs platform-specific runtimes and generated color/font products. A developer must fetch or build those from their upstream sources and comply with their licenses. The existing internal release scripts may expect owner-only creative packs or signing inputs; their failure in this community checkout is an explicit limitation, not a request to obtain the maintainer's private files.

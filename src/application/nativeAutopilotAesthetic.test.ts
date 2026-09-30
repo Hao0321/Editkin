@@ -7,7 +7,7 @@ import { assertMotionGraphicPresetBinding, findMotionGraphicPreset } from "../cr
 import { createMotionGraphic } from "../motion/composition";
 import { buildNativeAutopilotCommand, planNativeAutopilotCreative } from "./nativeAutopilot";
 import { planSemanticAutoEdit } from "./semanticAutoEdit";
-import { parseProject } from "./projectFiles";
+import { parseProject } from "./parseProject";
 import { resolveAestheticSystem } from "./editkinAesthetic";
 import type { NativeEditingPolicy } from "./nativeAutopilotPolicy";
 

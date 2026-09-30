@@ -3,7 +3,8 @@ import { createReadStream } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { canonicalJson } from "../shared/canonicalJson";
 import type { EditProject } from "../domain/types";
-import { parseProject, writeProjectFileAtomic } from "./projectFiles";
+import { parseProject } from "./parseProject";
+import { writeProjectFileAtomic } from "./projectFiles";
 
 export async function batchFileSha256(path: string) {
   const hash = createHash("sha256");

@@ -61,7 +61,7 @@ export function EditorShell(props: EditorShellProps) {
     selectedClipAtPlayhead, selectedCaption, transitionNeighbors, selectedMotionTracks, activeLayers,
     activeAudioLayers, runtimeUrls, status, setStatus, trackingMode, setTrackingMode, trackingSelection,
     setTrackingSelection, trackingBusy, recovery, desktopActions, automatic, creativeLibrary, batchAutoEdit, mobile,
-    newProject, openProject, saveProject, undoEdit, redoEdit, renderVideo, renderOpenExrSequence, renderAlphaMaster, importFiles,
+    newProject, openProject, saveProject, relinkMedia, undoEdit, redoEdit, renderVideo, renderOpenExrSequence, renderAlphaMaster, importFiles,
     acceptTrackingSelection, startPodcastDirector, submitAgentInstruction, runCommand, updateAnimatedClipProperty,
     addMotionGraphic, addCaption, addTrack, addAssetToTimeline, makeSelectedPictureInPicture, precomposeSelected, applyShortFormTemplate, applyLongFormTemplate, addLowerThird, clearTemplateApplication, splitSelected, deleteSelected,
   } = props;
@@ -193,6 +193,7 @@ export function EditorShell(props: EditorShellProps) {
         onNew={() => { setDemoWorkspaceOpened(false); newProject(); }}
         onOpen={openProject}
         onSave={() => void saveProject()}
+        onRelinkMedia={relinkMedia ? () => void relinkMedia() : undefined}
         onUndo={undoEdit}
         onRedo={redoEdit}
         onExport={renderVideo}
@@ -214,7 +215,7 @@ export function EditorShell(props: EditorShellProps) {
         isDesktop={isDesktop}
         onImport={importFiles}
         onDesktopImport={isDesktop ? () => void creativeLibrary.importDesktopMedia() : undefined}
-        onOpenProject={isDesktop ? () => void openProject() : undefined}
+        onOpenProject={() => void openProject()}
         onExploreDemo={() => setDemoWorkspaceOpened(true)}
         onHelp={() => setBeginnerGuideOpened(true)}
         onConnectAgent={isDesktop ? () => setAgentConnectOpened(true) : undefined}

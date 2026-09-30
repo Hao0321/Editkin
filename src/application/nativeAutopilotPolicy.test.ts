@@ -4,7 +4,7 @@ import { createEmptyProject } from "../domain/editGraph";
 import { createHistory, dispatchCommand, undo } from "../domain/history";
 import { conservativePolicy, validatePolicy } from "./nativeAutopilotPolicy";
 import { DEFAULT_COLOR, DEFAULT_TRANSFORM } from "../domain/types";
-import { parseProject } from "./projectFiles";
+import { parseProject } from "./parseProject";
 import { planSemanticAutoEdit } from "./semanticAutoEdit";
 import { buildNativeAutopilotCommand, planNativeAutopilotCreative } from "./nativeAutopilot";
 

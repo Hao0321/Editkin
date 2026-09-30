@@ -19,7 +19,7 @@ export function recoveryFailureMessage(error: unknown, prefix: string): string {
 }
 
 interface ProjectRecoveryOptions {
-  api?: HaoDesktopApi;
+  api?: Pick<HaoDesktopApi, "loadRecovery" | "saveRecovery" | "clearRecovery" | "previewUrls" | "integrationSmokeEnabled">;
   project: EditProject;
   projectPath?: string;
   cleanUpdatedAt: string;
@@ -70,7 +70,9 @@ export function useProjectRecovery({ api, project, projectPath, cleanUpdatedAt, 
       catch { /* missing media stays visible in the graph and can be relinked later */ }
       if (current()) {
         onRestoreRef.current(result.snapshot.project, result.snapshot.projectPath, result.snapshot.cleanUpdatedAt, runtimeUrls);
-        onStatusRef.current(result.source === "previous" ? "主要復原資料損壞，已從上一個有效 autosave 恢復。請儲存專案。" : "已恢復未儲存的工作。請確認後儲存專案。");
+        const unlinked = result.snapshot.project.assets.filter((asset) => !runtimeUrls[asset.id]);
+        const relink = unlinked.length ? ` ${unlinked.length} 份素材尚未連結來源檔案。` : "";
+        onStatusRef.current((result.source === "previous" ? "主要復原資料損壞，已從上一個有效 autosave 恢復。請儲存專案。" : "已恢復未儲存的工作。請確認後儲存專案。") + relink);
       }
     }).catch((error) => {
       if (current()) onStatusRef.current(recoveryFailureMessage(error, "讀取自動復原資料失敗"));

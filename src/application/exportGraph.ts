@@ -5,12 +5,16 @@ function safeDownloadName(name: string): string {
   return normalized || "Editkin-project";
 }
 
+export function editGraphFileName(project: EditProject): string {
+  return `${safeDownloadName(project.name)}.editkin.json`;
+}
+
 export function downloadEditGraph(project: EditProject): void {
   const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${safeDownloadName(project.name)}.editkin.json`;
+  link.download = editGraphFileName(project);
   link.click();
   URL.revokeObjectURL(url);
 }

@@ -164,4 +164,41 @@ describe("manual file actions with actual project session (desktop I/O is deferr
     expect(f.loadOpenedProject).toHaveBeenCalledExactlyOnceWith(opened);
     expect(f.session.getSnapshot()).toMatchObject({ sessionId: oldId + 1, dirty: false, diskRevision: 5, projectPath: opened.path });
   });
+
+  describe("browser media re-link", () => {
+    function relinkFixture() {
+      const f = fixture();
+      const relink = deferred<{ runtimeUrls: Record<string, string>; unlinkedAssetNames: string[] } | undefined>();
+      const runtimeUrls: Record<string, string> = { keep: "blob:keep", replaced: "blob:old" };
+      const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+      const setRuntimeUrls = vi.fn((update: unknown) => Object.assign(runtimeUrls, typeof update === "function" ? (update as (c: typeof runtimeUrls) => typeof runtimeUrls)(runtimeUrls) : update));
+      const actions = createAppProjectFileActions({
+        api: { ...f.api, relinkMedia: vi.fn(() => relink.promise) } as unknown as HaoDesktopApi & { relinkMedia: () => Promise<undefined> },
+        session: f.session, loadOpenedProject: f.loadOpenedProject, setStatus: f.status, setRuntimeUrls,
+        setSelectedClipId: vi.fn(), setSelectedCaptionId: vi.fn(), setPlayhead: vi.fn(), setPlaying: vi.fn(),
+        setTrackingMode: vi.fn(), setTrackingSelection: vi.fn(),
+      });
+      return { ...f, relink, runtimeUrls, revoke, actions };
+    }
+
+    it("merges new links, revokes replaced blob URLs, and names what is still unlinked", async () => {
+      const f = relinkFixture();
+      const task = f.actions.relinkMedia();
+      f.relink.resolve({ runtimeUrls: { replaced: "blob:new" }, unlinkedAssetNames: ["a.mp4", "b.mp4", "c.mp4", "d.mp4"] });
+      await task;
+      expect(f.runtimeUrls).toEqual({ keep: "blob:keep", replaced: "blob:new" });
+      expect(f.revoke).toHaveBeenCalledExactlyOnceWith("blob:old");
+      expect(f.status).toHaveBeenLastCalledWith(expect.stringContaining("4 份素材尚未連結（a.mp4、b.mp4、c.mp4…）"));
+    });
+
+    it("drops links that arrive after the project was replaced", async () => {
+      const f = relinkFixture();
+      const task = f.actions.relinkMedia();
+      f.session.replaceProject({ ...createDemoProject(), revision: 9 });
+      f.relink.resolve({ runtimeUrls: { late: "blob:late" }, unlinkedAssetNames: [] });
+      await task;
+      expect(f.runtimeUrls).toEqual({ keep: "blob:keep", replaced: "blob:old" });
+      expect(f.revoke).toHaveBeenCalledExactlyOnceWith("blob:late");
+    });
+  });
 });

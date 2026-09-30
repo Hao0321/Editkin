@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 import { CURRENT_MEDIA_PREVIEW_RECIPE, isMediaPreviewCurrent } from "../application/mediaDerivativeColor";
 import { createProjectSession, type ProjectSession } from "../application/projectSession";
-import { parseProject } from "../application/projectFiles";
+import { parseProject } from "../application/parseProject";
 import { createDemoProject } from "../domain/demo";
 import { dispatchCommand } from "../domain/history";
 import type { MediaAsset, MediaDerivatives } from "../domain/types";

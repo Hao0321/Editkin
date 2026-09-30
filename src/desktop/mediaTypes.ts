@@ -11,6 +11,8 @@ export interface OpenProjectResult {
   path?: string;
   project?: EditProject;
   runtimeUrls?: Record<string, string>;
+  /** Browser build only: assets whose source file was not picked and must be re-linked. */
+  unlinkedAssetNames?: string[];
 }
 
 export interface SaveProjectResult {

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { parseProject } from "../src/application/projectFiles";
+import { parseProject } from "../src/application/parseProject";
 import { skillEditorialProjectEvidence } from "../src/application/skillEditorialBatch";
 import { probeMedia } from "../src/render/ffmpeg";
 

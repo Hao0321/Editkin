@@ -3,7 +3,7 @@ import { createDemoProject } from "../domain/demo";
 import { applyCommand } from "../domain/commands";
 import { buildLongFormTemplateCommand } from "./longFormTemplates";
 import { buildShortFormTemplateCommand } from "./shortFormTemplates";
-import { parseProject } from "./projectFiles";
+import { parseProject } from "./parseProject";
 import {
   isTemplateGeneratedCaption,
   isTemplateGeneratedGraphic,

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
-import { parseProject } from "../src/application/projectFiles";
+import { parseProject } from "../src/application/parseProject";
 import type { EditProject } from "../src/domain/types";
 import { buildRenderPlan } from "../src/render/planner";
 import { resolveMediaPath } from "../src/render/ffmpegMedia";

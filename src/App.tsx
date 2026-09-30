@@ -18,6 +18,7 @@ import { activeVideoClip, alignTime, animatedClipState, createEmptyProject, find
 import { createUiDemoProject } from "./domain/demo";
 import { dispatchCommandSafely, redo, undo } from "./domain/history";
 import { DEFAULT_CLIP_LAYER, DEFAULT_COLOR, DEFAULT_TRANSFORM, type ClipLayout, type MotionGraphicKind, type MotionGraphicPresetSeed, type NormalizedRect } from "./domain/types";
+import { createBrowserProjectApi, createIndexedDbProjectStore, pickBrowserFiles } from "./desktop/browserProjectApi";
 import { importBrowserMedia, type ImportedBrowserMedia } from "./lib/browserMedia";
 import { canvasResolutionForAsset, isStarterDemo } from "./application/sourceOrientation";
 import { resolveAestheticSystem } from "./application/editkinAesthetic";
@@ -63,6 +64,10 @@ function App() {
   const trackingPending = useRef(false);
   const { theme, setTheme } = useEditorTheme();
   const isDesktop = window.haoDesktop?.isDesktop === true;
+  // Without the desktop bridge, projects are files the user downloads/opens and autosave lives in IndexedDB.
+  const [projectApi] = useState(() => window.haoDesktop ?? createBrowserProjectApi({
+    store: createIndexedDbProjectStore(), pickFiles: pickBrowserFiles, download: downloadEditGraph,
+  }));
   const project = history.present;
   const currentAestheticArtifact = useMemo(() => aestheticOutputOwner.get(project), [aestheticOutputOwner, aestheticOutputVersion, project]);
   const duration = projectDuration(project);
@@ -101,7 +106,7 @@ function App() {
     [project, playhead, status, previewAsset],
   );
   const recovery = useProjectRecovery({
-    api: window.haoDesktop,
+    api: projectApi,
     project,
     projectPath,
     cleanUpdatedAt,
@@ -515,8 +520,8 @@ function App() {
     ] }, "已進入 Podcast 雙人物導播並套用訪談美感標準。");
     setStatus("請先在預覽畫面框住主持人的臉；放開後會用 Rust 分析位置與局部說話動態。");
   };
-  const { newProject, openProject, saveProject } = createAppProjectFileActions({
-    api: window.haoDesktop, session: projectSession, loadOpenedProject,
+  const { newProject, openProject, saveProject, relinkMedia } = createAppProjectFileActions({
+    api: projectApi, session: projectSession, loadOpenedProject,
     setRuntimeUrls, setSelectedClipId, setSelectedCaptionId, setPlayhead, setPlaying,
     setTrackingMode, setTrackingSelection, setStatus,
   });
@@ -561,7 +566,7 @@ function App() {
     selectedClipAtPlayhead, selectedCaption, transitionNeighbors, selectedMotionTracks, activeLayers,
     activeAudioLayers, runtimeUrls, status, setStatus, trackingMode, setTrackingMode, trackingSelection,
     setTrackingSelection, trackingBusy, recovery, desktopActions, automatic, creativeLibrary, batchAutoEdit, mobile,
-    newProject, openProject, saveProject, undoEdit, redoEdit, renderVideo, renderOpenExrSequence, renderAlphaMaster, importFiles,
+    newProject, openProject, saveProject, relinkMedia: "relinkMedia" in projectApi ? relinkMedia : undefined, undoEdit, redoEdit, renderVideo, renderOpenExrSequence, renderAlphaMaster, importFiles,
     acceptTrackingSelection, startPodcastDirector, submitAgentInstruction, runCommand, updateAnimatedClipProperty,
     addMotionGraphic, addCaption, addTrack, addAssetToTimeline, makeSelectedPictureInPicture, precomposeSelected, applyShortFormTemplate, applyLongFormTemplate, addLowerThird, clearTemplateApplication, splitSelected, deleteSelected,
   }} /></Suspense>;

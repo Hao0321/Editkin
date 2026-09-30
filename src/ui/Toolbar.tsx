@@ -18,6 +18,7 @@ interface ToolbarProps {
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
+  onRelinkMedia?: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onExport: () => void;
@@ -50,6 +51,7 @@ export function Toolbar({
   onNew,
   onOpen,
   onSave,
+  onRelinkMedia,
   onUndo,
   onRedo,
   onExport,
@@ -133,13 +135,14 @@ export function Toolbar({
                   </select>
                 </div>
                 <button type="button" onClick={(event) => { const menu = event.currentTarget.closest<HTMLDetailsElement>("details.project-menu"); if (menu) menu.open = false; onDirectorConsole(); }} data-testid="director-console-button"><span>◉</span><div>導演台<small>標記重點並集中審片</small></div></button>
-                {isDesktop && <>
+                <>
                   <strong>專案與連線</strong>
                   <button type="button" onClick={onNew} data-testid="new-project-button"><span>＋</span><div>新增空白專案<small>從零開始剪一支影片</small></div></button>
-                  <button type="button" onClick={onOpen} data-testid="open-project-button"><span>⌂</span><div>開啟專案<small>繼續之前的工作</small></div></button>
-                  <button type="button" onClick={onSave} data-testid="save-project-button" title="儲存（Ctrl/Cmd+S；另存新檔 Ctrl/Cmd+Shift+S）"><span>✓</span><div>{saveLabel}<small>保留目前所有修改</small></div></button>
-                  <button type="button" onClick={onCheckUpdates}><span>↥</span><div>檢查更新<small>下載後由你決定是否安裝</small></div></button>
-                </>}
+                  <button type="button" onClick={onOpen} data-testid="open-project-button"><span>⌂</span><div>開啟專案<small>{isDesktop ? "繼續之前的工作" : "選擇 .editkin.json，可一併選取素材"}</small></div></button>
+                  <button type="button" onClick={onSave} data-testid="save-project-button" title="儲存（Ctrl/Cmd+S；另存新檔 Ctrl/Cmd+Shift+S）"><span>✓</span><div>{saveLabel}<small>{isDesktop ? "保留目前所有修改" : "下載 .editkin.json 專案檔"}</small></div></button>
+                  {onRelinkMedia && <button type="button" onClick={onRelinkMedia} data-testid="relink-media-button"><span>⛓</span><div>重新連結素材<small>選取專案用到的原始影片、聲音或圖片</small></div></button>}
+                  {isDesktop && <button type="button" onClick={onCheckUpdates}><span>↥</span><div>檢查更新<small>下載後由你決定是否安裝</small></div></button>}
+                </>
                 {isDesktop && onExportOpenExrSequence && <>
                   <strong>專業輸出</strong>
                   <button type="button" onClick={onExportOpenExrSequence} disabled={!hasUserMedia} data-testid="render-openexr-sequence-button"><span>▧</span><div>OpenEXR 影格序列<small>場景線性 RGBA32F · 無音訊</small></div></button>

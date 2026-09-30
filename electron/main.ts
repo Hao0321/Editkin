@@ -13,7 +13,8 @@ import { transcribeAutomaticCaptions } from "../src/application/automaticCaption
 import { analyzeSceneCuts } from "../src/application/sceneDetection";
 import { analyzeMotionTrack } from "../src/application/motionTracking";
 import { creativeAssetIdFromUri, creativeAssetUri, listCreativeLibrary, materializeCreativeAssets, resolveCreativeLibraryAsset, resolveCreativeLibraryPreviewAsset } from "../src/application/creativeLibrary";
-import { parseProject, readProjectFile, writeProjectFileAtomic } from "../src/application/projectFiles";
+import { parseProject } from "../src/application/parseProject";
+import { readProjectFile, writeProjectFileAtomic } from "../src/application/projectFiles";
 import { clearRecoveryFile, readRecoveryFile, writeRecoveryFileAtomic } from "../src/application/recoveryFiles";
 import {
   markUpdateHealthy,

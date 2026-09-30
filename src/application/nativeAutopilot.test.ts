@@ -7,8 +7,9 @@ import { createEmptyProject, projectDuration } from "../domain/editGraph";
 import { projectSchema } from "../domain/schema";
 import { DEFAULT_COLOR, DEFAULT_TRANSFORM, type MediaAsset } from "../domain/types";
 import { buildNativeAutopilotCommand, planNativeAutopilotCreative } from "./nativeAutopilot";
-import { parseProject } from "./projectFiles";
-import { parseRecoverySnapshot, readRecoveryFile, writeRecoveryFileAtomic } from "./recoveryFiles";
+import { parseProject } from "./parseProject";
+import { parseRecoverySnapshot } from "./recoverySnapshot";
+import { readRecoveryFile, writeRecoveryFileAtomic } from "./recoveryFiles";
 import { planSemanticAutoEdit } from "./semanticAutoEdit";
 
 function fixture() {

@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createEmptyProject } from "../domain/editGraph";
-import { clearRecoveryFile, parseRecoverySnapshot, readRecoveryFile, writeRecoveryFileAtomic } from "./recoveryFiles";
+import { clearRecoveryFile, readRecoveryFile, writeRecoveryFileAtomic } from "./recoveryFiles";
+import { parseRecoverySnapshot } from "./recoverySnapshot";
 
 const now = Date.parse("2026-08-21T12:00:00.000Z");
 

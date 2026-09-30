@@ -5,7 +5,7 @@ import { DEFAULT_COLOR, DEFAULT_TRANSFORM } from "../domain/types";
 import { buildNativeAutopilotCommand, planNativeAutopilotCreative } from "./nativeAutopilot";
 import { planSemanticAutoEdit } from "./semanticAutoEdit";
 import { createCaptionGapAllocator } from "./nativeAutopilotGraphicTiming";
-import { parseProject } from "./projectFiles";
+import { parseProject } from "./parseProject";
 
 function build(width: number, height: number, alignment: 2 | 5 | 8, continuous = false) {
   let project = createEmptyProject("graphic safety", { id: "safe", width, height, fps: 30 });

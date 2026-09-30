@@ -58,6 +58,7 @@ export interface EditorShellProps {
   newProject: () => void;
   openProject: () => Promise<void>;
   saveProject: (saveAs?: boolean) => Promise<void>;
+  relinkMedia?: () => Promise<void>;
   undoEdit: () => void;
   redoEdit: () => void;
   renderVideo: () => Promise<void>;

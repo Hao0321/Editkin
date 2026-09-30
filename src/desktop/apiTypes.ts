@@ -1,5 +1,5 @@
 import type { EditProject, EditorialProfileId, MediaAsset } from "../domain/types";
-import type { RecoveryReadResult } from "../application/recoveryFiles";
+import type { RecoveryReadResult } from "../application/recoverySnapshot";
 import type { CreativeLibrarySummary } from "../application/creativeLibrary";
 import type { EditorCommand } from "../domain/commands";
 import type { PluginRegistrySummary } from "./pluginTypes";

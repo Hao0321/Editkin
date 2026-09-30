@@ -2,23 +2,14 @@ import { randomUUID } from "node:crypto";
 import { access, lstat, mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { migrateProject, validateProject } from "../domain/editGraph";
-import { projectSchema } from "../domain/schema";
 import type { EditProject } from "../domain/types";
-import { resolveAestheticSystem } from "./editkinAesthetic";
-import { dehydrateAutoRotoFramePreviews } from "../domain/autoRotoPreviewProjection";
+import { parseProject } from "./parseProject";
 
 export class ProjectRevisionConflictError extends Error {
   constructor(expected: number, actual: number) {
     super(`專案已被其他視窗或 Agent 更新（目前 revision ${actual}，你的版本 ${expected}）；請重新開啟後再套用修改。`);
     this.name = "ProjectRevisionConflictError";
   }
-}
-
-export function parseProject(input: unknown): EditProject {
-  const project = dehydrateAutoRotoFramePreviews(validateProject(projectSchema.parse(migrateProject(input))));
-  project.aestheticSystem ??= resolveAestheticSystem(project.editorialProfile, project.width > project.height ? "longform" : "shorts");
-  return validateProject(project);
 }
 
 function previousPath(path: string): string { return `${path}.previous`; }

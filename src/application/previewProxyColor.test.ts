@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { activeMediaLayers, previewSurfaceAsset } from "./previewMedia";
 import { createDemoProject } from "../domain/demo";
-import { parseProject } from "./projectFiles";
+import { parseProject } from "./parseProject";
 import { validateProject } from "../domain/editGraph";
 import { buildGpuEngineVideoPreviewGraph } from "../render/gpuCompositor";
 import type { MediaAsset } from "../domain/types";

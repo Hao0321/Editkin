@@ -1,12 +1,14 @@
 import type { Dispatch, SetStateAction } from "react";
 import { resolveAestheticSystem } from "./editkinAesthetic";
+import type { RelinkResult } from "../desktop/browserProjectApi";
 import type { HaoDesktopApi, OpenProjectResult } from "../desktop/types";
 import { createEmptyProject } from "../domain/editGraph";
+import type { MediaAsset } from "../domain/types";
 import type { ProjectSession } from "./projectSession";
 import type { TrackingMode } from "../ui/editorShellTypes";
 
 export interface AppProjectFileActionsInput {
-  api?: HaoDesktopApi;
+  api?: Pick<HaoDesktopApi, "openProject" | "saveProject"> & { relinkMedia?: (assets: MediaAsset[]) => Promise<RelinkResult | undefined> };
   session: ProjectSession;
   loadOpenedProject: (opened: OpenProjectResult) => void;
   setRuntimeUrls: Dispatch<SetStateAction<Record<string, string>>>;
@@ -46,7 +48,7 @@ export function createAppProjectFileActions(input: AppProjectFileActionsInput) {
       if (current.dirty && current.history.present !== started.history.present
         && !window.confirm("選擇檔案期間又有新的修改。確定捨棄這些修改並開啟其他專案嗎？")) return;
       input.loadOpenedProject(opened);
-      input.setStatus(`已開啟 ${opened.path}`);
+      input.setStatus(unlinkedNotice(`已開啟 ${opened.path}`, opened.unlinkedAssetNames));
     } catch (error) {
       if (input.session.isCurrentSession(started.sessionId)) input.setStatus(fileActionError(error, "無法開啟專案"));
     }
@@ -73,7 +75,32 @@ export function createAppProjectFileActions(input: AppProjectFileActionsInput) {
       input.session.finishSave(request);
     }
   };
-  return { newProject, openProject, saveProject };
+  const relinkMedia = async () => {
+    if (!input.api?.relinkMedia) return;
+    const started = input.session.getSnapshot();
+    try {
+      const result = await input.api.relinkMedia(started.history.present.assets);
+      if (!result) return;
+      if (!input.session.isCurrentSession(started.sessionId)) {
+        for (const url of Object.values(result.runtimeUrls)) URL.revokeObjectURL(url);
+        return;
+      }
+      input.setRuntimeUrls((current) => {
+        for (const assetId of Object.keys(result.runtimeUrls)) if (current[assetId]?.startsWith("blob:")) URL.revokeObjectURL(current[assetId]);
+        return { ...current, ...result.runtimeUrls };
+      });
+      input.setStatus(unlinkedNotice(`已重新連結 ${Object.keys(result.runtimeUrls).length} 份素材`, result.unlinkedAssetNames));
+    } catch (error) {
+      if (input.session.isCurrentSession(started.sessionId)) input.setStatus(fileActionError(error, "無法重新連結素材"));
+    }
+  };
+  return { newProject, openProject, saveProject, relinkMedia };
+}
+
+function unlinkedNotice(message: string, unlinked: string[] | undefined): string {
+  if (!unlinked?.length) return message;
+  const shown = unlinked.slice(0, 3).join("、");
+  return `${message}；${unlinked.length} 份素材尚未連結（${shown}${unlinked.length > 3 ? "…" : ""}），請用「重新連結素材」選取原始檔案。`;
 }
 
 function fileActionError(error: unknown, fallback: string): string {

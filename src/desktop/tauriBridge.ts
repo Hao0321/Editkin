@@ -89,7 +89,7 @@ if (window.__TAURI_INTERNALS__) {
       return { ...result, frames: result.frames.map((frame) => ({ ...frame, previewUrl: convertFileSrc(frame.alphaPath) })) };
     },
     loadRecovery: async () => {
-      const result = await invoke<import("../application/recoveryFiles").RecoveryReadResult & { mattePreviewPaths?: string[] }>("load_recovery");
+      const result = await invoke<import("../application/recoverySnapshot").RecoveryReadResult & { mattePreviewPaths?: string[] }>("load_recovery");
       if (!result.found) return result;
       return { ...result, snapshot: { ...result.snapshot, project: hydrateAutoRotoFramePreviews(result.snapshot.project, result.mattePreviewPaths ?? [], convertFileSrc) } };
     },
