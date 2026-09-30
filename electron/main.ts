@@ -1,6 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, type IpcMainInvokeEvent } from "electron";
-import { spawn } from "node:child_process";
-import { readFile, stat } from "node:fs/promises";
+import { readBoundedFile } from "../src/shared/boundedFile";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { AgentTarget } from "../src/application/agentSetup";
@@ -23,7 +22,7 @@ import {
 } from "../src/application/updateManager";
 import type { EditProject, MediaAsset } from "../src/domain/types";
 import { registerBatchIpc } from "./batchIpc";
-import { registerUpdateIpc } from "./updateIpc";
+import { launchRollbackInstaller, registerUpdateIpc } from "./updateIpc";
 
 protocol.registerSchemesAsPrivileged([{
   scheme: "editkin-media",
@@ -177,9 +176,9 @@ function registerIpc() {
 
   secureIpcHandle("hao:read-color-asset", async (_event, payload: { relativePath: string }) => {
     const target = boundedColorAssetPath(runtimePaths().colorRoot, payload?.relativePath);
-    const metadata = await stat(target);
-    if (!metadata.isFile() || metadata.size <= 0 || metadata.size > 64 * 1024 * 1024) throw new Error("色彩資產超出安全大小");
-    return readFile(target, "utf8");
+    const bytes = await readBoundedFile(target, 64 * 1024 * 1024, { followSymlinks: true, messages: { tooLarge: "色彩資產超出安全大小", notRegular: "色彩資產超出安全大小" } });
+    if (bytes.length === 0) throw new Error("色彩資產超出安全大小");
+    return bytes.toString("utf8");
   });
 
   secureIpcHandle("hao:list-installed-plugins", async () => compactPluginRegistry(await discoverInstalledPlugins([runtimePaths().pluginRoot])));
@@ -424,9 +423,14 @@ app.whenReady().then(async () => {
     if (launch.status === "rollback_required") {
       const installer = await rollbackInstaller(transactionPath);
       if (installer) {
-        spawn(installer, ["/S"], { detached: true, stdio: "ignore", windowsHide: true }).unref();
-        app.quit();
-        return;
+        try {
+          await launchRollbackInstaller(installer);
+          app.quit();
+          return;
+        } catch (error) {
+          // An installer that fails the pinned-publisher check is never run; keep the app usable instead.
+          process.stderr.write(`Rollback installer refused: ${error instanceof Error ? error.message : String(error)}\n`);
+        }
       }
     } else updateLaunchNeedsHealthMark = true;
   }

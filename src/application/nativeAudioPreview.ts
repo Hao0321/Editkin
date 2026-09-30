@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, rm, rmdir, writeFile } from "node:fs/promises";
+import { readBoundedFile } from "../shared/boundedFile";
 import { isAbsolute, join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 import type { EditProject, MediaAsset, TimelineClip } from "../domain/types";
@@ -237,13 +238,13 @@ export async function stageNativeAudioPreview(
       const outputPath = join(sessionRoot, `source-${String(index).padStart(2, "0")}.f32le`);
       managedPaths.push(outputPath);
       await runFfmpeg(options.ffmpegPath, buildNativeAudioPreviewDecoderArgs(item, outputPath), options.timeoutMs ?? 45_000);
-      const bytes = (await stat(outputPath)).size;
       const maximumBytes = Math.ceil(item.overlapDuration * NATIVE_AUDIO_PREVIEW_SAMPLE_RATE)
         * NATIVE_AUDIO_PREVIEW_CHANNELS * Float32Array.BYTES_PER_ELEMENT;
-      if (bytes <= 0 || bytes > maximumBytes || bytes % (NATIVE_AUDIO_PREVIEW_CHANNELS * Float32Array.BYTES_PER_ELEMENT) !== 0) {
+      const content = await readBoundedFile(outputPath, maximumBytes, { followSymlinks: true, messages: { tooLarge: `原生音訊來源 PCM bytes 不合法：超過 ${maximumBytes}` } });
+      const bytes = content.length;
+      if (bytes <= 0 || bytes % (NATIVE_AUDIO_PREVIEW_CHANNELS * Float32Array.BYTES_PER_ELEMENT) !== 0) {
         throw new Error(`原生音訊來源 PCM bytes 不合法：${bytes}/${maximumBytes}`);
       }
-      const content = await readFile(outputPath);
       const role = item.asset.role === "background-music" ? "music" : "voice";
       sourcePcm.push({
         id: `source-${index}`,

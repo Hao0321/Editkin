@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readBoundedFile } from "../shared/boundedFile";
 import { join, resolve } from "node:path";
 import * as z from "zod/v4";
 import { canonicalJson } from "../shared/canonicalJson";
@@ -57,9 +58,8 @@ export class MaterialPreparationJobs {
     } finally { await rm(temp, { force: true }); }
   }
   private async read(id: string) {
-    const path = this.path(id), info = await lstat(path);
-    if (!info.isFile() || info.isSymbolicLink() || info.size > 32768) throw Error("素材工作狀態檔不合法");
-    const state = stateSchema.parse(JSON.parse(await readFile(path, "utf8")));
+    const bytes = await readBoundedFile(this.path(id), 32768, { messages: { notRegular: "素材工作狀態檔不合法", tooLarge: "素材工作狀態檔不合法" } });
+    const state = stateSchema.parse(JSON.parse(bytes.toString("utf8")));
     if (state.jobId !== id) throw Error("素材工作識別不一致");
     return state;
   }
