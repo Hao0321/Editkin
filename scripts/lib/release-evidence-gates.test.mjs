@@ -1,0 +1,71 @@
+import { describe, expect, it } from "vitest";
+import {
+  deliveredArtifactJourneyMatches,
+  missingReleaseInputs,
+  releaseDistribution,
+  releaseEvidenceExitCode,
+  releaseEvidenceStatus,
+} from "./release-evidence-gates.mjs";
+
+const installerHash = "a".repeat(64);
+const executableHash = "b".repeat(64);
+const journey = {
+  status: "GREEN",
+  deliveryEnvelope: { sha256: installerHash },
+  deliveredExecutable: { sha256: executableHash },
+};
+
+describe("release evidence gates", () => {
+  it("reports exactly the unavailable inputs once, preserving input order", async () => {
+    const present = new Set(["package.json", "vendor/node/node.exe"]);
+    const required = ["package.json", "vendor/node/manifest.json", "vendor/node/node.exe", "installer.exe", "installer.exe"];
+    expect(await missingReleaseInputs(required, async (path) => present.has(path)))
+      .toEqual(["vendor/node/manifest.json", "installer.exe"]);
+    expect(await missingReleaseInputs([...present], (path) => present.has(path))).toEqual([]);
+  });
+
+  it.each([
+    [{ identity: false }, { signing: true }, "INTERNAL_RELEASE_BLOCKED", 1],
+    [{ identity: false }, { signing: false }, "INTERNAL_RELEASE_BLOCKED", 1],
+    [{ identity: true }, { signing: false }, "INTERNAL_GREEN_PUBLIC_BLOCKED", 1],
+    [{ identity: true }, { signing: true }, "PUBLIC_RELEASE_GREEN", 0],
+  ])("gives internal blocks precedence and only public green succeeds (%s, %s)", (internal, publicGates, status, exitCode) => {
+    expect(releaseEvidenceStatus(internal, publicGates)).toBe(status);
+    expect(releaseEvidenceExitCode(status)).toBe(exitCode);
+  });
+
+  it("fails closed for missing-input and unrecognized statuses", () => {
+    expect(releaseEvidenceExitCode("RELEASE_INPUTS_MISSING")).toBe(1);
+    expect(releaseEvidenceExitCode(undefined)).toBe(1);
+  });
+
+  it("accepts a green journey only for the exact installer and delivered executable", () => {
+    expect(deliveredArtifactJourneyMatches(journey, installerHash, executableHash)).toBe(true);
+    expect(deliveredArtifactJourneyMatches(journey, "c".repeat(64), executableHash)).toBe(false);
+    expect(deliveredArtifactJourneyMatches(journey, installerHash, "c".repeat(64))).toBe(false);
+    expect(deliveredArtifactJourneyMatches({ ...journey, status: "BLOCK" }, installerHash, executableHash)).toBe(false);
+    expect(deliveredArtifactJourneyMatches(null, installerHash, executableHash)).toBe(false);
+    expect(deliveredArtifactJourneyMatches({ status: "GREEN" }, undefined, undefined)).toBe(false);
+  });
+
+  it.each([
+    [{ Status: "NotSigned" }, { Status: "Valid" }],
+    [{ Status: "Valid" }, { Status: "NotSigned" }],
+    [{ Status: "Valid" }, null],
+    [{ Status: "UnknownError" }, { Status: "Valid" }],
+  ])("labels an unsigned or unverifiable envelope or payload as community-only (%s, %s)", (installer, executable) => {
+    expect(releaseDistribution(installer, executable, true)).toEqual({
+      label: "unsigned-community-binary",
+      autoUpdate: "disabled-until-authenticode-and-reviewed-project-key-update",
+    });
+  });
+
+  it("requires both Authenticode signatures and project-key metadata before update eligibility", () => {
+    const valid = { Status: "Valid" };
+    expect(releaseDistribution(valid, valid, false)).toEqual({
+      label: "authenticode-signed",
+      autoUpdate: "disabled-until-authenticode-and-reviewed-project-key-update",
+    });
+    expect(releaseDistribution(valid, valid, true)).toEqual({ label: "authenticode-signed", autoUpdate: "eligible" });
+  });
+});

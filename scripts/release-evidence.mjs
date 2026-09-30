@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { access, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { arch, hostname, platform, release } from "node:os";
 import { inspectAuthenticode } from "./lib/authenticode.mjs";
@@ -10,6 +10,7 @@ import { inspectRuntimeProvenance } from "./lib/runtime-provenance.mjs";
 import { inspectReleaseIdentity } from "./lib/release-identity.mjs";
 import { inspectDistributionArtifacts } from "./lib/artifact-lifecycle.mjs";
 import { validateSpdx } from "./lib/sbom.mjs";
+import { deliveredArtifactJourneyMatches, missingReleaseInputs, releaseDistribution, releaseEvidenceExitCode, releaseEvidenceStatus } from "./lib/release-evidence-gates.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const artifactRoot = resolve(root, "../../.rd/artifacts");
@@ -38,6 +39,54 @@ const packageJson = await json("package.json");
 const tauri = await json("src-tauri/tauri.conf.json");
 if (packageJson.version !== tauri.version) throw new Error(`package/Tauri version drift: ${packageJson.version} / ${tauri.version}`);
 const version = packageJson.version;
+const scope = "windows-x64-artifact";
+const evidencePath = resolve(process.argv[2] ?? resolve(artifactRoot, `editkin-${version}-windows-x64-release.json`));
+const installer = resolve(root, `src-tauri/target/release/bundle/nsis/Editkin_${version}_x64-setup.exe`);
+const executable = resolve(root, "src-tauri/target/release/editkin.exe");
+const bundledSbomPath = resolve(root, "release/editkin.spdx.json");
+const creativePackManifestPath = resolve(root, ".creative-packs/hao-creator-library/editkin-pack.json");
+const runtimePaths = [
+  "vendor/node/win32-x64/node.exe", "vendor/ffmpeg/win32-x64/ffmpeg.exe", "vendor/ffmpeg/win32-x64/ffprobe.exe",
+  "vendor/whisper/win32-x64/whisper-cli.exe", "vendor/whisper/win32-x64/whisper.dll", "vendor/whisper/win32-x64/ggml.dll", "vendor/whisper/win32-x64/ggml-base.dll", "vendor/whisper/win32-x64/ggml-cpu.dll",
+  "native/bin/win32-x64/hao-core.exe", "desktop-dist/service.mjs", "desktop-dist/mcp.mjs", "desktop-dist/mcp.mjs.material-color-identity.json", "desktop-dist/remote.mjs",
+].map((path) => resolve(root, path));
+const requiredInputs = [
+  "vendor/node/win32-x64/manifest.json", "vendor/node/win32-x64/NODE-LICENSE.txt",
+  ".build-node-receipt.json", "vendor/ffmpeg/win32-x64/corresponding-source.json",
+  "scripts/artifact-toolchain.json", "package-lock.json", "product-capabilities.json", "autopilot-capabilities.json",
+  "src/creative/haoCorePack.json", ".personal-packs/hao-music-library/editkin-personal-music.json",
+  "public/fonts/editkin-open-fonts.json", "src-tauri/Cargo.toml", "src/mcp/server.ts",
+  "vendor/ffmpeg/win32-x64/FFMPEG-LICENSE.txt", "vendor/whisper/win32-x64/WHISPER-LICENSE.txt",
+  "vendor/whisper/win32-x64/manifest.json", "native/bin/win32-x64/editkin-gpu-compositor.exe",
+  "public/demo-source.mp4", "public/editkin-demo-preview.mp4", ".release-input-manifest.json",
+  "release/THIRD_PARTY_NOTICES.md", "src/shared/agentSetupContract.json", "scripts/editkin-product-mcp-launcher.mjs",
+].map((path) => resolve(root, path));
+// The extraction tool's paths come from the checked-in toolchain receipt, not vendor inputs.
+if (await exists(resolve(root, "scripts/artifact-toolchain.json"))) {
+  const toolReceipt = await json("scripts/artifact-toolchain.json");
+  const sevenZipPath = resolve(root, toolReceipt.sevenZip.path);
+  requiredInputs.push(sevenZipPath, resolve(dirname(sevenZipPath), "../package.json"));
+}
+const missing = await missingReleaseInputs(
+  [...requiredInputs, installer, executable, bundledSbomPath, creativePackManifestPath, ...runtimePaths].map(relativePath),
+  (path) => exists(resolve(root, path)),
+);
+if (missing.length) {
+  const report = {
+    status: "RELEASE_INPUTS_MISSING",
+    scope,
+    missing,
+    externalActions: ["Provision the exact Windows release runtimes, build receipts, installer, source/license evidence, and creative packs before running this gate."],
+  };
+  try {
+    await mkdir(dirname(evidencePath), { recursive: true });
+    await writeFile(evidencePath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  } catch (error) {
+    report.externalActions.push(`Provide a writable evidence destination: ${error.code ?? "write-failed"}.`);
+  }
+  process.stdout.write(`${JSON.stringify(report)}\n`);
+  process.exit(releaseEvidenceExitCode(report.status));
+}
 const nodeManifest = await json("vendor/node/win32-x64/manifest.json");
 const buildNodeReceipt = await json(".build-node-receipt.json");
 const releaseIdentity = await inspectReleaseIdentity(root);
@@ -48,20 +97,8 @@ const runtimeProvenance = await inspectRuntimeProvenance({
   licensePath: resolve(root, "vendor/node/win32-x64/NODE-LICENSE.txt"),
   buildReceipt: buildNodeReceipt,
 });
-const bundleRoot = resolve(root, "src-tauri/target/release/bundle/nsis");
-const installers = (await readdir(bundleRoot)).filter((name) => name === `Editkin_${version}_x64-setup.exe`);
-if (installers.length !== 1) throw new Error(`Expected exactly one Editkin ${version} x64 NSIS installer; found ${installers.length}`);
-const installer = resolve(bundleRoot, installers[0]);
-const executable = resolve(root, "src-tauri/target/release/editkin.exe");
-const runtimePaths = [
-  "vendor/node/win32-x64/node.exe", "vendor/ffmpeg/win32-x64/ffmpeg.exe", "vendor/ffmpeg/win32-x64/ffprobe.exe",
-  "vendor/whisper/win32-x64/whisper-cli.exe", "vendor/whisper/win32-x64/whisper.dll", "vendor/whisper/win32-x64/ggml.dll", "vendor/whisper/win32-x64/ggml-base.dll", "vendor/whisper/win32-x64/ggml-cpu.dll",
-  "native/bin/win32-x64/hao-core.exe", "desktop-dist/service.mjs", "desktop-dist/mcp.mjs", "desktop-dist/mcp.mjs.material-color-identity.json", "desktop-dist/remote.mjs",
-].map((path) => resolve(root, path));
-for (const path of [installer, executable, ...runtimePaths]) if (!await exists(path)) throw new Error(`Missing release input: ${path}`);
 
 const created = new Date().toISOString();
-const bundledSbomPath = resolve(root, "release/editkin.spdx.json");
 const sbom = JSON.parse(await readFile(bundledSbomPath, "utf8"));
 const sbomReport = validateSpdx(sbom, { productVersion: version });
 const thirdPartyPackages = sbom.packages.filter((item) => item.SPDXID !== "SPDXRef-Editkin");
@@ -80,7 +117,6 @@ const publicUpdateChannelConfigured = (() => {
     return url.protocol === "https:" && !url.username && !url.password && !url.hash && !url.search;
   } catch { return false; }
 })();
-const creativePackManifestPath = resolve(root, ".creative-packs/hao-creator-library/editkin-pack.json");
 const creativePackRoot = dirname(creativePackManifestPath);
 const creativePackManifest = JSON.parse(await readFile(creativePackManifestPath, "utf8"));
 const creativePackReport = evaluateCreativePack(creativePackManifest, { root: creativePackRoot });
@@ -106,10 +142,48 @@ const ffmpegSourceEvidence = await inspectFfmpegCorrespondingSource({
   expectedBuild: "8.0-full_build-www.gyan.dev",
   expectedConfigurationFlags: ffmpegConfigurationFlags,
 });
+const installerEvidence = await fileEvidence(installer);
+const deliveredExecutable = artifactLifecycle.nsis?.deliveredExecutable;
+const deliveredJourneyPath = resolve(root, `../../.rd/benchmarks/editkin-delivered-journey-${version}-windows-x64.json`);
+let deliveredJourneyReceipt = null;
+let deliveredJourneyError = null;
+try { deliveredJourneyReceipt = await json(deliveredJourneyPath); }
+catch (error) { deliveredJourneyError = error.code ?? "invalid-receipt"; }
+const updateMetadataPath = process.env.EDITKIN_UPDATE_METADATA_FILE?.trim();
+const updateTrustPolicyPath = process.env.EDITKIN_UPDATE_TRUST_POLICY_FILE?.trim();
+let projectKeySignedUpdateMetadata = false;
+let updateMetadataVerification = { status: "BLOCK", reason: "metadata-and-reviewed-trust-policy-required" };
+if (updateMetadataPath && updateTrustPolicyPath) {
+  try {
+    const { tsImport } = await import("tsx/esm/api");
+    const { verifyTrustedUpdateEnvelope } = await tsImport("../src/application/updateTrust.ts", import.meta.url);
+    const [envelope, policy] = await Promise.all([json(resolve(updateMetadataPath)), json(resolve(updateTrustPolicyPath))]);
+    const decision = verifyTrustedUpdateEnvelope(envelope, policy, {
+      currentVersion: version,
+      currentProjectSchema: 8,
+      currentOsVersion: release(),
+      currentArtifactSha256: installerEvidence.sha256,
+    });
+    projectKeySignedUpdateMetadata = decision.status === "current"
+      && decision.metadata.version === version
+      && decision.metadata.artifact.sha256 === installerEvidence.sha256
+      && decision.metadata.artifact.size === installerEvidence.bytes
+      && policy.platform === "windows" && policy.arch === "x86_64" && policy.abi === "msvc"
+      && policy.manifestUrl === updateManifestUrl;
+    updateMetadataVerification = {
+      status: projectKeySignedUpdateMetadata ? "GREEN" : "BLOCK",
+      reason: projectKeySignedUpdateMetadata ? null : "metadata-does-not-match-release-artifact-channel-or-compatibility",
+    };
+  } catch (error) {
+    updateMetadataVerification = { status: "BLOCK", reason: error instanceof Error ? error.message : String(error) };
+  }
+}
 const publicGates = {
   authenticodeInstaller: installerSignature.Status === "Valid",
   authenticodeExecutable: artifactLifecycle.nsis?.deliveredExecutable?.authenticode?.Status === "Valid",
   publicUpdateChannelConfigured,
+  deliveredArtifactJourney: deliveredArtifactJourneyMatches(deliveredJourneyReceipt, installerEvidence.sha256, deliveredExecutable?.sha256),
+  projectKeySignedUpdateMetadata,
   productLicenseSelected: Boolean(productLicense && await exists(productLicense)),
   exactFfmpegCorrespondingSourceRetained: ffmpegSourceEvidence.ready,
   completeThirdPartyLicenseAggregation: sbomReport.status === "GREEN" && thirdPartyPackages.every((item) => item.licenseDeclared !== "NOASSERTION"),
@@ -125,14 +199,14 @@ const internalGates = {
   creatorPackValidated: creativePackReport.status === "GREEN" && artifactLifecycle.archive?.status === "GREEN",
   distributionArtifactsClosedWorld: artifactLifecycle.status === "GREEN",
 };
-const internalGreen = Object.values(internalGates).every(Boolean);
 const evidence = {
-  status: !internalGreen ? "INTERNAL_RELEASE_BLOCKED" : Object.values(publicGates).every(Boolean) ? "PUBLIC_RELEASE_GREEN" : "INTERNAL_GREEN_PUBLIC_BLOCKED",
+  status: releaseEvidenceStatus(internalGates, publicGates),
   product: { name: packageJson.productName, version, identifier: tauri.identifier, architecture: "x64" },
-  scope: "windows-x64-artifact",
+  scope,
   build: { created, host: hostname(), platform: platform(), release: release(), arch: arch(), node: process.version },
+  distribution: releaseDistribution(installerSignature, deliveredExecutable?.authenticode, projectKeySignedUpdateMetadata),
   artifacts: {
-    installer: await fileEvidence(installer),
+    installer: installerEvidence,
     buildExecutable: await fileEvidence(executable),
     deliveredExecutable: artifactLifecycle.nsis?.deliveredExecutable ? {
       path: `${relativePath(installer)}!/editkin.exe`,
@@ -158,9 +232,14 @@ const evidence = {
     privateReferenceImagesEmbedded: creativePackManifest.source?.privateImagesEmbedded ?? null,
   },
   ffmpegSourceEvidence,
+  deliveredArtifactJourney: { path: relativePath(deliveredJourneyPath), receipt: deliveredJourneyReceipt, error: deliveredJourneyError },
+  updateMetadataVerification,
   publicGates,
   externalActions: [
     !publicGates.authenticodeInstaller ? "Inject a trusted Windows signing identity and rebuild/sign the installer." : null,
+    !publicGates.authenticodeExecutable ? "Sign and verify the executable extracted from the final installer with a trusted Windows signing identity." : null,
+    !publicGates.deliveredArtifactJourney ? "Run scripts/tauri-delivered-smoke.mjs against the exact final installer and retain its GREEN receipt with matching installer and delivered executable SHA-256 hashes." : null,
+    !publicGates.projectKeySignedUpdateMetadata ? "Provide EDITKIN_UPDATE_METADATA_FILE and EDITKIN_UPDATE_TRUST_POLICY_FILE with an independently reviewed project-key trust policy and valid Ed25519 metadata bound to the final installer and configured update channel." : null,
     !publicGates.publicUpdateChannelConfigured ? "Configure a credential-free immutable HTTPS update manifest URL owned by the release operator." : null,
     !publicGates.productLicenseSelected ? "Release owner must select and provide the Editkin product license." : null,
     !publicGates.exactFfmpegCorrespondingSourceRetained ? "Retain and distribute the exact FFmpeg corresponding source/build information required by GPL." : null,
@@ -168,7 +247,7 @@ const evidence = {
     !publicGates.creatorPackPortableAndRedistributable ? "Rebuild and validate the portable Hao Creator Library archive." : null,
   ].filter(Boolean),
 };
-const evidencePath = resolve(process.argv[2] ?? resolve(artifactRoot, `editkin-${version}-windows-x64-release.json`));
+await mkdir(dirname(evidencePath), { recursive: true });
 await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
 process.stdout.write(`${JSON.stringify(evidence)}\n`);
-if (!evidence.status.startsWith("INTERNAL_GREEN") && evidence.status !== "PUBLIC_RELEASE_GREEN") process.exitCode = 1;
+process.exitCode = releaseEvidenceExitCode(evidence.status);
