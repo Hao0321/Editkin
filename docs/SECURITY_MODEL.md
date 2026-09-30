@@ -9,3 +9,13 @@ No automated verifier can prove that a pull request contains no malicious logic.
 5. **Runtime boundary:** external Skills, plugins, models, and media are untrusted inputs. Review requested permissions, use explicit user installation, and keep private user files and credentials out of telemetry and logs. A repository badge or popularity does not grant trust.
 
 The community source build currently has no signed installer claim. The 39 integration suites listed in [source-test-exclusions.json](../source-test-exclusions.json) need external runtimes, the separate video-autopilot skill, or generated release products; the default CI result does not cover them. The Windows Authenticode installer suite runs only on Windows. See [RELEASE.md](RELEASE.md) for the remaining official binary gate.
+
+## Desktop IPC path grants
+
+The desktop shells (Tauri, and the legacy Electron shell) do not trust file paths that arrive from the renderer. The main process keeps two allow-lists for the session:
+
+- **Project files:** the path the user picked in an open dialog, chose in a save dialog, or that a recovery snapshot records (recovery only stores granted paths). A regular save, and a recovery snapshot that names a project path, are refused for any other path. Project files must end in `.editkin.json` or `.haoedit.json`; `save_project` refuses other extensions and points the user to Save As.
+- **Source media:** files the user imported through the picker or by dropping them on the window (the drop is recorded by the native window event, not reported by the webview), plus the media referenced by a project the user opened. Preview URLs, proxy/cache preparation and analysis commands (smart cut, captions, scene detection, motion tracking, Auto Roto) refuse an absolute source outside this list. A relative source may only resolve inside the bundled asset base, without `..` or a URL scheme.
+- **Derived files:** proxy, thumbnail and waveform paths must be inside Editkin's `media-cache`.
+
+Limits: a project file you open still names its own media, so opening a hostile project grants those paths (see the UNC path guard for the network-share case). `render_project` and `render_alpha_master` take their asset list from the renderer and are not yet bound to this list, and the browser MCP server keeps its own workspace boundary.

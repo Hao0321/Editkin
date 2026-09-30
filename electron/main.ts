@@ -24,6 +24,8 @@ import {
 import type { EditProject, MediaAsset } from "../src/domain/types";
 import { registerBatchIpc } from "./batchIpc";
 import { registerUpdateIpc } from "./updateIpc";
+import { mediaGrants, projectGrants } from "./pathGrants";
+import { assertProjectFilePath, isWithinRoot, PROJECT_FILE_PATTERN, projectMediaPaths } from "../src/application/pathGrants";
 
 protocol.registerSchemesAsPrivileged([{
   scheme: "editkin-media",
@@ -66,10 +68,27 @@ function secureIpcHandle(channel: string, listener: Parameters<typeof ipcMain.ha
   });
 }
 
+// Absolute sources must be user-selected; a relative one resolves inside the bundled asset base only.
+function analysisSourcePath(sourcePath: string, assetBase: string): string {
+  if (isAbsolute(sourcePath)) {
+    mediaGrants.assertGranted(sourcePath, `媒體路徑尚未經使用者選擇或載入專案：${sourcePath}`);
+    return sourcePath;
+  }
+  const resolved = resolve(assetBase, sourcePath);
+  if (!isWithinRoot(assetBase, resolved)) throw new Error(`拒絕超出內建素材目錄的相對路徑：${sourcePath}`);
+  return resolved;
+}
+
 function runtimeUrls(assets: MediaAsset[]): Record<string, string> {
   const entries: Array<[string, string]> = [];
   for (const asset of assets) {
-    if (isAbsolute(asset.uri)) entries.push([`${asset.id}:source`, mediaUrl(asset.uri)]);
+    if (isAbsolute(asset.uri)) {
+      mediaGrants.assertGranted(asset.uri, `媒體路徑尚未經使用者選擇或載入專案：${asset.uri}`);
+      entries.push([`${asset.id}:source`, mediaUrl(asset.uri)]);
+    }
+    for (const derived of [asset.derivatives?.proxyUri, asset.derivatives?.overlayProxyUri, asset.derivatives?.thumbnailUri, asset.derivatives?.waveformUri]) {
+      if (derived && isAbsolute(derived)) assertDerivedMediaPath(derived);
+    }
     const proxy = asset.derivatives?.proxyUri;
     const preview = proxy && isAbsolute(proxy) ? proxy : asset.uri;
     if (isAbsolute(preview)) entries.push([asset.id, mediaUrl(preview)]);
@@ -94,6 +113,12 @@ async function runtimeUrlsWithCreative(assets: MediaAsset[]): Promise<Record<str
     if (!urls[asset.id]) urls[asset.id] = sourceUrl;
   }
   return urls;
+}
+
+// Derived files (proxy, thumbnail, waveform) are produced by Editkin itself, so
+// they must live in its media cache; sources must have been selected or loaded.
+function assertDerivedMediaPath(path: string): void {
+  if (!isWithinRoot(join(app.getPath("userData"), "media-cache"), path)) throw new Error(`拒絕媒體快取以外的衍生檔路徑：${path}`);
 }
 
 function runtimePaths() {
@@ -148,6 +173,7 @@ function registerIpc() {
     });
     if (result.canceled) return [];
     const paths = runtimePaths();
+    for (const path of result.filePaths) mediaGrants.grant(path);
     return Promise.all(result.filePaths.map(async (path, index) => {
       const kind = /\.(png|jpe?g|webp)$/i.test(path) ? "image" : /\.(mp3|wav|m4a|aac|flac)$/i.test(path) ? "audio" : "video";
       const probed = await inspectMedia(path, paths.ffprobe);
@@ -238,6 +264,7 @@ function registerIpc() {
     const creativeId = creativeAssetIdFromUri(payload.asset.uri);
     const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(paths.creativePackRoot, creativeId, paths.personalMusicRoot, paths.personalVisualRoot)).absolutePath : payload.asset.uri;
     if (!isAbsolute(sourcePath)) throw new Error("只有本機或 Creative Pack 素材能建立 proxy 與視覺快取");
+    if (!creativeId) mediaGrants.assertGranted(sourcePath, `媒體路徑尚未經使用者選擇或載入專案：${sourcePath}`);
     const probe = await inspectMedia(sourcePath, paths.ffprobe);
     const result = await generateMediaDerivatives({
       sourcePath,
@@ -255,7 +282,7 @@ function registerIpc() {
 
   secureIpcHandle("hao:smart-cut-media", async (_event, payload: { request: Parameters<typeof analyzeSmartCut>[0] }) => {
     const paths = runtimePaths();
-    const request = { ...payload.request, sourcePath: isAbsolute(payload.request.sourcePath) ? payload.request.sourcePath : resolve(paths.assetBase, payload.request.sourcePath) };
+    const request = { ...payload.request, sourcePath: analysisSourcePath(payload.request.sourcePath, paths.assetBase) };
     return analyzeSmartCut(request, { ffmpegPath: paths.ffmpeg, nativeCorePath: paths.nativeCore, cacheRoot: join(app.getPath("userData"), "media-cache") });
   });
 
@@ -264,7 +291,7 @@ function registerIpc() {
     const creativeId = creativeAssetIdFromUri(payload.request.sourcePath);
     const sourcePath = creativeId
       ? (await resolveCreativeLibraryAsset(paths.creativePackRoot, creativeId, paths.personalMusicRoot, paths.personalVisualRoot)).absolutePath
-      : isAbsolute(payload.request.sourcePath) ? payload.request.sourcePath : resolve(paths.assetBase, payload.request.sourcePath);
+      : analysisSourcePath(payload.request.sourcePath, paths.assetBase);
     return transcribeAutomaticCaptions({ ...payload.request, sourcePath }, {
       ffmpegPath: paths.ffmpeg,
       whisperCliPath: paths.whisperCli,
@@ -279,7 +306,7 @@ function registerIpc() {
     const creativeId = creativeAssetIdFromUri(payload.request.sourcePath);
     const sourcePath = creativeId
       ? (await resolveCreativeLibraryAsset(paths.creativePackRoot, creativeId, paths.personalMusicRoot, paths.personalVisualRoot)).absolutePath
-      : isAbsolute(payload.request.sourcePath) ? payload.request.sourcePath : resolve(paths.assetBase, payload.request.sourcePath);
+      : analysisSourcePath(payload.request.sourcePath, paths.assetBase);
     return analyzeSceneCuts({ ...payload.request, sourcePath }, {
       ffmpegPath: paths.ffmpeg,
       cacheRoot: join(app.getPath("userData"), "media-cache"),
@@ -291,13 +318,23 @@ function registerIpc() {
     const creativeId = creativeAssetIdFromUri(payload.request.sourcePath);
     const sourcePath = creativeId
       ? (await resolveCreativeLibraryAsset(paths.creativePackRoot, creativeId, paths.personalMusicRoot, paths.personalVisualRoot)).absolutePath
-      : isAbsolute(payload.request.sourcePath) ? payload.request.sourcePath : resolve(paths.assetBase, payload.request.sourcePath);
+      : analysisSourcePath(payload.request.sourcePath, paths.assetBase);
     return analyzeMotionTrack({ ...payload.request, sourcePath }, { ffmpegPath: paths.ffmpeg, nativeCorePath: paths.nativeCore, cacheRoot: join(app.getPath("userData"), "media-cache") });
   });
 
   const recoveryPath = () => join(app.getPath("userData"), "recovery", "session.json");
-  secureIpcHandle("hao:load-recovery", () => readRecoveryFile(recoveryPath()));
+  secureIpcHandle("hao:load-recovery", async () => {
+    const recovery = await readRecoveryFile(recoveryPath());
+    // The recovery file is only ever written from granted paths (see save-recovery).
+    if (recovery.found) {
+      const { projectPath, project } = recovery.snapshot;
+      if (projectPath && PROJECT_FILE_PATTERN.test(projectPath)) projectGrants.grant(projectPath);
+      for (const media of projectMediaPaths(project.assets)) mediaGrants.grant(media);
+    }
+    return recovery;
+  });
   secureIpcHandle("hao:save-recovery", async (_event, payload: { project: EditProject; projectPath?: string; cleanUpdatedAt: string }) => {
+    if (payload.projectPath) projectGrants.assertGranted(payload.projectPath, "專案路徑尚未經使用者選擇");
     await writeRecoveryFileAtomic(recoveryPath(), payload);
   });
   secureIpcHandle("hao:clear-recovery", () => clearRecoveryFile(recoveryPath()));
@@ -315,16 +352,22 @@ function registerIpc() {
     if (result.canceled || !result.filePaths[0]) return { canceled: true };
     const path = result.filePaths[0];
     const project = await readProjectFile(path);
+    projectGrants.grant(path);
+    for (const media of projectMediaPaths(project.assets)) mediaGrants.grant(media);
     return { canceled: false, path, project, runtimeUrls: await runtimeUrlsWithCreative(project.assets) };
   });
 
   secureIpcHandle("hao:save-project", async (_event, payload: { project: EditProject; currentPath?: string; saveAs?: boolean }) => {
     const regularSave = !payload.saveAs && Boolean(payload.currentPath);
     let path = regularSave ? payload.currentPath : undefined;
-    if (!path) {
+    if (path) {
+      projectGrants.assertGranted(path, "專案路徑尚未經使用者選擇；請使用「另存新檔」");
+      assertProjectFilePath(path);
+    } else {
       const result = await dialog.showSaveDialog({ title: "儲存 Editkin 專案", defaultPath: `${payload.project.name}.editkin.json`, filters: [{ name: "Editkin EditGraph", extensions: ["editkin.json", "haoedit.json"] }] });
       if (result.canceled || !result.filePath) return { canceled: true };
       path = /\.(?:editkin|haoedit)\.json$/i.test(result.filePath) ? result.filePath : `${result.filePath}.editkin.json`;
+      projectGrants.grant(path);
     }
     const project = await writeProjectFileAtomic(path, payload.project, regularSave ? payload.project.revision : null);
     return { canceled: false, path, project };

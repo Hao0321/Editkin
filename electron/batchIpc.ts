@@ -3,7 +3,9 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { runBatchAutoEditItem } from "../src/application/batchAutoEdit";
 import { inspectMedia } from "../src/application/inspectMedia";
+import { projectMediaPaths } from "../src/application/pathGrants";
 import { readProjectFile } from "../src/application/projectFiles";
+import { mediaGrants, projectGrants } from "./pathGrants";
 import type { EditorialProfileId, MediaAsset } from "../src/domain/types";
 import type { BatchAutoEditSession } from "../src/desktop/types";
 
@@ -152,6 +154,8 @@ export function registerBatchIpc({
     const job = session.jobs.find((item) => item.id === payload.jobId);
     if (!job?.projectPath) throw new Error("這個批次項目尚未產生可編輯專案");
     const project = await readProjectFile(job.projectPath);
+    projectGrants.grant(job.projectPath);
+    for (const media of projectMediaPaths(project.assets)) mediaGrants.grant(media);
     return {
       canceled: false,
       path: job.projectPath,

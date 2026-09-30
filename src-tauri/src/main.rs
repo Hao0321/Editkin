@@ -15,6 +15,7 @@ mod gpu_preview_cache;
 mod gpu_preview_owner;
 mod gpu_resident_process;
 mod media_probe_fields;
+mod path_grants;
 mod native_preview_playback;
 mod preview_process_platform;
 mod preview_service_process;
@@ -143,6 +144,8 @@ fn editkin_agent_launcher_contract(
 #[derive(Default)]
 struct AppState {
     services: Arc<service_pool::ServicePool>,
+    project_grants: Mutex<path_grants::PathGrants>,
+    media_grants: Mutex<path_grants::PathGrants>,
     pending_update: Mutex<Option<Value>>,
     update_job_result: Mutex<Option<Value>>,
     update_job_running: AtomicBool,
@@ -1309,6 +1312,115 @@ fn allow_path(app: &AppHandle, path: &str) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
+fn grant_project_file(app: &AppHandle, path: &Path) -> Result<(), String> {
+    app.state::<AppState>()
+        .project_grants
+        .lock()
+        .map_err(|_| "project grants lock poisoned")?
+        .grant(path);
+    Ok(())
+}
+
+fn grant_media_path(app: &AppHandle, path: &Path) -> Result<(), String> {
+    app.state::<AppState>()
+        .media_grants
+        .lock()
+        .map_err(|_| "media grants lock poisoned")?
+        .grant(path);
+    Ok(())
+}
+
+/// Opening a project is the user's selection of the media it refers to.
+fn grant_project_assets(app: &AppHandle, assets: &[Value]) -> Result<(), String> {
+    for asset in assets {
+        let sequence_preview = asset
+            .get("imageSequence")
+            .and_then(|item| item.get("previewUri"))
+            .and_then(Value::as_str);
+        for uri in std::iter::once(asset.get("uri").and_then(Value::as_str))
+            .chain(std::iter::once(sequence_preview))
+            .flatten()
+        {
+            if Path::new(uri).is_absolute() {
+                grant_media_path(app, Path::new(uri))?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn require_project_grant(app: &AppHandle, path: &Path) -> Result<(), String> {
+    if !path_grants::is_project_file_path(path) {
+        return Err("專案檔必須使用 .editkin.json 或 .haoedit.json 副檔名；請使用另存新檔".into());
+    }
+    let granted = app
+        .state::<AppState>()
+        .project_grants
+        .lock()
+        .map_err(|_| "project grants lock poisoned")?
+        .contains(path);
+    if granted {
+        Ok(())
+    } else {
+        Err(format!(
+            "專案路徑尚未經使用者選擇；請使用另存新檔：{}",
+            path.display()
+        ))
+    }
+}
+
+fn require_media_grant(app: &AppHandle, path: &Path) -> Result<(), String> {
+    let granted = app
+        .state::<AppState>()
+        .media_grants
+        .lock()
+        .map_err(|_| "media grants lock poisoned")?
+        .contains(path);
+    if granted {
+        Ok(())
+    } else {
+        Err(format!(
+            "媒體路徑尚未經使用者選擇或載入專案：{}",
+            path.display()
+        ))
+    }
+}
+
+/// Derived files (proxy, thumbnail, waveform) are written by Editkin, so they
+/// must live in its media cache, whatever the webview claims.
+fn require_derived_media_path(app: &AppHandle, path: &Path) -> Result<(), String> {
+    let root = application_cache_root(app)?.join("media-cache");
+    if path_grants::is_within(&root, path) {
+        Ok(())
+    } else {
+        Err(format!("拒絕媒體快取以外的衍生檔路徑：{}", path.display()))
+    }
+}
+
+/// An absolute source must be user-selected. A relative one resolves inside the
+/// bundled asset base, so it may not climb out of it or use a URL scheme.
+fn require_source_path(app: &AppHandle, source: &str) -> Result<(), String> {
+    let path = Path::new(source);
+    if path.is_absolute() || source.starts_with('/') || source.starts_with('\\') {
+        return require_media_grant(app, path);
+    }
+    if source.contains(':')
+        || path
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir))
+    {
+        return Err(format!("拒絕不安全的素材路徑：{source}"));
+    }
+    Ok(())
+}
+
+fn check_request_source_path(app: &AppHandle, request: &Value) -> Result<(), String> {
+    match request.get("sourcePath").and_then(Value::as_str) {
+        Some(source) if creative_asset_id(source)?.is_none() => require_source_path(app, source),
+        _ => Ok(()),
+    }
+}
+
 const PRODUCT_AUTO_ROTO_ENGINE: &str = "editkin-native-color-temporal-roto/v1";
 const PRODUCT_AUTO_ROTO_ROUTE_SCHEMA: &str = "editkin.auto-roto-product-route-receipt/v2";
 const PRODUCT_AUTO_ROTO_ROUTE_POLICY: &str = "editkin.auto-roto-product-artifact-policy/2";
@@ -2033,6 +2145,7 @@ fn collect_runtime_paths(
         let id = string_field(asset, "id")?;
         let source = string_field(asset, "uri")?;
         if Path::new(source).is_absolute() {
+            require_media_grant(app, Path::new(source))?;
             allow_path(app, source)?;
             paths.insert(format!("{id}:source"), Value::String(source.to_string()));
         }
@@ -2049,6 +2162,24 @@ fn collect_runtime_paths(
             .and_then(|item| item.get("previewUri"))
             .and_then(Value::as_str);
         let preview = proxy.or(sequence_preview).unwrap_or(source);
+        if let Some(path) = proxy {
+            require_derived_media_path(app, Path::new(path))?;
+        }
+        if let Some(path) = sequence_preview.filter(|path| Path::new(path).is_absolute()) {
+            require_media_grant(app, Path::new(path))?;
+        }
+        if let Some(path) = overlay_proxy.filter(|path| Path::new(path).is_absolute()) {
+            require_derived_media_path(app, Path::new(path))?;
+        }
+        for field in ["thumbnailUri", "waveformUri"] {
+            if let Some(path) = derivatives
+                .and_then(|item| item.get(field))
+                .and_then(Value::as_str)
+                .filter(|path| Path::new(path).is_absolute())
+            {
+                require_derived_media_path(app, Path::new(path))?;
+            }
+        }
         if Path::new(preview).is_absolute() {
             allow_path(app, preview)?;
             paths.insert(id.to_string(), Value::String(preview.to_string()));
@@ -2204,6 +2335,9 @@ async fn pick_media(app: AppHandle) -> Result<Vec<PickedMedia>, String> {
         )
         .pick_files()
         .unwrap_or_default();
+    for path in &selected {
+        grant_media_path(&app, path)?;
+    }
     import_media_path_bufs(&app, selected).await
 }
 
@@ -2252,6 +2386,8 @@ async fn import_media_paths(
         if !path.is_absolute() || !path.is_file() {
             return Err("拖入項目不是可讀取的媒體檔案".into());
         }
+        // The native drop event granted this path; a webview cannot invent one.
+        require_media_grant(&app, &path)?;
         if !supported_media_path(&path) {
             return Err(format!("不支援的媒體格式：{}", path.display()));
         }
@@ -2309,6 +2445,7 @@ async fn import_media_path_bufs(
             .and_then(Value::as_str)
             .unwrap_or(&path_string)
             .to_string();
+        grant_media_path(app, Path::new(&preview_path))?;
         allow_path(app, &preview_path)?;
         let mut asset = json!({
             "id": format!("asset-{timestamp}-{index}"),
@@ -2580,6 +2717,8 @@ async fn open_batch_project(
         .get("assets")
         .and_then(Value::as_array)
         .ok_or("專案缺少 assets")?;
+    grant_project_file(&app, Path::new(&project_path))?;
+    grant_project_assets(&app, assets)?;
     let runtime_paths = collect_runtime_paths_async(&app, assets).await?;
     let matte_preview_paths = collect_product_auto_roto_preview_paths(&app, &project)?;
     Ok(json!({
@@ -2771,6 +2910,7 @@ async fn prepare_media(app: AppHandle, asset: Value) -> Result<Value, String> {
         .await?;
         string_field(&resolved, "absolutePath")?.to_string()
     } else {
+        require_source_path(&app, &uri)?;
         uri.clone()
     };
     let probe = call_service(&app, "inspect_media", json!({ "path": source })).await?;
@@ -2804,11 +2944,13 @@ async fn prepare_media(app: AppHandle, asset: Value) -> Result<Value, String> {
 
 #[tauri::command]
 async fn smart_cut_media(app: AppHandle, request: Value) -> Result<Value, String> {
+    check_request_source_path(&app, &request)?;
     call_service(&app, "analyze_smart_cut", request).await
 }
 
 #[tauri::command]
 async fn automatic_caption_media(app: AppHandle, mut request: Value) -> Result<Value, String> {
+    check_request_source_path(&app, &request)?;
     if let Some(uri) = request.get("sourcePath").and_then(Value::as_str) {
         if let Some(asset_id) = creative_asset_id(uri)? {
             let resolved = call_service(
@@ -2825,6 +2967,7 @@ async fn automatic_caption_media(app: AppHandle, mut request: Value) -> Result<V
 
 #[tauri::command]
 async fn detect_scenes(app: AppHandle, mut request: Value) -> Result<Value, String> {
+    check_request_source_path(&app, &request)?;
     if let Some(uri) = request
         .get("sourcePath")
         .and_then(Value::as_str)
@@ -2845,6 +2988,7 @@ async fn detect_scenes(app: AppHandle, mut request: Value) -> Result<Value, Stri
 
 #[tauri::command]
 async fn analyze_motion_track(app: AppHandle, mut request: Value) -> Result<Value, String> {
+    check_request_source_path(&app, &request)?;
     if let Some(uri) = request
         .get("sourcePath")
         .and_then(Value::as_str)
@@ -3086,6 +3230,7 @@ async fn repair_auto_roto_video_model(
 
 #[tauri::command]
 async fn analyze_auto_roto(app: AppHandle, mut request: Value) -> Result<Value, String> {
+    check_request_source_path(&app, &request)?;
     if let Some(uri) = request
         .get("sourcePath")
         .and_then(Value::as_str)
@@ -3120,6 +3265,8 @@ async fn open_project(app: AppHandle) -> Result<Value, String> {
         .get("assets")
         .and_then(Value::as_array)
         .ok_or("專案缺少 assets")?;
+    grant_project_file(&app, &path)?;
+    grant_project_assets(&app, assets)?;
     let runtime_paths = collect_runtime_paths_async(&app, assets).await?;
     let matte_preview_paths = collect_product_auto_roto_preview_paths(&app, &project)?;
     Ok(
@@ -3157,7 +3304,10 @@ async fn save_project(
         None
     };
     let path = match target {
-        Some(path) => path,
+        Some(path) => {
+            require_project_grant(&app, &path)?;
+            path
+        }
         None => {
             let Some(path) = FileDialog::new()
                 .set_title("儲存 Editkin 專案")
@@ -3182,6 +3332,7 @@ async fn save_project(
             }
         }
     };
+    grant_project_file(&app, &path)?;
     let expected_revision = if regular_save {
         project.get("revision").cloned().unwrap_or(Value::Null)
     } else {
@@ -3215,6 +3366,21 @@ async fn load_recovery(app: AppHandle) -> Result<Value, String> {
         Some(project) => collect_product_auto_roto_preview_paths(&app, project)?,
         None => Vec::new(),
     };
+    // save_recovery only stores granted paths, so the recorded project path and
+    // the project's media were user-selected in an earlier session.
+    if let Some(project_path) = result
+        .pointer("/snapshot/projectPath")
+        .and_then(Value::as_str)
+        .filter(|path| path_grants::is_project_file_path(Path::new(path)))
+    {
+        grant_project_file(&app, Path::new(project_path))?;
+    }
+    if let Some(assets) = result
+        .pointer("/snapshot/project/assets")
+        .and_then(Value::as_array)
+    {
+        grant_project_assets(&app, assets)?;
+    }
     let mut response = result
         .as_object()
         .cloned()
@@ -3230,6 +3396,9 @@ async fn save_recovery(
     project_path: Option<String>,
     clean_updated_at: String,
 ) -> Result<(), String> {
+    if let Some(path) = project_path.as_deref() {
+        require_project_grant(&app, Path::new(path))?;
+    }
     call_service(
         &app,
         "write_recovery",
@@ -9905,6 +10074,17 @@ fn release_input_manifest() -> Result<Value, String> {
 fn main() {
     tauri::Builder::default()
         .manage(AppState::default())
+        .on_window_event(|window, event| {
+            // A file dropped on the window is the user's selection; record it here,
+            // in the native layer, so the webview cannot name paths it was never given.
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                if let Ok(mut grants) = window.state::<AppState>().media_grants.lock() {
+                    for path in paths {
+                        grants.grant(path);
+                    }
+                }
+            }
+        })
         .on_page_load(|webview, payload| {
             if webview.label() == "main"
                 && matches!(payload.event(), tauri::webview::PageLoadEvent::Started)
