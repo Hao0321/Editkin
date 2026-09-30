@@ -4,6 +4,7 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join } from "node:path";
 import { DEVICE_IDLE_LIFETIME_MS, deviceIdleExpired, PairingWindow } from "./pairingPolicy";
+import { assertRelayWebSocketUrl, parseRelayEnvelope, projectRemoteStatus } from "./relayContract";
 
 const token = process.env.EDITKIN_REMOTE_TOKEN;
 const queuePath = process.env.EDITKIN_REMOTE_QUEUE;
@@ -31,7 +32,6 @@ const activeWindowMs = 12_000;
 const sessionLifetimeMs = 12 * 60 * 60_000;
 const pairRateWindowMs = 60_000;
 const pairRateLimit = 10;
-const maxRelayEnvelopeBytes = 32_768;
 
 interface RemoteSession {
   credentialHash: string;
@@ -299,38 +299,6 @@ function sendRelay(clientId: string, payload: Record<string, unknown>) {
   if (relaySocket?.readyState === WebSocket.OPEN) relaySocket.send(JSON.stringify({ type: "desktop-response", clientId, payload }));
 }
 
-type RelayPayload = { type: "pair" | "status" | "command"; token?: unknown; deviceId?: unknown; name?: unknown; credential?: unknown; instruction?: unknown };
-type RelayEnvelope = { type: "mobile-message"; clientId: string; payload: RelayPayload };
-type RelayUpstreamEnvelope = RelayEnvelope | { type: "relay-ready" };
-
-function plainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function validRelayClientId(value: unknown): value is string {
-  return typeof value === "string" && /^[A-Za-z0-9._:-]{1,100}$/.test(value);
-}
-
-function parseRelayEnvelope(raw: unknown): RelayUpstreamEnvelope | undefined {
-  if (typeof raw !== "string" || Buffer.byteLength(raw, "utf8") > maxRelayEnvelopeBytes) return undefined;
-  let candidate: unknown;
-  try { candidate = JSON.parse(raw); } catch { return undefined; }
-  if (!plainObject(candidate)) return undefined;
-  if (candidate.type === "relay-ready") return { type: "relay-ready" };
-  if (candidate.type !== "mobile-message" || !validRelayClientId(candidate.clientId) || !plainObject(candidate.payload)) return undefined;
-  const payload = candidate.payload;
-  const deviceIdValid = typeof payload.deviceId === "string" && payload.deviceId.trim().length > 0 && payload.deviceId.length <= 100;
-  const credentialValid = payload.credential === undefined || (typeof payload.credential === "string" && payload.credential.length <= 100);
-  if (payload.type === "pair") {
-    if (typeof payload.token !== "string" || payload.token.length > 256 || !deviceIdValid || (payload.name !== undefined && (typeof payload.name !== "string" || payload.name.length > 60))) return undefined;
-  } else if (payload.type === "status") {
-    if (!deviceIdValid || !credentialValid) return undefined;
-  } else if (payload.type === "command") {
-    if (!deviceIdValid || !credentialValid || typeof payload.instruction !== "string" || !payload.instruction.trim() || payload.instruction.length > 1_000) return undefined;
-  } else return undefined;
-  return candidate as RelayEnvelope;
-}
-
 async function handleRelayMessage(raw: unknown): Promise<boolean> {
   const envelope = parseRelayEnvelope(raw);
   if (!envelope) return false;
@@ -340,7 +308,8 @@ async function handleRelayMessage(raw: unknown): Promise<boolean> {
     if (payload.type === "pair") {
       const now = Date.now();
       pruneState(now);
-      if (!pairRateAllowed(`relay:${envelope.clientId}`, now)) throw new Error("PAIRING_RATE_LIMITED");
+      // Client ids are chosen by the relay, so also bound pairing attempts across all of them.
+      if (!pairRateAllowed(`relay:${envelope.clientId}`, now) || !pairRateAllowed("relay:all-clients", now)) throw new Error("PAIRING_RATE_LIMITED");
       const paired = await pairRelayDevice(payload);
       sendRelay(envelope.clientId, { type: "paired", permanent: true, ...paired });
       return true;
@@ -351,9 +320,7 @@ async function handleRelayMessage(raw: unknown): Promise<boolean> {
       return true;
     }
     if (payload.type === "status") {
-      const current = await snapshot();
-      const { previewPath: _privatePath, ...safe } = current;
-      sendRelay(envelope.clientId, { type: "status", ...safe, deviceName: session.name, permanentlyPaired: true, previewAvailable: false, transport: "cloud-relay" });
+      sendRelay(envelope.clientId, { type: "status", ...projectRemoteStatus(await snapshot(), "relay"), deviceName: session.name, permanentlyPaired: true, previewAvailable: false, transport: "cloud-relay" });
       return true;
     }
     if (payload.type === "command") {
@@ -362,7 +329,7 @@ async function handleRelayMessage(raw: unknown): Promise<boolean> {
         sendRelay(envelope.clientId, { type: "error", error: "指令長度不合法" });
         return true;
       }
-      const key = `relay:${envelope.clientId}`;
+      const key = `relay-device:${session.deviceId}`;
       const now = Date.now();
       if (now - (recent.get(key) ?? 0) < 150) {
         sendRelay(envelope.clientId, { type: "error", error: "操作太快，請稍候" });
@@ -383,9 +350,11 @@ async function handleRelayMessage(raw: unknown): Promise<boolean> {
 
 function connectRelay() {
   if (!relayWebSocketUrl || !relayRoom || !relaySecret) return;
-  const socket = new WebSocket(relayWebSocketUrl);
+  const socket = new WebSocket(assertRelayWebSocketUrl(relayWebSocketUrl, relayRoom));
   relaySocket = socket;
   socket.addEventListener("open", () => {
+    // A client id only means something on the connection that issued it.
+    relaySessions.clear();
     relayRetryMs = 500;
     socket.send(JSON.stringify({ type: "desktop-auth", room: relayRoom, secret: relaySecret }));
   });
@@ -398,6 +367,7 @@ function connectRelay() {
   });
   socket.addEventListener("close", () => {
     if (relaySocket === socket) relaySocket = undefined;
+    relaySessions.clear();
     const delay = relayRetryMs;
     relayRetryMs = Math.min(15_000, relayRetryMs * 2);
     setTimeout(connectRelay, delay).unref();
@@ -482,6 +452,10 @@ const page = String.raw`<!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#08090d">
 <title>Editkin Remote</title><style>${pageStyle}</style></head><body><main class="shell"><div class="top"><div class="brand"><i>E</i> Editkin</div><div class="online" id="online" role="status" aria-live="polite">安全配對中</div></div><section class="card"><h1 id="name">讀取專案…</h1><div class="meta" id="meta"></div><div class="time" id="time">00:00.00</div><video class="preview" id="previewVideo" controls playsinline></video><img class="preview" id="previewImage" alt="目前素材預覽"><audio class="preview audio" id="previewAudio" controls></audio><div class="quick"><button data-command="復原">↶ 復原</button><button data-command="重做">↷ 重做</button><button data-command="在目前播放頭分割">✂ 分割選取</button><button data-command="壓緊空隙">⇥ 壓緊空隙</button><button data-command="智慧去停頓">✂ 智慧去停頓</button><button data-command="自動字幕">▣ 自動上字幕</button><button data-command="自動分鏡">▤ 自動分鏡</button><button data-command="智慧成片">✦ 智慧成片</button></div></section><section class="card"><textarea id="instruction" aria-label="剪輯指令" placeholder="直接說：智慧成片\n或：自動字幕"></textarea><button class="primary" id="send">送出剪輯指令</button><div class="caption-row"><input id="captionTime" aria-label="字幕時間（秒）" inputmode="decimal" placeholder="秒數"><input id="captionText" aria-label="字幕文字" placeholder="字幕文字"></div><button id="caption" class="primary">加入字幕</button><div class="status" id="status" role="status" aria-live="polite"></div><div class="hint">第一次掃碼會綁定這台裝置，閒置 30 天後需重新掃碼；QR 憑證只能使用一次，並會立刻從網址移除。之後桌機 Remote 上線即可自動重連，素材與 GPU 輸出仍留在桌機。</div></section></main><script>${pageScript}</script></body></html>`;
 
+if (relayWebSocketUrl) {
+  if (!relayRoom || !relaySecret) throw new Error("Editkin Remote relay 設定不完整");
+  assertRelayWebSocketUrl(relayWebSocketUrl, relayRoom);
+}
 await mkdir(remoteQueuePath, { recursive: true });
 await writeDeviceStatus();
 connectRelay();
@@ -524,10 +498,9 @@ const server = createServer(async (request, response) => {
     if (!await authenticate(request, url)) return send(response, 401, JSON.stringify({ error: "工作階段無效，請重新配對" }));
     if (url.pathname === "/api/status" && request.method === "GET") {
       const current = await snapshot();
-      const { previewPath: _privatePath, ...safe } = current;
       const credential = cookies(request).editkin_remote_device;
       const session = credential ? sessions.get(credentialHash(credential)) : undefined;
-      return send(response, 200, JSON.stringify({ ...safe, deviceName: session?.name, permanentlyPaired: true, previewAvailable: typeof current.previewPath === "string" }), undefined,
+      return send(response, 200, JSON.stringify({ ...projectRemoteStatus(current, "lan"), deviceName: session?.name, permanentlyPaired: true, previewAvailable: typeof current.previewPath === "string" }), undefined,
         credential ? { "set-cookie": deviceCookie(credential, requestIsSecure(request)) } : {});
     }
     if (url.pathname === "/api/preview" && request.method === "GET") return await servePreview(request, response);

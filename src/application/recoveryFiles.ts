@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { access, mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
+import { access, mkdir, open, rename, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { EditProject } from "../domain/types";
+import { readBoundedFile } from "../shared/boundedFile";
 import { parseProject } from "./projectFiles";
 
 export const RECOVERY_MAX_BYTES = 32 * 1024 * 1024;
@@ -53,8 +54,8 @@ export function parseRecoverySnapshot(
 
 async function readCandidate(path: string, nowMs: number, maxBytes: number): Promise<RecoverySnapshot | undefined> {
   if (!await exists(path)) return undefined;
-  if ((await stat(path)).size > maxBytes) throw new Error("recovery snapshot 超過大小上限");
-  return parseRecoverySnapshot(JSON.parse(await readFile(path, "utf8")), nowMs);
+  const bytes = await readBoundedFile(path, maxBytes, { followSymlinks: true, messages: { tooLarge: "recovery snapshot 超過大小上限" } });
+  return parseRecoverySnapshot(JSON.parse(bytes.toString("utf8")), nowMs);
 }
 
 export async function readRecoveryFile(

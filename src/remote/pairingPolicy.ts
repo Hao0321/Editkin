@@ -2,7 +2,9 @@
 export const DEVICE_IDLE_LIFETIME_MS = 30 * 24 * 60 * 60_000;
 
 export function deviceIdleExpired(lastSeenIso: string, now: number): boolean {
-  return now - Date.parse(lastSeenIso) > DEVICE_IDLE_LIFETIME_MS;
+  const lastSeen = Date.parse(lastSeenIso);
+  return !Number.isFinite(now) || !Number.isFinite(lastSeen) || lastSeen > now
+    || now - lastSeen > DEVICE_IDLE_LIFETIME_MS;
 }
 
 /**

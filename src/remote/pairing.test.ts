@@ -28,6 +28,12 @@ describe("pairing window", () => {
 });
 
 describe("device credential lifetime", () => {
+  it("fails closed for invalid or future last-seen times", () => {
+    const now = Date.parse("2026-01-01T00:00:00Z");
+    expect(deviceIdleExpired("invalid-date", now)).toBe(true);
+    expect(deviceIdleExpired("2026-01-02T00:00:00Z", now)).toBe(true);
+    expect(deviceIdleExpired("2026-01-01T00:00:00Z", Number.NaN)).toBe(true);
+  });
   it("expires after the idle lifetime, not before", () => {
     const seen = "2026-01-01T00:00:00.000Z";
     const base = Date.parse(seen);
