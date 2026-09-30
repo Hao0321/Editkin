@@ -11,6 +11,8 @@ export interface BoundedFileOptions {
 
 const READ_ONLY = constants.O_RDONLY;
 const NO_FOLLOW = constants.O_NOFOLLOW ?? 0;
+// A path switched to a FIFO must not block open before fstat can reject it.
+const NON_BLOCKING = constants.O_NONBLOCK ?? 0;
 const DEFAULT_MESSAGES = {
   notRegular: "path is not a regular file",
   tooLarge: "file exceeds its size limit",
@@ -36,7 +38,7 @@ export async function readBoundedFile(path: string, maxBytes: number, options: B
   const followed = options.followSymlinks === true;
   const before = followed ? undefined : await lstat(path);
   if (before && (before.isSymbolicLink() || !before.isFile())) throw new Error(text.notRegular);
-  const handle = await open(path, READ_ONLY | (followed ? 0 : NO_FOLLOW));
+  const handle = await open(path, READ_ONLY | NON_BLOCKING | (followed ? 0 : NO_FOLLOW));
   try {
     const opened = await handle.stat();
     if (!opened.isFile()) throw new Error(text.notRegular);
@@ -65,7 +67,7 @@ export function readBoundedFileSync(path: string, maxBytes: number, options: Bou
   const followed = options.followSymlinks === true;
   const before = followed ? undefined : lstatSync(path);
   if (before && (before.isSymbolicLink() || !before.isFile())) throw new Error(text.notRegular);
-  const descriptor = openSync(path, READ_ONLY | (followed ? 0 : NO_FOLLOW));
+  const descriptor = openSync(path, READ_ONLY | NON_BLOCKING | (followed ? 0 : NO_FOLLOW));
   try {
     const opened = fstatSync(descriptor);
     if (!opened.isFile()) throw new Error(text.notRegular);

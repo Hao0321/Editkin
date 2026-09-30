@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { access, lstat, mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { access, lstat, mkdir, open, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { migrateProject, validateProject } from "../domain/editGraph";
@@ -7,6 +7,7 @@ import { projectSchema } from "../domain/schema";
 import type { EditProject } from "../domain/types";
 import { resolveAestheticSystem } from "./editkinAesthetic";
 import { dehydrateAutoRotoFramePreviews } from "../domain/autoRotoPreviewProjection";
+import { readBoundedFile } from "../shared/boundedFile";
 
 export class ProjectRevisionConflictError extends Error {
   constructor(expected: number, actual: number) {
@@ -28,9 +29,24 @@ async function exists(path: string): Promise<boolean> {
   try { await access(path); return true; } catch { return false; }
 }
 
+export const PROJECT_MAX_BYTES = 64 * 1024 * 1024;
+
+/** Reads a user-selected project file, refusing one larger than `maxBytes` before it is buffered. */
+export async function readProjectText(path: string, maxBytes = PROJECT_MAX_BYTES): Promise<string> {
+  return (await readBoundedFile(path, maxBytes, {
+    // Preserve the existing user-selected project symlink behavior.
+    followSymlinks: true,
+    messages: {
+      notRegular: `專案路徑不是一般檔案：${path}`,
+      tooLarge: `專案檔超過 ${Math.floor(maxBytes / 1024 / 1024)} MiB 上限，拒絕讀取`,
+      changed: "專案檔在讀取時變動，拒絕讀取",
+    },
+  })).toString("utf8");
+}
+
 async function readCandidate(path: string): Promise<EditProject | undefined> {
   if (!await exists(path)) return undefined;
-  return parseProject(JSON.parse(await readFile(path, "utf8")));
+  return parseProject(JSON.parse(await readProjectText(path)));
 }
 
 export async function readProjectFile(path: string): Promise<EditProject> {

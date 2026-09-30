@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join } from "node:path";
+import { hostAllowed, resolveByteRange } from "./requestPolicy";
 import { DEVICE_IDLE_LIFETIME_MS, deviceIdleExpired, PairingWindow } from "./pairingPolicy";
 import { assertRelayWebSocketUrl, parseRelayEnvelope, projectRemoteStatus } from "./relayContract";
 
@@ -17,6 +18,7 @@ const relaySecret = process.env.EDITKIN_REMOTE_RELAY_SECRET;
 const healthProbeId = process.env.EDITKIN_REMOTE_HEALTH_PROBE_ID;
 const port = Number(process.env.EDITKIN_REMOTE_PORT ?? 0);
 const parentPid = Number(process.env.EDITKIN_REMOTE_PARENT_PID ?? 0);
+const allowedHosts = (process.env.EDITKIN_REMOTE_ALLOWED_HOSTS ?? "").split(",").map((host) => host.trim().toLowerCase()).filter(Boolean);
 if (!token || token.length < 12 || !queuePath || !snapshotPath || !devicesPath || !trustedDevicesPath || !healthProbeId || !/^[a-f0-9]{32}$/.test(healthProbeId) || !Number.isInteger(port) || port <= 0) {
   throw new Error("Editkin Remote 缺少安全啟動參數");
 }
@@ -444,21 +446,30 @@ async function servePreview(request: IncomingMessage, response: ServerResponse) 
   };
   const contentType = contentTypes[extname(path).toLowerCase()] ?? "application/octet-stream";
   const info = await stat(path);
-  const range = request.headers.range?.match(/^bytes=(\d*)-(\d*)$/);
-  const start = range?.[1] ? Number(range[1]) : 0;
-  const end = Math.min(range?.[2] ? Number(range[2]) : info.size - 1, info.size - 1);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start || start >= info.size) {
+  if (!info.isFile()) return send(response, 404, JSON.stringify({ error: "目前沒有可預覽素材" }));
+  const range = resolveByteRange(request.headers.range, info.size);
+  if (!range) {
     response.writeHead(416, { ...securityHeaders, "content-range": `bytes */${info.size}` });
     return response.end();
   }
-  response.writeHead(range ? 206 : 200, {
+  const { start, end, partial } = range;
+  response.writeHead(partial ? 206 : 200, {
     ...securityHeaders,
     "accept-ranges": "bytes",
     "content-length": end - start + 1,
-    "content-range": `bytes ${start}-${end}/${info.size}`,
+    ...(partial ? { "content-range": `bytes ${start}-${end}/${info.size}` } : {}),
     "content-type": contentType,
   });
-  createReadStream(path, { start, end }).pipe(response);
+  if (end < start) return response.end();
+  const stream = createReadStream(path, { start, end });
+  // The file can vanish or become unreadable after stat; without a listener that
+  // stream error would be uncaught and end the whole Remote process.
+  stream.on("error", () => {
+    process.stderr.write("Editkin Remote preview stream failed\n");
+    response.destroy();
+  });
+  response.on("close", () => stream.destroy());
+  stream.pipe(response);
 }
 
 const page = String.raw`<!doctype html>
@@ -474,6 +485,7 @@ await writeDeviceStatus();
 connectRelay();
 const server = createServer(async (request, response) => {
   try {
+    if (!hostAllowed(request.headers.host, allowedHosts)) return send(response, 421, JSON.stringify({ error: "不接受的 Host" }));
     const url = new URL(request.url ?? "/", "http://editkin.local");
     if (url.pathname === "/" && request.method === "GET") return send(response, 200, page, "text/html; charset=utf-8");
     if (url.pathname === "/api/health" && request.method === "GET") return send(response, 200, JSON.stringify({ schema: "editkin.remote-health/v1", probeId: remoteHealthProbeId }), "application/json; charset=utf-8", { "cache-control": "no-store" });
