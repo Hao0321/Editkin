@@ -19,6 +19,7 @@ export interface EditorShellProps {
   currentAestheticArtifact?: import("../domain/types").AestheticArtifactBinding;
   history: EditorHistory;
   project: EditProject;
+  projectPath?: string;
   projectSession: ProjectSession;
   duration: number;
   theme: EditorTheme;
@@ -57,10 +58,15 @@ export interface EditorShellProps {
   mobile: ReturnType<typeof useMobileRemote>;
   newProject: () => void;
   openProject: () => Promise<void>;
+  ensureAgentWorkingProject: () => Promise<string>;
+  reloadAgentProject: (agentPath?: string, allowConflictReplace?: boolean) => Promise<void>;
+  openCompletedAgentProject: (result: import("../application/agentProjectResult").AgentProjectResult) => Promise<boolean>;
+  projectSavePending: boolean;
   saveProject: (saveAs?: boolean) => Promise<void>;
   undoEdit: () => void;
   redoEdit: () => void;
   renderVideo: () => Promise<void>;
+  renderBusy: boolean;
   renderOpenExrSequence: () => Promise<void>;
   renderAlphaMaster: () => Promise<void>;
   importFiles: (files: File[]) => Promise<void>;

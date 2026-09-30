@@ -23,6 +23,12 @@ const library: CreativeLibrarySummary = {
 };
 
 describe("CreativeLibraryBrowser", () => {
+  it("explains how to start when the optional bundled pack is absent", () => {
+    const empty = { ...library, packInstalled: false, assetCount: 0, assetBytes: 0, assets: [], musicAssetCount: 0 };
+    const html = renderToStaticMarkup(<CreativeLibraryBrowser library={empty} />);
+    expect(html).toContain("此版本未附內建素材庫");
+    expect(html).toContain("加入自己的影片、音訊或圖片");
+  });
   it("exposes a typed readiness contract for packaged-product smoke tests",()=>{
     const ready=renderToStaticMarkup(<CreativeLibraryBrowser library={library}/>);
     expect(ready).toContain('data-library-count="3"');

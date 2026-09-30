@@ -46,8 +46,9 @@ import {
   applyProjectCommands,
   createProjectFile,
   inspectProject,
+  pinBoundProjectMediaSources,
   readProject,
-  resolveWorkspaceMediaPath,
+  resolveProjectAssetMediaPath,
   workspaceRoot,
 } from "./storage";
 
@@ -73,6 +74,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
     registerRemoteOnboardingTools(server, environment, { includeConfigure: false, includeVerify: false });
     return server;
   }
+  pinBoundProjectMediaSources(environment);
   // MCP is a standalone process, so it must initialize the same creative extensions
   // as the editor UI before any planner lists or applies a preset.
   motionGraphicPresets();
@@ -346,7 +348,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
     const asset = findAsset(project, clip.assetId);
     if (asset.kind !== "video") throw new Error("動態追蹤只支援影片片段");
     const creativeId = creativeAssetIdFromUri(asset.uri);
-    const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveWorkspaceMediaPath(asset.uri);
+    const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveProjectAssetMediaPath(asset.uri);
     const result = await analyzeMotionTrack({ sourcePath, sourceStart: clip.sourceStart, duration: clip.duration, fps: project.fps,
       sourceWidth: asset.width ?? project.width, sourceHeight: asset.height ?? project.height, initialTime, initialRect: rect,
       sourceSha256: asset.derivatives?.sourceSha256 }, {
@@ -494,7 +496,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       const asset = findAsset(project, clip.assetId);
       if (asset.kind === "image") throw new Error("Smart Cut 不支援圖片片段");
       const creativeId = creativeAssetIdFromUri(asset.uri);
-      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveWorkspaceMediaPath(asset.uri);
+      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveProjectAssetMediaPath(asset.uri);
       const result = await analyzeSmartCut({
         sourcePath, sourceStart: clip.sourceStart, duration: clip.duration, fps: project.fps,
         options: { thresholdDb, minSilence, padding, minKeep },
@@ -532,7 +534,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       const asset = findAsset(project, clip.assetId);
       if (asset.kind === "image") throw new Error("自動字幕不支援圖片片段");
       const creativeId = creativeAssetIdFromUri(asset.uri);
-      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveWorkspaceMediaPath(asset.uri);
+      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveProjectAssetMediaPath(asset.uri);
       const modelRoot = process.env.EDITKIN_MODEL_ROOT ?? resolve(workspaceRoot(), ".editkin-models");
       const result = await transcribeAutomaticCaptions({
         sourcePath,
@@ -578,7 +580,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       const asset = findAsset(project, clip.assetId);
       if (asset.kind !== "video") throw new Error("自動分鏡只支援影片片段");
       const creativeId = creativeAssetIdFromUri(asset.uri);
-      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveWorkspaceMediaPath(asset.uri);
+      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveProjectAssetMediaPath(asset.uri);
       const result = await analyzeSceneCuts({
         sourcePath,
         sourceStart: clip.sourceStart,
@@ -616,7 +618,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       const asset = findAsset(project, clip.assetId);
       if (asset.kind === "image") throw new Error("智慧成片不支援圖片片段");
       const creativeId = creativeAssetIdFromUri(asset.uri);
-      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveWorkspaceMediaPath(asset.uri);
+      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveProjectAssetMediaPath(asset.uri);
       const ffmpegPath = process.env.HAO_FFMPEG_PATH ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../vendor/ffmpeg/win32-x64/ffmpeg.exe") : "ffmpeg");
       const modelRoot = process.env.EDITKIN_MODEL_ROOT ?? resolve(workspaceRoot(), ".editkin-models");
       const transcriptPromise = transcribeAutomaticCaptions({

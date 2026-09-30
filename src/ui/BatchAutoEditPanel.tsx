@@ -51,7 +51,7 @@ export function BatchAutoEditPanel({ session, onClose, onRetry, onOpenProject }:
         </div>
         <footer className="batch-footer">
           <span>輸出資料夾</span><strong title={session.outputRoot}>{session.outputRoot}</strong>
-          <small>完整 Video Autopilot 美感剪輯請從「連接 AI」交給 Codex／Claude，逐支判讀素材並套用你目前的 Skill。這裡提供本機粗剪，按「繼續編輯」可調整剪點、字幕與配樂。</small>
+          <small>完整剪輯請在右側 Agent 交代目標，依實際素材判讀與目前規則執行。這裡提供本機粗剪，按「繼續編輯」可調整剪點、字幕與配樂。</small>
         </footer>
       </section>
     </div>

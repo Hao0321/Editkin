@@ -1,8 +1,9 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createFileSymlinkOrSkip } from "../testSupport/fileSymlink";
 import { readBoundedFile, readBoundedFileSync } from "./boundedFile";
 
 let root: string;
@@ -38,11 +39,11 @@ describe.each([
     await expect(read(directory, 10, { messages: { notRegular: "not regular" } })).rejects.toThrow();
   });
 
-  it("rejects a symlink unless following is explicitly requested", async () => {
+  it("rejects a symlink unless following is explicitly requested", async (context) => {
     const target = join(root, "target.txt");
     const link = join(root, "link.txt");
     await writeFile(target, "secret");
-    await symlink(target, link);
+    await createFileSymlinkOrSkip(target, link, context);
     await expect(read(link, 100, { messages: { notRegular: "no links" } })).rejects.toThrow("no links");
     expect((await read(link, 100, { followSymlinks: true })).toString()).toBe("secret");
   });

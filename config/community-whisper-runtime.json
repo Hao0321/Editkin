@@ -1,0 +1,76 @@
+{
+  "files": [
+    {
+      "bytes": 479232,
+      "name": "whisper-cli.exe",
+      "sha256": "95e3c0b0e778ad9499eb0125f97c1dcf437dd9eb4ea77050b043574f93c2631d"
+    },
+    {
+      "bytes": 1368064,
+      "name": "whisper.dll",
+      "sha256": "792fc523c7ad16e6b9c348e30ad5e5f591165cbcf6a80ca8d0db02a38ce3eea2"
+    },
+    {
+      "bytes": 67584,
+      "name": "ggml.dll",
+      "sha256": "894c6237ee7849843213906a2b6a0b371aaa6234048d465f206d910ae846fafb"
+    },
+    {
+      "bytes": 666624,
+      "name": "ggml-base.dll",
+      "sha256": "1482359d921b4c1b183d49db1d770f9b5e90d86a618b8b648d4845c2471ad6b0"
+    },
+    {
+      "bytes": 809984,
+      "name": "ggml-cpu-alderlake.dll",
+      "sha256": "d1c5411561361f7ce71ff8455ecf01f666f581b0608fa91a1dfe7d3fd6a25bd1"
+    },
+    {
+      "bytes": 853504,
+      "name": "ggml-cpu-cannonlake.dll",
+      "sha256": "2ef36f05fa252ff4fdcb8d42ebce1ceba4f3d3de12b93bed15bdee6237dccd63"
+    },
+    {
+      "bytes": 850944,
+      "name": "ggml-cpu-cascadelake.dll",
+      "sha256": "505899aaf3f99c5d714361640f561458ea97f8a09eb0614568a66bead2115cb0"
+    },
+    {
+      "bytes": 811008,
+      "name": "ggml-cpu-haswell.dll",
+      "sha256": "f8cf2f35a06498d783d77fde42004dd54d2f8236b0d42ac323b94bba65a603c4"
+    },
+    {
+      "bytes": 850944,
+      "name": "ggml-cpu-icelake.dll",
+      "sha256": "78ad143ee2e674d037b4840ef33b5748a0659762a26e0ae2b621c4f9451cbde8"
+    },
+    {
+      "bytes": 803328,
+      "name": "ggml-cpu-sandybridge.dll",
+      "sha256": "ee47db7dc40fb30eca73e62a05306059c2c3c42aecddf2e8d6ad7e530069b815"
+    },
+    {
+      "bytes": 852992,
+      "name": "ggml-cpu-skylakex.dll",
+      "sha256": "164e2793897944a43ee071ce6c0b09018088bdf4dd8b14ac0755c58849cf8c50"
+    },
+    {
+      "bytes": 790016,
+      "name": "ggml-cpu-sse42.dll",
+      "sha256": "7318a9a3b95a85b2453c437b274412bbbae89e5ecdf5babb19b99edc06ded063"
+    },
+    {
+      "bytes": 794112,
+      "name": "ggml-cpu-x64.dll",
+      "sha256": "af0f1c2f28ff9e3f472481dd969907bda85fa39d4fde17617d4bb0b389301b60"
+    }
+  ],
+  "license": "MIT",
+  "version": "v1.9.2",
+  "archive": {
+    "url": "https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.2/whisper-bin-x64.zip",
+    "sha256": "49dcc16de826f20bd53d44f947a1ae49dfa81f86cad67a64d80820cb192d674a"
+  },
+  "licenseSha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d"
+}

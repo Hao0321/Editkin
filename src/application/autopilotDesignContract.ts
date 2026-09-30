@@ -30,7 +30,8 @@ export type DesignEvidence = z.infer<typeof designEvidenceSchema>;
 
 // Metadata alone cannot demonstrate that a design decision changes a timeline.
 const visibleTypes = new Set([
-  "add_clip", "move_clip", "trim_clip", "split_clip", "delete_clip", "apply_smart_cut",
+  "add_clip", "move_clip", "move_clip_to_track", "trim_clip_start", "trim_clip_end",
+  "split_clip", "delete_clip", "ripple_delete_clip", "smart_cut_clip", "compact_track",
   "add_caption", "update_caption", "set_caption_style", "add_motion_graphic",
   "update_clip_transform", "update_clip_transform_3d", "set_clip_floating_frame", "set_clip_layout", "set_clip_creative",
   "set_clip_volume", "set_clip_color", "add_native_effect", "update_native_effect",

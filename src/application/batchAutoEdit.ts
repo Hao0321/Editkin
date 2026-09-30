@@ -35,6 +35,8 @@ export interface BatchAutoEditRuntime {
   nativeCorePath?: string;
   cacheRoot?: string;
   modelRoot: string;
+  modelPath?: string;
+  whisperCliPath?: string;
   creativePackRoot?: string;
   personalMusicRoot?: string;
   fontRoot?: string;
@@ -303,6 +305,8 @@ export async function runBatchAutoEditItem(
         }, {
           ffmpegPath: runtime.ffmpegPath,
           modelRoot: runtime.modelRoot,
+          modelPath: runtime.modelPath,
+          whisperCliPath: runtime.whisperCliPath,
           cacheRoot: runtime.cacheRoot,
         });
       } catch (error) {

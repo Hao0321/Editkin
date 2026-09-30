@@ -28,6 +28,15 @@ async function communityFixture() {
 }
 
 describe("community Creative Library", () => {
+  it("treats an absent optional pack as an empty library without masking a malformed installed pack", async () => {
+    const root = await mkdtemp(join(tmpdir(), "editkin-pack-absent-"));
+    const absent = await listCreativeLibrary(root);
+    expect(absent.packInstalled).toBe(false);
+    expect(absent.assetCount).toBe(0);
+    expect(absent.assets).toEqual([]);
+    await writeFile(join(root, "editkin-pack.json"), "not-json");
+    await expect(listCreativeLibrary(root)).rejects.toThrow();
+  });
   it("lists metadata without exposing a local path and verifies selected bytes", async () => {
     const { root, asset } = await communityFixture();
     const listed = await listCreativeLibrary(root);

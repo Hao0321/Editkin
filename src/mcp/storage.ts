@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import { mkdir, readFile, readdir, realpath, rename, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, isAbsolute, relative, resolve } from "node:path";
+import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ProjectRevisionConflictError, readProjectFile, writeProjectFileAtomic } from "../application/projectFiles";
 import { applyCommand, type EditorCommand } from "../domain/commands";
@@ -70,6 +71,59 @@ export async function resolveWorkspaceMediaPath(input: string): Promise<string> 
   return assertCanonicalWorkspaceBoundary(lexicalWorkspacePath(input, "素材路徑"));
 }
 
+// Pin only sources already present in the desktop's bound project when the MCP
+// server starts. The model cannot expand this set by importing another path.
+let boundProjectSources: ReadonlyMap<string, string> = new Map();
+
+export function pinBoundProjectMediaSources(environment: NodeJS.ProcessEnv = process.env): void {
+  boundProjectSources = new Map();
+  const projectPath = environment.EDITKIN_AGENT_PROJECT_PATH;
+  if (!projectPath) return;
+  const workspace = environment.EDITKIN_WORKSPACE;
+  if (!workspace || !isAbsolute(workspace) || !isAbsolute(projectPath)) throw new WorkspaceBoundaryError("Agent 專案綁定無效");
+  const canonicalWorkspace = realpathSync(workspace);
+  const canonicalProject = realpathSync(projectPath);
+  const projectRelation = relative(canonicalWorkspace, canonicalProject);
+  if (!projectRelation || projectRelation === ".." || projectRelation.startsWith(`..${sep}`) || isAbsolute(projectRelation)
+    || !statSync(canonicalProject).isFile() || statSync(canonicalProject).size > 64 * 1024 * 1024) {
+    throw new WorkspaceBoundaryError("Agent 專案檔超出工作區或大小限制");
+  }
+  const project = JSON.parse(readFileSync(canonicalProject, "utf8")) as { assets?: Array<{ uri?: unknown }> };
+  if (!Array.isArray(project.assets) || project.assets.length > 10_000) throw new WorkspaceBoundaryError("Agent 專案素材清單無效");
+  const sources = new Map<string, string>();
+  for (const asset of project.assets) {
+    const uri = asset?.uri;
+    if (typeof uri !== "string" || uri.length > 4096 || uri.startsWith("creative://") || uri.startsWith("editkin-composition://")) continue;
+    let path: string;
+    try { path = uri.startsWith("file:") ? fileURLToPath(uri) : uri; } catch { continue; }
+    if (!isAbsolute(path)) continue;
+    const lexicalRelation = relative(canonicalWorkspace, resolve(path));
+    if (lexicalRelation !== ".." && !lexicalRelation.startsWith(`..${sep}`) && !isAbsolute(lexicalRelation)) continue;
+    let canonicalSource: string;
+    try { canonicalSource = realpathSync(path); } catch { continue; }
+    const sourceRelation = relative(canonicalWorkspace, canonicalSource);
+    if (sourceRelation !== ".." && !sourceRelation.startsWith(`..${sep}`) && !isAbsolute(sourceRelation)) continue;
+    if (statSync(canonicalSource).isFile()) {
+      sources.set(uri, canonicalSource);
+      sources.set(canonicalSource, canonicalSource);
+    }
+  }
+  boundProjectSources = sources;
+}
+
+export async function resolveProjectAssetMediaPath(uri: string): Promise<string> {
+  const pinned = boundProjectSources.get(uri);
+  if (pinned) {
+    const raw = uri.startsWith("file:") ? fileURLToPath(uri) : uri;
+    let current: string;
+    try { current = await realpath(raw); }
+    catch { throw new WorkspaceBoundaryError("專案外部素材已不存在或路徑已改變"); }
+    if (current !== pinned) throw new WorkspaceBoundaryError("專案外部素材的實際路徑已改變");
+    return current;
+  }
+  return resolveWorkspaceMediaPath(uri.startsWith("file:") ? fileURLToPath(uri) : uri);
+}
+
 export async function readProject(projectPath: string): Promise<EditProject> {
   return readProjectFile(await resolveProjectPath(projectPath));
 }
@@ -82,7 +136,7 @@ export async function writeProject(projectPath: string, project: EditProject, ex
   const persisted = structuredClone(project);
   for (const asset of persisted.assets) {
     if (!asset.uri.startsWith("creative://") && !asset.uri.startsWith("editkin-composition://")) {
-      asset.uri = await resolveWorkspaceMediaPath(asset.uri.startsWith("file:") ? fileURLToPath(asset.uri) : asset.uri);
+      asset.uri = await resolveProjectAssetMediaPath(asset.uri);
     }
     if (asset.derivatives) {
       for (const key of ["proxyUri", "overlayProxyUri", "thumbnailUri", "waveformUri"] as const) {

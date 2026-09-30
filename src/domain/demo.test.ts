@@ -26,7 +26,7 @@ describe("community-safe demo project", () => {
 
   it("wires the interactive app to the UI preview without changing engine callers", () => {
     const appSource = readFileSync(resolve(process.cwd(), "src/App.tsx"), "utf8");
-    expect(appSource).toMatch(/import\s*\{\s*createUiDemoProject\s*\}\s*from\s*["']\.\/domain\/demo["'];/);
+    expect(appSource).toMatch(/import\s*\{[^}]*\bcreateUiDemoProject\b[^}]*\}\s*from\s*["']\.\/domain\/demo["'];/);
     expect(appSource).toContain("const demo = createUiDemoProject();");
     expect(appSource).not.toContain("const demo = createDemoProject();");
   });

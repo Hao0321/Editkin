@@ -55,6 +55,44 @@ export interface AutomaticCaptionRuntimeCapability {
   whisperCli: boolean;
 }
 
+export interface AutomaticCaptionReadiness {
+  status: "ready" | "model-download-needed" | "unavailable";
+  engine?: AutomaticCaptionEngine;
+  message: string;
+}
+
+/** Read-only preflight. It never downloads a model or changes the project. */
+export async function inspectAutomaticCaptionReadiness(
+  runtime: AutomaticCaptionRuntime,
+): Promise<AutomaticCaptionReadiness> {
+  let capability: AutomaticCaptionRuntimeCapability;
+  try {
+    capability = await assertAutomaticCaptionRuntime(runtime);
+  } catch {
+    return {
+      status: "unavailable",
+      message: "此版本的本機語音辨識執行器不可用。含語音的粗剪與逐字稿流程目前無法完成。",
+    };
+  }
+  try {
+    const modelPath = runtime.modelPath?.trim() || join(runtime.modelRoot, PINNED_WHISPER_MODEL.fileName);
+    if (!(await inspectWhisperModel(modelPath)).valid) {
+      return {
+        status: "model-download-needed",
+        engine: capability.engine,
+        message: "語音辨識模型尚未就緒；開始時需下載約 190 MB 模型。",
+      };
+    }
+  } catch {
+    return {
+      status: "unavailable",
+      engine: capability.engine,
+      message: "無法驗證本機語音辨識模型；請檢查安裝內容。",
+    };
+  }
+  return { status: "ready", engine: capability.engine, message: "本機語音辨識可用。" };
+}
+
 interface ModelInspection {
   valid: boolean;
   bytes: number;
@@ -360,7 +398,7 @@ export function buildWhisperCliArgs(
   translateToEnglish = false,
 ): string[] {
   return [
-    "-m", resolve(modelPath), "-f", audioPath, "-l", language,
+    "-m", modelPath, "-f", audioPath, "-l", language,
     ...(translateToEnglish ? ["-tr"] : []),
     "-osrt", "-of", outputPrefix, "-ml", String(whisperCaptionSegmentation(language).maxCharacters),
     // Chinese/Japanese and auto detection cannot use whitespace-only splitting:
@@ -458,8 +496,10 @@ async function transcribeWithWhisperCli(
     ], { timeoutMs, signal: runtime.signal, label: `${translateToEnglish ? "雙語字幕" : "自動字幕"}音訊準備` });
     await runAnalysisProcess(
       resolve(whisperCliPath),
-      buildWhisperCliArgs(modelPath, audioPath, outputPrefix, language, translateToEnglish),
-      { cwd: dirname(resolve(whisperCliPath)), timeoutMs, signal: runtime.signal, label: translateToEnglish ? "本機英文翻譯" : "本機 whisper-cli 轉錄" },
+      // The official Windows CLI accepts a narrow model argument. Keep that
+      // argument ASCII so a portable EXE inside a Chinese path still works.
+      buildWhisperCliArgs(basename(modelPath), audioPath, outputPrefix, language, translateToEnglish),
+      { cwd: dirname(resolve(modelPath)), timeoutMs, signal: runtime.signal, label: translateToEnglish ? "本機英文翻譯" : "本機 whisper-cli 轉錄" },
     );
     return parseWhisperRecognition(await readFile(`${outputPrefix}.srt`, "utf8"), request.duration);
   } finally {

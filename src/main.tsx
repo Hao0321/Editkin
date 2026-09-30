@@ -1,9 +1,11 @@
 import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
+import { startDesktopDropBroker } from "./desktop/desktopDropBroker";
 import "./styles.css";
 
 // Complete desktop API setup before evaluating App, while keeping the boot entry small.
 const App = lazy(async () => {
+  await startDesktopDropBroker();
   await import("./desktop/tauriBridge");
   if (typeof window !== "undefined") void window.haoDesktop?.integrationSmokeEnabled?.().then(async enabled => {
     if (enabled === true) (await import("./desktop/integrationUiPerformance")).installIntegrationUiPerformance(true);

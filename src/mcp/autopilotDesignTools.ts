@@ -10,6 +10,7 @@ import { assertMotionTreatmentBinding } from "../application/motionTreatment";
 import type { EditProject } from "../domain/types";
 import type { EditorCommand } from "../domain/commands";
 import { readProject } from "./storage";
+import { resolveAestheticSystemForDomain } from "../application/editkinAesthetic";
 
 export interface CurrentDesignBrief {
   schema: "hao.editkin.current-design-brief/v1";
@@ -23,8 +24,9 @@ export async function compileCurrentDesign(request: DesignRequest, options: { sk
   const skillPath = await resolveLiveVideoAutopilotSkillPath(options.skillPath);
   await readLiveAutopilotIdentity({ skillPath, pluginRoots: options.pluginRoots });
   const script = resolve(dirname(skillPath), "editkin_design_bridge.py");
-  const { stdout } = await promisify(execFile)(process.env.EDITKIN_PYTHON_EXECUTABLE ?? "python", ["-X", "utf8", script, "--request-json", JSON.stringify(request)], {
+  const { stdout } = await promisify(execFile)(process.env.EDITKIN_PYTHON_EXECUTABLE ?? "python", ["-B", "-X", "utf8", script, "--request-json", JSON.stringify(request)], {
     windowsHide: true, timeout: 30000, maxBuffer: 1024 * 1024, encoding: "utf8",
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" },
   });
   const brief = JSON.parse(stdout) as CurrentDesignBrief;
   if (brief.schema !== "hao.editkin.current-design-brief/v1" ||
@@ -86,8 +88,21 @@ function page(text: string, offset: number, maxTokens: number) {
 }
 
 export function registerAutopilotDesignTools(server: McpServer) {
+  server.registerTool("get_autopilot_aesthetic_system", {
+    description: "依目前 Kit 設計配方的 route.primary_family 產生完整 Editkin 美感結構，供 v4 plan.aesthetic 與 set_aesthetic_system 命令使用。先讀 get_autopilot_design_brief 的 beat 配方，再把實際家族 ID 傳給 selectedFamily；只讀，不認證美感。",
+    inputSchema: z.object({ domain: z.string().trim().min(1).max(64), format: z.enum(["longform", "shorts"]),
+      selectedFamily: z.string().trim().min(1).max(64) }),
+  }, async ({ domain, format, selectedFamily }) => {
+    try {
+      return { content: [{ type: "text" as const, text: JSON.stringify({ status: "GREEN",
+        aestheticSystem: resolveAestheticSystemForDomain(domain, format, selectedFamily) }) }] };
+    } catch (error) {
+      return { isError: true, content: [{ type: "text" as const, text: JSON.stringify({ status: "BLOCK",
+        error: error instanceof Error ? error.message : String(error) }) }] };
+    }
+  });
   server.registerTool("get_autopilot_design_brief", {
-    description: "從目前啟用的 Video Autopilot Skill 編譯段落設計配方；私人 Skill 可使用其學習記憶，公開 Kit 使用公開設計 DNA。分頁讀完 context 及每個 beat，將 identity、request、recipeSha256 與實際 commandIndexes 放入 v4 designEvidence。只讀，不認證美感。",
+    description: "從目前啟用的 Video Autopilot Skill 編譯段落設計配方；私人 Skill 可使用其學習記憶，公開 Kit 使用公開設計 DNA。若未確定目前 Kit 核准的 styleFamily，先省略 request.styleFamily；讀完 beat 配方的 route.primary_family，再呼叫 get_autopilot_aesthetic_system 取得 v4 美感結構。分頁讀完 context 及每個 beat，將 identity、request、recipeSha256 與實際 commandIndexes 放入 v4 designEvidence。只讀，不認證美感。",
     inputSchema: z.object({ projectPath: z.string(), request: designRequestSchema,
       pageId: z.string().max(90).default("context"), offset: z.number().int().nonnegative().default(0),
       maxTokens: z.number().int().min(300).max(900).default(900) }),
