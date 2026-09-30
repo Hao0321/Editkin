@@ -1428,10 +1428,30 @@ fn string_field<'a>(value: &'a Value, field: &str) -> Result<&'a str, String> {
         .ok_or_else(|| format!("缺少欄位：{field}"))
 }
 
+/// UNC (`\\host\share`), `\\?\UNC\` and device (`\\.\`, `\\?\Volume{..}`) paths
+/// are absolute on Windows, but touching one opens an SMB connection (and may
+/// send NTLM credentials) to a host named by an untrusted project file. Only a
+/// verbatim drive path (`\\?\C:\`) stays local.
+fn is_windows_network_path(path: &str) -> bool {
+    let normalized = path.replace('/', "\\");
+    let bytes = normalized.as_bytes();
+    let verbatim_drive = normalized.starts_with("\\\\?\\")
+        && bytes.len() >= 6
+        && bytes[4].is_ascii_alphabetic()
+        && bytes[5] == b':'
+        && bytes.get(6).is_none_or(|byte| *byte == b'\\');
+    normalized.starts_with("\\\\") && !verbatim_drive
+}
+
 fn allow_path(app: &AppHandle, path: &str) -> Result<(), String> {
     let candidate = Path::new(path);
     if !candidate.is_absolute() {
         return Err(format!("媒體路徑不是 absolute path：{path}"));
+    }
+    if cfg!(windows) && is_windows_network_path(path) {
+        return Err(format!(
+            "拒絕網路共用或裝置路徑作為媒體來源，請先複製到本機磁碟：{path}"
+        ));
     }
     app.asset_protocol_scope()
         .allow_file(candidate)
@@ -10622,6 +10642,32 @@ mod tests {
             "CN=Editkin Studio",
             &expected_sha
         ));
+    }
+
+    #[test]
+    fn windows_network_and_device_paths_are_not_local_media() {
+        for path in [
+            r"\\host\share\clip.mp4",
+            "//host/share/clip.mp4",
+            r"\\?\UNC\host\share\clip.mp4",
+            "//?/UNC/host/share/clip.mp4",
+            r"\\.\pipe\name",
+            r"\\?\Volume{01234567-89ab-cdef-0123-456789abcdef}\clip.mp4",
+            r"\\?\GLOBALROOT\Device\HarddiskVolume1\clip.mp4",
+            r"\\?\",
+        ] {
+            assert!(is_windows_network_path(path), "{path}");
+        }
+        for path in [
+            r"C:\media\clip.mp4",
+            "C:/media/clip.mp4",
+            r"\\?\C:\media\clip.mp4",
+            r"\\?\c:",
+            "/Users/someone/clip.mp4",
+            "media/clip.mp4",
+        ] {
+            assert!(!is_windows_network_path(path), "{path}");
+        }
     }
 
     #[test]

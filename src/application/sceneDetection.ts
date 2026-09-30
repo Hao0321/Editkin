@@ -2,6 +2,7 @@ import { runAnalysisProcess } from "./analysisProcess";
 import { createHash, randomUUID } from "node:crypto";
 import { access, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { assertLocalMediaPath } from "../shared/localMediaPath";
 
 export interface SceneDetectionRequest {
   sourcePath: string;
@@ -69,6 +70,7 @@ export async function analyzeSceneCuts(
   request: SceneDetectionRequest,
   runtime: { ffmpegPath: string; cacheRoot?: string; signal?: AbortSignal },
 ): Promise<SceneDetectionResult> {
+  assertLocalMediaPath(request.sourcePath);
   const startedAt = Date.now();
   runtime.signal?.throwIfAborted();
   const threshold = request.threshold ?? 10;
