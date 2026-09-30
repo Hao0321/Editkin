@@ -10,6 +10,10 @@ With an independently installed FFmpeg and ffprobe on `PATH` (verified with Home
 
 `npm run source:verify:self-test` checks the source verifier's negative controls. `npm run source:verify` checks the exact initial publication snapshot and its hash manifest. `npm run source:scan` checks the current checkout, including pull requests, for private paths, unexpected binaries, key patterns, and the CI permission boundary while allowing ordinary text source changes. New binary assets need maintainer review and a refreshed rights record. These checks support maintainer review; they cannot decide whether arbitrary contributor code is malicious.
 
+## Caption files
+
+The project menu can import SRT and WebVTT files as editable captions (all cues are added at their file times and undone with one Undo) and, in the browser build, export the project's captions as SRT or WebVTT. Import validates the whole file first and adds nothing if any cue is malformed. Text is exported as the primary caption only (translations are not written). The desktop app has no generic file-save channel yet, so export is browser-only there. Parsing and serialization live in `src/application/captionFiles.ts`.
+
 ## Desktop and release path
 
 The Rust and Tauri source is included for development. The desktop media pipeline needs platform-specific runtimes and generated color/font products. A developer must fetch or build those from their upstream sources and comply with their licenses. The existing internal release scripts may expect owner-only creative packs or signing inputs; their failure in this community checkout is an explicit limitation, not a request to obtain the maintainer's private files.

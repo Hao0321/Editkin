@@ -1,7 +1,8 @@
 import { lazy, Suspense, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import "./generated/fontFaces.css";
 import { activeMediaLayers } from "./application/previewMedia";
-import { downloadEditGraph } from "./application/exportGraph";
+import { downloadEditGraph, downloadTextFile, projectDownloadName } from "./application/exportGraph";
+import { buildImportCaptionsCommand, CAPTION_FILE_MAX_BYTES, parseCaptionFile, serializeCaptions, type CaptionFileFormat } from "./application/captionFiles";
 import { buildMobileSnapshot } from "./desktop/mobileSnapshot";
 import { useAutomaticUpdates } from "./desktop/useAutomaticUpdates";
 import { useEditorShortcuts } from "./desktop/useEditorShortcuts";
@@ -198,6 +199,23 @@ function App() {
     }, `已在 ${playhead.toFixed(2)} 秒加入字幕。`);
     setSelectedClipId(undefined);
     setSelectedCaptionId(captionId);
+  };
+  const exportCaptions = (format: CaptionFileFormat) => {
+    if (!project.captions.some((caption) => caption.text.trim())) return setStatus("目前沒有字幕可以匯出。");
+    const fileName = projectDownloadName(project, format);
+    downloadTextFile(fileName, serializeCaptions(project.captions, format), format === "srt" ? "application/x-subrip" : "text/vtt");
+    setStatus(`已匯出 ${format.toUpperCase()} 字幕：${fileName}`);
+  };
+  const importCaptions = async (file: File) => {
+    const sessionId = projectSession.getSnapshot().sessionId;
+    try {
+      if (file.size > CAPTION_FILE_MAX_BYTES) throw new Error(`${file.name} 超過 ${CAPTION_FILE_MAX_BYTES / 1024 / 1024} MB，不像是字幕檔。`);
+      const cues = parseCaptionFile(await file.text());
+      if (!projectSession.isCurrentSession(sessionId)) return;
+      runCommand(buildImportCaptionsCommand(projectSession.getSnapshot().history.present, cues, () => makeId("caption")), `已從 ${file.name} 匯入 ${cues.length} 句字幕。復原一次即可全部移除。`);
+    } catch (error) {
+      if (projectSession.isCurrentSession(sessionId)) setStatus(error instanceof Error ? error.message : "無法匯入字幕檔");
+    }
   };
   const addTrack = (kind: "video" | "audio") => {
     const existing = project.tracks.filter((track) => track.kind === kind).length;
@@ -561,7 +579,7 @@ function App() {
     selectedClipAtPlayhead, selectedCaption, transitionNeighbors, selectedMotionTracks, activeLayers,
     activeAudioLayers, runtimeUrls, status, setStatus, trackingMode, setTrackingMode, trackingSelection,
     setTrackingSelection, trackingBusy, recovery, desktopActions, automatic, creativeLibrary, batchAutoEdit, mobile,
-    newProject, openProject, saveProject, undoEdit, redoEdit, renderVideo, renderOpenExrSequence, renderAlphaMaster, importFiles,
+    exportCaptions, importCaptions, newProject, openProject, saveProject, undoEdit, redoEdit, renderVideo, renderOpenExrSequence, renderAlphaMaster, importFiles,
     acceptTrackingSelection, startPodcastDirector, submitAgentInstruction, runCommand, updateAnimatedClipProperty,
     addMotionGraphic, addCaption, addTrack, addAssetToTimeline, makeSelectedPictureInPicture, precomposeSelected, applyShortFormTemplate, applyLongFormTemplate, addLowerThird, clearTemplateApplication, splitSelected, deleteSelected,
   }} /></Suspense>;

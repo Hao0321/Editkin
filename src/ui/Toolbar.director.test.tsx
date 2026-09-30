@@ -17,7 +17,7 @@ describe("Director workspace entry", () => {
     const menu = { open: true };
     const noop = () => {};
     const onDirectorConsole = vi.fn(() => { if (parentExists) expect(menu.open).toBe(false); });
-    const props: Parameters<typeof Toolbar>[0] = {projectName:"P1", hasUserMedia:true, workspaceMode:"editor", theme:"sky", onThemeChange:noop, dirty:false, recoveryState:"idle", playhead:0, canUndo:false, canRedo:false, isDesktop:true, onNew:noop, onOpen:noop, onSave:noop, onUndo:noop, onRedo:noop, onExport:noop, onOpenAgentConnect:noop, onCheckUpdates:noop, onDirectorConsole, onHelp:noop};
+    const props: Parameters<typeof Toolbar>[0] = {projectName:"P1", hasUserMedia:true, workspaceMode:"editor", theme:"sky", onThemeChange:noop, dirty:false, recoveryState:"idle", playhead:0, canUndo:false, canRedo:false, isDesktop:true, onNew:noop, onOpen:noop, onSave:noop, onImportCaptions:noop, onUndo:noop, onRedo:noop, onExport:noop, onOpenAgentConnect:noop, onCheckUpdates:noop, onDirectorConsole, onHelp:noop};
     const action = findAction(Toolbar(props));
     expect(action).toBeDefined();
     const closest = vi.fn(() => parentExists ? menu : null);
