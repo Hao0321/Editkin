@@ -1077,8 +1077,8 @@
     },
     {
       "path": "scripts/auto-roto-native-product-artifact-freshness-gate.ts",
-      "bytes": 45792,
-      "sha256": "ccb936c80199be45da15cb071f80c16907af27f17a10ae6b31b222b7f529b330",
+      "bytes": 45857,
+      "sha256": "3f990f4e6dbeeb2d057ad6db86f2556ca26ed8a45af1e7515549f3683dfb5181",
       "origin": "scripts/auto-roto-native-product-artifact-freshness-gate.ts",
       "rights": "GPL-3.0-or-later"
     },
