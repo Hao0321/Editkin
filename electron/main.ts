@@ -1,5 +1,4 @@
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, type IpcMainInvokeEvent } from "electron";
-import { spawn } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -23,7 +22,7 @@ import {
 } from "../src/application/updateManager";
 import type { EditProject, MediaAsset } from "../src/domain/types";
 import { registerBatchIpc } from "./batchIpc";
-import { registerUpdateIpc } from "./updateIpc";
+import { launchRollbackInstaller, registerUpdateIpc } from "./updateIpc";
 
 protocol.registerSchemesAsPrivileged([{
   scheme: "editkin-media",
@@ -424,9 +423,14 @@ app.whenReady().then(async () => {
     if (launch.status === "rollback_required") {
       const installer = await rollbackInstaller(transactionPath);
       if (installer) {
-        spawn(installer, ["/S"], { detached: true, stdio: "ignore", windowsHide: true }).unref();
-        app.quit();
-        return;
+        try {
+          await launchRollbackInstaller(installer);
+          app.quit();
+          return;
+        } catch (error) {
+          // An installer that fails the pinned-publisher check is never run; keep the app usable instead.
+          process.stderr.write(`Rollback installer refused: ${error instanceof Error ? error.message : String(error)}\n`);
+        }
       }
     } else updateLaunchNeedsHealthMark = true;
   }

@@ -3,14 +3,15 @@ import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { verifyStagedUpdateCache } from "../src/application/updateCache";
 import {
-  assertUpdateManifestUrl,
   compareVersions,
   createUpdateTransaction,
-  parseUpdateManifest,
+  loadUpdateManifest,
   readUpdateTransaction,
   signerIdentityMatches,
   stageUpdate,
+  UPDATE_PUBLISHER_PIN,
   type StagedUpdate,
+  type UpdatePublisherPin,
 } from "../src/application/updateManager";
 
 type SecureIpcHandle = (channel: string, listener: Parameters<typeof ipcMain.handle>[1]) => void;
@@ -53,18 +54,26 @@ function spawnInstaller(path: string): Promise<void> {
   });
 }
 
-export function registerUpdateIpc(secureIpcHandle: SecureIpcHandle): void {
+/** Starts the previous installer only if it carries the build's pinned publisher signature. */
+export async function launchRollbackInstaller(path: string, publisher: UpdatePublisherPin | undefined = UPDATE_PUBLISHER_PIN): Promise<void> {
+  if (!publisher) throw new Error("此版本沒有內建釘選的發布者 Authenticode 身分，拒絕執行 rollback installer");
+  await verifyAuthenticode(path, publisher.signatureSubject, publisher.signatureSha256);
+  await spawnInstaller(path);
+}
+
+export function registerUpdateIpc(secureIpcHandle: SecureIpcHandle, publisher: UpdatePublisherPin | undefined = UPDATE_PUBLISHER_PIN): void {
   let pendingUpdate: Readonly<StagedUpdate> | undefined;
   let operation: "checking" | "installing" | "started" | undefined;
   secureIpcHandle("hao:check-updates", async (_event, options?: { download?: boolean }) => {
     if (operation) return { status: "busy", message: "已有更新檢查或安裝正在進行，請稍候。" };
     operation = "checking";
     try {
-      const manifestUrl = process.env.EDITKIN_UPDATE_MANIFEST_URL ?? process.env.HAO_EDITOR_UPDATE_MANIFEST_URL;
+      // Only development builds may redirect the channel; a packaged build follows its pinned manifest URL.
+      const developmentManifestUrl = app.isPackaged ? undefined
+        : process.env.EDITKIN_UPDATE_MANIFEST_URL ?? process.env.HAO_EDITOR_UPDATE_MANIFEST_URL;
+      const manifestUrl = developmentManifestUrl ?? publisher?.manifestUrl;
       if (!manifestUrl) return { status: "unconfigured", message: "更新頻道尚未設定；本機 checksum／rollback 引擎已啟用。" };
-      const response = await fetch(assertUpdateManifestUrl(manifestUrl));
-      if (!response.ok) throw new Error(`更新 manifest 讀取失敗：HTTP ${response.status}`);
-      const manifest = parseUpdateManifest(await response.json());
+      const manifest = await loadUpdateManifest(manifestUrl, { publisher });
       if (compareVersions(manifest.version, app.getVersion()) <= 0) {
         pendingUpdate = undefined;
         return { status: "current", message: "目前已是最新版。" };
@@ -72,7 +81,7 @@ export function registerUpdateIpc(secureIpcHandle: SecureIpcHandle): void {
       if (manifest.minimumProjectSchema > 6) throw new Error("這個更新需要尚未支援的專案 schema");
       if (options?.download === false) return { status: "available", version: manifest.version, message: `有新版本 ${manifest.version}；尚未下載。` };
       const staged = await stageUpdate(manifest, {
-        currentVersion: app.getVersion(), currentProjectSchema: 6, cacheRoot: join(app.getPath("userData"), "updates"),
+        currentVersion: app.getVersion(), currentProjectSchema: 6, cacheRoot: join(app.getPath("userData"), "updates"), publisher,
       });
       pendingUpdate = staged ? Object.freeze({ ...staged }) : undefined;
       return pendingUpdate
@@ -90,14 +99,12 @@ export function registerUpdateIpc(secureIpcHandle: SecureIpcHandle): void {
     const cacheRoot = join(app.getPath("userData"), "updates");
     operation = "installing";
     try {
-      const unsignedDevelopmentUpdate = !app.isPackaged && process.env.HAO_EDITOR_ALLOW_UNSIGNED_UPDATES === "1";
-      if ((!selected.signatureSubject || !selected.signatureSha256) && !unsignedDevelopmentUpdate) {
-        return { started: false, message: "更新沒有完整 Authenticode subject／certificate fingerprint，release 模式拒絕執行。" };
+      const unsignedDevelopmentUpdate = !publisher && !app.isPackaged && process.env.HAO_EDITOR_ALLOW_UNSIGNED_UPDATES === "1";
+      if (!publisher && !unsignedDevelopmentUpdate) {
+        return { started: false, message: "此版本沒有內建釘選的發布者 Authenticode 身分，release 模式拒絕執行 installer。" };
       }
       await verifyStagedUpdateCache(cacheRoot, selected);
-      if (selected.signatureSubject && selected.signatureSha256) {
-        await verifyAuthenticode(selected.artifactPath, selected.signatureSubject, selected.signatureSha256);
-      }
+      if (publisher) await verifyAuthenticode(selected.artifactPath, publisher.signatureSubject, publisher.signatureSha256);
       const choice = await dialog.showMessageBox({
         type: "question", title: "安裝更新", message: `安裝版本 ${selected.version}？`,
         detail: "專案檔不會被移動；應用程式將關閉，由已驗證的 installer 完成更新。", buttons: ["安裝並重新啟動", "取消"], defaultId: 0, cancelId: 1,
@@ -109,7 +116,7 @@ export function registerUpdateIpc(secureIpcHandle: SecureIpcHandle): void {
         ? previousTransaction.stagedArtifact : undefined;
       await createUpdateTransaction(transactionPath, {
         fromVersion: app.getVersion(), toVersion: selected.version, stagedArtifact: selected.artifactPath,
-        previousInstaller: process.env.HAO_EDITOR_PREVIOUS_INSTALLER ?? cachedCurrentInstaller,
+        previousInstaller: (app.isPackaged ? undefined : process.env.HAO_EDITOR_PREVIOUS_INSTALLER) ?? cachedCurrentInstaller,
       });
       // Recheck the same selected digest after every asynchronous confirmation /
       // transaction step, immediately before starting that exact installer path.
