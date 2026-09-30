@@ -13,6 +13,7 @@ vi.mock("electron", () => ({ app: mocks.app, dialog: { showMessageBox: mocks.sho
 vi.mock("node:child_process", () => ({ spawn: mocks.spawn }));
 vi.mock("../src/application/updateManager", async (importOriginal) => ({
   ...await importOriginal<typeof import("../src/application/updateManager")>(),
+  UPDATE_PUBLISHER_PIN: undefined,
   stageUpdate: mocks.stageUpdate, createUpdateTransaction: mocks.createUpdateTransaction,
   readUpdateTransaction: mocks.readUpdateTransaction,
 }));
@@ -20,7 +21,7 @@ vi.mock("../src/application/updateCache", async (importOriginal) => ({
   ...await importOriginal<typeof import("../src/application/updateCache")>(),
   verifyStagedUpdateCache: mocks.verifyStagedUpdateCache,
 }));
-import { registerUpdateIpc } from "../electron/updateIpc";
+import { launchRollbackInstaller, registerUpdateIpc } from "../electron/updateIpc";
 
 type Handler = (...args: unknown[]) => Promise<Record<string, unknown>>;
 type FakeChild = EventEmitter & { stdout: PassThrough; stderr: PassThrough; unref: ReturnType<typeof vi.fn> };
@@ -29,6 +30,7 @@ const userData = join(process.cwd(), "isolated-ipc-fixture-not-written");
 const cacheRoot = join(userData, "updates");
 let nextVersion = "2.0.0";
 let records: Record<string, StagedUpdate>;
+const pin = { manifestUrl: "https://updates.example/stable.json", signatureSubject: "CN=Editkin Test", signatureSha256: "c".repeat(64) };
 
 function deferred<T = void>() {
   let resolve!: (value: T) => void;
@@ -73,7 +75,8 @@ const installerCalls = () => mocks.spawn.mock.calls.filter(([path]) => path !== 
 beforeEach(() => {
   vi.resetAllMocks();
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-  vi.stubEnv("EDITKIN_UPDATE_MANIFEST_URL", "https://updates.example/stable.json");
+  vi.stubEnv("EDITKIN_UPDATE_MANIFEST_URL", undefined);
+  vi.stubEnv("HAO_EDITOR_UPDATE_MANIFEST_URL", undefined);
   vi.stubEnv("HAO_EDITOR_ALLOW_UNSIGNED_UPDATES", "");
   vi.stubEnv("HAO_EDITOR_PREVIOUS_INSTALLER", "");
   vi.stubGlobal("fetch", mocks.fetch);
@@ -90,7 +93,7 @@ beforeEach(() => {
   mocks.showMessageBox.mockResolvedValue({ response: 0 });
   mocks.spawn.mockImplementation(defaultSpawn);
   handlers.clear();
-  registerUpdateIpc((channel, listener) => handlers.set(channel, listener as unknown as Handler));
+  registerUpdateIpc((channel, listener) => handlers.set(channel, listener as unknown as Handler), pin);
 });
 
 afterEach(() => {
@@ -282,10 +285,15 @@ describe("Electron updater fixed selection and operation ownership", () => {
   });
 
   it("keeps unsigned-development opt-in out of the packaged install path", async () => {
+    handlers.clear();
+    registerUpdateIpc((channel, listener) => handlers.set(channel, listener as unknown as Handler), undefined);
     delete records["2.0.0"].signatureSubject;
     delete records["2.0.0"].signatureSha256;
     vi.stubEnv("HAO_EDITOR_ALLOW_UNSIGNED_UPDATES", "1");
+    vi.stubEnv("EDITKIN_UPDATE_MANIFEST_URL", pin.manifestUrl);
+    mocks.app.isPackaged = false;
     await check();
+    mocks.app.isPackaged = true;
     expect(await install()).toMatchObject({ started: false });
     expect(mocks.verifyStagedUpdateCache).not.toHaveBeenCalled();
     expect(mocks.spawn).not.toHaveBeenCalled();
@@ -295,11 +303,93 @@ describe("Electron updater fixed selection and operation ownership", () => {
     expect(mocks.spawn).toHaveBeenCalledTimes(1);
   });
 
+  it("has no update channel and refuses installers when the build pins no publisher", async () => {
+    handlers.clear();
+    registerUpdateIpc((channel, listener) => handlers.set(channel, listener as unknown as Handler), undefined);
+    expect(await check()).toMatchObject({ status: "unconfigured" });
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(await install()).toMatchObject({ started: false });
+    expect(mocks.spawn).not.toHaveBeenCalled();
+  });
+
   it("clears pending state when a later check finds the current installed version", async () => {
     await check();
     nextVersion = "1.0.0";
     expect(await check()).toMatchObject({ status: "current" });
     expect(await install()).toMatchObject({ started: false });
+    expect(mocks.spawn).not.toHaveBeenCalled();
+  });
+
+  it("rejects a manifest that advertises a signer other than the pinned publisher before downloading", async () => {
+    Object.assign(records["2.0.0"], { signatureSubject: "CN=Attacker", signatureSha256: "d".repeat(64) });
+    await expect(check()).rejects.toThrow(/發布者身分不符合內建釘選/u);
+    expect(mocks.stageUpdate).not.toHaveBeenCalled();
+    expect(await install()).toMatchObject({ started: false });
+  });
+
+  it("refuses an installer signed by another certificate even when the staged record advertises it", async () => {
+    const attacker = { subject: "CN=Attacker", sha256: "d".repeat(64) };
+    mocks.stageUpdate.mockResolvedValueOnce({ ...records["2.0.0"], signatureSubject: attacker.subject, signatureSha256: attacker.sha256 });
+    await check();
+    mocks.spawn.mockImplementationOnce(() => {
+      const child = fakeChild();
+      queueMicrotask(() => {
+        child.stdout.write(JSON.stringify({ Status: "Valid", Subject: attacker.subject, CertificateSha256: attacker.sha256 }));
+        child.emit("exit", 0);
+        child.emit("close", 0);
+      });
+      return child;
+    });
+    await expect(install()).rejects.toThrow(/更新簽章不符合/u);
+    expect(mocks.showMessageBox).not.toHaveBeenCalled();
+    expect(installerCalls()).toEqual([]);
+  });
+
+  it("ignores manifest-URL and previous-installer environment overrides in a packaged build", async () => {
+    vi.stubEnv("EDITKIN_UPDATE_MANIFEST_URL", "https://attacker.example/stable.json");
+    vi.stubEnv("HAO_EDITOR_PREVIOUS_INSTALLER", join(userData, "attacker-old.exe"));
+    await check();
+    expect(mocks.fetch.mock.calls[0][0]).toBe(pin.manifestUrl);
+    await install();
+    expect(mocks.createUpdateTransaction.mock.calls[0][1].previousInstaller).toBeUndefined();
+  });
+
+  it("honors those overrides only in a development build", async () => {
+    const previous = join(userData, "dev-old.exe");
+    vi.stubEnv("EDITKIN_UPDATE_MANIFEST_URL", "https://dev.example/stable.json");
+    vi.stubEnv("HAO_EDITOR_PREVIOUS_INSTALLER", previous);
+    mocks.app.isPackaged = false;
+    await check();
+    expect(mocks.fetch.mock.calls[0][0]).toBe("https://dev.example/stable.json");
+    await install();
+    expect(mocks.createUpdateTransaction.mock.calls[0][1].previousInstaller).toBe(previous);
+  });
+});
+
+describe("Electron rollback installer launch", () => {
+  const installer = join(userData, "previous-installer.exe");
+
+  it("runs the previous installer only after the pinned publisher signature verifies", async () => {
+    await launchRollbackInstaller(installer, pin);
+    expect(mocks.spawn.mock.calls.map(([path]) => path)).toEqual(["powershell.exe", installer]);
+  });
+
+  it("refuses a previous installer signed by another certificate", async () => {
+    mocks.spawn.mockImplementationOnce(() => {
+      const child = fakeChild();
+      queueMicrotask(() => {
+        child.stdout.write(JSON.stringify({ Status: "Valid", Subject: "CN=Attacker", CertificateSha256: "d".repeat(64) }));
+        child.emit("exit", 0);
+        child.emit("close", 0);
+      });
+      return child;
+    });
+    await expect(launchRollbackInstaller(installer, pin)).rejects.toThrow(/更新簽章不符合/u);
+    expect(installerCalls()).toEqual([]);
+  });
+
+  it("refuses any previous installer when the build pins no publisher", async () => {
+    await expect(launchRollbackInstaller(installer, undefined)).rejects.toThrow(/內建釘選/u);
     expect(mocks.spawn).not.toHaveBeenCalled();
   });
 });

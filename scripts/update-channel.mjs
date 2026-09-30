@@ -46,6 +46,12 @@ if (publicMode && signature.Status !== "Valid") throw new Error(`public update a
 const signatureSubject = signature.Status === "Valid" ? String(signature.SignerSubject) : undefined;
 const signatureSha256 = signature.Status === "Valid" ? String(signature.CertificateSha256 ?? "").toLowerCase() : undefined;
 if (signatureSubject && !/^[a-f0-9]{64}$/.test(signatureSha256 ?? "")) throw new Error("無法取得 signer certificate SHA-256 fingerprint");
+// The app only trusts the publisher compiled into it; never emit a manifest it would refuse.
+const publisherPin = JSON.parse(await readFile(resolve(root, "src/shared/updatePublisherPin.json"), "utf8"));
+if (publicMode && publisherPin.signatureSubject === null) throw new Error("--public 需要先在 src/shared/updatePublisherPin.json 釘選發布者 Authenticode 身分");
+if (publisherPin.signatureSubject !== null && (signatureSubject?.trim().toLowerCase() !== publisherPin.signatureSubject.toLowerCase() || signatureSha256 !== publisherPin.signatureSha256)) {
+  throw new Error(`artifact 簽署者不符合內建釘選的發布者：${signature.Status} / ${signature.SignerSubject ?? "none"}`);
+}
 const manifest = {
   schemaVersion: 1,
   version,
