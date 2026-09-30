@@ -264,11 +264,24 @@ async function authenticateRelayDevice(credential: unknown, deviceId: unknown, c
     const remembered = relaySessions.get(clientId);
     if (!remembered || remembered.deviceId !== deviceId) return undefined;
     const trusted = await readTrustedDevices();
-    if (!trusted.devices.some((item) => item.id === remembered.deviceId && item.credentialHash === remembered.credentialHash)) {
+    const device = trusted.devices.find((item) => item.id === remembered.deviceId && item.credentialHash === remembered.credentialHash);
+    if (!device) {
       relaySessions.delete(clientId);
       return undefined;
     }
-    remembered.lastSeen = Date.now();
+    const now = Date.now();
+    if (deviceIdleExpired(device.lastSeen, now)) {
+      trusted.devices = trusted.devices.filter((item) => item !== device);
+      relaySessions.delete(clientId);
+      sessions.delete(remembered.credentialHash);
+      await writeTrustedDevices(trusted);
+      return undefined;
+    }
+    remembered.lastSeen = now;
+    if (now - Date.parse(device.lastSeen) >= 60_000) {
+      device.lastSeen = new Date(now).toISOString();
+      await writeTrustedDevices(trusted);
+    }
     sessions.set(remembered.credentialHash, remembered);
     await writeDeviceStatus();
     return remembered;
