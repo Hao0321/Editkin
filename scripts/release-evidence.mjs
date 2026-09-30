@@ -10,7 +10,7 @@ import { inspectRuntimeProvenance } from "./lib/runtime-provenance.mjs";
 import { inspectReleaseIdentity } from "./lib/release-identity.mjs";
 import { inspectDistributionArtifacts } from "./lib/artifact-lifecycle.mjs";
 import { validateSpdx } from "./lib/sbom.mjs";
-import { deliveredArtifactJourneyMatches, missingReleaseInputs, releaseDistribution, releaseEvidenceExitCode, releaseEvidenceStatus } from "./lib/release-evidence-gates.mjs";
+import { authenticodeMatchesPolicy, deliveredArtifactJourneyMatches, missingReleaseInputs, releaseDistribution, releaseEvidenceExitCode, releaseEvidenceStatus } from "./lib/release-evidence-gates.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const artifactRoot = resolve(root, "../../.rd/artifacts");
@@ -152,11 +152,12 @@ catch (error) { deliveredJourneyError = error.code ?? "invalid-receipt"; }
 const updateMetadataPath = process.env.EDITKIN_UPDATE_METADATA_FILE?.trim();
 const updateTrustPolicyPath = process.env.EDITKIN_UPDATE_TRUST_POLICY_FILE?.trim();
 let projectKeySignedUpdateMetadata = false;
+let reviewedUpdatePolicy = null;
 let updateMetadataVerification = { status: "BLOCK", reason: "metadata-and-reviewed-trust-policy-required" };
 if (updateMetadataPath && updateTrustPolicyPath) {
   try {
     const { tsImport } = await import("tsx/esm/api");
-    const { verifyTrustedUpdateEnvelope } = await tsImport("../src/application/updateTrust.ts", import.meta.url);
+    const { parseUpdateTrustPolicy, verifyTrustedUpdateEnvelope } = await tsImport("../src/application/updateTrust.ts", import.meta.url);
     const [envelope, policy] = await Promise.all([json(resolve(updateMetadataPath)), json(resolve(updateTrustPolicyPath))]);
     const decision = verifyTrustedUpdateEnvelope(envelope, policy, {
       currentVersion: version,
@@ -164,23 +165,29 @@ if (updateMetadataPath && updateTrustPolicyPath) {
       currentOsVersion: release(),
       currentArtifactSha256: installerEvidence.sha256,
     });
+    reviewedUpdatePolicy = parseUpdateTrustPolicy(policy);
+    const signersMatch = authenticodeMatchesPolicy(installerSignature, reviewedUpdatePolicy)
+      && authenticodeMatchesPolicy(deliveredExecutable?.authenticode, reviewedUpdatePolicy);
     projectKeySignedUpdateMetadata = decision.status === "current"
       && decision.metadata.version === version
       && decision.metadata.artifact.sha256 === installerEvidence.sha256
       && decision.metadata.artifact.size === installerEvidence.bytes
       && policy.platform === "windows" && policy.arch === "x86_64" && policy.abi === "msvc"
-      && policy.manifestUrl === updateManifestUrl;
+      && policy.manifestUrl === updateManifestUrl
+      && signersMatch;
     updateMetadataVerification = {
       status: projectKeySignedUpdateMetadata ? "GREEN" : "BLOCK",
-      reason: projectKeySignedUpdateMetadata ? null : "metadata-does-not-match-release-artifact-channel-or-compatibility",
+      reason: projectKeySignedUpdateMetadata ? null : !signersMatch
+        ? "authenticode-publisher-does-not-match-reviewed-trust-policy"
+        : "metadata-does-not-match-release-artifact-channel-or-compatibility",
     };
   } catch (error) {
     updateMetadataVerification = { status: "BLOCK", reason: error instanceof Error ? error.message : String(error) };
   }
 }
 const publicGates = {
-  authenticodeInstaller: installerSignature.Status === "Valid",
-  authenticodeExecutable: artifactLifecycle.nsis?.deliveredExecutable?.authenticode?.Status === "Valid",
+  authenticodeInstaller: authenticodeMatchesPolicy(installerSignature, reviewedUpdatePolicy),
+  authenticodeExecutable: authenticodeMatchesPolicy(deliveredExecutable?.authenticode, reviewedUpdatePolicy),
   publicUpdateChannelConfigured,
   deliveredArtifactJourney: deliveredArtifactJourneyMatches(deliveredJourneyReceipt, installerEvidence.sha256, deliveredExecutable?.sha256),
   projectKeySignedUpdateMetadata,
@@ -204,7 +211,7 @@ const evidence = {
   product: { name: packageJson.productName, version, identifier: tauri.identifier, architecture: "x64" },
   scope,
   build: { created, host: hostname(), platform: platform(), release: release(), arch: arch(), node: process.version },
-  distribution: releaseDistribution(installerSignature, deliveredExecutable?.authenticode, projectKeySignedUpdateMetadata),
+  distribution: releaseDistribution(installerSignature, deliveredExecutable?.authenticode, projectKeySignedUpdateMetadata, reviewedUpdatePolicy),
   artifacts: {
     installer: installerEvidence,
     buildExecutable: await fileEvidence(executable),

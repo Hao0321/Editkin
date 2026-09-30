@@ -21,11 +21,25 @@ export function deliveredArtifactJourneyMatches(receipt, installerSha256, delive
     && receipt.deliveredExecutable?.sha256 === deliveredExecutableSha256;
 }
 
-export function releaseDistribution(installerSignature, deliveredExecutableSignature, projectKeySignedUpdateMetadata) {
+export function authenticodeMatchesPolicy(signature, policy) {
+  const expectedSubject = policy?.authenticodeSubject;
+  const expectedCertificate = policy?.authenticodeCertificateSha256;
+  const actualCertificate = signature?.CertificateSha256;
+  return signature?.Status === "Valid"
+    && typeof expectedSubject === "string" && expectedSubject.trim().length > 0
+    && signature.SignerSubject === expectedSubject
+    && typeof expectedCertificate === "string" && /^[a-f0-9]{64}$/iu.test(expectedCertificate)
+    && typeof actualCertificate === "string" && /^[a-f0-9]{64}$/iu.test(actualCertificate)
+    && actualCertificate.toLowerCase() === expectedCertificate.toLowerCase();
+}
+
+export function releaseDistribution(installerSignature, deliveredExecutableSignature, projectKeySignedUpdateMetadata, reviewedPolicy) {
   const signed = installerSignature?.Status === "Valid" && deliveredExecutableSignature?.Status === "Valid";
+  const trustedPublisher = authenticodeMatchesPolicy(installerSignature, reviewedPolicy)
+    && authenticodeMatchesPolicy(deliveredExecutableSignature, reviewedPolicy);
   return {
     label: signed ? "authenticode-signed" : "unsigned-community-binary",
-    autoUpdate: signed && projectKeySignedUpdateMetadata
+    autoUpdate: trustedPublisher && projectKeySignedUpdateMetadata === true
       ? "eligible" : "disabled-until-authenticode-and-reviewed-project-key-update",
   };
 }

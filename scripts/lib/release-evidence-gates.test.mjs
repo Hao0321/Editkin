@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  authenticodeMatchesPolicy,
   deliveredArtifactJourneyMatches,
   missingReleaseInputs,
   releaseDistribution,
@@ -9,6 +10,8 @@ import {
 
 const installerHash = "a".repeat(64);
 const executableHash = "b".repeat(64);
+const policy = { authenticodeSubject: "CN=Editkin Publisher", authenticodeCertificateSha256: "c".repeat(64) };
+const publisherSignature = { Status: "Valid", SignerSubject: policy.authenticodeSubject, CertificateSha256: policy.authenticodeCertificateSha256 };
 const journey = {
   status: "GREEN",
   deliveryEnvelope: { sha256: installerHash },
@@ -61,11 +64,37 @@ describe("release evidence gates", () => {
   });
 
   it("requires both Authenticode signatures and project-key metadata before update eligibility", () => {
-    const valid = { Status: "Valid" };
-    expect(releaseDistribution(valid, valid, false)).toEqual({
+    const valid = publisherSignature;
+    expect(releaseDistribution(valid, valid, false, policy)).toEqual({
       label: "authenticode-signed",
       autoUpdate: "disabled-until-authenticode-and-reviewed-project-key-update",
     });
-    expect(releaseDistribution(valid, valid, true)).toEqual({ label: "authenticode-signed", autoUpdate: "eligible" });
+    expect(releaseDistribution(valid, valid, true, policy)).toEqual({ label: "authenticode-signed", autoUpdate: "eligible" });
+  });
+
+  it.each([
+    ["a different publisher", { ...publisherSignature, SignerSubject: "CN=Another Publisher" }],
+    ["a different certificate", { ...publisherSignature, CertificateSha256: "d".repeat(64) }],
+    ["no publisher", { Status: "Valid", CertificateSha256: policy.authenticodeCertificateSha256 }],
+    ["no certificate", { Status: "Valid", SignerSubject: policy.authenticodeSubject }],
+    ["a malformed certificate", { ...publisherSignature, CertificateSha256: "not-a-sha256" }],
+    ["an unverified signature", { ...publisherSignature, Status: "UnknownError" }],
+  ])("rejects %s even when project-key metadata claims the expected publisher", (_name, actual) => {
+    expect(authenticodeMatchesPolicy(actual, policy)).toBe(false);
+    expect(releaseDistribution(actual, publisherSignature, true, policy).autoUpdate).not.toBe("eligible");
+    expect(releaseDistribution(publisherSignature, actual, true, policy).autoUpdate).not.toBe("eligible");
+  });
+
+  it("fails closed without a reviewed publisher policy or with malformed policy fields", () => {
+    for (const badPolicy of [undefined, null, {}, { ...policy, authenticodeSubject: "" }, { ...policy, authenticodeCertificateSha256: "short" }]) {
+      expect(authenticodeMatchesPolicy(publisherSignature, badPolicy)).toBe(false);
+      expect(releaseDistribution(publisherSignature, publisherSignature, true, badPolicy).autoUpdate).not.toBe("eligible");
+    }
+  });
+
+  it("normalizes hex case without accepting a mismatched certificate", () => {
+    const uppercase = { ...publisherSignature, CertificateSha256: policy.authenticodeCertificateSha256.toUpperCase() };
+    expect(authenticodeMatchesPolicy(uppercase, policy)).toBe(true);
+    expect(releaseDistribution(uppercase, uppercase, true, policy).autoUpdate).toBe("eligible");
   });
 });
