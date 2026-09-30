@@ -1,9 +1,6 @@
 name: Deploy GitHub Pages
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 # The build job holds no deployment credentials; only `deploy` may publish.
@@ -16,6 +13,8 @@ concurrency:
 
 jobs:
   build:
+    # Publication is a separate owner action after the repository is reviewed.
+    if: github.ref == 'refs/heads/main' && github.actor_id == '126182090'
     runs-on: ubuntu-latest
 
     steps:
@@ -49,6 +48,7 @@ jobs:
 
   deploy:
     needs: build
+    if: github.ref == 'refs/heads/main' && github.actor_id == '126182090'
     runs-on: ubuntu-latest
     permissions:
       pages: write
