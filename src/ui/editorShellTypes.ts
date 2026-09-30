@@ -55,6 +55,8 @@ export interface EditorShellProps {
   creativeLibrary: ReturnType<typeof useCreativeLibrary>;
   batchAutoEdit: ReturnType<typeof useBatchAutoEdit>;
   mobile: ReturnType<typeof useMobileRemote>;
+  exportCaptions: (format: import("../application/captionFiles").CaptionFileFormat) => void;
+  importCaptions: (file: File) => Promise<void>;
   newProject: () => void;
   openProject: () => Promise<void>;
   saveProject: (saveAs?: boolean) => Promise<void>;

@@ -52,6 +52,7 @@ export function EditorShell(props: EditorShellProps) {
   const autoEditTarget = useRef<{ task: ProjectTask; clipId: string } | undefined>(undefined);
   const [autoRotoBusy, setAutoRotoBusy] = useState(false);
   const autoRotoBusyRef = useRef(false);
+  const captionFileInput = useRef<HTMLInputElement>(null);
   const [autoRotoRuntimeStatus, setAutoRotoRuntimeStatus] = useState(() => initialAutoRotoRuntimeStatus(window.haoDesktop?.analyzeAutoRoto));
   const [beginnerGuideOpened, setBeginnerGuideOpened] = useState(() => window.localStorage.getItem(BEGINNER_GUIDE_KEY) !== "done");
   const workspace = useWorkspaceLayout();
@@ -61,7 +62,7 @@ export function EditorShell(props: EditorShellProps) {
     selectedClipAtPlayhead, selectedCaption, transitionNeighbors, selectedMotionTracks, activeLayers,
     activeAudioLayers, runtimeUrls, status, setStatus, trackingMode, setTrackingMode, trackingSelection,
     setTrackingSelection, trackingBusy, recovery, desktopActions, automatic, creativeLibrary, batchAutoEdit, mobile,
-    newProject, openProject, saveProject, undoEdit, redoEdit, renderVideo, renderOpenExrSequence, renderAlphaMaster, importFiles,
+    exportCaptions, importCaptions, newProject, openProject, saveProject, undoEdit, redoEdit, renderVideo, renderOpenExrSequence, renderAlphaMaster, importFiles,
     acceptTrackingSelection, startPodcastDirector, submitAgentInstruction, runCommand, updateAnimatedClipProperty,
     addMotionGraphic, addCaption, addTrack, addAssetToTimeline, makeSelectedPictureInPicture, precomposeSelected, applyShortFormTemplate, applyLongFormTemplate, addLowerThird, clearTemplateApplication, splitSelected, deleteSelected,
   } = props;
@@ -178,6 +179,18 @@ export function EditorShell(props: EditorShellProps) {
         onDesktopPaths={isDesktop ? (paths) => void creativeLibrary.importDesktopPaths(paths) : undefined}
         onStatus={setStatus}
       /></Suspense>
+      <input
+        ref={captionFileInput}
+        className="visually-hidden"
+        type="file"
+        accept=".srt,.vtt,text/vtt,application/x-subrip"
+        data-testid="caption-file-input"
+        onChange={(event) => {
+          const [file] = Array.from(event.target.files ?? []);
+          event.target.value = "";
+          if (file) void importCaptions(file);
+        }}
+      />
       <Toolbar
         projectName={project.name}
         hasUserMedia={hasUserMedia}
@@ -193,6 +206,8 @@ export function EditorShell(props: EditorShellProps) {
         onNew={() => { setDemoWorkspaceOpened(false); newProject(); }}
         onOpen={openProject}
         onSave={() => void saveProject()}
+        onExportCaptions={isDesktop ? undefined : exportCaptions}
+        onImportCaptions={() => captionFileInput.current?.click()}
         onUndo={undoEdit}
         onRedo={redoEdit}
         onExport={renderVideo}

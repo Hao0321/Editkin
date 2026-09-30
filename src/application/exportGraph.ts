@@ -5,12 +5,24 @@ function safeDownloadName(name: string): string {
   return normalized || "Editkin-project";
 }
 
-export function downloadEditGraph(project: EditProject): void {
-  const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
+export function projectDownloadName(project: EditProject, extension: string): string {
+  return `${safeDownloadName(project.name)}.${extension}`;
+}
+
+export function editGraphFileName(project: EditProject): string {
+  return projectDownloadName(project, "editkin.json");
+}
+
+export function downloadTextFile(fileName: string, text: string, mimeType: string): void {
+  const blob = new Blob([text], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${safeDownloadName(project.name)}.editkin.json`;
+  link.download = fileName;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+export function downloadEditGraph(project: EditProject): void {
+  downloadTextFile(editGraphFileName(project), JSON.stringify(project, null, 2), "application/json");
 }

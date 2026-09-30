@@ -18,6 +18,8 @@ interface ToolbarProps {
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
+  onExportCaptions?: (format: "srt" | "vtt") => void;
+  onImportCaptions: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onExport: () => void;
@@ -50,6 +52,8 @@ export function Toolbar({
   onNew,
   onOpen,
   onSave,
+  onExportCaptions,
+  onImportCaptions,
   onUndo,
   onRedo,
   onExport,
@@ -139,6 +143,12 @@ export function Toolbar({
                   <button type="button" onClick={onOpen} data-testid="open-project-button"><span>⌂</span><div>開啟專案<small>繼續之前的工作</small></div></button>
                   <button type="button" onClick={onSave} data-testid="save-project-button" title="儲存（Ctrl/Cmd+S；另存新檔 Ctrl/Cmd+Shift+S）"><span>✓</span><div>{saveLabel}<small>保留目前所有修改</small></div></button>
                   <button type="button" onClick={onCheckUpdates}><span>↥</span><div>檢查更新<small>下載後由你決定是否安裝</small></div></button>
+                </>}
+                <strong>字幕檔</strong>
+                <button type="button" onClick={onImportCaptions} data-testid="import-captions-button"><span>⇣</span><div>匯入字幕檔<small>SRT 或 WebVTT，加到目前時間軸</small></div></button>
+                {onExportCaptions && <>
+                  <button type="button" onClick={() => onExportCaptions("srt")} data-testid="export-srt-button"><span>⇡</span><div>匯出字幕（SRT）<small>相容大多數剪輯與播放軟體</small></div></button>
+                  <button type="button" onClick={() => onExportCaptions("vtt")} data-testid="export-vtt-button"><span>⇡</span><div>匯出字幕（WebVTT）<small>網頁影片與 YouTube</small></div></button>
                 </>}
                 {isDesktop && onExportOpenExrSequence && <>
                   <strong>專業輸出</strong>
