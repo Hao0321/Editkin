@@ -28,7 +28,24 @@ export default defineConfig(({ command }) => ({
   // and static render faces stay in Tauri/Electron resources and are loaded
   // through bounded desktop commands instead of being duplicated in the EXE.
   publicDir: command === "build" ? ".web-public" : "public",
-  plugins: [react()],
+  plugins: [react(), {
+    // Crawlers require absolute og:url / og:image and the deployment origin is
+    // not known to the repository, so only the Pages workflow supplies it.
+    // Desktop builds leave EDITKIN_SITE_URL unset and get no absolute URLs.
+    name: "editkin-site-url",
+    transformIndexHtml() {
+      const raw = process.env.EDITKIN_SITE_URL;
+      if (!raw) return [];
+      const site = new URL(raw.endsWith("/") ? raw : `${raw}/`);
+      if (site.protocol !== "https:") throw new Error(`EDITKIN_SITE_URL must be https: ${raw}`);
+      return [
+        { tag: "meta", attrs: { property: "og:url", content: site.href }, injectTo: "head" },
+        { tag: "meta", attrs: { property: "og:image", content: new URL("og-image.png", site).href }, injectTo: "head" },
+        { tag: "meta", attrs: { name: "twitter:image", content: new URL("og-image.png", site).href }, injectTo: "head" },
+        { tag: "link", attrs: { rel: "canonical", href: site.href }, injectTo: "head" },
+      ];
+    },
+  }],
   test: {
     // Retained fail-before experiments are replayed explicitly against their
     // captured source; they are not current product regression entry points.
