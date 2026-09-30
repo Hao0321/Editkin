@@ -1,0 +1,136 @@
+import * as z from "zod/v4";
+import { CANDIDATE_SCHEMA, HEX_32_PATTERN, HEX_64_PATTERN, LEGACY_PENDING_SCHEMA, PROVIDER_PROPOSAL_SCHEMA, UUID_V4_PATTERN, VERIFICATION_SCHEMA } from "./constants";
+import { remoteProviderProposalSchema } from "./proposal";
+
+const remotePolicyOutputSchema = z.object({
+  mode: z.literal("user-owned-byo"),
+  autoDeploy: z.literal(false),
+  costResponsibility: z.literal("end-user"),
+  providerRequired: z.literal(false),
+}).strict();
+export const connectorListOutputSchema = z.object({
+  schema: z.literal("editkin.remote-provider-connector-list/v1"),
+  status: z.literal("RESEARCH_ONLY_NO_EXTERNAL_ACTION"),
+  connectors: z.array(z.object({
+    connectorId: z.string().min(1).max(63),
+    connectorRevision: z.string().min(1).max(64),
+    manifestSha256: z.string().regex(HEX_64_PATTERN),
+    providerId: z.string().min(1).max(63),
+    providerDisplayName: z.string().min(1).max(80),
+    productName: z.string().min(1).max(120),
+    transport: z.literal("https-tunnel"),
+    availability: z.enum(["enabled", "research-only-disabled", "unsupported-temporary"]),
+    approvalAvailable: z.boolean(),
+    attested: z.boolean(),
+    executionOwner: z.literal("native-typed-connector"),
+    authMode: z.enum(["provider-owned-browser", "none"]),
+    stableHttpsName: z.boolean(),
+    supportedPublicPorts: z.array(z.number().int().min(1).max(65_535)).max(8),
+    limitations: z.array(z.string().min(1).max(240)).min(1).max(16),
+    sourceUrls: z.array(z.string().url()).min(1).max(8),
+  }).strict()).min(1).max(16),
+  externalMutationToolAvailable: z.literal(false),
+  nextAction: z.string().min(1),
+}).strict();
+export const statusOutputSchema = z.object({
+  schema: z.literal("editkin.remote-setup-status/v1"),
+  status: z.enum([
+    "LAN_DEFAULT", "PROPOSAL_READY_NOT_APPROVED", "PROPOSAL_EXPIRED", "LEGACY_PROVIDER_PROPOSAL_BLOCKED", "LEGACY_PENDING_INCOMPLETE",
+    "LEGACY_PENDING_EXPIRED", "AWAITING_DESKTOP_APPROVAL", "CONFIGURED_UNVERIFIED", "CONFIGURED_ROUTE_VERIFIED",
+    "RENEWAL_RECONCILIATION_REQUIRED", "STATE_RECONCILIATION_REQUIRED",
+  ]),
+  transport: z.enum(["lan", "https-tunnel", "cloud-relay", "unknown"]),
+  configured: z.boolean(),
+  proposal: remoteProviderProposalSchema.optional(),
+  resumeAvailable: z.boolean().optional(),
+  renewal: z.object({ expectedExpiredProposalRevision: z.string().regex(UUID_V4_PATTERN) }).strict().optional(),
+  recovery: z.object({
+    artifact: z.literal("network-setup-pending.json.renewing"),
+    reason: z.enum(["INVALID_RENEWING_ARTIFACT", "CONFLICTING_PENDING_AND_RENEWING", "RENEWING_PROPOSAL_NOT_EXPIRED", "RECOVERY_PUBLICATION_FAILED"]),
+    automaticReplayPerformed: z.literal(false),
+  }).strict().optional(),
+  conflict: z.object({
+    present: z.array(z.enum(["config", "candidate", "pending"])).min(1).max(3)
+      .refine((values) => new Set(values).size === values.length),
+    reason: z.string().min(1).max(240),
+    automaticMutationPerformed: z.literal(false),
+  }).strict().optional(),
+  pendingProviderConfirmation: z.object({
+    schema: z.literal(LEGACY_PENDING_SCHEMA),
+    confirmationId: z.string().regex(UUID_V4_PATTERN),
+    providerId: z.string().regex(/^[a-z0-9][a-z0-9._-]{1,62}$/),
+    preparedAt: z.string().datetime(),
+    expiresAtMs: z.number().nonnegative().refine(Number.isSafeInteger),
+    costResponsibility: z.literal("end-user"),
+  }).strict().optional(),
+  pendingDesktopApproval: z.object({
+    candidateRevision: z.string().regex(UUID_V4_PATTERN),
+    originHost: z.string().min(1).max(255),
+    providerId: z.string().min(1).max(63),
+    expiresAtMs: z.number().nonnegative().refine(Number.isSafeInteger),
+  }).strict().optional(),
+  configuration: z.object({
+    originHost: z.string().min(1).max(255),
+    providerId: z.string().min(1).max(63),
+    configurationId: z.string().regex(HEX_64_PATTERN),
+    configuredAt: z.string().datetime(),
+  }).strict().optional(),
+  verification: z.unknown().optional(),
+  policy: remotePolicyOutputSchema,
+  nextAction: z.string(),
+}).strict();
+export const prepareOutputSchema = z.object({
+  schema: z.literal(PROVIDER_PROPOSAL_SCHEMA),
+  status: z.literal("PROPOSAL_READY_NOT_APPROVED"),
+  created: z.boolean(),
+  resumed: z.boolean(),
+  proposal: remoteProviderProposalSchema,
+  externalMutationPerformed: z.literal(false),
+  autoDeploy: z.literal(false),
+  approvalAvailable: z.boolean(),
+  nextAction: z.string(),
+}).strict();
+export const configureOutputSchema = z.object({
+  schema: z.literal(CANDIDATE_SCHEMA),
+  status: z.literal("PENDING_DESKTOP_APPROVAL"),
+  candidateRevision: z.string().regex(UUID_V4_PATTERN),
+  proposal: z.object({
+    transport: z.enum(["https-tunnel", "cloud-relay"]),
+    originHost: z.string().min(1).max(255),
+    providerId: z.string().min(1).max(63),
+    configurationId: z.string().regex(HEX_64_PATTERN),
+    expiresAtMs: z.number().nonnegative().refine(Number.isSafeInteger),
+  }).strict(),
+  persistedSecretFields: z.array(z.string()).max(0),
+  formalConfigurationWritten: z.literal(false),
+  desktopApprovalRequired: z.literal(true),
+  nextAction: z.string(),
+}).strict();
+export const verifyOutputSchema = z.object({
+  schema: z.literal(VERIFICATION_SCHEMA),
+  status: z.enum(["BLOCKED", "PARTIAL"]),
+  verified: z.literal(false),
+  reason: z.string(),
+  nextAction: z.string().optional(),
+  observed: z.object({
+    firstConnectionSucceeded: z.boolean(),
+    secondIndependentConnectionSucceeded: z.boolean(),
+    latencyMs: z.tuple([z.number(), z.number()]),
+  }).strict().optional(),
+  providerEndpointVerified: z.literal(true).optional(),
+  configurationId: z.string().regex(HEX_64_PATTERN).optional(),
+  verifiedAt: z.string().datetime().optional(),
+  verifiedAtMs: z.number().nonnegative().refine(Number.isSafeInteger).optional(),
+  probeId: z.string().regex(HEX_32_PATTERN).optional(),
+  runtimeInstanceId: z.string().regex(HEX_32_PATTERN).optional(),
+  processId: z.number().positive().refine(Number.isSafeInteger).optional(),
+  startedAtMs: z.number().nonnegative().refine(Number.isSafeInteger).optional(),
+  endpointKind: z.literal("editkin-tunnel").optional(),
+  successfulTlsConnections: z.literal(2).optional(),
+  latencyMs: z.tuple([z.number(), z.number()]).optional(),
+  latencyP50Ms: z.number().nonnegative().optional(),
+  jitterMs: z.number().nonnegative().optional(),
+  routeEvidence: z.literal("two-pinned-independent-tls-connections-succeeded").optional(),
+  reconnectVerified: z.literal(false).optional(),
+  requiresActiveMobileProof: z.literal(true).optional(),
+}).strict();
