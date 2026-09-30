@@ -11,6 +11,14 @@ The source repository does not publish an official installer. The maintainer mus
 
 Passing CI or a static scan cannot replace these checks. Contributions may be merged while official binary publication remains closed.
 
+## Community desktop is not an official release
+
+The explicit `community-desktop` Cargo feature embeds a generated schema 1 identity, scope `editkin.community-desktop-build/v1`, with `officialRelease: false`. Its service bundle is real, but it cannot satisfy the owner-only schema 2 formal product identity or the private product/runtime gates. An unflagged build fails when `.release-input-manifest.json` is absent, including with a spoofed ambient `CARGO_FEATURE_COMMUNITY_DESKTOP=1`; the feature boundary is compile-time.
+
+The GTK 0.19 / GLib 0.22 migration uses immutable unreleased upstream PR revisions rather than a GLib 0.18 backport. Passing the dependency audit and the observed Ubuntu 26.04 aarch64 native caption/timing/undo/redo/recovery smoke is not an official release-ready claim. Compatible registry releases still need a reviewed upgrade and renewed verification.
+
+The native screenshot showed the edited caption on the timeline and duration 5 in the inspector, but a native ffprobe missing-relative-path error card hid the preview; rendered preview captions and playback were not verified. CJK glyphs were tofu and private Creator Pack content was unavailable. Optional tray dependencies are locked but not enabled by the app or exercised by the smoke. No full rendering/playback, import/export, codecs/GPU, dialogs, delivered installer, signing, private model, Windows/macOS/Wayland, or Ubuntu 24.04/x86_64 result is claimed. See [BUILDING.md](BUILDING.md) for reproducible commands, system-library minimums, and measured scope. Official binary publication remains blocked until every gate above is met for the exact delivered artifact.
+
 ## Windows evidence command
 
 Run `node scripts/release-evidence.mjs [evidence-path]` after provisioning the Windows release inputs. A source-only checkout reports `RELEASE_INPUTS_MISSING` with relative paths, writes the report when the destination is writable, and exits 1. Only `PUBLIC_RELEASE_GREEN` exits 0; internally green but publicly blocked evidence still exits 1.
