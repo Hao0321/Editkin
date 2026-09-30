@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { open, readFile, stat } from "node:fs/promises";
+import { open } from "node:fs/promises";
+import { readBoundedFile } from "../shared/boundedFile";
 import { resolve } from "node:path";
 import {
   parseProductAutoRotoRouteReceipt,
@@ -87,8 +88,7 @@ export async function verifyFrozenRotoMatte(
     frames: frameArtifactUris.map((alphaPath, frame) => ({ frame, alphaPath })),
   }, productCacheRoot);
 
-  if ((await stat(manifestPath)).size > MANIFEST_MAX_BYTES) throw new Error("Auto Roto product manifest 超出安全上限");
-  const manifestBytes = await readFile(manifestPath);
+  const manifestBytes = await readBoundedFile(manifestPath, MANIFEST_MAX_BYTES, { followSymlinks: true, messages: { tooLarge: "Auto Roto product manifest 超出安全上限" } });
   let manifest: Record<string, unknown>;
   try { manifest = JSON.parse(manifestBytes.toString("utf8")) as Record<string, unknown>; }
   catch { throw new Error("Auto Roto product manifest 不是合法 JSON"); }
@@ -120,14 +120,15 @@ export async function verifyFrozenRotoMatte(
       throw new Error(`Auto Roto frame ${frame} artifact receipt 驗證失敗`);
     }
   }
-  const sequenceInfo = await stat(sequencePath);
-  if (sequenceInfo.size !== matte.sequenceBytes || sequenceInfo.size > PRODUCT_AUTO_ROTO_MAX_ALPHA_BYTES) {
-    throw new Error("Auto Roto frozen matte 長度超出安全 envelope");
-  }
   const frameBytes = matte.width * matte.height;
   const sequenceDigest = createHash("sha256");
   const sequenceHandle = await open(sequencePath, "r");
   try {
+    // Size is taken from the handle that is read, so the path cannot be swapped between check and use.
+    const sequenceInfo = await sequenceHandle.stat();
+    if (!sequenceInfo.isFile() || sequenceInfo.size !== matte.sequenceBytes || sequenceInfo.size > PRODUCT_AUTO_ROTO_MAX_ALPHA_BYTES) {
+      throw new Error("Auto Roto frozen matte 長度超出安全 envelope");
+    }
     for (let frame = 0; frame < frames.length; frame += 1) {
       const alpha = Buffer.allocUnsafe(frameBytes);
       let offset = 0;
@@ -147,19 +148,15 @@ export async function verifyFrozenRotoMatte(
   if (sequenceDigest.digest("hex") !== matte.sequenceSha256) throw new Error("Auto Roto frozen matte SHA-256 驗證失敗");
 
   let totalPreviewBytes = 0;
-  for (const path of frameArtifactUris) {
-    const bytes = (await stat(path)).size;
-    if (bytes < 32 || bytes > PRODUCT_AUTO_ROTO_MAX_PREVIEW_BYTES
-      || (totalPreviewBytes += bytes) > PRODUCT_AUTO_ROTO_MAX_PREVIEW_TOTAL_BYTES) {
-      throw new Error("Auto Roto preview PNG 超出安全 envelope");
-    }
-  }
   let cursor = 0;
   await Promise.all(Array.from({ length: Math.min(PREVIEW_READ_CONCURRENCY, frames.length) }, async () => {
     while (cursor < frames.length) {
       const frame = cursor;
       cursor += 1;
-      const preview = await readFile(frameArtifactUris[frame]);
+      const preview = await readBoundedFile(frameArtifactUris[frame], PRODUCT_AUTO_ROTO_MAX_PREVIEW_BYTES, { followSymlinks: true, messages: { tooLarge: "Auto Roto preview PNG 超出安全 envelope" } });
+      if (preview.length < 32 || (totalPreviewBytes += preview.length) > PRODUCT_AUTO_ROTO_MAX_PREVIEW_TOTAL_BYTES) {
+        throw new Error("Auto Roto preview PNG 超出安全 envelope");
+      }
       if (preview.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a"
         || (frames[frame] as Record<string, unknown>).previewSha256 !== sha256(preview)) {
         throw new Error(`Auto Roto frame ${frame} preview receipt 驗證失敗`);

@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readBoundedFileSync } from "../shared/boundedFile";
 
 export const AUTO_ROTO_SERVICE_ARTIFACT_SCHEMA = "editkin.auto-roto-service-artifact/v1" as const;
 
@@ -79,9 +80,8 @@ function samePath(left: string, right: string): boolean {
 }
 
 function parseProductManifest(path: string): ProductBuildManifest {
-  const info = lstatSync(path);
-  if (!info.isFile() || info.isSymbolicLink()) throw new Error(`manifest is not a regular file: ${path}`);
-  const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<ProductBuildManifest>;
+  const bytes = readBoundedFileSync(path, 16 * 1024 * 1024, { messages: { notRegular: `manifest is not a regular file: ${path}`, tooLarge: `manifest is too large: ${path}` } });
+  const parsed = JSON.parse(bytes.toString("utf8")) as Partial<ProductBuildManifest>;
   if (parsed.schemaVersion !== 2 || parsed.product !== "Editkin" || !Array.isArray(parsed.outputs)) {
     throw new Error(`invalid Editkin product manifest: ${path}`);
   }
@@ -137,13 +137,10 @@ function attestProductExecutable(
   if (!samePath(actualPath, canonicalExpectedPath)) {
     throw new Error(`Editkin product executable identity attestation 拒絕 ${runtimeKey} 路徑替換`);
   }
-  const before = statSync(actualPath);
-  const bytes = readFileSync(actualPath);
-  const after = statSync(actualPath);
-  if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ino !== after.ino
-    || bytes.length !== entry.bytes || before.size !== entry.bytes) {
-    throw new Error(`Editkin product executable identity attestation 拒絕 ${runtimeKey} 非穩定 bytes`);
-  }
+  const unstable = `Editkin product executable identity attestation 拒絕 ${runtimeKey} 非穩定 bytes`;
+  // One handle supplies type, size bound and bytes; growth or replacement while reading is rejected.
+  const bytes = readBoundedFileSync(actualPath, entry.bytes, { messages: { notRegular: unstable, tooLarge: unstable, changed: unstable } });
+  if (bytes.length !== entry.bytes) throw new Error(unstable);
   const actualSha256 = createHash("sha256").update(bytes).digest("hex");
   if (actualSha256 !== entry.sha256) {
     throw new Error(`Editkin product executable identity attestation 拒絕 ${runtimeKey} SHA-256 不符`);
