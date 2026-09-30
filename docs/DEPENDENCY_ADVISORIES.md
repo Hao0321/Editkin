@@ -19,29 +19,29 @@ Minor and patch updates are grouped into one PR per ecosystem. Major updates are
 
 ## Accepted advisories
 
-Status as recorded from `main` at 7a27566. `npm audit` reported 0 vulnerabilities. For Rust, OSV was queried for every registry crate in the four `Cargo.lock` files. `native/hao-core` had no advisories.
+The contributor's historical assessment used `main` at 7a27566 and reported no npm advisories and no advisories for `native/hao-core` after querying OSV for registry crates in the four lockfiles. This is an assessment of that revision, not a current dependency scan. The advisory identifiers below were checked against the official RustSec entries on 2026-09-30. Re-scan the actual release lockfiles before accepting a release.
 
-All entries below are **unmaintained-crate** notices, not known exploitable vulnerabilities. Each one is a transitive dependency; none is a direct dependency of this repository.
+The listed RustSec entries are classified as **unmaintained-crate** notices. That classification does not prove that a crate is free of vulnerabilities. They were transitive dependencies in the assessed revision.
 
 ### `src-tauri`
 
 | Crate | Version | Advisory | Pulled in by |
 | --- | --- | --- | --- |
-| `proc-macro-error` | 1.0.4 | RUSTSEC-2024-0370 | `glib-macros`, `gtk3-macros` (GTK3 bindings used by Tauri on Linux) |
-| `unic-char-property` | 0.9.0 | RUSTSEC-2025-0075 | `unic-ucd-ident` <- `urlpattern` <- `tauri-utils` |
-| `unic-char-range` | 0.9.0 | RUSTSEC-2025-0080 | `unic-char-property`, `unic-ucd-ident` |
-| `unic-common` | 0.9.0 | RUSTSEC-2025-0081 | `unic-ucd-version` |
-| `unic-ucd-ident` | 0.9.0 | RUSTSEC-2025-0098 | `urlpattern` |
-| `unic-ucd-version` | 0.9.0 | RUSTSEC-2025-0100 | `unic-ucd-ident` |
+| `proc-macro-error` | 1.0.4 | [RUSTSEC-2024-0370](https://rustsec.org/advisories/RUSTSEC-2024-0370.html) | `glib-macros`, `gtk3-macros` (GTK3 bindings used by Tauri on Linux) |
+| `unic-char-property` | 0.9.0 | [RUSTSEC-2025-0081](https://rustsec.org/advisories/RUSTSEC-2025-0081.html) | `unic-ucd-ident` <- `urlpattern` <- `tauri-utils` |
+| `unic-char-range` | 0.9.0 | [RUSTSEC-2025-0075](https://rustsec.org/advisories/RUSTSEC-2025-0075.html) | `unic-char-property`, `unic-ucd-ident` |
+| `unic-common` | 0.9.0 | [RUSTSEC-2025-0080](https://rustsec.org/advisories/RUSTSEC-2025-0080.html) | `unic-ucd-version` |
+| `unic-ucd-ident` | 0.9.0 | [RUSTSEC-2025-0100](https://rustsec.org/advisories/RUSTSEC-2025-0100.html) | `urlpattern` |
+| `unic-ucd-version` | 0.9.0 | [RUSTSEC-2025-0098](https://rustsec.org/advisories/RUSTSEC-2025-0098.html) | `unic-ucd-ident` |
 
-**Status: accepted until the next Tauri bump.** They are compile-time helpers (procedural macros and Unicode tables) reached only through the Tauri stack; we do not depend on any of them directly, so they can only be dropped by an upstream change. `proc-macro-error` comes from the same GTK3 bindings as the `glib` advisory tracked in #19. Re-check this table whenever Dependabot proposes a `tauri`/`tauri-utils` bump: run `cargo tree -i <crate>` in `src-tauri` and remove the row if the crate is gone.
+**Status: recorded maintenance exceptions, subject to release revalidation.** `proc-macro-error` is a procedural-macro helper; the Unicode crates also provide code and tables used at runtime by URL-pattern dependencies. Reachability and impact must be assessed separately. Re-check this table after changes to Tauri or its GTK dependency overrides: run `cargo tree -i <crate>` in `src-tauri` and remove the row if the crate is gone. This document adds no scanner exclusions and does not waive an exploitable or unsoundness advisory.
 
 ### `spikes/gpu-compositor`
 
 | Crate | Version | Advisory | Pulled in by |
 | --- | --- | --- | --- |
-| `paste` | 1.0.15 | RUSTSEC-2024-0436 | `pulp` |
-| `ttf-parser` | 0.25.1 | RUSTSEC-2026-0192 | `fontdue` |
+| `paste` | 1.0.15 | [RUSTSEC-2024-0436](https://rustsec.org/advisories/RUSTSEC-2024-0436.html) | `pulp` |
+| `ttf-parser` | 0.25.1 | [RUSTSEC-2026-0192](https://rustsec.org/advisories/RUSTSEC-2026-0192.html) | `fontdue` |
 
 **Status: accepted.** This directory is an experiment and is not built into the shipped product. Re-check if any of it is promoted into `src-tauri` or `native`.
 
