@@ -266,6 +266,30 @@ describe("cloud relay authorization", () => {
     expect(await queued()).toEqual([]);
   });
 
+  it("enforces the idle deadline for a remembered relay client", async () => {
+    const paired = await harness.relay.ask("c1", { type: "pair", token: bootstrapToken, deviceId: "phone-1" });
+    const credential = String(paired.credential);
+    expect((await harness.relay.ask("c1", { type: "status", deviceId: "phone-1", credential })).type).toBe("status");
+    const trusted = JSON.parse(await readFile(harness.trusted, "utf8"));
+    trusted.devices[0].lastSeen = "2020-01-01T00:00:00Z";
+    await writeFile(harness.trusted, JSON.stringify(trusted));
+    expect((await harness.relay.ask("c1", { type: "status", deviceId: "phone-1" })).type).toBe("unauthorized");
+    expect(JSON.parse(await readFile(harness.trusted, "utf8")).devices).toEqual([]);
+    expect(await queued()).toEqual([]);
+  });
+
+  it("persists activity for a remembered relay client", async () => {
+    const paired = await harness.relay.ask("c1", { type: "pair", token: bootstrapToken, deviceId: "phone-1" });
+    const credential = String(paired.credential);
+    await harness.relay.ask("c1", { type: "status", deviceId: "phone-1", credential });
+    const trusted = JSON.parse(await readFile(harness.trusted, "utf8"));
+    const before = new Date(Date.now() - 120_000).toISOString();
+    trusted.devices[0].lastSeen = before;
+    await writeFile(harness.trusted, JSON.stringify(trusted));
+    expect((await harness.relay.ask("c1", { type: "status", deviceId: "phone-1" })).type).toBe("status");
+    expect(Date.parse(JSON.parse(await readFile(harness.trusted, "utf8")).devices[0].lastSeen)).toBeGreaterThan(Date.parse(before));
+  });
+
   it("does not let a client id remembered on one relay connection authorize on the next", async () => {
     const paired = await harness.relay.ask("c1", { type: "pair", token: bootstrapToken, deviceId: "phone-1" });
     const credential = String(paired.credential);

@@ -166,7 +166,7 @@ try {
   let reconnectedWithoutQr = false;
   for (let attempt = 0; attempt < 80; attempt += 1) {
     try {
-      const state = await evaluate(page.webSocketDebuggerUrl, "JSON.stringify({connected:document.querySelector('#online')?.textContent?.includes('永久綁定')===true,hash:location.hash})");
+      const state = await evaluate(page.webSocketDebuggerUrl, "JSON.stringify({connected:document.querySelector('#online')?.textContent?.includes('已綁定')===true,hash:location.hash})");
       if (state.connected && state.hash === "") { reconnectedWithoutQr = true; break; }
     } catch { /* page is reloading */ }
     await delay(50);
