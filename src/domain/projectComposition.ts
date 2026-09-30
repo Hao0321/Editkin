@@ -18,6 +18,7 @@ export function projectFromComposition(
     aestheticSystem: root.aestheticSystem,
     colorManagement: composition.colorManagement ?? root.colorManagement,
     scene25d: composition.scene25d,
+    scene3d: composition.scene3d,
     particleSimulation: composition.particleSimulation,
     assets: structuredClone(assets),
     compositions: structuredClone(compositions),

@@ -61,7 +61,7 @@ export interface TimelineClip {
 
 export interface FloatingVideoFrame {
   schema: "editkin.floating-video-frame/v1";
-  style: "prism" | "graphite";
+  style: "prism" | "graphite" | "matte";
   size: number;
   yawDegrees: number;
   pitchDegrees: number;

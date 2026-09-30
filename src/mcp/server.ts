@@ -26,7 +26,16 @@ import { FLOATING_FRAME_SCENE_PRESETS, floatingFrameSceneCommands } from "../mot
 import { MOTION_CLIP_PRESETS, motionClipPresetCommands } from "../motion/motionClipPresets";
 import { compactMotionGraphicPresets, findMotionGraphicPreset, motionGraphicPresets } from "../creative/motionGraphicPresets";
 import { motionPresetVariantDescriptor } from "../application/motionPresetVariant";
+import { prepareNativeReelScene } from "../application/nativeReelScenes";
+import { nativeMotionSectionSchema, prepareNativeMotionSequence } from "../application/nativeMotionSequence";
+import { motionReferenceDesignInputSchema, prepareMotionReferenceDesign } from "../application/motionReferenceDesign";
+import { nativeMotionRevisionSchema, prepareNativeMotionRevision } from "../application/nativeMotionRevision";
+import { motionSceneStyleSchema } from "../domain/motionSceneStyle";
+import { registerMesh3dTools } from "./mesh3dTools";
+import { registerReferenceMotionTemplateTools } from "./referenceMotionTemplateTools";
+import { REFERENCE_MOTION_TEMPLATES } from "../motion/referenceMotionTemplates";
 import { compactCinematicLanguageIndex, resolveCinematicRecipe } from "../creative/cinematicLanguage";
+import { rankStyleShotCandidates, type ShotSelectionStyleId } from "../creative/shotSelectionStyles";
 import { SHORT_FORM_TEMPLATES } from "../application/shortFormTemplates";
 import { LONG_FORM_TEMPLATES, LONG_FORM_WHITE_CAPTION_STYLE } from "../application/longFormTemplates";
 import { editorialProfile } from "../application/editorialProfiles";
@@ -91,6 +100,8 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
   registerMontageTools(server);
   registerAutoColorTools(server);
   registerRemoteOnboardingTools(server);
+  registerReferenceMotionTemplateTools(server);
+  registerMesh3dTools(server);
 
   server.registerTool("list_creative_presets", {
     description: "列出 Editkin 可輸出的調色、特效、轉場、字幕、動態圖文、2D 片段動態、2.5D 浮空影片框與鏡頭語言 presets。動態圖文回低 Token 索引；motionPresetId 只展開單一 seed。",
@@ -111,6 +122,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       transitions: kind === "all" || kind === "transition" ? compact(TRANSITION_PRESETS) : undefined,
       textStyles: kind === "all" || kind === "text" ? compact(TEXT_STYLE_PRESETS) : undefined,
       motionGraphics: !motionPresetId && (kind === "all" || kind === "motion") ? compactMotionGraphicPresets() : undefined,
+      referenceMotionTemplates: !motionPresetId && (kind === "all" || kind === "motion") ? REFERENCE_MOTION_TEMPLATES.map(({ id, name, grammar, sourceSlots, maxSources, minSeconds }) => ({ id, name, grammar, sourceSlots, maxSources, minSeconds, prepareTool: "prepare_reference_motion_template", capabilityBoundary: "editable_2d_not_sphere_or_studio" })) : undefined,
         floatingVideoFrames: !motionPresetId && (kind === "all" || kind === "motion") ? FLOATING_VIDEO_FRAME_PRESETS.map(preset => ({
           id: preset.id, name: preset.name, capability: "editable_2.5d_perspective_video_frame", frame: floatingVideoFramePreset(preset.id),
           commandType: "set_clip_floating_frame", requires: ["rec709_video_clip", "no_scene25d", "no_mask_or_layout", ...(preset.id === "portrait_orbit" ? ["portrait_project"] : [])],
@@ -123,7 +135,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
         ...preset, prepareTool: "prepare_clip_motion_preset", commandType: "add_keyframe", requires: ["clip_without_existing_keyframes", "at_least_12_frames"],
       })) : undefined,
       formatTemplates: kind === "all" || kind === "template" ? {
-        shortForm: SHORT_FORM_TEMPLATES.map(({ id, name, category, bestFor, rhythm, lookPresetId, effectPresetIds, transitionPresetId, captionPresetId, cinematicRecipeId }) => ({ id, name, category, bestFor, rhythm, lookPresetId, effectPresetIds, transitionPresetId, captionPresetId, cinematicRecipeId, executionBoundary: "visual_package_now_recipe_requires_evidence_gate" })),
+        shortForm: SHORT_FORM_TEMPLATES.map(({ id, name, category, bestFor, rhythm, lookPresetId, effectPresetIds, transitionPresetId, captionPresetId, cinematicRecipeId, motionGraphicPresetId, motionClipPresetId, floatingFrameScenePresetId }) => ({ id, name, category, bestFor, rhythm, lookPresetId, effectPresetIds, transitionPresetId, captionPresetId, cinematicRecipeId, motionGraphicPresetId, motionClipPresetId, floatingFrameScenePresetId, executionBoundary: "visual_package_now_recipe_requires_evidence_gate" })),
         longForm: LONG_FORM_TEMPLATES.map(({ id, name, category, bestFor, lookPresetId, effectPresetIds, introTransitionPresetId, cinematicRecipeId, cadence }) => ({ id, name, category, bestFor, lookPresetId, effectPresetIds, introTransitionPresetId, cinematicRecipeId, cadence, captionColorPolicy: "white_only", executionBoundary: "visual_package_now_recipe_requires_evidence_gate" })),
       } : undefined,
       cinematicLanguage: kind === "all" || kind === "cinematic" ? compactCinematicLanguageIndex() : undefined,
@@ -133,8 +145,8 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
   });
 
   server.registerTool("prepare_clip_motion_preset", {
-    description: "只讀：依專案 fps 與片段時長產生浮空入場或緩推鏡頭的精確 add_keyframe commands。將結果放入同一份 v4 plan，再 audit/apply；本工具不修改專案。",
-    inputSchema: z.object({ projectPath: z.string().min(1), clipId: z.string().min(1), presetId: z.enum(["float_in", "slow_push"]) }),
+    description: "只讀：依專案 fps 與片段時長產生浮空、緩推、空間側移或章節彈入的逐格 add_keyframe commands。將結果放入同一份 v4 plan，再 audit/apply；本工具不修改專案。",
+    inputSchema: z.object({ projectPath: z.string().min(1), clipId: z.string().min(1), presetId: z.enum(["float_in", "slow_push", "gallery_drift", "chapter_snap"]) }),
   }, async ({ projectPath, clipId, presetId }) => {
     try {
       const project = await readProject(projectPath);
@@ -145,15 +157,55 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
   });
 
   server.registerTool("prepare_floating_frame_scene", {
-    description: "只讀：為直式專案中的使用者影片編譯前景環繞旋轉 + 後方兩片大型直式影片的五個 EditGraph commands。結果可編輯、可 Undo；放入 v4 plan 後 audit/apply，本工具不改專案。",
-    inputSchema: z.object({ projectPath: z.string().min(1), clipId: z.string().min(1), presetId: z.literal("portrait_duo") }),
-  }, async ({ projectPath, clipId, presetId }) => {
+    description: "只讀：將三份獨立使用者影片編譯成双直式後景或錯層浮窗的五個 EditGraph commands。必須綁 rearRight/front 素材與來源入點，僅原片保留音訊。結果可編輯、可 Undo；綁素材 receipts 放入 v4 plan 後 audit/apply。",
+    inputSchema: z.object({ projectPath: z.string().min(1), clipId: z.string().min(1), presetId: z.enum(["portrait_duo", "portrait_stack"]),
+      sources: z.object({ rearRight: z.object({ assetId: z.string().min(1), sourceStart: z.number().finite().nonnegative() }), front: z.object({ assetId: z.string().min(1), sourceStart: z.number().finite().nonnegative() }) }) }),
+  }, async ({ projectPath, clipId, presetId, sources }) => {
     try {
       const project = await readProject(projectPath);
       return textResult({ status: "GREEN", clipId, projectRevision: project.revision, presetId,
-        commands: floatingFrameSceneCommands(project, clipId, presetId), readOnly: true,
+        commands: floatingFrameSceneCommands(project, clipId, presetId, sources), sources, readOnly: true,
         next: "bind commands to v4 motionTreatment and designEvidence, then audit/apply" });
     } catch (error) { return errorResult(error); }
+  });
+
+  const nativeSceneSchema = z.strictObject({ projectPath: z.string().min(1), templateId: z.enum(["editorial_steps", "spatial_gallery"]),
+      startFrame: z.number().int().nonnegative(), durationFrames: z.number().int().min(30).max(1800), title: z.string().trim().min(1).max(48), body: z.string().trim().max(64).optional(),
+      progress: z.strictObject({ steps: z.number().int().min(1).max(12), activeStep: z.number().int().min(0).max(12) }).optional(),
+      clipId: z.string().min(1).optional(), sources: z.strictObject({
+        rearRight: z.strictObject({ assetId: z.string().min(1), sourceStart: z.number().finite().nonnegative() }),
+        front: z.strictObject({ assetId: z.string().min(1), sourceStart: z.number().finite().nonnegative() }),
+      }).optional(), evidenceRefs: z.array(z.string().trim().min(1).max(160)).min(1).max(8), style: motionSceneStyleSchema.optional(),
+    });
+  server.registerTool("prepare_native_reel_scene", {
+    description: "只讀：編譯 Editkin 9:16 自研章節資訊（進度、短線、點陣、字）或特別指定的三素材空間展廊；不輸入第三方 UI。長片不搬整套章節，請用 prepare_native_motion_sequence 的局部提示。回傳可編輯 commands、v4 editorial graphic events 和代表幀排版 receipts。缺素材／文字／有效範圍會阻擋；仍須 v4 素材、designEvidence、motionTreatment audit/apply/render。",
+    inputSchema: nativeSceneSchema,
+  }, async ({ projectPath, ...input }) => {
+    try { return textResult(prepareNativeReelScene(await readProject(projectPath), input, prefix => `${prefix}-${randomUUID()}`)); }
+    catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_native_motion_sequence", {
+    description: "只讀：長片只提取短文字／局部焦點線條，保留原素材完整尺寸、剪點、旁白和播放速度；每次最多四秒，再回乾淨觀看。需要已觀察的文字留白位置，焦點提示另需明確來源區域。禁止整套直式章節、PPT 底板、分欄、縮小原片或自動浮窗。回傳可編輯 commands、v4 圖形 events 和 clean_hold，仍須 material receipts、audit/apply/render 與完整段落審查。",
+    inputSchema: z.strictObject({ projectPath: z.string().min(1), sections: z.array(nativeMotionSectionSchema).min(1).max(64) }),
+  }, async ({ projectPath, sections }) => {
+    try { return textResult(prepareNativeMotionSequence(await readProject(projectPath), sections, prefix => `${prefix}-${randomUUID()}`)); }
+    catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_reference_motion_design", {
+    description: "只讀設計入口：完整參考每一段的動作、攝影手法、節奏、文字與轉場，再依自己的 Logo、配色、字型和核對服務內容重新設計。產出三種不同敘事／焦點分鏡與全片參考覆蓋表。缺來源、缺實體字型、Logo 或未實作場景明確保留缺口；禁止導入參考作者影片、第三方 UI 或把直式片拉寬。分鏡仍需同專案靜態稿、連續動態和 v4 audit/apply/render 驗收後才成為模板。",
+    inputSchema: motionReferenceDesignInputSchema.extend({ projectPath: z.string().min(1) }),
+  }, async ({ projectPath, ...input }) => {
+    try { return textResult(prepareMotionReferenceDesign(await readProject(projectPath), input)); }
+    catch (error) { return errorResult(error); }
+  });
+  server.registerTool("prepare_native_motion_revision", {
+    description: "只讀局部導演修訂：精確指定 Motion v2 元素、專案版本、完整元素影格範圍與入場／退場。0.7 倍動畫速度、明確影格時長、動畫起始縮放分開；不改影片播放速度、音訊、文字及終點位置。回傳 before/after 和普通更新命令，過期版本、错误對象或閱讀停留不足會阻擋；經 v4 audit/apply 重驗。",
+    inputSchema: nativeMotionRevisionSchema.extend({ projectPath: z.string().min(1) }),
+  }, async ({ projectPath, ...input }) => {
+    try { return textResult(prepareNativeMotionRevision(await readProject(projectPath), input)); }
+    catch (error) { return errorResult(error); }
   });
 
   server.registerTool("resolve_cinematic_recipe", {
@@ -161,6 +213,20 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
     inputSchema: z.object({ recipeId: z.string().min(1).max(128), availableCapabilities: z.array(z.string().min(1).max(128)).max(64) }),
   }, async ({ recipeId, availableCapabilities }) => {
     try { return textResult(resolveCinematicRecipe(recipeId, availableCapabilities)); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("rank_style_shots", {
+    description: "唯讀選鏡建議：依已核對的來源時間碼、權利、段落用途與逐鏡觀察，對九種敘事風格的候選排序。輸出永遠待人工審核，不修改專案、時間軸或 v4 plan；未知線索不會被推測。",
+    inputSchema: z.object({
+      styleId: z.enum(["realist", "stylized", "suspense_horror", "action_adventure", "romance", "sci_fi_fantasy", "character_drama", "vlog", "commercial_ad"]),
+      candidates: z.array(z.object({
+        id: z.string().min(1).max(80), sourceRef: z.string().min(1).max(160),
+        rightsApproved: z.boolean(), beatPurposeMatched: z.boolean(),
+        observations: z.array(z.object({ signal: z.string().min(1).max(80), evidenceRef: z.string().max(160) })).max(16),
+      })).max(128),
+    }),
+  }, async ({ styleId, candidates }) => {
+    try { return textResult(rankStyleShotCandidates(styleId as ShotSelectionStyleId, candidates)); } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("apply_creative_preset", {
@@ -328,7 +394,10 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
         templateId, format, commands, suggestions: { effectPresetIds: template.effectPresetIds,
           transitionPresetId: "transitionPresetId" in template ? template.transitionPresetId : template.introTransitionPresetId,
           captionPresetId: "captionPresetId" in template ? template.captionPresetId : LONG_FORM_WHITE_CAPTION_STYLE.presetId,
-          cinematicRecipeId: template.cinematicRecipeId },
+          cinematicRecipeId: template.cinematicRecipeId,
+          ...("motionGraphicPresetId" in template && template.motionGraphicPresetId ? { motionGraphicPresetId: template.motionGraphicPresetId } : {}),
+          ...("motionClipPresetId" in template && template.motionClipPresetId ? { motionClipPresetId: template.motionClipPresetId } : {}),
+          ...("floatingFrameScenePresetId" in template && template.floatingFrameScenePresetId ? { floatingFrameScenePresetId: template.floatingFrameScenePresetId } : {}) },
         instruction: "Only the Look and long-form caption style are precompiled. Add motivated effects/transitions and exact Motion v2 graphics after material and design evidence; bind every command to motionTreatment and audit/apply once." });
     } catch (error) { return errorResult(error); }
   });

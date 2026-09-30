@@ -31,7 +31,10 @@ interface MediaBinProps {
   onAddAssetAsPictureInPicture?: (assetId: string) => void;
   onAssetDragStart?: (assetId: string) => void;
   onAssetDragEnd?: () => void;
-  onApplyShortTemplate?: (templateId: string) => void;
+  onApplyShortTemplate?: (templateId: string, content?: import("../application/shortFormTemplates").ShortFormTemplateContent) => void;
+  templateSourceAssetId?: string;
+  templateFps?: number;
+  templateCanvasFormat?: "short" | "long";
   onApplyLongTemplate?: (templateId: string) => void;
   onAddLowerThird?: (presetId: LowerThirdPresetId, personName: string, organization: string) => void;
   motionGraphics?: MotionGraphic[];
@@ -65,7 +68,7 @@ const KIND_LABEL: Record<MediaAsset["kind"], string> = {
 const KIND_FALLBACK: Record<MediaAsset["kind"], string> = { video: "影片", audio: "聲音", image: "圖片" };
 export const PROJECT_ASSET_ROW_HEIGHT = 76;
 
-export function MediaBin({ assets, runtimeUrls, onImport, onDesktopImport, creativeLibrary, creativeLoading, onCreativeImport, creativeImportingId, creativePreviewingId, onCreativePreview, onCreativeResolve, onAutoMusic, onBatchAutoEdit, batchSummary, onOpenBatch, onAddAssetToTimeline, onAddAssetAsPictureInPicture, onAssetDragStart, onAssetDragEnd, onApplyShortTemplate, onApplyLongTemplate, onAddLowerThird, motionGraphics, captions, directorMarkers, templateApplication, onDeleteMotionGraphic, onDeleteCaption, onDeleteDirectorMarker, onClearTemplateApplication, pluginRegistry, pluginLoading, pluginBusyId, hasSelectedClip = false, onApplyPlugin, onOpenPluginFolder, onRefreshPlugins, workflowProfile, onWorkflowProfileChange }: MediaBinProps) {
+export function MediaBin({ assets, runtimeUrls, onImport, onDesktopImport, creativeLibrary, creativeLoading, onCreativeImport, creativeImportingId, creativePreviewingId, onCreativePreview, onCreativeResolve, onAutoMusic, onBatchAutoEdit, batchSummary, onOpenBatch, onAddAssetToTimeline, onAddAssetAsPictureInPicture, onAssetDragStart, onAssetDragEnd, onApplyShortTemplate, templateSourceAssetId, templateFps = 30, templateCanvasFormat, onApplyLongTemplate, onAddLowerThird, motionGraphics, captions, directorMarkers, templateApplication, onDeleteMotionGraphic, onDeleteCaption, onDeleteDirectorMarker, onClearTemplateApplication, pluginRegistry, pluginLoading, pluginBusyId, hasSelectedClip = false, onApplyPlugin, onOpenPluginFolder, onRefreshPlugins, workflowProfile, onWorkflowProfileChange }: MediaBinProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const assetScrollRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<"project" | "library" | "templates" | "plugins">("project");
@@ -173,7 +176,7 @@ export function MediaBin({ assets, runtimeUrls, onImport, onDesktopImport, creat
         onAudioPreview={onCreativePreview}
         onResolvePreview={onCreativeResolve}
         onAutoMusic={onAutoMusic}
-      /></Suspense> : tab === "templates" ? <Suspense fallback={<div className="creative-library"><small>正在載入成片模板…</small></div>}><ShortFormTemplateBrowser onApplyShort={(templateId) => onApplyShortTemplate?.(templateId)} onApplyLong={(templateId) => onApplyLongTemplate?.(templateId)} onAddLowerThird={onAddLowerThird} motionGraphics={motionGraphics ?? []} captions={captions ?? []} directorMarkers={directorMarkers ?? []} templateApplication={templateApplication} onDeleteMotionGraphic={onDeleteMotionGraphic} onDeleteCaption={onDeleteCaption} onDeleteDirectorMarker={onDeleteDirectorMarker} onClearTemplateApplication={onClearTemplateApplication} /></Suspense> : <Suspense fallback={<div className="creative-library"><small>正在載入外掛工具…</small></div>}><PluginBrowser registry={pluginRegistry} loading={pluginLoading} busyId={pluginBusyId} hasSelectedClip={hasSelectedClip} onApply={onApplyPlugin} onOpenFolder={onOpenPluginFolder} onRefresh={onRefreshPlugins} workflowProfile={workflowProfile} onWorkflowProfileChange={onWorkflowProfileChange} /></Suspense>}
+      /></Suspense> : tab === "templates" ? <Suspense fallback={<div className="creative-library"><small>正在載入成片模板…</small></div>}><ShortFormTemplateBrowser onApplyShort={(templateId, content) => onApplyShortTemplate?.(templateId, content)} assets={assets} sourceAssetId={templateSourceAssetId} fps={templateFps} canvasFormat={templateCanvasFormat} onApplyLong={(templateId) => onApplyLongTemplate?.(templateId)} onAddLowerThird={onAddLowerThird} motionGraphics={motionGraphics ?? []} captions={captions ?? []} directorMarkers={directorMarkers ?? []} templateApplication={templateApplication} onDeleteMotionGraphic={onDeleteMotionGraphic} onDeleteCaption={onDeleteCaption} onDeleteDirectorMarker={onDeleteDirectorMarker} onClearTemplateApplication={onClearTemplateApplication} /></Suspense> : <Suspense fallback={<div className="creative-library"><small>正在載入外掛工具…</small></div>}><PluginBrowser registry={pluginRegistry} loading={pluginLoading} busyId={pluginBusyId} hasSelectedClip={hasSelectedClip} onApply={onApplyPlugin} onOpenFolder={onOpenPluginFolder} onRefresh={onRefreshPlugins} workflowProfile={workflowProfile} onWorkflowProfileChange={onWorkflowProfileChange} /></Suspense>}
       <div className="privacy-note"><span>✓</span> 素材只留在你的電腦</div>
     </aside>
   );

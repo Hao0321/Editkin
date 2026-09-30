@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import { mesh3dSceneSchema } from "../motion/mesh3dScene";
 import type { EditorCommand } from "./commands";
 import type { EditProject, HaoExpressionSource } from "./types";
 import { AESTHETIC_BENCHMARKS, BENCHMARK_AXES } from "./aestheticBenchmarks";
@@ -21,7 +22,7 @@ const finiteVec3Schema = z.tuple([z.number().finite(), z.number().finite(), z.nu
 const transform3dSchema = z.object({ position: finiteVec3Schema, rotationDegrees: finiteVec3Schema, scale: finiteVec3Schema });
 const floatingVideoFrameSchema = z.strictObject({
   schema: z.literal("editkin.floating-video-frame/v1"),
-  style: z.enum(["prism", "graphite"]),
+  style: z.enum(["prism", "graphite", "matte"]),
   size: z.number().finite().min(.3).max(.82),
   yawDegrees: z.number().finite().min(-35).max(35),
   pitchDegrees: z.number().finite().min(-25).max(25),
@@ -302,6 +303,26 @@ const layoutV2Schema = z.object({
   maxLines: z.number().int().min(1).max(4), minFontSize: z.number().finite().min(8).max(384), lineGap: z.number().finite().min(0).max(128), align: z.enum(["left", "center", "right"]),
   widthMode: z.enum(["fixed", "fit_content"]).optional(),
 });
+const vectorBase = {
+  schema: z.literal("editkin.motion-vector/v1"),
+  heightPixels: z.number().finite().min(1).max(4096),
+  revealFrames: z.number().int().min(1).max(600),
+};
+export const motionVectorV2Schema = z.discriminatedUnion("kind", [
+  z.strictObject({ ...vectorBase, kind: z.enum(["rule", "panel", "ellipse"]) }),
+  z.strictObject({ ...vectorBase, kind: z.literal("step_progress"), steps: z.number().int().min(1).max(12),
+    activeStep: z.number().int().min(0).max(12), gapPixels: z.number().finite().min(0).max(128) }),
+  z.strictObject({ ...vectorBase, kind: z.literal("dot_grid"), spacingPixels: z.number().finite().min(8).max(512),
+    dotRadiusPixels: z.number().finite().min(.25).max(32) }),
+  z.strictObject({ ...vectorBase, kind: z.literal("line_grid"), spacingPixels: z.number().finite().min(8).max(512),
+    lineWidthPixels: z.number().finite().min(.25).max(8), majorEvery: z.number().int().min(2).max(12) }),
+  z.strictObject({ ...vectorBase, kind: z.literal("connection_field"), seed: z.number().int().min(0).max(0xffffffff),
+    points: z.number().int().min(8).max(64), dotRadiusPixels: z.number().finite().min(.5).max(12),
+    lineWidthPixels: z.number().finite().min(.5).max(8), burstFrames: z.number().int().min(1).max(180),
+    gatherStartFrame: z.number().int().nonnegative().max(1800), gatherFrames: z.number().int().min(1).max(180),
+    connectStartFrame: z.number().int().nonnegative().max(1800), connectFrames: z.number().int().min(1).max(180),
+    groupColors: z.tuple([z.string().regex(/^#[0-9a-f]{6}$/i), z.string().regex(/^#[0-9a-f]{6}$/i), z.string().regex(/^#[0-9a-f]{6}$/i)]).optional() }),
+]);
 // A variant is an explicit style contract, not a second command language.
 // Reject unknown nested fields instead of silently discarding expressions.
 const variantEasingSchema = z.discriminatedUnion("type", [
@@ -331,6 +352,7 @@ export const motionPresetOverridesSchema = z.strictObject({
     exit: variantPhaseSchema,
   }).strict().optional(),
   layoutV2: layoutV2Schema.extend({ safeArea: layoutV2Schema.shape.safeArea.strict() }).strict().optional(),
+  vectorV2: motionVectorV2Schema.optional(),
 });
 export const motionPresetVariantSchema = z.strictObject({
   schema: z.literal("editkin.motion-preset-variant/v1"),
@@ -350,11 +372,11 @@ const motionGraphicBaseSchema = z.object({
   textColor: z.string(), backgroundColor: z.string(), accentColor: z.string(), animation: z.enum(["fade", "slide_up", "pop", "spring_soft"]),
   visualStyle: z.enum(["solid_panel", "holo_scan_cyan", "holo_grid_lime", "target_lock_red", "spectral_wire_violet", "depth_glass_blue", "telemetry_beam_amber", "neon_extrude_white", "quantum_label_magenta"]).optional(),
   trackId: z.string().optional(), trackingMode: z.enum(["anchor", "surface"]).optional(), offsetX: z.number(), offsetY: z.number(),
-  motionV2: motionV2Schema.optional(), layoutV2: layoutV2Schema.optional(),
+  motionV2: motionV2Schema.optional(), layoutV2: layoutV2Schema.optional(), vectorV2: motionVectorV2Schema.optional(),
   templateOwner: templateElementOwnerSchema.optional(),
 });
 const motionGraphicSchema = motionGraphicBaseSchema.superRefine((graphic, context) => {
-  if (graphic.schema === "hao.motion-composition/v1" && (graphic.motionV2 !== undefined || graphic.layoutV2 !== undefined)) {
+  if (graphic.schema === "hao.motion-composition/v1" && (graphic.motionV2 !== undefined || graphic.layoutV2 !== undefined || graphic.vectorV2 !== undefined)) {
     context.addIssue({ code: "custom", message: "v1 不可攜帶 v2 motion/layout 參數", path: ["schema"] });
   }
   if (graphic.schema === "hao.motion-composition/v2" && (!graphic.motionV2 || !graphic.layoutV2)) {
@@ -378,6 +400,7 @@ const compositionSchema = z.object({
   director: directorStateSchema,
   colorManagement: z.object({ mode: z.enum(["rec709", "aces2"]), workingSpace: z.literal("ACEScct"), outputTransform: z.enum(["rec709_sdr", "p3d65_sdr", "rec2100_hlg_1000", "rec2100_pq_1000"]), configId: z.literal("studio-config-v4.0.0_aces-v2.0_ocio-v2.5") }).optional(),
   scene25d: scene25dSchema.optional(),
+  scene3d: mesh3dSceneSchema.optional(),
   particleSimulation: particleSimulationSchema.optional(),
   updatedAt: z.string(),
 });
@@ -402,14 +425,23 @@ const aestheticReviewSchema = z.object({
   status: z.enum(["REVIEW", "BLOCKED", "PASSED"]), score: z.number().min(0).max(100), ratings: z.record(z.string(), z.number().min(1).max(5)),
   machineBlockers: z.array(z.string()), completedAt: z.string().optional(),
   benchmarkReview: aestheticBenchmarkReviewSchema.optional(),
+  reviewer: z.enum(["human", "agent"]).optional(),
 });
 export const aestheticSystemSchema = z.object({
   schema: z.literal("editkin.aesthetic-system/v1"), standardId: z.literal("editkin-community-aesthetic-standard"), standardVersion: z.string(),
   sourceSha256: z.string().regex(/^[a-f0-9]{64}$/i), format: z.enum(["shorts", "longform"]), domain: z.string(), primaryFamily: z.string(), primaryLabel: z.string(),
   supportFamilies: z.array(z.string()).max(4), avoid: z.array(z.string()).max(16), sharedDnaSha256: z.string().regex(/^[a-f0-9]{64}$/i),
   dimensions: z.array(z.object({ id: z.string(), labelZh: z.string(), question: z.string(), weight: z.number().positive() })).length(10),
-  scoreContract: z.object({ passScore: z.number(), blockBelow: z.number(), minimumDimensionRating: z.number(), humanReviewRequired: z.literal(true) }),
+  scoreContract: z.object({ passScore: z.number(), blockBelow: z.number(), minimumDimensionRating: z.number(), humanReviewRequired: z.boolean() }),
+  reviewPolicy: z.discriminatedUnion("mode", [z.strictObject({ mode: z.literal("human") }), z.strictObject({ mode: z.literal("agent_reference_comparison"), authorization: z.string().trim().min(1).max(500) })]).optional(),
   review: aestheticReviewSchema,
+}).superRefine((system, context) => {
+  if (!system.scoreContract.humanReviewRequired && system.reviewPolicy?.mode !== "agent_reference_comparison") {
+    context.addIssue({ code: "custom", path: ["reviewPolicy"], message: "Agent visual review requires explicit creator authorization" });
+  }
+  if (system.scoreContract.humanReviewRequired && system.reviewPolicy?.mode === "agent_reference_comparison") {
+    context.addIssue({ code: "custom", path: ["scoreContract"], message: "Explicit agent review policy cannot keep a contradictory human-only completion gate" });
+  }
 });
 
 const templateCreativeSnapshotSchema = z.strictObject({
@@ -419,6 +451,8 @@ const templateCreativeSnapshotSchema = z.strictObject({
   effectPresetIds: z.array(z.string()),
   transitionIn: creativeTransitionSchema.nullable(),
   transitionOut: creativeTransitionSchema.nullable(),
+  floatingFrame: floatingVideoFrameSchema.nullable().optional(),
+  transform: transformSchema.optional(),
 });
 const templateApplicationSnapshotSchema = z.strictObject({
   editorialProfile: z.enum(["auto", "gaming", "food", "travel", "podcast_on_camera", "podcast_no_face"]),
@@ -435,6 +469,14 @@ const templateApplicationSchema = z.strictObject({
   createdAt: z.string(),
   before: templateApplicationSnapshotSchema,
   applied: templateApplicationSnapshotSchema,
+  generatedClips: z.array(z.strictObject({ clipId: z.string().min(1), trackId: z.string().min(1) })).max(32).optional(),
+}).superRefine((application, context) => {
+  const originals = new Set(application.before.clips.map(clip => clip.clipId));
+  const seen = new Set<string>();
+  for (const owned of application.generatedClips ?? []) {
+    if (originals.has(owned.clipId) || seen.has(owned.clipId)) context.addIssue({ code: "custom", message: "模板生成片段不能指向原始片段或重複身分" });
+    seen.add(owned.clipId);
+  }
 });
 
 export const projectSchema: z.ZodType<EditProject> = z.object({
@@ -443,6 +485,7 @@ export const projectSchema: z.ZodType<EditProject> = z.object({
   aestheticSystem: aestheticSystemSchema.optional(),
   colorManagement: z.object({ mode: z.enum(["rec709", "aces2"]), workingSpace: z.literal("ACEScct"), outputTransform: z.enum(["rec709_sdr", "p3d65_sdr", "rec2100_hlg_1000", "rec2100_pq_1000"]), configId: z.literal("studio-config-v4.0.0_aces-v2.0_ocio-v2.5") }).optional(),
   scene25d: scene25dSchema.optional(),
+  scene3d: mesh3dSceneSchema.optional(),
   particleSimulation: particleSimulationSchema.optional(),
   assets: z.array(assetSchema),
   compositions: z.array(compositionSchema),
@@ -478,6 +521,7 @@ export const editorCommandSchema: z.ZodType<EditorCommand> = z.lazy(() => z.disc
     segmentIds: z.array(z.string()).min(1),
   }),
   z.object({ type: z.literal("update_clip_transform"), clipId: z.string(), patch: transformSchema.partial() }),
+  z.strictObject({ type: z.literal("set_mesh_3d_scene"), scene: mesh3dSceneSchema.optional() }),
   z.object({ type: z.literal("configure_scene_25d"), enabled: z.boolean() }),
   z.object({ type: z.literal("set_scene_25d_settings"), settings: scene25dSchema }),
   z.object({ type: z.literal("update_clip_transform_3d"), clipId: z.string(), patch: transform3dSchema.partial() }),

@@ -1,0 +1,9 @@
+.mesh-3d-controls { margin: 16px; padding: 14px; border: 1px solid var(--line, #d8dee8); border-radius: 12px; }
+.mesh-3d-controls summary { cursor: pointer; font-weight: 700; line-height: 1.6; }
+.mesh-3d-controls[open] > summary { margin-bottom: 14px; }
+.mesh-3d-controls label { display: grid; grid-template-columns: minmax(72px, 1fr) minmax(96px, 1.5fr); align-items: center; gap: 10px; margin: 10px 0; font-size: 14px; }
+.mesh-3d-controls input, .mesh-3d-controls select { box-sizing: border-box; min-width: 0; width: 100%; min-height: 36px; padding: 6px 8px; border: 1px solid var(--line, #d8dee8); border-radius: 7px; background: var(--surface, #fff); color: var(--ink, #172033); font: inherit; }
+.mesh-3d-controls input[type="color"] { padding: 3px; }
+.mesh-3d-controls .mini-action { width: 100%; min-height: 38px; margin: 8px 0; }
+.mesh-3d-controls details { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line, #d8dee8); }
+.mesh-3d-controls p[role="alert"] { font-size: 14px; line-height: 1.6; color: var(--danger, #b42318); }

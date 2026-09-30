@@ -195,6 +195,7 @@ export function cloneProject(project: EditProject): EditProject {
 }
 
 export function projectDuration(project: EditProject): number {
+  const meshDuration = project.scene3d?.enabled ? Math.max(0, ...project.scene3d.segments.map(s => s.timelineStart + s.duration)) : 0;
   const mediaDuration = project.tracks.reduce(
     (max, track) => track.clips.reduce(
       (trackMax, clip) => Math.max(trackMax, clip.timelineStart + clip.duration),
@@ -202,7 +203,7 @@ export function projectDuration(project: EditProject): number {
     ),
     0,
   );
-  const captionDuration = project.captions.reduce((max, caption) => Math.max(max, caption.start + caption.duration), mediaDuration);
+  const captionDuration = project.captions.reduce((max, caption) => Math.max(max, caption.start + caption.duration), Math.max(mediaDuration, meshDuration));
   return project.motionGraphics.reduce((max, graphic) => Math.max(max, graphic.timelineStart + graphic.duration), captionDuration);
 }
 

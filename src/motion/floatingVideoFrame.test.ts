@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { floatingFrameCssMatrix, floatingFrameFeatherPixels, floatingFrameFfmpegFilters, floatingFrameGeometry, floatingVideoFramePreset } from "./floatingVideoFrame";
+import { floatingFrameCornerRadiusPixels, floatingFrameCssMatrix, floatingFrameFeatherPixels, floatingFrameFfmpegFilters, floatingFrameGeometry, floatingVideoFramePreset } from "./floatingVideoFrame";
 
 describe("floating video frame preview and formal render geometry", () => {
+  it("keeps the matte edge thin and the export cast shadow outside its feathered alpha", () => {
+    const frame = floatingVideoFramePreset("matte");
+    const geometry = floatingFrameGeometry(frame, 1080, 1920);
+    expect(geometry.border).toBe(2);
+    expect(floatingFrameCornerRadiusPixels(frame, 1080, 1920, geometry.border)).toBe(30);
+    const filters = floatingFrameFfmpegFilters(frame, 1080, 1920, 30);
+    const shadow = filters.find(filter => filter.startsWith("geq="))!;
+    expect(shadow).toContain("alpha(X,Y)/255");
+    expect(shadow).toContain("exp(-pow(max(");
+    expect(filters.filter(filter => filter.startsWith("drawbox="))).toHaveLength(2);
+    const legacy = floatingFrameFfmpegFilters(floatingVideoFramePreset("graphite"), 1080, 1920, 30);
+    expect(legacy.some(filter => filter.startsWith("geq="))).toBe(false);
+  });
   it("maps all four browser corners to the shared project quad", () => {
     const frame = floatingVideoFramePreset("portrait_orbit");
     const geometry = floatingFrameGeometry(frame, 360, 640, .55);
@@ -30,7 +43,8 @@ describe("floating video frame preview and formal render geometry", () => {
     const filters = floatingFrameFfmpegFilters(floatingVideoFramePreset("portrait_orbit"), 360, 640, 30);
     expect(filters[0]).toContain("force_original_aspect_ratio=increase");
     expect(filters[1]).toMatch(/^crop=\d+:\d+:/);
-    expect(filters.at(-1)).toContain("planes=8");
+    expect(filters.find(filter => filter.startsWith("gblur="))).toContain("planes=8");
+    expect(filters.at(-1)).toBe("format=rgba");
   });
 
   it("fades only the outside alpha and scales the feather with the project canvas", () => {
@@ -40,6 +54,6 @@ describe("floating video frame preview and formal render geometry", () => {
     const mask = filters.find(filter => filter.startsWith("format=rgba,geq="))!;
     expect(mask).toContain("min(min(X,W-1-X),min(Y,H-1-Y))/17");
     expect(mask).toContain("a='alpha(X,Y)*");
-    expect(filters.at(-1)).toContain("planes=8");
+    expect(filters.find(filter => filter.startsWith("gblur="))).toContain("planes=8");
   });
 });

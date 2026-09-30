@@ -37,7 +37,7 @@ function assertEasing(easing: MotionGraphicV2Easing, label: string): void {
 /** Runtime guard shared by EditGraph validation and the deterministic evaluator. */
 export function assertMotionGraphicV2Contract(graphic: MotionGraphic, fps: number): void {
   if (graphic.schema !== "hao.motion-composition/v2") {
-    if (graphic.motionV2 !== undefined || graphic.layoutV2 !== undefined) throw new Error("v1 不可攜帶 v2 motion/layout 參數");
+    if (graphic.motionV2 !== undefined || graphic.layoutV2 !== undefined || graphic.vectorV2 !== undefined) throw new Error("v1 不可攜帶 v2 motion/layout/vector 參數");
     return;
   }
   const motion = graphic.motionV2;
@@ -46,6 +46,42 @@ export function assertMotionGraphicV2Contract(graphic: MotionGraphic, fps: numbe
   if (graphic.trackId || graphic.trackingMode) throw new Error("v2 追蹤／平面貼合尚未完成共享 receipt，禁止降級到 v1");
   if (!Number.isFinite(fps) || fps <= 0 || fps > 240) throw new Error("v2 fps 不合法");
   const durationFrames = Math.max(1, Math.round(graphic.duration * fps));
+  const vector = graphic.vectorV2;
+  if (vector) {
+    if (vector.schema !== "editkin.motion-vector/v1" || !["rule", "panel", "ellipse", "step_progress", "dot_grid", "line_grid", "connection_field"].includes(vector.kind)) throw new Error("未知原生向量種類");
+    if (graphic.text !== "" || motion.sequence.unit !== "all" || motion.sequence.staggerFrames !== 0) throw new Error("原生向量必須使用空文字及整層動畫，文字請另加可編輯文字層");
+    assertFiniteRange(vector.heightPixels, 1, 4096, "vector heightPixels");
+    if (!Number.isInteger(vector.revealFrames) || vector.revealFrames < 1 || vector.revealFrames > 600 || vector.revealFrames > durationFrames - motion.exit.durationFrames) throw new Error("向量 revealFrames 超出有效停留段");
+    if (vector.kind === "step_progress") {
+      if (!Number.isInteger(vector.steps) || vector.steps < 1 || vector.steps > 12 || !Number.isInteger(vector.activeStep) || vector.activeStep < 0 || vector.activeStep > vector.steps) throw new Error("章節進度步數不合法");
+      assertFiniteRange(vector.gapPixels, 0, 128, "vector gapPixels");
+    }
+    if (vector.kind === "dot_grid") {
+      assertFiniteRange(vector.spacingPixels, 8, 512, "vector spacingPixels");
+      assertFiniteRange(vector.dotRadiusPixels, .25, 32, "vector dotRadiusPixels");
+      if (vector.dotRadiusPixels * 2 > vector.spacingPixels) throw new Error("點陣半徑不可超過間隔一半");
+    }
+    if (vector.kind === "line_grid") {
+      assertFiniteRange(vector.spacingPixels, 8, 512, "vector spacingPixels");
+      assertFiniteRange(vector.lineWidthPixels, .25, 8, "vector lineWidthPixels");
+      if (vector.lineWidthPixels * 2 >= vector.spacingPixels) throw new Error("網格線不可占滿間隔");
+      if (!Number.isInteger(vector.majorEvery) || vector.majorEvery < 2 || vector.majorEvery > 12) throw new Error("網格主線間隔不合法");
+    }
+    if (vector.kind === "connection_field") {
+      for (const [name, value, min, max] of [["seed", vector.seed, 0, 0xffffffff], ["points", vector.points, 8, 64],
+        ["burstFrames", vector.burstFrames, 1, 180], ["gatherStartFrame", vector.gatherStartFrame, 0, 1800],
+        ["gatherFrames", vector.gatherFrames, 1, 180], ["connectStartFrame", vector.connectStartFrame, 0, 1800],
+        ["connectFrames", vector.connectFrames, 1, 180]] as const) {
+        assertFiniteRange(value, min, max, `connection_field.${name}`);
+        if (!Number.isInteger(value)) throw new Error(`connection_field.${name} 必須是整數`);
+      }
+      assertFiniteRange(vector.dotRadiusPixels, .5, 12, "connection_field.dotRadiusPixels");
+      assertFiniteRange(vector.lineWidthPixels, .5, 8, "connection_field.lineWidthPixels");
+      if (vector.groupColors && (vector.groupColors.length !== 3 || vector.groupColors.some(color => !/^#[0-9a-f]{6}$/i.test(color)))) throw new Error("點群配色需要三個有效 HEX 色碼");
+      if (vector.gatherStartFrame < vector.burstFrames || vector.connectStartFrame < vector.gatherStartFrame + vector.gatherFrames
+        || vector.connectStartFrame + vector.connectFrames > durationFrames - motion.exit.durationFrames) throw new Error("連線場的場景交接重疊或超出時長");
+    }
+  }
   const glyphs = [...graphic.text].length;
   const units = motionGraphicV2UnitCount(graphic);
   if (glyphs > MOTION_V2_MAX_TEXT_UNITS || units > MOTION_V2_MAX_TEXT_UNITS) throw new Error(`v2 文字單元超過 ${MOTION_V2_MAX_TEXT_UNITS} 上限`);

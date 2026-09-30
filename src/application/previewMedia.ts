@@ -19,6 +19,15 @@ export interface ActivePreviewLayer {
   compositionAncestors?: PreviewCompositionAncestor[];
 }
 
+/** Keep the final mesh frame's sources mounted, even after an end seek. */
+export function mesh3dPreviewTime(project: EditProject, time: number): number {
+  if (!project.scene3d?.enabled) return time;
+  const last = project.scene3d.segments.at(-1);
+  if (!last) return time;
+  const lastFrame = Math.max(0, Math.round((last.timelineStart + last.duration) * project.fps) - 1);
+  return Math.max(0, Math.min(time, lastFrame / project.fps));
+}
+
 export function previewSurfaceAsset(asset: MediaAsset, source: string, runtimeUrls: Record<string, string>): MediaAsset {
   const derivatives = asset.derivatives;
   const isProxy = source === runtimeUrls[`${asset.id}:proxy`] || source === runtimeUrls[`${asset.id}:overlay-proxy`];
@@ -73,5 +82,5 @@ export function activeMediaLayers(
       }];
     })
   );
-  return collect(project, time, [], []);
+  return collect(project, kind === "video" ? mesh3dPreviewTime(project, time) : time, [], []);
 }

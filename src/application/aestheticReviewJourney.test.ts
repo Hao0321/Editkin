@@ -8,11 +8,11 @@ import { applyCommand, type EditorCommandContext } from "../domain/commands";
 import { renderReviewContentJson } from "../shared/renderReviewContent";
 import { createAppRenderActions } from "./appRenderActions";
 import { createProjectSession } from "./projectSession";
-import type { AestheticBenchmarkReview } from "../domain/types";
+import type { AestheticBenchmarkReview, AestheticReviewPolicy } from "../domain/types";
 import type { HaoDesktopApi } from "../desktop/types";
 
-async function fixture() {
-  const project = createDemoProject(); project.aestheticSystem = resolveAestheticSystem("gaming", "shorts");
+async function fixture(policy?: AestheticReviewPolicy) {
+  const project = createDemoProject(); project.aestheticSystem = resolveAestheticSystem("gaming", "shorts", policy);
   const artifact = { schema: "editkin.render-artifact-identity/v1" as const, outputSha256: "a".repeat(64), bytes: 40000, fps: 30, durationFrames: 300,
     projectContentSha256: createHash("sha256").update(renderReviewContentJson(project)).digest("hex") };
   const owner = createAestheticOutputOwner(webcrypto.subtle as unknown as SubtleCrypto);
@@ -27,6 +27,16 @@ async function fixture() {
 }
 
 describe("output-bound aesthetic review journey (not certification)", () => {
+  it("records an explicitly authorized agent review without human impersonation and still requires current output evidence", async () => {
+    const { project, review, owner } = await fixture({ mode: "agent_reference_comparison", authorization: "Creator explicitly delegated reference comparison for this integration fixture." });
+    expect(project.aestheticSystem?.scoreContract.humanReviewRequired).toBe(false);
+    expect(review.reviewer).toBe("agent"); expect(review.status).toBe("PASSED");
+    const unauthorized = resolveAestheticSystem("gaming", "shorts");
+    const ratings = Object.fromEntries(unauthorized.dimensions.map(d => [d.id, 5]));
+    expect(scoreAestheticReview(unauthorized, ratings, { complete: true, reviewer: "agent", benchmarkReview: review.benchmarkReview, currentArtifact: owner.get(project) }).status).toBe("REVIEW");
+    project.tracks[0].clips[0].transform.x += 1;
+    expect(scoreAestheticReview(project.aestheticSystem!, ratings, { complete: true, reviewer: "agent", benchmarkReview: review.benchmarkReview, currentArtifact: owner.get(project) }).status).toBe("REVIEW");
+  });
   it("accepts complete current review only via application-owned output context", async () => {
     const f = await fixture();
     expect(applyCommand(f.project, { type: "set_aesthetic_review", review: f.review }).aestheticSystem!.review.status).toBe("REVIEW");

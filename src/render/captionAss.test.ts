@@ -39,7 +39,7 @@ describe("ASS caption output", () => {
     graphic.backgroundColor="#00000000";graphic.textColor="#FFFFFF33";graphic.accentColor="#11223380";
     project.motionGraphics=[graphic];
     const ass=writeAssContent(project,project.captionStyle);
-    expect(ass).toContain("\\1c&H000000&\\1a&HFF&");
+    expect(ass).not.toContain("\\1c&H000000&\\1a&HFF&");
     expect(ass).toContain("\\1c&HFFFFFF&\\1a&HCC&");
     expect(ass).toContain("\\3c&H332211&\\3a&H7F&");
     expect(ass).toContain("\\4c&H332211&\\4a&H7F&");

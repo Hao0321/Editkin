@@ -20,6 +20,7 @@ import type { EditorHistory } from "../domain/history";
 import { DEFAULT_COLOR_MANAGEMENT } from "../domain/types";
 import { motionClipPresetCommands } from "../motion/motionClipPresets";
 import { floatingFrameSceneCommands } from "../motion/floatingFrameScenes";
+import { buildReferenceMotionTemplateCommands } from "../application/referenceMotionTemplateCommands";
 import type { CaptionCue, ClipLayout, EditProject, MotionGraphicKind, MotionGraphicPresetSeed, MotionTrack, NormalizedRect, TimelineClip } from "../domain/types";
 import { makeId } from "../lib/format";
 import type { EditorTheme } from "./theme";
@@ -249,7 +250,10 @@ export function EditorShell(props: EditorShellProps) {
           onAddAssetAsPictureInPicture={(assetId) => addAssetToTimeline(assetId, "pip")}
           onAssetDragStart={setDraggingAssetId}
           onAssetDragEnd={() => setDraggingAssetId(undefined)}
-          onApplyShortTemplate={(templateId) => void applyShortFormTemplate(templateId)}
+          onApplyShortTemplate={(templateId, content) => void applyShortFormTemplate(templateId, content)}
+          templateSourceAssetId={[...project.tracks.filter(track => track.kind === "video").flatMap(track => track.clips)].sort((a, b) => a.timelineStart - b.timelineStart)[0]?.assetId}
+          templateFps={project.fps}
+          templateCanvasFormat={project.width > project.height ? "long" : "short"}
           onApplyLongTemplate={(templateId) => void applyLongFormTemplate(templateId)}
           onAddLowerThird={addLowerThird}
           motionGraphics={project.motionGraphics}
@@ -341,6 +345,8 @@ export function EditorShell(props: EditorShellProps) {
           /></Suspense>}
         </div>
         {workspace.layout.inspectorVisible && !directorConsoleOpened && <><WorkspaceResizeHandle axis="horizontal" label="調整屬性面板寬度" onDelta={(delta) => workspace.resize("inspector", delta)} /><Suspense fallback={<aside className="inspector inspector-empty"><small>正在載入調整面板…</small></aside>}><Inspector
+          mesh3dProject={project}
+          onMesh3dCommand={command => runCommand(command, "已更新可編輯 3D 場景，可復原。 ")}
           projectFps={project.fps}
           playhead={playhead}
           pluginRegistry={creativeLibrary.plugins}
@@ -351,6 +357,7 @@ export function EditorShell(props: EditorShellProps) {
           canTransitionIn={transitionNeighbors.before}
           canTransitionOut={transitionNeighbors.after}
           asset={selectedAsset}
+          sceneAssets={project.assets}
           previewSource={selectedAsset ? runtimeUrls[`${selectedAsset.id}:thumbnail`] ?? (selectedAsset.kind === "image" ? runtimeUrls[selectedAsset.id] : undefined) : undefined}
           onMove={(timelineStart) => {
             if (selectedClip && Number.isFinite(timelineStart)) runCommand({ type: "move_clip", clipId: selectedClip.id, timelineStart }, "已更新片段位置。");
@@ -378,10 +385,10 @@ export function EditorShell(props: EditorShellProps) {
             if (selectedClip) runCommand({ type: "set_clip_floating_frame", clipId: selectedClip.id, frame }, frame ? "已套用可編輯浮空影片框。" : "已移除浮空影片框。");
           }}
           portraitCanvas={project.height > project.width}
-          onApplyFloatingScene={(preset) => {
+          onApplyFloatingScene={(preset, sources) => {
             if (!selectedClip) return;
             try {
-              runCommand({ type: "batch", commands: floatingFrameSceneCommands(project, selectedClip.id, preset) }, "已建立三層可編輯直式浮空框舞台，可復原。");
+              runCommand({ type: "batch", commands: floatingFrameSceneCommands(project, selectedClip.id, preset, sources) }, "已建立三層可編輯直式浮空框舞台，可復原。");
             } catch (error) { setStatus(error instanceof Error ? error.message : "浮空框舞台套用失敗"); }
           }}
           onApplyClipMotionPreset={(preset) => {
@@ -389,6 +396,15 @@ export function EditorShell(props: EditorShellProps) {
             try {
               runCommand({ type: "batch", commands: motionClipPresetCommands(selectedClip, project.fps, preset) }, "已套用逐格 Motion 動畫，可復原。");
             } catch (error) { setStatus(error instanceof Error ? error.message : "Motion 動畫套用失敗"); }
+          }}
+          onApplyReferenceMotionTemplate={(input) => {
+            if (!selectedClip) return;
+            try {
+              const scene = buildReferenceMotionTemplateCommands(project, { ...input, clipId: selectedClip.id,
+                startFrame: Math.round(selectedClip.timelineStart * project.fps), durationFrames: Math.round(selectedClip.duration * project.fps),
+                evidenceRefs: ["manual:motion-template-input"] }, makeId);
+              runCommand({ type: "batch", commands: scene.commands }, "已建立可編輯 Motion 場景，可復原；文字與素材都能分別修改。");
+            } catch (error) { setStatus(error instanceof Error ? error.message : "Motion 模板套用失敗"); }
           }}
           particleSimulation={project.particleSimulation}
           onParticleSimulationToggle={(enabled) => runCommand({ type: "configure_particle_simulation", enabled }, enabled ? "已啟用原生 GPU 粒子 VFX；預覽與輸出會使用同一個 fixed-seed 模擬。" : "已移除粒子 VFX。")}

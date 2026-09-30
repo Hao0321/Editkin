@@ -29,6 +29,8 @@ const PRODUCT_NATIVE_ENGINE_MODULES = new Set([
   "src/application/autoRotoProductContract.ts",
   "src/domain/autoRotoProductReceipt.ts",
   "src/render/nativeCore.ts",
+  "src/shared/boundedFile.ts",
+  "src/shared/localMediaPath.ts",
   "src/shared/utf8ByteOrder.ts",
 ]);
 const SERVICE_RESEARCH_MARKERS = [

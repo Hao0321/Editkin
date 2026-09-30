@@ -77,7 +77,7 @@ export function gpuLayerPropertyBuffer(graph: GpuRenderGraph): GpuLayerPropertyB
 }
 
 export function buildGpuEnginePreviewGraph(project: EditProject, playhead: number): GpuEnginePreviewGraph | undefined {
-  if ([project.tracks, ...project.compositions.map(composition => composition.tracks)].some(tracks => tracks.some(track => track.clips.some(clip => clip.floatingFrame)))) return undefined;
+  if (project.scene3d?.enabled || [project.tracks, ...project.compositions.map(composition => composition.tracks)].some(tracks => tracks.some(track => track.clips.some(clip => clip.floatingFrame)))) return undefined;
   if (project.colorManagement?.mode === "aces2" || project.captions.length || project.motionGraphics.length || !commonGpuEffectsSupported(project)) return undefined;
   const scene25d = project.scene25d?.enabled === true;
   const particleSimulation = project.particleSimulation?.enabled === true;
@@ -129,7 +129,7 @@ export function buildGpuEnginePreviewGraph(project: EditProject, playhead: numbe
  * independent audio graph is omitted because this hook owns visual preview only.
  */
 export function buildGpuEngineVideoPreviewGraph(project: EditProject, playhead: number): GpuEngineVideoPreviewGraph | undefined {
-  if ([project.tracks, ...project.compositions.map(composition => composition.tracks)].some(tracks => tracks.some(track => track.clips.some(clip => clip.floatingFrame)))) return undefined;
+  if (project.scene3d?.enabled || [project.tracks, ...project.compositions.map(composition => composition.tracks)].some(tracks => tracks.some(track => track.clips.some(clip => clip.floatingFrame)))) return undefined;
   const sceneLinearAces2 = project.colorManagement?.mode === "aces2";
   if ((sceneLinearAces2 && (!(["rec709_sdr", "rec2100_pq_1000"] as const).includes(project.colorManagement?.outputTransform as "rec709_sdr" | "rec2100_pq_1000")
       || project.colorManagement?.configId !== "studio-config-v4.0.0_aces-v2.0_ocio-v2.5"))

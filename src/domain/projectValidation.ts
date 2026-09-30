@@ -1,3 +1,4 @@
+import { validateMesh3dProject } from "./mesh3dValidation";
 import type { ColorAdjustments, EditComposition, EditProject, MediaAsset, RotoMatteSequence, TimelineClip, TimelineTrack, Transform2D } from "./types";
 import { DEFAULT_CAPTION_STYLE, DEFAULT_CLIP_LAYER, DEFAULT_COLOR, DEFAULT_COLOR_MANAGEMENT, DEFAULT_TRANSFORM } from "./types";
 import { assertHaoExpression } from "./expression";
@@ -72,9 +73,8 @@ export function validateClipForTrack(project: EditProject, track: TimelineTrack,
       throw new EditGraphError(`片段 ${clip.id} 的浮空影片框不合法：${error instanceof Error ? error.message : String(error)}`);
     }
     const frameAsset = project.assets.find(asset => asset.id === clip.assetId);
-    if (clip.floatingFrame.aspect === "portrait" && project.height <= project.width) {
-      throw new EditGraphError(`片段 ${clip.id} 的直式浮空框需要直式畫布`);
-    }
+    // Portrait describes the embedded plane. Landscape scenes recompose these
+    // planes beside a reading lane; canvas bounds were checked above.
     if (track.kind !== "video" || frameAsset?.kind !== "video" || frameAsset.compositionId
       || project.scene25d?.enabled || project.colorManagement?.mode === "aces2" || clip.transform3d
       || clip.layout || clip.masks?.some(mask => mask.enabled) || clip.chromaKey?.enabled
@@ -402,6 +402,7 @@ export function validateProject(project: EditProject): EditProject {
     visited.add(clipId);
   };
   for (const clipId of layerEdges.keys()) visitLayer(clipId);
+  validateMesh3dProject(project);
   validateScene25dProductContract(project);
   validateParticleSimulationProductContract(project);
   const captionIds = new Set<string>();
@@ -519,7 +520,7 @@ export function validateProject(project: EditProject): EditProject {
   const graphicIds = new Set<string>();
   const cssColor = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i;
   for (const graphic of project.motionGraphics) {
-    if (!["hao.motion-composition/v1", "hao.motion-composition/v2"].includes(graphic.schema) || !graphic.id.trim() || graphicIds.has(graphic.id) || !graphic.name.trim() || !graphic.text.trim()) throw new EditGraphError(`動態圖卡 ${graphic.id} 的識別或文字不合法`);
+    if (!["hao.motion-composition/v1", "hao.motion-composition/v2"].includes(graphic.schema) || !graphic.id.trim() || graphicIds.has(graphic.id) || !graphic.name.trim() || (!graphic.vectorV2 && !graphic.text.trim())) throw new EditGraphError(`動態圖卡 ${graphic.id} 的識別或文字不合法`);
     if (![graphic.timelineStart, graphic.duration, graphic.x, graphic.y, graphic.width, graphic.fontSize, graphic.offsetX, graphic.offsetY, graphic.fontWeight ?? 700, graphic.letterSpacing ?? 0, graphic.outlineWidth ?? 0, graphic.shadowDepth ?? 0, graphic.cornerRadius ?? 0].every(Number.isFinite)
       || graphic.timelineStart < 0 || graphic.duration <= 0 || graphic.x < 0 || graphic.x > 1 || graphic.y < 0 || graphic.y > 1 || graphic.width <= 0 || graphic.width > 1 || graphic.fontSize <= 0
       || (graphic.fontFamily !== undefined && !graphic.fontFamily.trim()) || (graphic.fontWeight ?? 700) < 100 || (graphic.fontWeight ?? 700) > 1000 || (graphic.outlineWidth ?? 0) < 0 || (graphic.outlineWidth ?? 0) > 30 || (graphic.shadowDepth ?? 0) < 0 || (graphic.shadowDepth ?? 0) > 40

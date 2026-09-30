@@ -6,6 +6,12 @@ import { createMotionGraphic } from "../motion/composition";
 import { createEmptyEditkinSkillSelectionReceipt } from "../plugins/skillPack";
 
 describe("video-autopilot plan contract", () => {
+  it("advertises artifact-bound agent review so stale runtimes fail before material preparation", () => {
+    expect(compactAutopilotContract().visualReview).toMatchObject({
+      step: "visual-review", policyBound: true,
+      modes: ["human", "agent_reference_comparison"], outcomeCheckpoints: ["human_review", "agent_review"],
+    });
+  });
   it("publishes the closed-world Roto/Keyer planning tool IDs without exposing research routes", () => {
     expect(compactAutopilotContract().rotoKeyerAutomation).toMatchObject({
       inspect: "inspect_roto_keyer_capabilities",

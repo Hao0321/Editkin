@@ -49,7 +49,7 @@ export function nearbyDirectorVisualCuts(
 }
 
 const STATE_LABELS: Record<DirectorReviewState, string> = {
-  draft: "草稿", reviewing: "導演審片中", changes_requested: "需要修改", ready_for_hao_review: "等待 Hao 最終審片",
+  draft: "草稿", reviewing: "導演審片中", changes_requested: "需要修改", ready_for_hao_review: "待最終畫面檢查",
 };
 
 interface DirectorTabsProps {
@@ -134,7 +134,7 @@ export function DirectorConsole({ project, playhead, currentArtifact, onSeek, on
         <div className="section-heading"><div><span className="eyebrow">視覺剪點</span><h3>播放頭前後 20 秒</h3></div><small>含目前畫面；點一下即可跳轉</small></div>
         <DirectorCutMap clips={nearbyCuts} playhead={playhead} onSeek={onSeek} media={media} />
         <div className="director-state-block"><div><strong>審片狀態</strong><span>狀態會存回專案，但不等於發佈認證。</span></div><div className="director-state-buttons">{(Object.keys(STATE_LABELS) as DirectorReviewState[]).map((state) => <button type="button" key={state} className={project.director.reviewState === state ? "active" : ""} onClick={() => onCommand({ type: "set_director_review_state", reviewState: state }, `導演台狀態：${STATE_LABELS[state]}`)}>{STATE_LABELS[state]}</button>)}</div></div>
-        <p className="director-truth">只有真人完成成片時間碼審查後，才可進入 Certified；「等待 Hao 最終審片」本身不是通過證據。</p>
+        <p className="director-truth">完整成片需依創作者指定的審查方式核對時間碼、動態與畫面；狀態標籤本身不是通過證據。</p>
       </section>}
       {view === "notes" && <section id="director-panel-notes" aria-labelledby="director-tab-notes" className="director-workspace director-notes" role="tabpanel">
         <div className="section-heading"><div><span className="eyebrow">逐點修改</span><h3>時間碼註記</h3></div><small>目前播放頭 {formatTime(playhead)}</small></div>

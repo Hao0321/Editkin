@@ -23,6 +23,8 @@ export function templateCreativeSnapshot(clip: TimelineClip): TemplateCreativeSn
     effectPresetIds: [...(clip.creative?.effectPresetIds ?? [])],
     transitionIn: clip.creative?.transitionIn ? { ...clip.creative.transitionIn } : null,
     transitionOut: clip.creative?.transitionOut ? { ...clip.creative.transitionOut } : null,
+    floatingFrame: clip.floatingFrame ? structuredClone(clip.floatingFrame) : null,
+    transform: { ...clip.transform },
   };
 }
 
@@ -59,6 +61,13 @@ export function clearTemplateApplicationInPlace(project: EditProject): void {
   const application = project.templateApplication;
   if (!application) return;
   const { before, applied } = application;
+  const generated = application.generatedClips ?? [];
+  for (const owned of generated) {
+    const track = project.tracks.find(item => item.id === owned.trackId);
+    if (track) track.clips = track.clips.filter(clip => clip.id !== owned.clipId);
+  }
+  const generatedTracks = new Set(generated.map(item => item.trackId));
+  project.tracks = project.tracks.filter(track => !generatedTracks.has(track.id) || track.clips.length > 0);
   if (project.editorialProfile === applied.editorialProfile) project.editorialProfile = before.editorialProfile;
   if (same(project.aestheticSystem ?? null, applied.aestheticSystem)) {
     project.aestheticSystem = before.aestheticSystem ? structuredClone(before.aestheticSystem) : undefined;
@@ -70,6 +79,10 @@ export function clearTemplateApplicationInPlace(project: EditProject): void {
     const clip = project.tracks.flatMap((track) => track.clips).find((item) => item.id === appliedClip.clipId);
     const prior = beforeByClip.get(appliedClip.clipId);
     if (!clip || !prior) continue;
+    if (appliedClip.transform && prior.transform && same(clip.transform, appliedClip.transform)) clip.transform = { ...prior.transform };
+    if (appliedClip.floatingFrame !== undefined && same(clip.floatingFrame ?? null, appliedClip.floatingFrame)) {
+      clip.floatingFrame = prior.floatingFrame ? structuredClone(prior.floatingFrame) : undefined;
+    }
     const creative = structuredClone(clip.creative ?? { effectPresetIds: [] });
     if ((creative.lookPresetId ?? null) === appliedClip.lookPresetId) {
       if (prior.lookPresetId === null) delete creative.lookPresetId;

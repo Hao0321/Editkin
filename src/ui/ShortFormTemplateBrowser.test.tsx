@@ -43,8 +43,8 @@ describe("template browser information architecture", () => {
       onDeleteDirectorMarker={() => {}} onClearTemplateApplication={() => {}}
     />);
     expect(html).toContain("已套用：Hao 教學長片");
-    expect(html).toContain("8 個圖卡／字幕／註記");
-    expect(html).toContain("模板示範字幕");
+    expect(html).toContain("3 個圖卡／字幕／註記");
+    expect(html).not.toContain("模板示範字幕");
     expect(html).toContain("節奏註記");
     expect(html).toContain("還原成片模板");
     expect(html).toContain("還原套用前的字幕樣式、調色、特效、轉場與剪輯類型");

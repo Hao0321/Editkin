@@ -23,6 +23,12 @@ This repository is the **community source edition**. It contains neutral default
 
 ---
 
+## Current mesh and agent workflow scope
+
+Video Autopilot workflow revision 6 uses the v4 material → audit → apply → render → policy-bound visual review → outcome chain. An authorized agent review is recorded as agent_review and never as a human approval.
+
+Optional scene3d data uses the shared CPU triangle/z-buffer executor with physical Noto Sans TC 700/900 font faces. This is bounded opaque Rec.709 geometry, not GPU PBR or complete 3D feature parity. The three rejected mesh recipes remain DESIGN_REWORK: UI creation is withdrawn, MCP discovery is empty, and prepare rejects before project IO. Existing research scenes remain editable. See docs/mesh3d-scenes.md.
+
 ## 2. Tech stack
 
 | Layer | Technology |
@@ -35,7 +41,7 @@ This repository is the **community source edition**. It contains neutral default
 | Native | Rust: `native/hao-core` (frame/timebase alignment, render scheduling, CPU reference executor, auto-roto, effect plugin runner), `spikes/gpu-compositor`, `native/shared/owned_process`, `native/effect-sdk` (C ABI headers `editkin_effect_plugin_v1.h`/`v2.h`), `native/effect-test-plugin` |
 | Runtime | Node `>=22.13` (CI pins 22.23.2). ESM (`"type": "module"`). `node:sqlite` is used in `projectFiles.ts`, so use a Node that provides it |
 
-Runtime dependencies are deliberately tiny: `react`, `react-dom`, `zod`, `qrcode`, `@tauri-apps/api`, and the two MCP packages. Do not add dependencies for trivial functionality.
+Runtime dependencies are deliberately tiny: `react`, `react-dom`, `zod`, `qrcode`, `@tauri-apps/api`, the two MCP packages, `three` (mesh geometry), and `opentype.js` (font outlines). Do not add dependencies for trivial functionality.
 
 ---
 

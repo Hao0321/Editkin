@@ -36,7 +36,9 @@ export function applyTimelineCommand(project: EditProject, command: EditorComman
     case "add_clip": {
       findAsset(project, command.clip.assetId);
       const track = findTrack(project, command.clip.trackId);
-      track.clips.push({ ...command.clip, layer: { ...DEFAULT_CLIP_LAYER, ...command.clip.layer }, expressions: { ...command.clip.expressions } });
+      // Later commands in the same batch can edit keyframes/masks. Never retain
+      // their arrays from the caller's reusable preparation packet.
+      track.clips.push({ ...structuredClone(command.clip), layer: { ...DEFAULT_CLIP_LAYER, ...command.clip.layer }, expressions: { ...command.clip.expressions } });
       track.clips.sort((a, b) => a.timelineStart - b.timelineStart);
       break;
     }

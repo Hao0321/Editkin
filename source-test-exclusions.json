@@ -3,6 +3,14 @@
   "reason": "These original product integration suites require binaries, an external skill, or generated artifacts absent from the community source checkout. They are retained in source and are not claimed by npm test.",
   "entries": [
     {
+      "file": "src/motion/floatingVideoFrame.render.test.ts",
+      "prerequisite": "External FFmpeg on PATH or EDITKIN_FFMPEG_PATH for decoded synthetic pixel geometry; independent unit geometry tests remain in the default suite"
+    },
+    {
+      "file": "src/render/referenceMotionGrowth.test.ts",
+      "prerequisite": "External FFmpeg/FFprobe for decoded synthetic geometry; run separately with EDITKIN_FFMPEG_PATH and EDITKIN_FFPROBE_PATH"
+    },
+    {
       "file": "src/application/autopilotPlanHash.integration.test.ts",
       "prerequisite": "Separately installed video-autopilot skill and its Python workflow_state module"
     },

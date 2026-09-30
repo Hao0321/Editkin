@@ -387,7 +387,9 @@ function connectRelay() {
     relayRetryMs = Math.min(15_000, relayRetryMs * 2);
     setTimeout(connectRelay, delay).unref();
   });
-  socket.addEventListener("error", () => socket.close());
+  // A failed handshake already closes the socket. Calling close() from error
+  // can synchronously emit error again in Node; close owns the reconnect timer.
+  socket.addEventListener("error", () => undefined);
 }
 
 async function authenticate(request: IncomingMessage, url: URL): Promise<boolean> {

@@ -24,6 +24,7 @@ export interface RenderOptions {
 }
 
 export interface RenderResult {
+  mesh3dPipeline?: import("./mesh3dReceipt").Mesh3dRenderReceipt;
   artifactIdentity?: import("./renderArtifactIdentity").RenderArtifactIdentity;
   outputPath: string;
   duration: number;
