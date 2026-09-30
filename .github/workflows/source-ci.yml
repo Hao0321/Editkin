@@ -65,3 +65,16 @@ jobs:
         run: cargo audit --file src-tauri/Cargo.lock --deny unsound
       - name: Exercise the native editor
         run: dbus-run-session -- xvfb-run -a -s '-screen 0 1440x1000x24' node scripts/linux-native-editor-smoke.mjs src-tauri/target/debug/editkin
+      - name: Retain the isolated synthetic native smoke evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-native-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .rd/tmp/linux-native-editor-*/report.json
+            .rd/tmp/linux-native-editor-*/*.png
+            .rd/tmp/linux-native-editor-*/driver.stdout.txt
+            .rd/tmp/linux-native-editor-*/driver.stderr.txt
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
