@@ -4,6 +4,7 @@ import { basename, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { MediaProbe } from "./ffmpegContracts";
 import { mediaDisplayRotation } from "./mediaDisplayGeometry";
+import { assertLocalMediaPath } from "../shared/localMediaPath";
 
 export async function runProcess(executable: string, args: string[], timeoutMs: number): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolvePromise, reject) => {
@@ -26,6 +27,7 @@ export async function runProcess(executable: string, args: string[], timeoutMs: 
 }
 
 export async function probeMedia(path: string, ffprobePath = "ffprobe"): Promise<MediaProbe> {
+  assertLocalMediaPath(path);
   const { stdout } = await runProcess(ffprobePath, [
     "-v", "error", "-show_entries", "format=duration", "-show_entries", "stream=codec_type,codec_name,profile,width,height,pix_fmt,bits_per_raw_sample,color_primaries,color_transfer,color_space,color_range:stream_side_data=side_data_type,rotation:stream_tags=rotate",
     "-of", "json", path,
@@ -46,9 +48,20 @@ export async function probeMedia(path: string, ffprobePath = "ffprobe"): Promise
 }
 
 export function resolveMediaPath(uri: string, assetBase?: string): string {
-  if (uri.startsWith("file:")) return fileURLToPath(uri);
-  if (isAbsolute(uri)) return uri;
+  assertLocalMediaPath(uri);
+  if (uri.startsWith("file:")) {
+    const path = fileURLToPath(uri);
+    assertLocalMediaPath(path);
+    return path;
+  }
+  if (isAbsolute(uri)) {
+    assertLocalMediaPath(uri);
+    return uri;
+  }
   if (uri.startsWith("local://")) throw new Error(`瀏覽器工作階段素材無法桌面輸出：${uri}`);
   if (!assetBase) throw new Error(`無法解析素材路徑：${uri}`);
-  return resolve(assetBase, uri.replace(/^[/\\]+/, ""));
+  assertLocalMediaPath(assetBase);
+  const path = resolve(assetBase, uri.replace(/^[/\\]+/, ""));
+  assertLocalMediaPath(path);
+  return path;
 }

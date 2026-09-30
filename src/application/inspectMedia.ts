@@ -4,6 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
 import { probeMedia, type MediaProbe } from "../render/ffmpeg";
 import { mediaProbeForDisplay } from "../render/mediaDisplayGeometry";
+import { assertLocalMediaPath } from "../shared/localMediaPath";
 
 async function sha256File(path: string): Promise<string> {
   const hash = createHash("sha256");
@@ -66,6 +67,7 @@ async function inspectOpenExrSequence(path: string): Promise<MediaProbe> {
 }
 
 export async function inspectMedia(path: string, ffprobePath?: string): Promise<MediaProbe> {
+  assertLocalMediaPath(path);
   if (extname(path).toLowerCase() === ".json") return inspectOpenExrSequence(path);
   return mediaProbeForDisplay(await probeMedia(path, ffprobePath));
 }

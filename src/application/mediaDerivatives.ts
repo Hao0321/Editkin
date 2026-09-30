@@ -7,6 +7,7 @@ import type { AssetKind, MediaColorMetadata, MediaDerivatives } from "../domain/
 import { inspectMedia } from "./inspectMedia";
 import { BROWSER_PROXY_COLOR_CONTRACT, CURRENT_MEDIA_PREVIEW_RECIPE, browserProxyColorPlan, browserProxyFilters, browserThumbnailFilters, type BrowserProxyColorPlan } from "./mediaDerivativeColor";
 import { withMediaCachePublishLock } from "./mediaCachePublishLock";
+import { assertLocalMediaPath } from "../shared/localMediaPath";
 
 // Cache v8 changes the HLG preview resize order. Old proxies remain on disk
 // but must not silently warm-hit this color/performance recipe.
@@ -212,6 +213,7 @@ async function promoteCache(staging: string, directory: string, sourceSha: strin
 }
 
 export async function generateMediaDerivatives(request: DerivativeRequest): Promise<DerivativeResult> {
+  assertLocalMediaPath(request.sourcePath);
   const ffmpeg = request.ffmpegPath ?? "ffmpeg";
   const ffprobe = request.ffprobePath ?? "ffprobe";
   const timeoutMs = request.timeoutMs ?? 30 * 60_000;

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { access, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createNativeSmartCutPlan, type NativeSmartCutPlan, type SmartCutRequest } from "../render/nativeCore";
+import { assertLocalMediaPath } from "../shared/localMediaPath";
 
 export interface SmartCutOptions {
   thresholdDb: number;
@@ -131,6 +132,7 @@ export async function analyzeSmartCut(
   request: AnalyzeSmartCutRequest,
   runtime: { ffmpegPath: string; nativeCorePath?: string; cacheRoot?: string },
 ): Promise<SmartCutResult> {
+  assertLocalMediaPath(request.sourcePath);
   const options = { ...DEFAULT_SMART_CUT_OPTIONS, ...request.options };
   if (!request.sourcePath || !Number.isFinite(request.sourceStart) || request.sourceStart < 0) throw new Error("Smart Cut 素材範圍不合法");
   await access(request.sourcePath);

@@ -33,6 +33,7 @@ export {
   PRODUCT_AUTO_ROTO_ROUTE_POLICY,
   type ProductAutoRotoRouteReceipt,
 } from "./autoRotoProductContract";
+import { assertLocalMediaPath } from "../shared/localMediaPath";
 
 export interface AnalyzeProductAutoRotoRequest {
   sourcePath: string;
@@ -445,6 +446,7 @@ export async function analyzeProductAutoRoto(
   request: AnalyzeProductAutoRotoRequest,
   runtime: ProductAutoRotoRuntime,
 ): Promise<ProductAutoRotoAnalysisResult> {
+  assertLocalMediaPath(request.sourcePath);
   const startedAt = Date.now();
   validateAnalyzeProductAutoRotoRequest(request);
   const cacheRoot = resolve(runtime.cacheRoot);
