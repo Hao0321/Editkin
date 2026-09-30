@@ -12,7 +12,7 @@ This document answers [#23](https://github.com/Hao0321/Editkin/issues/23). It re
 | Skills / plugins | Manifests, Skill JSON and **native libraries** become commands or executable code | `src/plugins/registry.ts`, `manifest.ts`, `skillPack.ts`; `native/hao-core/src/engine/plugin.rs` (`libloading::Library::new`) | Hash pinning proves identity, not safety or provenance. Native code loading has no OS sandbox |
 | Local file access | Project/media paths from the renderer and dialogs | `electron/main.ts` (sender validation, sandbox, media protocol), `src-tauri/src/main.rs` (`read_project`/`write_project`), `src-tauri/tauri.conf.json` (CSP, empty asset scope) | Path traversal, symlink/junction escape, arbitrary `current_path`, renderer compromise |
 | Process execution | Tool paths, arguments, worker processes, installers | `src/render/mediaProcess.ts` (`spawn(executable, args)`), `src-tauri/src/main.rs` (remote Node, audio process), `electron/updateIpc.ts` (PowerShell verifier, installer spawn) | Executable provenance, argument injection, inherited environment, process ownership |
-| Update manifests | Network metadata selects an artifact and its claimed signer | `src-tauri/src/main.rs` (`start_update_job`), `electron/updateIpc.ts`, `src/service/cli.ts`, `scripts/update-channel.mjs` | The active updater derives the expected signer from the fetched manifest. `src/application/updateTrust.ts` (pinned Ed25519 policy) **exists but has no production consumer** (only its test). Do not describe project-key update trust as integrated |
+| Update manifests | Network metadata selects an artifact and its claimed signer | `src-tauri/src/main.rs` (`start_update_job`), `electron/updateIpc.ts`, `src/service/cli.ts`, `scripts/update-channel.mjs` | The active updater derives the expected signer from the fetched manifest. `src/application/updateTrust.ts` (pinned Ed25519 policy) **is not wired into the active Tauri/Electron updaters**. Verification by the release-evidence script does not integrate runtime update trust |
 | Dependency changes | Registry/git packages, lifecycle scripts, `build.rs`, proc macros | `package.json`, `package-lock.json`, `src-tauri/Cargo.{toml,lock}`, `src-tauri/build.rs`; CI runs `npm ci` without `--ignore-scripts` | Lockfile source URLs, `[patch]`/git sources, install scripts, build scripts |
 | Release signing | Build output becomes a publisher-authenticated download | `docs/RELEASE.md`, `scripts/{signing-readiness,tauri-build,release-evidence}.mjs` | No release workflow, environment or release exists today; this is a future gate, not a provisioned pipeline |
 
@@ -85,7 +85,17 @@ Observed by read-only `gh api --method GET` calls. Permission-denied results are
 | Private vulnerability reporting | **Verified:** enabled | `SECURITY.md` points here |
 | Secret scanning and push protection | **Unverified upstream** (field omitted) | Enabled on the contributor's fork only |
 | Workflow permissions in files | **Verified:** `source-ci` and `dependency-review` use `contents: read`; **`codeql.yml` also declares `security-events: write`** | So not every workflow is read-only; `SECURITY_MODEL.md` should say so |
-| Actions pinned by commit | **Verified** in all three workflow files | Not enforced by repository policy |
+| Actions pinned by commit | **Verified** in all three workflow files | Repository enforcement was unverified from the contributor account; see the owner readback below |
+
+### Maintainer readback, 2026-09-30
+
+The maintainer queried the upstream repository with the owner account. These observations supplement the contributor's assessment; they do not imply that unobserved controls are enabled.
+
+- `main` requires the three Source checks above with strict current-base checks, one approving review, CODEOWNERS review, stale-approval dismissal, latest-push approval and resolved conversations. Force pushes and deletion are disabled, and linear history is required. `enforce_admins` is false, so the owner can bypass these requirements; a bypass is not evidence of independent review.
+- The default Actions token is read-only and Actions cannot approve pull requests. All external contributors require workflow approval. `allowed_actions` is `all`, with **`sha_pinning_required: true`**; commit pinning is enforced by repository policy.
+- The verified collaborators are `Hao0321` (Admin) and `teddashh` (Write). The latter is not currently a CODEOWNER or an assigned second reviewer. A pending invitation grants no active access.
+- Secret values were not read. Secret scanning, push protection and protected release credentials are not certified by this readback.
+- The Linux GTK desktop check proposed in #29 still needs to complete before that dependency migration can merge. Its required-check configuration must be read back after any maintainer update.
 
 ### Documentation claims to reconcile
 
