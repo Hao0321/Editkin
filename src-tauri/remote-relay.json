@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 2,
+  "mode": "user-owned-byo",
+  "defaultTransport": "lan",
+  "relayOrigin": "",
+  "publicTunnelOrigin": "",
+  "autoDeploy": false,
+  "providerRequired": false,
+  "costResponsibility": "end-user",
+  "deploymentStatus": "optional-user-configuration-required-for-cross-network"
+}
