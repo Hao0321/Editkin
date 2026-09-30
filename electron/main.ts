@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, type IpcMainInvokeEvent } from "electron";
 import { spawn } from "node:child_process";
-import { readFile, stat } from "node:fs/promises";
+import { readBoundedFile } from "../src/shared/boundedFile";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { AgentTarget } from "../src/application/agentSetup";
@@ -177,9 +177,9 @@ function registerIpc() {
 
   secureIpcHandle("hao:read-color-asset", async (_event, payload: { relativePath: string }) => {
     const target = boundedColorAssetPath(runtimePaths().colorRoot, payload?.relativePath);
-    const metadata = await stat(target);
-    if (!metadata.isFile() || metadata.size <= 0 || metadata.size > 64 * 1024 * 1024) throw new Error("色彩資產超出安全大小");
-    return readFile(target, "utf8");
+    const bytes = await readBoundedFile(target, 64 * 1024 * 1024, { followSymlinks: true, messages: { tooLarge: "色彩資產超出安全大小", notRegular: "色彩資產超出安全大小" } });
+    if (bytes.length === 0) throw new Error("色彩資產超出安全大小");
+    return bytes.toString("utf8");
   });
 
   secureIpcHandle("hao:list-installed-plugins", async () => compactPluginRegistry(await discoverInstalledPlugins([runtimePaths().pluginRoot])));
