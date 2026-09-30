@@ -29,3 +29,52 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+
+  linux-desktop:
+    name: Linux GTK desktop
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: "2"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - name: Install GTK and WebDriver prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev webkit2gtk-driver xvfb dbus-x11
+      - name: Install pinned Rust and verification tools
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup default 1.98.1
+          cargo install cargo-audit --version 0.22.2 --locked
+          cargo install tauri-driver --version 2.1.0 --locked
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/build-desktop.mjs --community
+      - name: Compile the native GTK desktop
+        run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol
+      - name: Inspect the Linux GLib dependency path
+        run: cargo tree --locked --manifest-path src-tauri/Cargo.toml --target x86_64-unknown-linux-gnu --features community-desktop,tauri/custom-protocol -i glib
+      - name: Audit the complete desktop lockfile
+        run: cargo audit --file src-tauri/Cargo.lock --deny unsound
+      - name: Exercise the native editor
+        run: dbus-run-session -- xvfb-run -a -s '-screen 0 1440x1000x24' node scripts/linux-native-editor-smoke.mjs src-tauri/target/debug/editkin
+      - name: Retain the isolated synthetic native smoke evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: linux-native-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .rd/tmp/linux-native-editor-*/report.json
+            .rd/tmp/linux-native-editor-*/*.png
+            .rd/tmp/linux-native-editor-*/driver.stdout.txt
+            .rd/tmp/linux-native-editor-*/driver.stderr.txt
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
