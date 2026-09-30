@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readFile, readdir, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -8,6 +9,17 @@ import { ProposalAlreadyExistsError, readJson, remoteSetupPaths, writeJsonAtomic
 const temporaryRoot = () => mkdtemp(join(tmpdir(), "editkin-remote-state-"));
 
 describe("remote onboarding state files", () => {
+  it.skipIf(process.platform === "win32")("rejects a FIFO without waiting for a writer", async () => {
+    const root = await temporaryRoot();
+    try {
+      const fifo = join(root, "not-a-receipt");
+      execFileSync("mkfifo", [fifo], { timeout: 5_000, stdio: "ignore" });
+      await expect(readJson(fifo)).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 5_000);
+
   it("derives receipt paths only from an absolute agent-runtime-v3 state root", async () => {
     const root = await temporaryRoot();
     const paths = remoteSetupPaths({ EDITKIN_AGENT_STATE_ROOT: join(root, "agent-runtime-v3") });
