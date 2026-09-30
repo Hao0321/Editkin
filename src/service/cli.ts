@@ -11,7 +11,7 @@ import { analyzeSceneCuts } from "../application/sceneDetection";
 import { analyzeMotionTrack } from "../application/motionTracking";
 import { analyzeProductAutoRoto } from "../application/autoRotoNativeProduct";
 import { listCreativeLibrary, materializeCreativeAssets, resolveCreativeLibraryAsset, resolveCreativeLibraryPreviewAsset } from "../application/creativeLibrary";
-import { assertUpdateManifestUrl, compareVersions, parseUpdateManifest, stageUpdate } from "../application/updateManager";
+import { compareVersions, loadUpdateManifest, stageUpdate, UPDATE_PUBLISHER_PIN } from "../application/updateManager";
 import { runBatchAutoEditItem } from "../application/batchAutoEdit";
 import { compactPluginRegistry, compilePluginApplication, discoverInstalledPlugins, findInstalledCapability, resolveGpuEffectGraphBindings } from "../plugins/registry";
 import { renderNativeEffectPreviewProxy } from "../plugins/nativeEffectRender";
@@ -289,10 +289,7 @@ async function dispatch(request: ServiceRequest): Promise<unknown> {
     });
   }
   if (request.command === "check_update" || request.command === "stage_update") {
-    const manifestUrl = assertUpdateManifestUrl(String(request.payload.manifestUrl));
-    const response = await fetch(manifestUrl);
-    if (!response.ok) throw new Error(`更新 manifest 讀取失敗：HTTP ${response.status}`);
-    const manifest = parseUpdateManifest(await response.json());
+    const manifest = await loadUpdateManifest(String(request.payload.manifestUrl), { publisher: UPDATE_PUBLISHER_PIN });
     if (compareVersions(manifest.version, String(request.payload.currentVersion)) <= 0) return undefined;
     if (manifest.minimumProjectSchema > 6) throw new Error("這個更新需要尚未支援的專案 schema");
     if (request.command === "check_update") return { version: manifest.version };
@@ -300,6 +297,7 @@ async function dispatch(request: ServiceRequest): Promise<unknown> {
       currentVersion: String(request.payload.currentVersion),
       currentProjectSchema: 6,
       cacheRoot: String(request.payload.cacheRoot),
+      publisher: UPDATE_PUBLISHER_PIN,
     });
   }
   throw new Error(`未知 service command：${String(request.command)}`);
