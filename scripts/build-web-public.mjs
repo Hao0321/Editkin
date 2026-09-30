@@ -15,6 +15,7 @@ if (!relation || relation.startsWith("..") || isAbsolute(relation) || dirname(ou
 const files = [
   "public/demo-source.mp4",
   "public/editkin-demo-preview.mp4",
+  "public/favicon.svg",
   "public/fonts/NotoSansTC[wght].ttf",
   "public/fonts/NotoSerifTC[wght].ttf",
   "public/fonts/LXGWWenKaiMonoTC-Regular.ttf",
@@ -35,6 +36,10 @@ try {
     await mkdir(dirname(targetPath), { recursive: true });
     await copyFile(sourcePath, targetPath);
   }
+  // The social-preview image and root favicon.ico reuse reviewed identity icons instead of
+  // adding binaries that the public-source binary policy would not cover.
+  await copyFile(resolve(root, "src-tauri/icons/icon.png"), resolve(staging, "og-image.png"));
+  await copyFile(resolve(root, "src-tauri/icons/icon.ico"), resolve(staging, "favicon.ico"));
   if (existsSync(output)) {
     await rename(output, backup);
     previousMoved = true;

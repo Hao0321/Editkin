@@ -44,6 +44,7 @@ const APP_INPUT_ROOTS = [
   "scripts/editkin-product-mcp-launcher.mjs",
   "public/demo-source.mp4",
   "public/editkin-demo-preview.mp4",
+  "public/favicon.svg",
   "public/fonts",
   "public/color/aces2",
   "plugins",
