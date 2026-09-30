@@ -9,3 +9,10 @@ No automated verifier can prove that a pull request contains no malicious logic.
 5. **Runtime boundary:** external Skills, plugins, models, and media are untrusted inputs. Review requested permissions, use explicit user installation, and keep private user files and credentials out of telemetry and logs. A repository badge or popularity does not grant trust.
 
 The community source build currently has no signed installer claim. The 39 integration suites listed in [source-test-exclusions.json](../source-test-exclusions.json) need external runtimes, the separate video-autopilot skill, or generated release products; the default CI result does not cover them. The Windows Authenticode installer suite runs only on Windows. See [RELEASE.md](RELEASE.md) for the remaining official binary gate.
+
+## Mobile Remote pairing (LAN)
+
+- **Transport:** the default LAN transport is plain HTTP on the local network. A person on the same network can read the pairing link and the device credential in transit, so pair only on a network you trust. The Remote dialog says this before pairing. Cross-network setups that you provide yourself (HTTPS tunnel, WSS relay) encrypt the transport; the credential cookie then carries `Secure`.
+- **Pairing token:** a 128-bit random token, valid for 10 minutes and for **one successful pairing**. A captured pairing request cannot be replayed to pair a second device, whether it arrives over LAN or the relay. A failed pairing (for example the device limit) gives the token back. To add another phone, pause Remote and open it again; that starts a fresh server with a new token and QR code.
+- **Device credential:** 256 random bits stored only as a SHA-256 hash. It expires after **30 days without use** (sliding: every authenticated status poll renews the cookie, and the server compares the stored `lastSeen`). An idle device is removed from the trusted list and must pair again.
+- **Revocation:** revoking a device in the Remote dialog takes effect on its next request, because every request re-reads the trusted-devices file. Pausing Remote keeps the trusted devices; removing them individually is the only way to revoke them today.

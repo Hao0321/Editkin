@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join } from "node:path";
+import { DEVICE_IDLE_LIFETIME_MS, deviceIdleExpired, PairingWindow } from "./pairingPolicy";
 
 const token = process.env.EDITKIN_REMOTE_TOKEN;
 const queuePath = process.env.EDITKIN_REMOTE_QUEUE;
@@ -25,6 +26,7 @@ const remoteDevicesPath = devicesPath;
 const remoteTrustedDevicesPath = trustedDevicesPath;
 const remoteHealthProbeId = healthProbeId;
 const pairingExpiresAt = Date.now() + 10 * 60_000;
+const pairingWindow = new PairingWindow(pairingExpiresAt);
 const activeWindowMs = 12_000;
 const sessionLifetimeMs = 12 * 60 * 60_000;
 const pairRateWindowMs = 60_000;
@@ -67,7 +69,7 @@ const pageScript = String.raw`
   function deviceId(){try{let id=localStorage.getItem('editkin-device-id');if(!id){id=crypto.randomUUID?.()||('device-'+Date.now()+'-'+Math.random().toString(16).slice(2));localStorage.setItem('editkin-device-id',id)}return id}catch{return 'device-'+Date.now()+'-'+Math.random().toString(16).slice(2)}}
   async function pair(){if(!bootstrapToken)return false;const r=await fetch('/api/pair',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({token:bootstrapToken,deviceId:deviceId(),name:deviceName()})});if(r.ok){history.replaceState({},'',location.pathname);return true}return false}
   async function command(instruction){q('status').textContent='傳送中…';const r=await fetch('/api/command',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({instruction})});const j=await r.json();q('status').textContent=r.ok?'已送到桌機：'+instruction:(j.error||'失敗')}
-  async function refresh(){try{const r=await fetch('/api/status',{credentials:'same-origin'});if(!r.ok)throw 0;const s=await r.json();q('online').textContent='● '+(s.deviceName||'手機')+' 已連線 · 永久綁定';q('name').textContent=s.projectName||'Editkin 專案';q('meta').textContent=(s.resolution||'')+' · '+(s.fps||'')+' fps · '+(s.trackCount||0)+' tracks';q('time').textContent=s.playheadLabel||'00:00.00';const nextKey=s.previewAvailable?(s.previewId||'preview')+':'+(s.previewKind||'video'):'';if(nextKey!==previewKey){['previewVideo','previewImage','previewAudio'].forEach(id=>{q(id).pause?.();q(id).removeAttribute('src');q(id).style.display='none'});previewKey=nextKey;if(nextKey){const id=s.previewKind==='image'?'previewImage':s.previewKind==='audio'?'previewAudio':'previewVideo';q(id).src='/api/preview?v='+encodeURIComponent(nextKey);q(id).style.display='block'}}}catch{q('online').textContent='等待桌機上線';q('status').textContent='這台手機已記住 Editkin；桌機 Remote 啟動後會自動重連。若桌機已撤銷此裝置，才需要重新掃描。'}}
+  async function refresh(){try{const r=await fetch('/api/status',{credentials:'same-origin'});if(!r.ok)throw 0;const s=await r.json();q('online').textContent='● '+(s.deviceName||'手機')+' 已連線 · 已綁定';q('name').textContent=s.projectName||'Editkin 專案';q('meta').textContent=(s.resolution||'')+' · '+(s.fps||'')+' fps · '+(s.trackCount||0)+' tracks';q('time').textContent=s.playheadLabel||'00:00.00';const nextKey=s.previewAvailable?(s.previewId||'preview')+':'+(s.previewKind||'video'):'';if(nextKey!==previewKey){['previewVideo','previewImage','previewAudio'].forEach(id=>{q(id).pause?.();q(id).removeAttribute('src');q(id).style.display='none'});previewKey=nextKey;if(nextKey){const id=s.previewKind==='image'?'previewImage':s.previewKind==='audio'?'previewAudio':'previewVideo';q(id).src='/api/preview?v='+encodeURIComponent(nextKey);q(id).style.display='block'}}}catch{q('online').textContent='等待桌機上線';q('status').textContent='這台手機已記住 Editkin；桌機 Remote 啟動後會自動重連。若桌機已撤銷此裝置，才需要重新掃描。'}}
   document.querySelectorAll('[data-command]').forEach(b=>b.onclick=()=>command(b.dataset.command));q('send').onclick=()=>{const v=q('instruction').value.trim();if(v)command(v)};q('caption').onclick=()=>{const t=q('captionTime').value||'0';const v=q('captionText').value.trim();if(v)command('在 '+t+' 秒加字幕：'+v)};(async()=>{await pair();await refresh();setInterval(refresh,1000)})();
 `;
 const contentHash = (value: string) => createHash("sha256").update(value).digest("base64");
@@ -101,11 +103,25 @@ function cookies(request: IncomingMessage): Record<string, string> {
   }));
 }
 
-function bootstrapAuthorized(candidate: unknown): boolean {
-  if (Date.now() > pairingExpiresAt || typeof candidate !== "string") return false;
+// A matching token is consumed by the first pairing that claims it. Callers must
+// `pairingWindow.release()` if that pairing then fails.
+function claimBootstrapToken(candidate: unknown): boolean {
+  if (typeof candidate !== "string") return false;
   const supplied = Buffer.from(candidate, "utf8");
   const expected = Buffer.from(remoteToken, "utf8");
-  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
+  return supplied.length === expected.length && timingSafeEqual(supplied, expected) && pairingWindow.claim(Date.now());
+}
+
+function requestIsSecure(request: IncomingMessage): boolean {
+  const forwarded = Array.isArray(request.headers["x-forwarded-proto"])
+    ? request.headers["x-forwarded-proto"][0] : request.headers["x-forwarded-proto"];
+  return forwarded === "https" || Boolean((request.socket as typeof request.socket & { encrypted?: boolean }).encrypted);
+}
+
+// Sliding: every authenticated status poll re-issues the cookie, so it only
+// lapses after DEVICE_IDLE_LIFETIME_MS without use.
+function deviceCookie(credential: string, secure: boolean): string {
+  return `editkin_remote_device=${encodeURIComponent(credential)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${DEVICE_IDLE_LIFETIME_MS / 1000}${secure ? "; Secure" : ""}`;
 }
 
 function clientAddress(request: IncomingMessage): string {
@@ -132,10 +148,7 @@ function requestOriginAllowed(request: IncomingMessage): boolean {
   const origin = request.headers.origin;
   const host = request.headers.host;
   if (typeof origin !== "string" || typeof host !== "string" || !host || /[\r\n]/.test(host)) return false;
-  const forwarded = Array.isArray(request.headers["x-forwarded-proto"])
-    ? request.headers["x-forwarded-proto"][0] : request.headers["x-forwarded-proto"];
-  const protocol = forwarded === "https" || Boolean((request.socket as typeof request.socket & { encrypted?: boolean }).encrypted) ? "https" : "http";
-  return origin === `${protocol}://${host}`;
+  return origin === `${requestIsSecure(request) ? "https" : "http"}://${host}`;
 }
 
 function jsonMutationAllowed(request: IncomingMessage): boolean {
@@ -193,7 +206,7 @@ async function writeDeviceStatus() {
       connected,
     };
   });
-  await writeFile(remoteDevicesPath, `${JSON.stringify({ connectedCount: devices.filter((device) => device.connected).length, trustedCount: devices.length, devices, pairingExpiresAt: new Date(pairingExpiresAt).toISOString() })}\n`, "utf8");
+  await writeFile(remoteDevicesPath, `${JSON.stringify({ connectedCount: devices.filter((device) => device.connected).length, trustedCount: devices.length, devices, pairingExpiresAt: new Date(pairingExpiresAt).toISOString(), pairingConsumed: pairingWindow.isConsumed })}\n`, "utf8");
 }
 
 function pruneState(now: number) {
@@ -220,23 +233,29 @@ async function enqueueCommand(instruction: string, receivedAt: number) {
 }
 
 async function pairRelayDevice(input: { token?: unknown; deviceId?: unknown; name?: unknown }) {
-  if (!bootstrapAuthorized(input.token)) throw new Error("PAIRING_DENIED");
-  const deviceId = typeof input.deviceId === "string" ? input.deviceId.trim().slice(0, 100) : "";
-  const name = typeof input.name === "string" ? input.name.trim().slice(0, 60) : "手機";
-  if (!deviceId) throw new Error("DEVICE_ID_REQUIRED");
-  const trusted = await readTrustedDevices();
-  for (const [hash, session] of sessions) if (session.deviceId === deviceId) sessions.delete(hash);
-  trusted.devices = trusted.devices.filter((device) => device.id !== deviceId);
-  if (trusted.devices.length >= 20) throw new Error("DEVICE_LIMIT");
-  const credential = randomBytes(32).toString("base64url");
-  const hash = credentialHash(credential);
-  const now = Date.now();
-  const pairedAt = new Date(now).toISOString();
-  trusted.devices.push({ id: deviceId, name: name || "手機", credentialHash: hash, pairedAt, lastSeen: pairedAt });
-  await writeTrustedDevices(trusted);
-  sessions.set(hash, { credentialHash: hash, deviceId, name: name || "手機", pairedAt: now, lastSeen: now });
-  await writeDeviceStatus();
-  return { credential, deviceName: name || "手機" };
+  if (!claimBootstrapToken(input.token)) throw new Error("PAIRING_DENIED");
+  let paired = false;
+  try {
+    const deviceId = typeof input.deviceId === "string" ? input.deviceId.trim().slice(0, 100) : "";
+    const name = typeof input.name === "string" ? input.name.trim().slice(0, 60) : "手機";
+    if (!deviceId) throw new Error("DEVICE_ID_REQUIRED");
+    const trusted = await readTrustedDevices();
+    for (const [hash, session] of sessions) if (session.deviceId === deviceId) sessions.delete(hash);
+    trusted.devices = trusted.devices.filter((device) => device.id !== deviceId);
+    if (trusted.devices.length >= 20) throw new Error("DEVICE_LIMIT");
+    const credential = randomBytes(32).toString("base64url");
+    const hash = credentialHash(credential);
+    const now = Date.now();
+    const pairedAt = new Date(now).toISOString();
+    trusted.devices.push({ id: deviceId, name: name || "手機", credentialHash: hash, pairedAt, lastSeen: pairedAt });
+    await writeTrustedDevices(trusted);
+    paired = true;
+    sessions.set(hash, { credentialHash: hash, deviceId, name: name || "手機", pairedAt: now, lastSeen: now });
+    await writeDeviceStatus();
+    return { credential, deviceName: name || "手機" };
+  } finally {
+    if (!paired) pairingWindow.release();
+  }
 }
 
 async function authenticateRelayDevice(credential: unknown, deviceId: unknown, clientId: string): Promise<RemoteSession | undefined> {
@@ -259,6 +278,12 @@ async function authenticateRelayDevice(credential: unknown, deviceId: unknown, c
   const device = trusted.devices.find((item) => item.id === deviceId && item.credentialHash === hash);
   if (!device) return undefined;
   const now = Date.now();
+  if (deviceIdleExpired(device.lastSeen, now)) {
+    trusted.devices = trusted.devices.filter((item) => item !== device);
+    sessions.delete(hash);
+    await writeTrustedDevices(trusted);
+    return undefined;
+  }
   const session = { credentialHash: hash, deviceId: device.id, name: device.name, pairedAt: Date.parse(device.pairedAt), lastSeen: now };
   sessions.set(hash, session);
   relaySessions.set(clientId, session);
@@ -350,7 +375,7 @@ async function handleRelayMessage(raw: unknown): Promise<boolean> {
     }
   } catch (error) {
     const code = error instanceof Error ? error.message : "REMOTE_ERROR";
-    sendRelay(envelope.clientId, { type: "error", error: code === "PAIRING_DENIED" ? "配對碼無效或已過期" : code === "PAIRING_RATE_LIMITED" ? "配對嘗試過多，請稍後再試" : code === "DEVICE_LIMIT" ? "已達永久綁定裝置上限" : "Remote request failed" });
+    sendRelay(envelope.clientId, { type: "error", error: code === "PAIRING_DENIED" ? "配對碼無效或已過期" : code === "PAIRING_RATE_LIMITED" ? "配對嘗試過多，請稍後再試" : code === "DEVICE_LIMIT" ? "已達綁定裝置上限" : "Remote request failed" });
     return true;
   }
   return false;
@@ -389,6 +414,12 @@ async function authenticate(request: IncomingMessage, url: URL): Promise<boolean
   const device = trusted.devices.find((item) => item.credentialHash === hash);
   if (!device) return false;
   const now = Date.now();
+  if (deviceIdleExpired(device.lastSeen, now)) {
+    trusted.devices = trusted.devices.filter((item) => item !== device);
+    sessions.delete(hash);
+    await writeTrustedDevices(trusted);
+    return false;
+  }
   const existing = sessions.get(hash);
   sessions.set(hash, {
     credentialHash: hash,
@@ -449,7 +480,7 @@ async function servePreview(request: IncomingMessage, response: ServerResponse) 
 
 const page = String.raw`<!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#08090d">
-<title>Editkin Remote</title><style>${pageStyle}</style></head><body><main class="shell"><div class="top"><div class="brand"><i>E</i> Editkin</div><div class="online" id="online" role="status" aria-live="polite">安全配對中</div></div><section class="card"><h1 id="name">讀取專案…</h1><div class="meta" id="meta"></div><div class="time" id="time">00:00.00</div><video class="preview" id="previewVideo" controls playsinline></video><img class="preview" id="previewImage" alt="目前素材預覽"><audio class="preview audio" id="previewAudio" controls></audio><div class="quick"><button data-command="復原">↶ 復原</button><button data-command="重做">↷ 重做</button><button data-command="在目前播放頭分割">✂ 分割選取</button><button data-command="壓緊空隙">⇥ 壓緊空隙</button><button data-command="智慧去停頓">✂ 智慧去停頓</button><button data-command="自動字幕">▣ 自動上字幕</button><button data-command="自動分鏡">▤ 自動分鏡</button><button data-command="智慧成片">✦ 智慧成片</button></div></section><section class="card"><textarea id="instruction" aria-label="剪輯指令" placeholder="直接說：智慧成片\n或：自動字幕"></textarea><button class="primary" id="send">送出剪輯指令</button><div class="caption-row"><input id="captionTime" aria-label="字幕時間（秒）" inputmode="decimal" placeholder="秒數"><input id="captionText" aria-label="字幕文字" placeholder="字幕文字"></div><button id="caption" class="primary">加入字幕</button><div class="status" id="status" role="status" aria-live="polite"></div><div class="hint">第一次掃碼會永久綁定這台裝置；QR 的一次性憑證會立刻從網址移除。之後桌機 Remote 上線即可自動重連，素材與 GPU 輸出仍留在桌機。</div></section></main><script>${pageScript}</script></body></html>`;
+<title>Editkin Remote</title><style>${pageStyle}</style></head><body><main class="shell"><div class="top"><div class="brand"><i>E</i> Editkin</div><div class="online" id="online" role="status" aria-live="polite">安全配對中</div></div><section class="card"><h1 id="name">讀取專案…</h1><div class="meta" id="meta"></div><div class="time" id="time">00:00.00</div><video class="preview" id="previewVideo" controls playsinline></video><img class="preview" id="previewImage" alt="目前素材預覽"><audio class="preview audio" id="previewAudio" controls></audio><div class="quick"><button data-command="復原">↶ 復原</button><button data-command="重做">↷ 重做</button><button data-command="在目前播放頭分割">✂ 分割選取</button><button data-command="壓緊空隙">⇥ 壓緊空隙</button><button data-command="智慧去停頓">✂ 智慧去停頓</button><button data-command="自動字幕">▣ 自動上字幕</button><button data-command="自動分鏡">▤ 自動分鏡</button><button data-command="智慧成片">✦ 智慧成片</button></div></section><section class="card"><textarea id="instruction" aria-label="剪輯指令" placeholder="直接說：智慧成片\n或：自動字幕"></textarea><button class="primary" id="send">送出剪輯指令</button><div class="caption-row"><input id="captionTime" aria-label="字幕時間（秒）" inputmode="decimal" placeholder="秒數"><input id="captionText" aria-label="字幕文字" placeholder="字幕文字"></div><button id="caption" class="primary">加入字幕</button><div class="status" id="status" role="status" aria-live="polite"></div><div class="hint">第一次掃碼會綁定這台裝置，閒置 30 天後需重新掃碼；QR 憑證只能使用一次，並會立刻從網址移除。之後桌機 Remote 上線即可自動重連，素材與 GPU 輸出仍留在桌機。</div></section></main><script>${pageScript}</script></body></html>`;
 
 await mkdir(remoteQueuePath, { recursive: true });
 await writeDeviceStatus();
@@ -465,27 +496,30 @@ const server = createServer(async (request, response) => {
       pruneState(now);
       if (!lanPairRateAllowed(request, now)) return send(response, 429, JSON.stringify({ error: "配對嘗試過多，請稍後再試" }));
       const input = JSON.parse(await body(request)) as { token?: unknown; deviceId?: unknown; name?: unknown };
-      if (!bootstrapAuthorized(input.token)) return send(response, 401, JSON.stringify({ error: "配對碼無效或已過期" }));
-      const deviceId = typeof input.deviceId === "string" ? input.deviceId.trim().slice(0, 100) : "";
-      const name = typeof input.name === "string" ? input.name.trim().slice(0, 60) : "手機";
-      if (!deviceId) return send(response, 400, JSON.stringify({ error: "缺少裝置識別碼" }));
-      const trusted = await readTrustedDevices();
-      for (const [hash, session] of sessions) if (session.deviceId === deviceId) sessions.delete(hash);
-      trusted.devices = trusted.devices.filter((device) => device.id !== deviceId);
-      if (trusted.devices.length >= 20) return send(response, 429, JSON.stringify({ error: "已達永久綁定裝置上限" }));
-      const deviceCredential = randomBytes(32).toString("base64url");
-      const hash = credentialHash(deviceCredential);
-      const pairedAt = new Date(now).toISOString();
-      trusted.devices.push({ id: deviceId, name: name || "手機", credentialHash: hash, pairedAt, lastSeen: pairedAt });
-      await writeTrustedDevices(trusted);
-      sessions.set(hash, { credentialHash: hash, deviceId, name: name || "手機", pairedAt: now, lastSeen: now });
-      await writeDeviceStatus();
-      const forwardedProtocol = Array.isArray(request.headers["x-forwarded-proto"])
-        ? request.headers["x-forwarded-proto"][0] : request.headers["x-forwarded-proto"];
-      const secure = forwardedProtocol === "https" || Boolean((request.socket as typeof request.socket & { encrypted?: boolean }).encrypted);
-      return send(response, 201, JSON.stringify({ paired: true, permanent: true, deviceName: name || "手機" }), undefined, {
-        "set-cookie": `editkin_remote_device=${encodeURIComponent(deviceCredential)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=315360000${secure ? "; Secure" : ""}`,
-      });
+      if (!claimBootstrapToken(input.token)) return send(response, 401, JSON.stringify({ error: "配對碼無效、已使用或已過期" }));
+      let paired = false;
+      try {
+        const deviceId = typeof input.deviceId === "string" ? input.deviceId.trim().slice(0, 100) : "";
+        const name = typeof input.name === "string" ? input.name.trim().slice(0, 60) : "手機";
+        if (!deviceId) return send(response, 400, JSON.stringify({ error: "缺少裝置識別碼" }));
+        const trusted = await readTrustedDevices();
+        for (const [hash, session] of sessions) if (session.deviceId === deviceId) sessions.delete(hash);
+        trusted.devices = trusted.devices.filter((device) => device.id !== deviceId);
+        if (trusted.devices.length >= 20) return send(response, 429, JSON.stringify({ error: "已達綁定裝置上限" }));
+        const deviceCredential = randomBytes(32).toString("base64url");
+        const hash = credentialHash(deviceCredential);
+        const pairedAt = new Date(now).toISOString();
+        trusted.devices.push({ id: deviceId, name: name || "手機", credentialHash: hash, pairedAt, lastSeen: pairedAt });
+        await writeTrustedDevices(trusted);
+        paired = true;
+        sessions.set(hash, { credentialHash: hash, deviceId, name: name || "手機", pairedAt: now, lastSeen: now });
+        await writeDeviceStatus();
+        return send(response, 201, JSON.stringify({ paired: true, permanent: true, deviceName: name || "手機" }), undefined, {
+          "set-cookie": deviceCookie(deviceCredential, requestIsSecure(request)),
+        });
+      } finally {
+        if (!paired) pairingWindow.release();
+      }
     }
     if (!await authenticate(request, url)) return send(response, 401, JSON.stringify({ error: "工作階段無效，請重新配對" }));
     if (url.pathname === "/api/status" && request.method === "GET") {
@@ -493,7 +527,8 @@ const server = createServer(async (request, response) => {
       const { previewPath: _privatePath, ...safe } = current;
       const credential = cookies(request).editkin_remote_device;
       const session = credential ? sessions.get(credentialHash(credential)) : undefined;
-      return send(response, 200, JSON.stringify({ ...safe, deviceName: session?.name, permanentlyPaired: true, previewAvailable: typeof current.previewPath === "string" }));
+      return send(response, 200, JSON.stringify({ ...safe, deviceName: session?.name, permanentlyPaired: true, previewAvailable: typeof current.previewPath === "string" }), undefined,
+        credential ? { "set-cookie": deviceCookie(credential, requestIsSecure(request)) } : {});
     }
     if (url.pathname === "/api/preview" && request.method === "GET") return await servePreview(request, response);
     if (url.pathname === "/api/command" && request.method === "POST") {

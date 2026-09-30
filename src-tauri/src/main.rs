@@ -4882,13 +4882,23 @@ fn start_mobile_remote(
             let remote = remote_state.as_mut().expect("Remote state exists");
             match remote.child.try_wait() {
                 Ok(None) => {
-                    let connected = fs::read_to_string(&remote.devices_path)
+                    let device_status = fs::read_to_string(&remote.devices_path)
                         .ok()
-                        .and_then(|content| serde_json::from_str::<Value>(&content).ok())
+                        .and_then(|content| serde_json::from_str::<Value>(&content).ok());
+                    let connected = device_status
+                        .as_ref()
                         .and_then(|value| value.get("connectedCount").and_then(Value::as_u64))
                         .unwrap_or(0)
                         > 0;
-                    if connected || unix_time_ms() < remote.pairing_expires_at_ms {
+                    // The pairing token is single use: once a device consumed it, the
+                    // link is dead, so a new pairing needs a fresh server and token.
+                    let pairing_consumed = device_status
+                        .as_ref()
+                        .and_then(|value| value.get("pairingConsumed").and_then(Value::as_bool))
+                        .unwrap_or(false);
+                    if connected
+                        || (unix_time_ms() < remote.pairing_expires_at_ms && !pairing_consumed)
+                    {
                         reuse_result = Some((|| {
                             write_json_atomic(&remote.snapshot_path, &snapshot)?;
                             Clipboard::new()
