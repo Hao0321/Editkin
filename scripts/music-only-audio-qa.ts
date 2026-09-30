@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile, mkdtemp, stat } from "node:fs/promises";
+import { readRegularFile } from "./lib/regular-file.mjs";
 import { createReadStream } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
@@ -80,8 +81,8 @@ export async function runMusicOnlyQa(input:{project:EditProject;output:string;mu
   }
   let encodingInput=raw,nativeMasterVerification:ReturnType<typeof verifyNativeMusicMaster>|undefined;
   if(native&&input.nativeMasterPath){
-   if((await stat(input.nativeMasterPath)).size!==frames*channels*4)throw Error("Native master duration/channel mismatch");
-   const master=await readFile(input.nativeMasterPath);
+   const master=await readRegularFile(input.nativeMasterPath);
+   if(master.length!==frames*channels*4)throw Error("Native master duration/channel mismatch");
    nativeMasterVerification=verifyNativeMusicMaster(await readFile(raw),master,native.outputSha256);
    // Encode the exact bytes just verified, not an external path that can drift.
    encodingInput=join(dir,"verified-native-master.f32le");await writeFile(encodingInput,master,{flag:"wx"});

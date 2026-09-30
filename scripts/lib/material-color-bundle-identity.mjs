@@ -1,15 +1,16 @@
 import {build} from "esbuild";
-import {readFile,lstat,mkdir,writeFile,rename,realpath} from "node:fs/promises";
+import {lstat,mkdir,writeFile,rename,realpath} from "node:fs/promises";
 import {createHash,randomUUID} from "node:crypto";
 import {resolve,dirname,basename,relative,isAbsolute} from "node:path";
 import {fileURLToPath} from "node:url";
+import {readRegularFile} from "./regular-file.mjs";
 const defaultRoot=fileURLToPath(new URL("../../",import.meta.url));
 const digest=bytes=>createHash("sha256").update(bytes).digest("hex");
 async function readInputs(root){
   const base=resolve(root,"src/application"),listPath=resolve(base,"materialColorImplementationPaths.json");
   const listStat=await lstat(listPath);if(!listStat.isFile()||listStat.isSymbolicLink()||listStat.size>65536)throw Error("invalid-material-color-build-inputs");
   const sourceRoot=await realpath(resolve(root,"src"));
-  const list=JSON.parse(await readFile(listPath,"utf8"));
+  const list=JSON.parse((await readRegularFile(listPath)).toString("utf8"));
   // 33 includes the shared display-transfer implementation. Runtime validation
   // still requires the exact ordered registry; this is only an allocation cap.
   if(!Array.isArray(list)||!list.length||list.length>33||new Set(list).size!==list.length)throw Error("invalid-material-color-build-inputs");
@@ -19,7 +20,7 @@ async function readInputs(root){
     if(scope.startsWith("..")||isAbsolute(scope))throw Error("outside-material-color-build-input");
     const stat=await lstat(path);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>8*1024*1024)throw Error("invalid-material-color-build-input-file");
     const actualScope=relative(sourceRoot,await realpath(path));if(actualScope.startsWith("..")||isAbsolute(actualScope))throw Error("aliased-material-color-build-input");
-    return {name,sha256:digest(await readFile(path))};
+    return {name,sha256:digest(await readRegularFile(path))};
   }));
 }
 /** Build one ESM Node bundle; emitted bytes and sidecar are one integrity unit.

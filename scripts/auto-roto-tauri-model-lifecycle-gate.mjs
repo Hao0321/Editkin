@@ -2,7 +2,8 @@ import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { createServer } from "node:net";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { fileIdentity } from "./lib/regular-file.mjs";
 import { join, resolve } from "node:path";
 
 const appRoot = resolve(import.meta.dirname, "..");
@@ -145,10 +146,11 @@ try {
     uiStable: trace.length === 0,
   };
   const status = Object.values(checks).every(Boolean) ? "GREEN_TAURI_MODEL_LIFECYCLE" : "FAIL";
+  const executableIdentity = await fileIdentity(executable);
   const report = {
     schema: "editkin.auto-roto-tauri-model-lifecycle-gate/v1", status, checks,
     timing: { installSeconds, repairSeconds, totalSeconds: (performance.now() - started) / 1000 },
-    delivery: { executable, executableBytes: (await stat(executable)).size, executableSha256: sha256(await readFile(executable)) },
+    delivery: { executable, executableBytes: executableIdentity.bytes, executableSha256: executableIdentity.sha256 },
     pack: { source: packRoot, manifestSha256: verified.pack?.identity?.manifestSha256, copied: installed.copied }, trace,
     claimBoundary: "Proves a fresh delivered Windows Editkin app reports native fallback, installs a separately signed closed-world pack, detects an on-disk mutation, repairs it, and keeps the UI alive. Public Authenticode/download transport and macOS remain separate scopes.",
   };

@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { copyFile, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm, writeFile } from "node:fs/promises";
+import { readRegularFile } from "./regular-file.mjs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { canonicalJson, hashBytes } from "./editkin-mcp-generation-contract.mjs";
@@ -142,7 +143,8 @@ export async function inventoryFixtureTree(root) {
       for (const name of (await readdir(path)).sort()) await visit(resolve(path, name), `${relativePath}/${name}`);
     } else {
       assert(details.isFile(), `Unexpected fixture entry: ${path}`);
-      inventory.push({ path: relativePath, type: "file", bytes: details.size, sha256: hashBytes(await readFile(path)) });
+      const bytes = await readRegularFile(path);
+      inventory.push({ path: relativePath, type: "file", bytes: bytes.length, sha256: hashBytes(bytes) });
     }
   }
   await visit(root, ".");

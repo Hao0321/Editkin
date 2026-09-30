@@ -14,6 +14,7 @@ const nodeTestFiles = [
   "scripts/lib/desktop-stage-target-policy.test.mjs",
   "scripts/lib/native-shared-inputs.test.mjs",
   "scripts/lib/owned-process-runner.test.mjs",
+  "scripts/lib/regular-file.test.mjs",
   "scripts/lib/tauri-candidate-artifact-root.test.mjs",
   "scripts/material-color-runtime-pair.test.mjs",
   "src/shared/visualAssetRights.test.mjs",

@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { fileIdentity } from "./lib/regular-file.mjs";
 import { createServer as createNetServer } from "node:net";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -184,8 +185,7 @@ try {
     evaluator: { path: evaluatorPath, sha256: createHash("sha256").update(await readFile(evaluatorPath)).digest("hex") },
     executable: {
       path: executable,
-      bytes: (await stat(executable)).size,
-      sha256: createHash("sha256").update(await readFile(executable)).digest("hex"),
+      ...await fileIdentity(executable),
     },
     status: before.cards > 0 && before.loaded > 0 && before.failed === 0 && before.scrollHeight > before.clientHeight * 4 && after.scrollTop > before.scrollTop && after.visibleLoaded > 0 && importGreen ? "GREEN" : "BLOCK",
     cards: before.cards,

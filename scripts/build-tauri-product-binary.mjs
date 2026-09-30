@@ -2,6 +2,7 @@ import { runOwnedProcess } from "./lib/owned-process-runner.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { readRegularFile } from "./lib/regular-file.mjs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { assertTauriNativePolicyPin, assertTauriProductRustflagEnvironment, tauriProductCargoBuildArgs, TAURI_PRODUCT_EMBEDDED_FRONTEND_FEATURE } from "./lib/tauri-product-feature-policy.mjs";
@@ -48,7 +49,7 @@ async function collectInputs() {
   async function visit(path) {
     const info = await stat(path);
     if (info.isFile()) {
-      const bytes = await readFile(path);
+      const bytes = await readRegularFile(path);
       files.push({ path: relative(root, path).split(sep).join("/"), bytes: bytes.length, sha256: sha256(bytes) });
       return;
     }

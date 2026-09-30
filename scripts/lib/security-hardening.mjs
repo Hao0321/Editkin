@@ -1,4 +1,5 @@
 import { readFile, readdir, stat } from "node:fs/promises";
+import { readRegularFile } from "./regular-file.mjs";
 import { extname, join, relative, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -410,7 +411,7 @@ export async function inspectExtractedPayload({
           TEXT_EXTENSIONS.has(extname(child.name).toLowerCase()) &&
           info.size <= 8 * 1024 * 1024
         )
-          textPayloads.push({ path, text: await readFile(absolute, "utf8") });
+          textPayloads.push({ path, text: (await readRegularFile(absolute)).toString("utf8") });
       }
     }
   }

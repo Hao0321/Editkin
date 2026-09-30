@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { lstat, readFile, readdir, realpath } from "node:fs/promises";
+import { lstat, readdir, realpath } from "node:fs/promises";
+import { readRegularFile } from "./regular-file.mjs";
 import { dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { OWNER_VISUAL_GRANT } from "../../src/shared/visualAssetRights.mjs";
 import { NATIVE_SHARED_PROCESS_INPUTS } from "./native-shared-inputs.mjs";
@@ -322,7 +323,7 @@ async function dependencyClosure(root, entrypoints, { includeDeclarations = fals
     visited.add(current);
     const extension = extname(current).toLowerCase();
     if (![".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"].includes(extension)) continue;
-    const source = await readFile(current, "utf8");
+    const source = (await readRegularFile(current)).toString("utf8");
     for (const specifier of localSpecifiers(source)) {
       const dependency = await resolveLocalModule(current, specifier);
       if (dependency) pending.push(dependency);
@@ -348,7 +349,7 @@ async function collect(root, workspaceRoot, requested, { exclude = () => false }
     const label = labelFor(root, workspaceRoot, path);
     if (exclude(label, info.isDirectory())) return;
     if (info.isFile()) {
-      const bytes = await readFile(path);
+      const bytes = await readRegularFile(path);
       files.set(label, { path: label, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
       return;
     }

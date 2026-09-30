@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
+import { readRegularFile } from "./lib/regular-file.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,9 +27,8 @@ for (const [domain, route] of Object.entries(bundled.domain_routes)) {
 }
 let canonicalChecked = false;
 try {
-  await access(canonicalPath);
-  const canonical = JSON.parse(await readFile(canonicalPath, "utf8"));
-  const canonicalText = await readFile(canonicalPath, "utf8");
+  const canonicalText = (await readRegularFile(canonicalPath)).toString("utf8");
+  const canonical = JSON.parse(canonicalText);
   assert.equal(bundled.source_sha256, createHash("sha256").update(canonicalText).digest("hex"), "Editkin 美感來源 hash 落後 canonical");
   assert.equal(bundled.version, canonical.version, "Editkin 美感契約版本落後 canonical；先跑 npm run aesthetic:sync");
   assert.deepEqual(Object.keys(bundled.dimensions), Object.keys(canonical.dimensions), "Editkin 十維評分維度與 canonical 漂移");

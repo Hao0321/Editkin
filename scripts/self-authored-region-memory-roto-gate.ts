@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { readRegularFile } from "./lib/regular-file.mjs";
 import { arch, cpus, freemem, homedir, platform, release, tmpdir, totalmem } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -200,7 +201,7 @@ async function collectBuildInputs(): Promise<{ files: FileObservation[]; aggrega
   async function visit(path: string) {
     const info = await stat(path);
     if (info.isFile()) {
-      const bytes = await readFile(path);
+      const bytes = await readRegularFile(path);
       files.push({ path: relative(root, path).split(sep).join("/"), bytes: bytes.length, sha256: sha256Bytes(bytes) });
       return;
     }

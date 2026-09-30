@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { readRegularFile } from "./lib/regular-file.mjs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { replaceFileTransactionally } from "./lib/product-ledger-transaction.mjs";
 
@@ -206,7 +207,7 @@ async function directoryMatches(directory, expectedFiles) {
     for (const [name, expected] of expectedFiles) {
       const filePath = resolve(directory, name);
       const fileEntry = await lstat(filePath);
-      if (!fileEntry.isFile() || fileEntry.isSymbolicLink() || !(await readFile(filePath)).equals(expected)) return false;
+      if (!fileEntry.isFile() || fileEntry.isSymbolicLink() || !(await readRegularFile(filePath)).equals(expected)) return false;
     }
     return true;
   } catch (error) {

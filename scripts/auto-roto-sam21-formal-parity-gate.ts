@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { fileIdentity } from "./lib/regular-file.mjs";
 import { join, resolve } from "node:path";
 import { createEmptyProject, validateProject } from "../src/domain/editGraph";
 import { createClipMask } from "../src/domain/masks";
@@ -183,10 +184,10 @@ async function main(): Promise<void> {
   const verdict = evaluate(metrics);
   const report = {
     schema: "editkin.auto-roto-sam21-formal-parity-gate/v1", ...verdict, metrics,
-    inputs: { productReportPath, productReportSha256: sha256(await readFile(productReportPath)), sourcePath, sourceSha256: sha256(await readFile(sourcePath)) },
+    inputs: { productReportPath, productReportSha256: (await fileIdentity(productReportPath)).sha256, sourcePath, sourceSha256: (await fileIdentity(sourcePath)).sha256 },
     artifacts: {
-      candidate: { path: candidateOutput, bytes: (await stat(candidateOutput)).size, sha256: sha256(await readFile(candidateOutput)), render: candidateRender, probe: await probeMedia(candidateOutput, ffprobe) },
-      control: { path: controlOutput, bytes: (await stat(controlOutput)).size, sha256: sha256(await readFile(controlOutput)), render: controlRender, probe: await probeMedia(controlOutput, ffprobe) },
+      candidate: { path: candidateOutput, ...await fileIdentity(candidateOutput), render: candidateRender, probe: await probeMedia(candidateOutput, ffprobe) },
+      control: { path: controlOutput, ...await fileIdentity(controlOutput), render: controlRender, probe: await probeMedia(controlOutput, ffprobe) },
     },
     claimBoundary: "Proves Editkin formal FFmpeg export consumes the exact hash-bound production matte represented in EditGraph and matches preview alpha within frozen thresholds; it does not establish Adobe parity or public distribution signing.",
   };

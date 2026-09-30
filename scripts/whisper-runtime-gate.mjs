@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
+import { readRegularFile } from "./lib/regular-file.mjs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { inspectPeMitigations } from "./lib/security-hardening.mjs";
@@ -15,10 +16,9 @@ for (const name of expectedNames) if (!actualNames.has(name)) findings.push({ co
 for (const name of actualNames) if (!expectedNames.has(name)) findings.push({ code: "undeclared-runtime-file", name });
 for (const file of manifest.files) {
   const path = resolve(runtimeRoot, file.name);
-  const info = await stat(path);
-  const bytes = await readFile(path);
+  const bytes = await readRegularFile(path);
   const sha256 = createHash("sha256").update(bytes).digest("hex");
-  if (info.size !== file.bytes || sha256 !== file.sha256) findings.push({ code: "runtime-identity-mismatch", name: file.name, bytes: info.size, sha256 });
+  if (bytes.length !== file.bytes || sha256 !== file.sha256) findings.push({ code: "runtime-identity-mismatch", name: file.name, bytes: bytes.length, sha256 });
   const pe = inspectPeMitigations(bytes);
   if (!pe.valid || pe.architecture !== "x64" || !pe.dynamicBase || !pe.nxCompat || !pe.highEntropyVa) findings.push({ code: "runtime-pe-hardening-missing", name: file.name, pe });
 }
