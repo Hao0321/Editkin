@@ -3,17 +3,13 @@ import { access, appendFile, link, mkdir, mkdtemp, readdir, readFile, rename, un
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import {
-  configureRemoteAccess,
-  getRemoteSetupStatus,
-  listRemoteProviderConnectorStatus,
-  prepareRemoteSetup,
-  type PrepareRemoteSetupInput,
-  registerRemoteOnboardingTools,
-  remoteSetupPaths,
-  validateRemoteOrigin,
-  verifyRemoteAccess,
-} from "./remoteOnboardingTools";
+import { listRemoteProviderConnectorStatus, registerRemoteOnboardingTools } from "./remoteOnboardingTools";
+import { validateRemoteOrigin } from "./remoteOnboarding/network";
+import { type PrepareRemoteSetupInput } from "./remoteOnboarding/proposal";
+import { configureRemoteAccess, prepareRemoteSetup } from "./remoteOnboarding/setup";
+import { remoteSetupPaths } from "./remoteOnboarding/stateFiles";
+import { getRemoteSetupStatus } from "./remoteOnboarding/status";
+import { verifyRemoteAccess } from "./remoteOnboarding/verify";
 
 async function fixtureEnvironment() {
   const root = await mkdtemp(join(tmpdir(), "editkin-remote-onboarding-"));

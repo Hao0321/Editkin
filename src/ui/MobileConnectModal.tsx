@@ -347,6 +347,7 @@ export function MobileConnectModal({ remote, status, networkSummary, agentLaunch
   const agentLaunchResult = agentLaunch.result;
   const agentLaunchError = agentLaunch.error ?? agentLaunch.cancelError;
   const connected = Boolean(remote) && (status?.connectedCount ?? 0) > 0;
+  const pairingConsumed = Boolean(remote) && Boolean(status?.pairingConsumed);
   const activeTransport = remote?.transport ?? networkSummary?.transport ?? "lan";
   const internet = activeTransport !== "lan";
   const transportLabel = activeTransport === "cloud-relay" ? "使用者自備 WSS relay" : activeTransport === "https-tunnel" ? "使用者自備 HTTPS tunnel" : "預設 LAN";
@@ -450,7 +451,7 @@ export function MobileConnectModal({ remote, status, networkSummary, agentLaunch
     ? "Relay 模式只傳控制與狀態，不傳影片預覽。"
     : activeTransport === "https-tunnel"
       ? "Tunnel 設計上支援手機預覽，仍待真手機外網實測；預覽流量會計入你的供應商用量。"
-      : "LAN 預覽只在同一個區域網路傳輸。";
+      : "LAN 預覽只在同一個區域網路傳輸。LAN 使用未加密的 HTTP：同一網路上的人可能擷取配對連結與裝置憑證，請只在你信任的網路配對。";
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) dismissRemoteAgentModal(agentLaunch, onClose); }}>
@@ -522,20 +523,20 @@ export function MobileConnectModal({ remote, status, networkSummary, agentLaunch
 
           {remote && <>
             <ol>
-              <li>{connected ? "一次性 QR 憑證已移除，長效裝置金鑰不會顯示在網址" : "掃描右側一次性 QR Code"}</li>
+              <li>{pairingConsumed ? "這個 QR 已被使用，不能再綁定其他手機；要新增裝置，請先暫停 Remote，再重新開啟以產生新的 QR" : "掃描右側一次性 QR Code（只能綁定一台手機）"}</li>
               <li>{connected ? "Remote 重啟或網路暫斷後，網址可達時會自動重新連線" : "手機瀏覽器直接開啟，不需安裝或登入 Editkin 帳號"}</li>
               <li>{connected ? "遺失手機時，可在下方單獨撤銷該裝置" : "不用輸入 IP、連接埠或配對碼"}</li>
             </ol>
             {remote.warning && <div className="mobile-remote-warning">{remote.warning}</div>}
             {(status?.devices.length ?? 0) > 0 && <div className="mobile-device-list">{status?.devices.map((device) => <span key={device.id} className={device.connected ? "online" : "offline"}><i />{device.name}<button type="button" onClick={() => onRevoke(device.id)} aria-label={`撤銷 ${device.name}`}>撤銷</button></span>)}</div>}
-            <button type="button" className="secondary-button" onClick={() => void copy()}>{copied ? "✓ 配對連結已備妥" : "複製配對連結"}</button>
-            <button type="button" className="danger-link" onClick={onStop}>暫停 Remote（保留永久綁定）</button>
+            <button type="button" className="secondary-button" onClick={() => void copy()} disabled={pairingConsumed}>{copied ? "✓ 配對連結已備妥" : "複製配對連結"}</button>
+            <button type="button" className="danger-link" onClick={onStop}>暫停 Remote（保留已綁定裝置）</button>
           </>}
         </div>
         <div className={`mobile-connect-qr ${connected ? "connected" : ""} ${remote ? "" : "preflight"}`}>
           {remote ? qrCode ? <img src={qrCode} alt="Editkin Remote 配對 QR Code" /> : <div className="qr-placeholder">產生安全配對碼…</div> : <div className="remote-preflight-mark"><b>1</b><span>研究方案</span><b>2</b><span>確認費用</span><b>3</b><span>桌面核准</span><b>4</b><span>實測連線</span></div>}
           <span><i /> {remote ? connected ? `${status?.connectedCount} 台手機在線` : "等待手機掃描" : "尚未產生或傳送配對憑證"}</span>
-          <small>{remote ? connected ? `${status?.trustedCount ?? status?.devices.length ?? 0} 台已綁定 · 可隨時撤銷` : `${transportLabel} · ${internet ? "費用由你的供應商帳戶承擔" : "零雲端流量費"} · QR 10 分鐘有效` : "部署與外部流量都必須先取得你的確認"}</small>
+          <small>{remote ? connected ? `${status?.trustedCount ?? status?.devices.length ?? 0} 台已綁定 · 可隨時撤銷` : `${transportLabel} · ${internet ? "費用由你的供應商帳戶承擔" : "零雲端流量費"} · QR 10 分鐘內限用一次${internet ? "" : " · LAN 未加密"}` : "部署與外部流量都必須先取得你的確認"}</small>
         </div>
       </section>
     </div>

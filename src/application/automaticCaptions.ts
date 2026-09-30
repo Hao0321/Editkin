@@ -10,6 +10,7 @@ import { pipeline } from "node:stream/promises";
 import { analyzeSegmentedCaptions } from "./segmentedCaptions";
 import { runAnalysisProcess } from "./analysisProcess";
 import type { AutomaticCaptionAnalysisResult, AutomaticCaptionCue, AutomaticCaptionRequest, AutomaticCaptionResult, AutomaticCaptionRuntime, RawWhisperTranscript } from "./automaticCaptionTypes";
+import { assertLocalMediaPath } from "../shared/localMediaPath";
 export type { AutomaticCaptionAnalysisResult, AutomaticCaptionCue, AutomaticCaptionRequest, AutomaticCaptionResult, AutomaticCaptionRecognition, AutomaticCaptionRuntime, RawWhisperTranscript } from "./automaticCaptionTypes";
 
 export interface WhisperModelDescriptor {
@@ -133,11 +134,12 @@ function assertSafeModelDescriptor(model: WhisperModelDescriptor): void {
 export async function inspectWhisperModel(path: string, model: WhisperModelDescriptor = PINNED_WHISPER_MODEL): Promise<ModelInspection> {
   assertSafeModelDescriptor(model);
   try {
-    const fileStat = await stat(path);
-    if (!fileStat.isFile() || fileStat.size !== model.bytes) return { valid: false, bytes: fileStat.size, sha256: "" };
     const hash = createHash("sha256");
     const handle = await open(path, "r");
     try {
+      // The type/size gate and the hashed bytes come from the same open handle.
+      const fileStat = await handle.stat();
+      if (!fileStat.isFile() || fileStat.size !== model.bytes) return { valid: false, bytes: fileStat.size, sha256: "" };
       const buffer = Buffer.allocUnsafe(4 * 1024 * 1024);
       let position = 0;
       while (position < fileStat.size) {
@@ -146,9 +148,9 @@ export async function inspectWhisperModel(path: string, model: WhisperModelDescr
         hash.update(buffer.subarray(0, bytesRead));
         position += bytesRead;
       }
+      const sha256 = hash.digest("hex");
+      return { valid: sha256 === model.sha256, bytes: fileStat.size, sha256 };
     } finally { await handle.close(); }
-    const sha256 = hash.digest("hex");
-    return { valid: sha256 === model.sha256, bytes: fileStat.size, sha256 };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") return { valid: false, bytes: 0, sha256: "" };
@@ -521,6 +523,7 @@ export async function analyzeAutomaticCaptionTranscript(
   request: AutomaticCaptionRequest,
   runtime: AutomaticCaptionRuntime,
 ): Promise<AutomaticCaptionAnalysisResult> {
+  assertLocalMediaPath(request.sourcePath);
   const startedAt = Date.now();
   runtime = { ...runtime, whisperCliPath: configuredWhisperCliPath(runtime) };
   const { language, translationTarget } = validateCaptionRequest(request);
@@ -631,6 +634,7 @@ export async function transcribeAutomaticCaptions(
   request: AutomaticCaptionRequest,
   runtime: AutomaticCaptionRuntime,
 ): Promise<AutomaticCaptionResult> {
+  assertLocalMediaPath(request.sourcePath);
   const result = await analyzeAutomaticCaptionTranscript(request, runtime);
   if (result.recognition.status === "empty") throw new EmptyAutomaticCaptionError(result);
   const { recognition: _recognition, rawTranscript: _rawTranscript, rawTranslation: _rawTranslation, ...captions } = result;

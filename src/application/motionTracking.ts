@@ -4,6 +4,7 @@ import { access, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "n
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { createNativeMotionTrackPlan, type NativeMotionTrackPlan } from "../render/nativeCore";
+import { assertLocalMediaPath } from "../shared/localMediaPath";
 
 export interface AnalyzeMotionTrackRequest {
   sourcePath: string;
@@ -57,6 +58,7 @@ export async function analyzeMotionTrack(
   request: AnalyzeMotionTrackRequest,
   runtime: { ffmpegPath: string; nativeCorePath: string; cacheRoot?: string },
 ): Promise<MotionTrackAnalysisResult> {
+  assertLocalMediaPath(request.sourcePath);
   const startedAt = Date.now();
   if (!request.sourcePath || !Number.isFinite(request.sourceStart) || request.sourceStart < 0) throw new Error("動態追蹤素材起點不合法");
   if (!Number.isFinite(request.duration) || request.duration <= 0 || request.duration > 4 * 3600) throw new Error("動態追蹤時長不合法");
