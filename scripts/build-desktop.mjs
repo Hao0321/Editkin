@@ -8,6 +8,9 @@ const production = {
   legalComments: "none",
 };
 
+// A source-only desktop smoke needs the real service, not owner release assets.
+const community = process.argv.includes("--community");
+
 await Promise.all([
   "desktop-dist/main.mjs.map",
   "desktop-dist/preload.cjs.map",
@@ -16,37 +19,39 @@ await Promise.all([
   "desktop-dist/remote.mjs.map",
 ].map((path) => rm(path, { force: true })));
 
-await build({
-  entryPoints: ["electron/main.ts"],
-  bundle: true,
-  platform: "node",
-  target: "node22",
-  format: "esm",
-  outfile: "desktop-dist/main.mjs",
-  external: ["electron"],
-  ...production,
-});
+if (!community) {
+  await build({
+    entryPoints: ["electron/main.ts"],
+    bundle: true,
+    platform: "node",
+    target: "node22",
+    format: "esm",
+    outfile: "desktop-dist/main.mjs",
+    external: ["electron"],
+    ...production,
+  });
 
-await build({
-  entryPoints: ["electron/preload.ts"],
-  bundle: true,
-  platform: "node",
-  target: "node22",
-  format: "cjs",
-  outfile: "desktop-dist/preload.cjs",
-  external: ["electron"],
-  ...production,
-});
+  await build({
+    entryPoints: ["electron/preload.ts"],
+    bundle: true,
+    platform: "node",
+    target: "node22",
+    format: "cjs",
+    outfile: "desktop-dist/preload.cjs",
+    external: ["electron"],
+    ...production,
+  });
 
-await buildMaterialColorBundle({
-  entryPoints: ["src/mcp/server.ts"],
-  bundle: true,
-  platform: "node",
-  target: "node22",
-  format: "esm",
-  outfile: "desktop-dist/mcp.mjs",
-  ...production,
-});
+  await buildMaterialColorBundle({
+    entryPoints: ["src/mcp/server.ts"],
+    bundle: true,
+    platform: "node",
+    target: "node22",
+    format: "esm",
+    outfile: "desktop-dist/mcp.mjs",
+    ...production,
+  });
+}
 
 await build({
   entryPoints: ["src/service/cli.ts"],
@@ -61,14 +66,16 @@ await build({
   ...production,
 });
 
-await build({
-  entryPoints: ["src/remote/server.ts"],
-  bundle: true,
-  platform: "node",
-  target: "node22",
-  format: "esm",
-  outfile: "desktop-dist/remote.mjs",
-  ...production,
-});
+if (!community) {
+  await build({
+    entryPoints: ["src/remote/server.ts"],
+    bundle: true,
+    platform: "node",
+    target: "node22",
+    format: "esm",
+    outfile: "desktop-dist/remote.mjs",
+    ...production,
+  });
 
-await import("./build-release-input-manifest.mjs");
+  await import("./build-release-input-manifest.mjs");
+}
