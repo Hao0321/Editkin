@@ -522,6 +522,7 @@ export async function analyzeAutomaticCaptionTranscript(
   request: AutomaticCaptionRequest,
   runtime: AutomaticCaptionRuntime,
 ): Promise<AutomaticCaptionAnalysisResult> {
+  assertLocalMediaPath(request.sourcePath);
   const startedAt = Date.now();
   runtime = { ...runtime, whisperCliPath: configuredWhisperCliPath(runtime) };
   const { language, translationTarget } = validateCaptionRequest(request);

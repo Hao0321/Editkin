@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { assertLocalMediaPath, isWindowsNetworkPath } from "./localMediaPath";
 import { analyzeSceneCuts } from "../application/sceneDetection";
 import { inspectMedia } from "../application/inspectMedia";
-import { resolveMediaPath } from "../render/mediaProcess";
+import { analyzeAutomaticCaptionTranscript } from "../application/automaticCaptions";
+import { probeMedia, resolveMediaPath } from "../render/mediaProcess";
 
 const NETWORK_PATHS = [
   String.raw`\\host\share\clip.mp4`,
@@ -46,8 +47,11 @@ describe("local media path guard", () => {
       const unc = String.raw`\\attacker\share\clip.mp4`;
       await expect(inspectMedia(unc, "/nonexistent/ffprobe")).rejects.toThrow("拒絕網路共用或裝置路徑");
       await expect(analyzeSceneCuts({ sourcePath: unc } as never, { ffmpegPath: "/nonexistent/ffmpeg" })).rejects.toThrow("拒絕網路共用或裝置路徑");
+      await expect(probeMedia(unc, "/nonexistent/ffprobe")).rejects.toThrow("拒絕網路共用或裝置路徑");
+      await expect(analyzeAutomaticCaptionTranscript({ sourcePath: unc } as never, {} as never)).rejects.toThrow("拒絕網路共用或裝置路徑");
       // node:path follows the host OS, so use the slash form that is absolute everywhere.
       expect(() => resolveMediaPath("//attacker/share/clip.mp4")).toThrow("拒絕網路共用或裝置路徑");
+      expect(() => resolveMediaPath("clip.mp4", unc)).toThrow("拒絕網路共用或裝置路徑");
     } finally {
       Object.defineProperty(process, "platform", platform);
     }
