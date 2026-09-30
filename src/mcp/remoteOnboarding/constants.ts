@@ -1,0 +1,21 @@
+export const REMOTE_SCHEMA = "editkin.remote-user-config/v1";
+export const LEGACY_PENDING_SCHEMA = "editkin.remote-setup-confirmation/v1";
+export const LEGACY_PROVIDER_PROPOSAL_SCHEMA = "editkin.remote-provider-proposal/v1";
+export const PROVIDER_PROPOSAL_SCHEMA = "editkin.remote-provider-proposal/v2";
+
+export const CANDIDATE_SCHEMA = "editkin.remote-config-candidate/v1";
+export const RUNTIME_SCHEMA = "editkin.remote-runtime/v3";
+export const VERIFICATION_SCHEMA = "editkin.remote-route-verification/v3";
+export const REMOTE_AGENT_CONSENT_REVISION = "editkin.remote-agent-consent/v2";
+export const LEGACY_REMOTE_AGENT_CONSENT_REVISION = "editkin.remote-agent-consent/v1";
+export const MAX_JSON_BYTES = 64 * 1024;
+export const MAX_RESPONSE_BYTES = 128 * 1024;
+export const PROBE_TIMEOUT_MS = 5_000;
+export const PROPOSAL_TTL_MS = 30 * 60_000;
+export const RELAY_PROBE_ROOM = "00000000000000000000000000000000";
+export const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export const HEX_32_PATTERN = /^[a-f0-9]{32}$/;
+export const HEX_64_PATTERN = /^[a-f0-9]{64}$/;
+export const FORBIDDEN_DISPLAY_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u;
+export const OBVIOUS_SECRET_MATERIAL_PATTERN = /-----BEGIN [A-Z ]*PRIVATE KEY-----|authorization\s*:\s*bearer|(?:api[ _-]?key|access[ _-]?token|refresh[ _-]?token|password|secret)\s*[:=]/i;
+export const SECRET_BEARING_URL_HINT_PATTERN = /(?:^|[\/._-])(?:token|secret|password|credential|api[-_]?key|access[-_]?key)(?:[\/._-]|$)/i;
