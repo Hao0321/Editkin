@@ -10,9 +10,10 @@ interface EditingProfilePickerProps {
   trackingBusy: boolean;
   onChange: (profile: EditorialProfileId) => void;
   onStartSpeakerDirector: () => void;
+  unavailableReason?: string;
 }
 
-export function EditingProfilePicker({ profile, hasVideo, trackingBusy, onChange, onStartSpeakerDirector }: EditingProfilePickerProps) {
+export function EditingProfilePicker({ profile, hasVideo, trackingBusy, onChange, onStartSpeakerDirector, unavailableReason }: EditingProfilePickerProps) {
   const disclosure = useRef<HTMLDetailsElement>(null);
   const selected = EDITORIAL_PROFILES.find((item) => item.id === profile) ?? EDITORIAL_PROFILES[0];
   const aesthetic = resolveAestheticSystem(selected.id, "shorts");
@@ -28,7 +29,7 @@ export function EditingProfilePicker({ profile, hasVideo, trackingBusy, onChange
         <div className="profile-options" role="radiogroup" aria-label="影片類型">
           {EDITORIAL_PROFILES.map((item) => <button type="button" role="radio" aria-checked={profile === item.id} className={profile === item.id ? "active" : ""} onClick={() => { onChange(item.id); if (disclosure.current) disclosure.current.open = false; }} key={item.id}><b aria-hidden="true">{icons[item.id]}</b><span>{item.shortLabel}</span></button>)}
         </div>
-        {profile === "podcast_on_camera" && <button className="speaker-director-button" type="button" disabled={!hasVideo || trackingBusy} onClick={onStartSpeakerDirector}>
+        {profile === "podcast_on_camera" && <button className="speaker-director-button" type="button" disabled={!hasVideo || trackingBusy || Boolean(unavailableReason)} title={unavailableReason} onClick={onStartSpeakerDirector}>
           {trackingBusy ? "分析中…" : "框兩位人物"}
         </button>}
       </div>

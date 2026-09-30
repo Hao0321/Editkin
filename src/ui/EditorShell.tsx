@@ -65,6 +65,8 @@ export function EditorShell(props: EditorShellProps) {
     acceptTrackingSelection, startPodcastDirector, submitAgentInstruction, runCommand, updateAnimatedClipProperty,
     addMotionGraphic, addCaption, addTrack, addAssetToTimeline, makeSelectedPictureInPicture, precomposeSelected, applyShortFormTemplate, applyLongFormTemplate, addLowerThird, clearTemplateApplication, splitSelected, deleteSelected,
   } = props;
+  // The browser build has no local Whisper/FFmpeg/Rust engines; say so up front instead of failing after a click.
+  const engineUnavailableReason = isDesktop ? undefined : "網頁版沒有本機 Whisper／FFmpeg 引擎，這項功能需要桌面版。";
   const selectedAsset = selectedClip ? project.assets.find((asset) => asset.id === selectedClip.assetId) : undefined;
   const hasUserMedia = project.assets.some((asset) => asset.id !== "asset-demo");
   const showWelcome = !hasUserMedia && !demoWorkspaceOpened;
@@ -201,6 +203,7 @@ export function EditorShell(props: EditorShellProps) {
         onOpenAgentConnect={() => { setReturnToRemoteAfterAgent(false); setAgentConnectOpened(true); }}
         onAutoEdit={openAutoEdit}
         autoEditBusy={automatic.semantic.busy}
+        autoEditUnavailableReason={engineUnavailableReason}
         onMobileRemote={window.haoDesktop?.startMobileRemote ? () => void mobile.open() : undefined}
         mobileRemoteActive={mobile.remote?.active}
         mobileRemoteCount={mobile.remoteStatus?.connectedCount}
@@ -220,7 +223,7 @@ export function EditorShell(props: EditorShellProps) {
         onConnectAgent={isDesktop ? () => setAgentConnectOpened(true) : undefined}
       /></Suspense> : <>
       <section className="workspace-grid" style={{ gridTemplateColumns: workspaceColumns }} data-testid="modular-workspace">
-        {!hasUserMedia && <div className="demo-workspace-banner" data-testid="demo-workspace-banner"><b>示範模式</b><span>先熟悉介面；加入自己的影片後才會啟用自動剪輯與輸出</span></div>}
+        {!hasUserMedia && <div className="demo-workspace-banner" data-testid="demo-workspace-banner"><b>示範模式</b><span>{isDesktop ? "先熟悉介面；加入自己的影片後才會啟用自動剪輯與輸出" : "先熟悉介面；加入自己的影片後可手動剪輯並下載專案檔。自動剪輯與影片輸出需要桌面版"}</span></div>}
         {workspace.layout.mediaVisible && !directorConsoleOpened && <><Suspense fallback={<aside className="panel media-bin" aria-label="正在載入素材面板" />}><MediaBin
           assets={project.assets}
           runtimeUrls={runtimeUrls}
@@ -318,6 +321,7 @@ export function EditorShell(props: EditorShellProps) {
               { type: "set_aesthetic_system", aestheticSystem: resolveAestheticSystem(profile, project.width > project.height ? "longform" : "shorts") },
             ] }, "已套用剪輯類型與匿名美感標準；自動剪輯、批量與 AI 都會沿用。")}
             onStartSpeakerDirector={startPodcastDirector}
+            unavailableReason={engineUnavailableReason}
           /></Suspense>
           {workspace.layout.automationVisible && <Suspense fallback={null}><AgentPanel
             status={status}
@@ -330,6 +334,7 @@ export function EditorShell(props: EditorShellProps) {
             onSceneSplit={() => void automatic.scenes.run()}
             sceneSplitBusy={automatic.scenes.busy}
             onSemanticAutoEdit={openAutoEdit}
+            unavailableReason={engineUnavailableReason}
             semanticAutoEditBusy={automatic.semantic.busy}
             semanticAutoEditStage={automatic.semantic.stage}
             onOpenAgentConnect={isDesktop ? () => setAgentConnectOpened(true) : undefined}
@@ -434,6 +439,7 @@ export function EditorShell(props: EditorShellProps) {
           trackingSelectionActive={Boolean(trackingMode)}
           trackingSelection={trackingSelection}
           onBeginMotionTrack={() => {
+            if (!isDesktop) return setStatus("動態追蹤需要桌面版的本機分析引擎；網頁版無法使用。");
             if (!selectedClip || project.assets.find((asset) => asset.id === selectedClip.assetId)?.kind !== "video") return setStatus("請先選一段影片。");
             setPlaying(false);
             setTrackingSelection(undefined);

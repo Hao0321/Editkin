@@ -26,6 +26,7 @@ interface ToolbarProps {
   onOpenAgentConnect: () => void;
   onAutoEdit?: () => void;
   autoEditBusy?: boolean;
+  autoEditUnavailableReason?: string;
   onMobileRemote?: () => void;
   mobileRemoteActive?: boolean;
   mobileRemoteCount?: number;
@@ -58,6 +59,7 @@ export function Toolbar({
   onOpenAgentConnect,
   onAutoEdit,
   autoEditBusy = false,
+  autoEditUnavailableReason,
   onMobileRemote,
   mobileRemoteActive,
   mobileRemoteCount,
@@ -105,8 +107,8 @@ export function Toolbar({
           type="button"
           className="secondary-action auto-edit-action"
           onClick={onAutoEdit}
-          disabled={autoEditBusy || !hasUserMedia}
-          title={hasUserMedia ? "分析畫面與語音，自動完成第一版剪輯" : "請先加入自己的影片"}
+          disabled={autoEditBusy || !hasUserMedia || Boolean(autoEditUnavailableReason)}
+          title={autoEditUnavailableReason ?? (hasUserMedia ? "分析畫面與語音，自動完成第一版剪輯" : "請先加入自己的影片")}
           data-testid="semantic-edit-button"
           data-beginner-action="一鍵自動完成"
         ><span>✦</span> {autoEditBusy ? "自動剪輯中…" : "自動剪輯"}</button>}
@@ -150,7 +152,7 @@ export function Toolbar({
           </div>
         </details>}
 
-        {workspaceMode === "editor" && <button type="button" className="primary-button export-action" onClick={onExport} disabled={!hasUserMedia} title={hasUserMedia ? "輸出完成影片" : "請先加入自己的影片"} data-testid="render-button" data-beginner-action="輸出影片">
+        {workspaceMode === "editor" && <button type="button" className="primary-button export-action" onClick={onExport} disabled={!hasUserMedia} title={hasUserMedia ? (isDesktop ? "輸出完成影片" : "下載專案檔（.editkin.json）；網頁版無法輸出影片，請用桌面版") : "請先加入自己的影片"} data-testid="render-button" data-beginner-action="輸出影片">
           <span className="button-step">4</span>{isDesktop ? "輸出影片" : "匯出專案"}
         </button>}
       </nav>
