@@ -14,6 +14,10 @@ For integration development, install or clone the Kit and set `EDITKIN_VIDEO_AUT
 
 Motion presets include an editable floating video frame with softened outer edges, portrait perspective orbit, and a scene with two larger portrait panels behind the main clip. `prepare_floating_frame_scene` compiles that scene into commands for the audited v4 plan. The effect uses a 2.5D perspective plane; it is not a 3D mesh. Timeline asset drops snap to editing anchors and clips can be moved in frame increments. Rendering and preview performance depend on the media runtime and machine; these source features do not certify the visual result for every project.
 
+## Browser build
+
+The web build (`npm run build`, or `npm run dev` locally) is a browser fallback of the desktop UI, not the full product. It can import media, preview it, and edit the timeline. It cannot run automatic editing (which needs the desktop build's local Whisper and FFmpeg engines) or render a video: "Export project" downloads the EditGraph JSON only. Projects are not autosaved or restored; reloading the page discards them. If a web build is published, for example through GitHub Pages, treat it as a try-out of the interface. Use the desktop build for real editing and output.
+
 ## Build the source
 
 Use Node.js 22.13 or newer. From a fresh checkout:
