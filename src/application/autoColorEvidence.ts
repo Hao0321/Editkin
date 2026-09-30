@@ -1,4 +1,5 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readBoundedFile } from "../shared/boundedFile";
 import { join } from "node:path";
 import { applyCommand, type EditorCommand } from "../domain/commands";
 import { findAsset, findClip } from "../domain/editGraph";
@@ -122,8 +123,7 @@ export async function verifyAutoColorDecisions(bindings: AutoColorBindings | und
   const identity = await getMaterialColorRuntimeIdentity(runtime);
   for (const binding of bindings) {
     const path = receiptPath(runtime.cacheRoot, binding.decisionSha256);
-    if ((await stat(path)).size > 1024 * 1024) throw Error("Automatic colour receipt oversized");
-    const receipt = JSON.parse(await readFile(path, "utf8")) as AutoColorReceipt;
+    const receipt = JSON.parse((await readBoundedFile(path, 1024 * 1024, { followSymlinks: true, messages: { tooLarge: "Automatic colour receipt oversized" } })).toString("utf8")) as AutoColorReceipt;
     if (receipt.schema !== (receipt.mode === "exposure" ? "editkin.auto-color-decision/v2" : "editkin.auto-color-decision/v3") || receipt.mode !== (binding.mode ?? "exposure") || receipt.decisionSha256 !== binding.decisionSha256
       || colorDigest({ ...receipt, decisionSha256: undefined }) !== binding.decisionSha256) throw Error("Automatic colour receipt integrity failed");
     if (receipt.projectId !== project.id || receipt.projectRevision !== project.revision) throw Error("Automatic colour project revision changed");
