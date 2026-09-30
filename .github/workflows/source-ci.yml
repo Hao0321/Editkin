@@ -59,15 +59,17 @@ jobs:
       - run: node scripts/build-desktop.mjs --community
       - name: Compile the native GTK desktop
         run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol
-      - name: Verify private remote state permissions and advertised hosts
-        run: |
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol private_json_is_owner_only_even_when_replacing_a_readable_file -- --nocapture
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol remote_allowed_hosts_names_only_the_configured_tunnel_host -- --nocapture
       - name: Verify the native updater publisher and cache boundaries
         run: |
           cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol update_publisher_pin_is_all_or_nothing_and_canonical
           cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol release_builds_ignore_manifest_url_environment_and_follow_the_pin
           cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol staged_installer_
+      - name: Verify the native Windows media path classifier
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol windows_network_and_device_paths_are_not_local_media
+      - name: Verify private remote state permissions and advertised hosts
+        run: |
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol private_json_is_owner_only_even_when_replacing_a_readable_file -- --nocapture
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol remote_allowed_hosts_names_only_the_configured_tunnel_host -- --nocapture
       - name: Inspect the Linux GLib dependency path
         run: cargo tree --locked --manifest-path src-tauri/Cargo.toml --target x86_64-unknown-linux-gnu --features community-desktop,tauri/custom-protocol -i glib
       - name: Audit the complete desktop lockfile

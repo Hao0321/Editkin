@@ -10,6 +10,7 @@ import { pipeline } from "node:stream/promises";
 import { analyzeSegmentedCaptions } from "./segmentedCaptions";
 import { runAnalysisProcess } from "./analysisProcess";
 import type { AutomaticCaptionAnalysisResult, AutomaticCaptionCue, AutomaticCaptionRequest, AutomaticCaptionResult, AutomaticCaptionRuntime, RawWhisperTranscript } from "./automaticCaptionTypes";
+import { assertLocalMediaPath } from "../shared/localMediaPath";
 export type { AutomaticCaptionAnalysisResult, AutomaticCaptionCue, AutomaticCaptionRequest, AutomaticCaptionResult, AutomaticCaptionRecognition, AutomaticCaptionRuntime, RawWhisperTranscript } from "./automaticCaptionTypes";
 
 export interface WhisperModelDescriptor {
@@ -522,6 +523,7 @@ export async function analyzeAutomaticCaptionTranscript(
   request: AutomaticCaptionRequest,
   runtime: AutomaticCaptionRuntime,
 ): Promise<AutomaticCaptionAnalysisResult> {
+  assertLocalMediaPath(request.sourcePath);
   const startedAt = Date.now();
   runtime = { ...runtime, whisperCliPath: configuredWhisperCliPath(runtime) };
   const { language, translationTarget } = validateCaptionRequest(request);
@@ -632,6 +634,7 @@ export async function transcribeAutomaticCaptions(
   request: AutomaticCaptionRequest,
   runtime: AutomaticCaptionRuntime,
 ): Promise<AutomaticCaptionResult> {
+  assertLocalMediaPath(request.sourcePath);
   const result = await analyzeAutomaticCaptionTranscript(request, runtime);
   if (result.recognition.status === "empty") throw new EmptyAutomaticCaptionError(result);
   const { recognition: _recognition, rawTranscript: _rawTranscript, rawTranslation: _rawTranslation, ...captions } = result;
