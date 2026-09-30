@@ -888,7 +888,6 @@ fn workflow_profile_path(app: &AppHandle) -> Result<PathBuf, String> {
         .join("workflow-profile.json"))
 }
 
-#[cfg(feature = "auto-roto-research")]
 fn valid_sha256(value: &str) -> bool {
     value.len() == 64
         && value

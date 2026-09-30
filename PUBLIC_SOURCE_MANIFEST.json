@@ -4024,8 +4024,8 @@
     },
     {
       "path": "src-tauri/src/main.rs",
-      "bytes": 460732,
-      "sha256": "fe6b47d61e41e07732a42cf803b5d89378bb902264c6f3361af0fc3ac8151bd6",
+      "bytes": 460693,
+      "sha256": "8df8bce1106c34bf507cbc616cca7bd913787134eeacd6e0a7ef5fc4c72776e4",
       "origin": "src-tauri/src/main.rs",
       "rights": "GPL-3.0-or-later"
     },
