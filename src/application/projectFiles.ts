@@ -7,6 +7,7 @@ import { projectSchema } from "../domain/schema";
 import type { EditProject } from "../domain/types";
 import { resolveAestheticSystem } from "./editkinAesthetic";
 import { dehydrateAutoRotoFramePreviews } from "../domain/autoRotoPreviewProjection";
+import { readBoundedFile } from "../shared/boundedFile";
 
 export class ProjectRevisionConflictError extends Error {
   constructor(expected: number, actual: number) {
@@ -32,19 +33,15 @@ export const PROJECT_MAX_BYTES = 64 * 1024 * 1024;
 
 /** Reads a user-selected project file, refusing one larger than `maxBytes` before it is buffered. */
 export async function readProjectText(path: string, maxBytes = PROJECT_MAX_BYTES): Promise<string> {
-  const handle = await open(path, "r");
-  try {
-    const info = await handle.stat();
-    if (!info.isFile()) throw new Error(`專案路徑不是一般檔案：${path}`);
-    if (info.size > maxBytes) throw new Error(`專案檔超過 ${Math.floor(maxBytes / 1024 / 1024)} MiB 上限，拒絕讀取`);
-    const buffer = Buffer.alloc(info.size + 1);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    // The file grew between stat and read: treat it as over the size we agreed to.
-    if (bytesRead > info.size) throw new Error("專案檔在讀取時變大，拒絕讀取");
-    return buffer.toString("utf8", 0, bytesRead);
-  } finally {
-    await handle.close();
-  }
+  return (await readBoundedFile(path, maxBytes, {
+    // Preserve the existing user-selected project symlink behavior.
+    followSymlinks: true,
+    messages: {
+      notRegular: `專案路徑不是一般檔案：${path}`,
+      tooLarge: `專案檔超過 ${Math.floor(maxBytes / 1024 / 1024)} MiB 上限，拒絕讀取`,
+      changed: "專案檔在讀取時變動，拒絕讀取",
+    },
+  })).toString("utf8");
 }
 
 async function readCandidate(path: string): Promise<EditProject | undefined> {

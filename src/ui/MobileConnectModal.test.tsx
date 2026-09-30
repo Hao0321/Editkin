@@ -121,6 +121,26 @@ describe("MobileConnectModal Remote Agent lifecycle", () => {
     expect(html).toContain("取消並清理子行程");
   });
 
+  it("tells the user LAN pairing is unencrypted and a used QR cannot pair another phone", () => {
+    const render = (pairingConsumed: boolean) => renderToStaticMarkup(<MobileConnectModal
+      remote={{ active: true, url: "http://192.168.1.2:12690/#token=x", token: "x", copied: false, transport: "lan" }}
+      status={{ active: true, connectedCount: 0, devices: [], pairingConsumed }}
+      agentLaunch={{ phase: "idle" }}
+      onStartAgent={async () => undefined}
+      onCancelAgent={async () => undefined}
+      onClose={() => undefined}
+      onStop={() => undefined}
+      onRevoke={() => undefined}
+    />);
+    const fresh = render(false);
+    expect(fresh).toContain("LAN 使用未加密的 HTTP");
+    expect(fresh).toContain("只能綁定一台手機");
+    expect(fresh).not.toMatch(/secondary-button"[^>]*disabled/);
+    const used = render(true);
+    expect(used).toContain("這個 QR 已被使用");
+    expect(used).toMatch(/secondary-button"[^>]*disabled=""/);
+  });
+
   it("labels manual fallback as a visible agent session with explicit remote-only review boundaries", () => {
     const agentLaunch: RemoteAgentLaunchState = {
       phase: "settled",

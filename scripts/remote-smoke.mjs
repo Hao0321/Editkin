@@ -71,28 +71,25 @@ try {
     headers: { "content-type": "application/json", origin },
     body: JSON.stringify({ token: `${token}x`, deviceId: "invalid-token", name: "Invalid Token" }),
   });
-  const pairSamplesMs = [];
-  let pairResponse;
-  let localCookie = "";
-  for (let index = 0; index < 8; index += 1) {
-    const started = performance.now();
-    pairResponse = await fetch(`${origin}/api/pair`, {
+  const pairStarted = performance.now();
+  const pairResponse = await fetch(`${origin}/api/pair`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin },
+    body: JSON.stringify({ token, deviceId: "smoke-phone", name: "Smoke iPhone" }),
+  });
+  const pairSamplesMs = [performance.now() - pairStarted];
+  const pairSetCookie = pairResponse.headers.get("set-cookie") ?? "";
+  const localCookie = pairSetCookie.split(";", 1)[0] ?? "";
+  // The bootstrap token is single use: a captured pairing request cannot pair a second device.
+  const replayStatuses = [];
+  for (let index = 0; index < 9; index += 1) {
+    const replay = await fetch(`${origin}/api/pair`, {
       method: "POST",
       headers: { "content-type": "application/json", origin },
-      body: JSON.stringify({ token, deviceId: "smoke-phone", name: "Smoke iPhone" }),
+      body: JSON.stringify({ token, deviceId: `replay-phone-${index}`, name: "Replay Phone" }),
     });
-    pairSamplesMs.push(performance.now() - started);
-    localCookie = (pairResponse.headers.get("set-cookie") ?? "").split(";", 1)[0] ?? "";
-    if (pairResponse.status !== 201) break;
+    replayStatuses.push(replay.status);
   }
-  if (!pairResponse) throw new Error("pair response missing");
-  const tunnelOrigin = origin.replace(/^http:/, "https:");
-  const tunnelPair = await fetch(`${origin}/api/pair`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: tunnelOrigin, "x-forwarded-proto": "https" },
-    body: JSON.stringify({ token, deviceId: "tunnel-phone", name: "Tunnel iPhone" }),
-  });
-  const tunnelSetCookie = tunnelPair.headers.get("set-cookie") ?? "";
   const rateLimitedPair = await fetch(`${origin}/api/pair`, {
     method: "POST",
     headers: { "content-type": "application/json", origin },
@@ -121,6 +118,7 @@ try {
   const queueFiles = (await readdir(queuePath)).filter((name) => name.endsWith(".json"));
   const queued = JSON.parse((await readFile(join(queuePath, queueFiles[0]), "utf8")).trim());
   const devices = JSON.parse(await readFile(devicesPath, "utf8"));
+  const statusRefreshCookie = statusResponse.headers.get("set-cookie") ?? "";
   const trustedBeforeRestart = JSON.parse(await readFile(trustedDevicesPath, "utf8"));
   const childExited = new Promise((resolveExit) => child.once("exit", resolveExit));
   child.kill();
@@ -152,10 +150,17 @@ try {
   const reconnectOrigin = `http://127.0.0.1:${reconnectPort}`;
   const reconnectResponse = await fetch(`${reconnectOrigin}/api/status`, { headers: { cookie: localCookie } });
   const reconnectStatus = await reconnectResponse.json();
+  const tunnelPair = await fetch(`${reconnectOrigin}/api/pair`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: reconnectOrigin.replace(/^http:/, "https:"), "x-forwarded-proto": "https" },
+    body: JSON.stringify({ token: "fedcba9876543210fedcba9876543210", deviceId: "tunnel-phone", name: "Tunnel iPhone" }),
+  });
+  const tunnelSetCookie = tunnelPair.headers.get("set-cookie") ?? "";
+  const trustedAfterTunnel = JSON.parse(await readFile(trustedDevicesPath, "utf8"));
   const credential = localCookie.split("=", 2)[1] ?? "";
   const secretAbsentAtRest = credential.length > 0 && !(await readFile(trustedDevicesPath, "utf8")).includes(credential);
-  trustedBeforeRestart.devices = trustedBeforeRestart.devices.filter((device) => device.id !== "smoke-phone");
-  await writeFile(trustedDevicesPath, `${JSON.stringify(trustedBeforeRestart)}\n`, "utf8");
+  trustedAfterTunnel.devices = trustedAfterTunnel.devices.filter((device) => device.id !== "smoke-phone");
+  await writeFile(trustedDevicesPath, `${JSON.stringify(trustedAfterTunnel)}\n`, "utf8");
   const revokedResponse = await fetch(`${reconnectOrigin}/api/status`, { headers: { cookie: localCookie } });
   const green = page.ok
     && pageText.includes("Editkin Remote")
@@ -170,10 +175,13 @@ try {
     && missingOriginPair.status === 403
     && invalidTokenPair.status === 401
     && pairResponse.status === 201
-    && pairSamplesMs.length === 8
     && localCookie.startsWith("editkin_remote_device=")
+    && /Max-Age=2592000(;|$)/.test(pairSetCookie)
+    && !/; Secure/i.test(pairSetCookie)
+    && replayStatuses.slice(0, 8).every((code) => code === 401)
     && tunnelPair.status === 201
     && /; Secure/i.test(tunnelSetCookie)
+    && /Max-Age=2592000(;|$)/.test(statusRefreshCookie)
     && rateLimitedPair.status === 429
     && statusResponse.ok
     && status.projectName === "Remote Smoke"
@@ -187,10 +195,11 @@ try {
     && commandBody.commandId === queued.id
     && pairSamplesMs.every((sample) => sample < 250)
     && commandLatencyMs < 250
-    && devices.connectedCount === 2
-    && devices.trustedCount === 2
+    && devices.connectedCount === 1
+    && devices.trustedCount === 1
+    && devices.pairingConsumed === true
     && devices.devices.some((device) => device.name === "Smoke iPhone")
-    && devices.devices.some((device) => device.name === "Tunnel iPhone")
+    && trustedAfterTunnel.devices.some((device) => device.name === "Tunnel iPhone")
     && reconnectResponse.status === 200
     && reconnectStatus.permanentlyPaired === true
     && secretAbsentAtRest
@@ -198,7 +207,7 @@ try {
     && queued.instruction === "在目前播放頭分割";
   const sortedPairSamples = [...pairSamplesMs].sort((a, b) => a - b);
   const pairP95Ms = sortedPairSamples[Math.ceil(sortedPairSamples.length * 0.95) - 1];
-  process.stdout.write(`${JSON.stringify({ status: green ? "GREEN" : "BLOCK", port, page: page.status, cspHashed: csp.includes("script-src 'sha256-") && !csp.includes("unsafe-inline"), unauthorized: unauthorized.status, bootstrapCannotControl: bootstrapCannotControl.status, crossOriginPair: crossOriginPair.status, missingOriginPair: missingOriginPair.status, invalidTokenPair: invalidTokenPair.status, pair: pairResponse.status, repeatedPairCount: pairSamplesMs.length, pairP95Ms: Number(pairP95Ms.toFixed(2)), rateLimitedPair: rateLimitedPair.status, permanentDeviceCookie: localCookie.startsWith("editkin_remote_device="), autoReconnectAfterServerRestart: reconnectResponse.status, revocationEnforced: revokedResponse.status, secretAbsentAtRest, secureCookieThroughTunnel: /; Secure/i.test(tunnelSetCookie), crossOriginCommand: crossOriginCommand.status, wrongContentTypeCommand: wrongContentTypeCommand.status, connected: devices.connectedCount, trusted: devices.trustedCount, command: commandResponse.status, commandLatencyMs: Number(commandLatencyMs.toFixed(2)), atomicQueueFiles: queueFiles.length, privatePathHidden: status.previewPath === undefined, queued: queued.instruction })}\n`);
+  process.stdout.write(`${JSON.stringify({ status: green ? "GREEN" : "BLOCK", port, page: page.status, cspHashed: csp.includes("script-src 'sha256-") && !csp.includes("unsafe-inline"), unauthorized: unauthorized.status, bootstrapCannotControl: bootstrapCannotControl.status, crossOriginPair: crossOriginPair.status, missingOriginPair: missingOriginPair.status, invalidTokenPair: invalidTokenPair.status, pair: pairResponse.status, replayStatuses, pairP95Ms: Number(pairP95Ms.toFixed(2)), rateLimitedPair: rateLimitedPair.status, permanentDeviceCookie: localCookie.startsWith("editkin_remote_device="), autoReconnectAfterServerRestart: reconnectResponse.status, revocationEnforced: revokedResponse.status, secretAbsentAtRest, secureCookieThroughTunnel: /; Secure/i.test(tunnelSetCookie), crossOriginCommand: crossOriginCommand.status, wrongContentTypeCommand: wrongContentTypeCommand.status, connected: devices.connectedCount, trusted: devices.trustedCount, command: commandResponse.status, commandLatencyMs: Number(commandLatencyMs.toFixed(2)), atomicQueueFiles: queueFiles.length, privatePathHidden: status.previewPath === undefined, queued: queued.instruction })}\n`);
   if (!green) process.exitCode = 1;
 } finally {
   child.kill();

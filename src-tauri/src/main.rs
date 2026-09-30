@@ -1068,8 +1068,8 @@ fn restrict_to_owner(_path: &Path, _mode: u32) -> Result<(), String> {
     Ok(())
 }
 
-/// Like `write_json_atomic`, but the parent directory is owner-only and the
-/// temporary file is created `0600`, so the secret is never briefly world-readable.
+/// On Unix, use an owner-only parent and a `0600` temporary file. Windows relies
+/// on the application-data directory's existing ACLs; those are not changed here.
 fn write_private_json_atomic(path: &Path, value: &Value) -> Result<(), String> {
     let parent = path.parent().ok_or("private JSON path has no directory")?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -1101,6 +1101,7 @@ fn write_private_json_atomic(path: &Path, value: &Value) -> Result<(), String> {
         let _ = fs::remove_file(&temporary);
         return Err(error.to_string());
     }
+    #[cfg(windows)]
     if path.exists() {
         fs::remove_file(path).map_err(|error| error.to_string())?;
     }
@@ -4951,13 +4952,23 @@ fn start_mobile_remote(
             let remote = remote_state.as_mut().expect("Remote state exists");
             match remote.child.try_wait() {
                 Ok(None) => {
-                    let connected = fs::read_to_string(&remote.devices_path)
+                    let device_status = fs::read_to_string(&remote.devices_path)
                         .ok()
-                        .and_then(|content| serde_json::from_str::<Value>(&content).ok())
+                        .and_then(|content| serde_json::from_str::<Value>(&content).ok());
+                    let connected = device_status
+                        .as_ref()
                         .and_then(|value| value.get("connectedCount").and_then(Value::as_u64))
                         .unwrap_or(0)
                         > 0;
-                    if connected || unix_time_ms() < remote.pairing_expires_at_ms {
+                    // The pairing token is single use: once a device consumed it, the
+                    // link is dead, so a new pairing needs a fresh server and token.
+                    let pairing_consumed = device_status
+                        .as_ref()
+                        .and_then(|value| value.get("pairingConsumed").and_then(Value::as_bool))
+                        .unwrap_or(false);
+                    if connected
+                        || (unix_time_ms() < remote.pairing_expires_at_ms && !pairing_consumed)
+                    {
                         reuse_result = Some((|| {
                             write_json_atomic(&remote.snapshot_path, &snapshot)?;
                             Clipboard::new()
