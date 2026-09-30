@@ -59,6 +59,11 @@ jobs:
       - run: node scripts/build-desktop.mjs --community
       - name: Compile the native GTK desktop
         run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol
+      - name: Verify the native updater publisher and cache boundaries
+        run: |
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol update_publisher_pin_is_all_or_nothing_and_canonical
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol release_builds_ignore_manifest_url_environment_and_follow_the_pin
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol staged_installer_
       - name: Verify the native Windows media path classifier
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol windows_network_and_device_paths_are_not_local_media
       - name: Inspect the Linux GLib dependency path

@@ -134,11 +134,12 @@ function assertSafeModelDescriptor(model: WhisperModelDescriptor): void {
 export async function inspectWhisperModel(path: string, model: WhisperModelDescriptor = PINNED_WHISPER_MODEL): Promise<ModelInspection> {
   assertSafeModelDescriptor(model);
   try {
-    const fileStat = await stat(path);
-    if (!fileStat.isFile() || fileStat.size !== model.bytes) return { valid: false, bytes: fileStat.size, sha256: "" };
     const hash = createHash("sha256");
     const handle = await open(path, "r");
     try {
+      // The type/size gate and the hashed bytes come from the same open handle.
+      const fileStat = await handle.stat();
+      if (!fileStat.isFile() || fileStat.size !== model.bytes) return { valid: false, bytes: fileStat.size, sha256: "" };
       const buffer = Buffer.allocUnsafe(4 * 1024 * 1024);
       let position = 0;
       while (position < fileStat.size) {
@@ -147,9 +148,9 @@ export async function inspectWhisperModel(path: string, model: WhisperModelDescr
         hash.update(buffer.subarray(0, bytesRead));
         position += bytesRead;
       }
+      const sha256 = hash.digest("hex");
+      return { valid: sha256 === model.sha256, bytes: fileStat.size, sha256 };
     } finally { await handle.close(); }
-    const sha256 = hash.digest("hex");
-    return { valid: sha256 === model.sha256, bytes: fileStat.size, sha256 };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") return { valid: false, bytes: 0, sha256: "" };

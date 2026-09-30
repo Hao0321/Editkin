@@ -64,6 +64,8 @@ const RELEASE_INPUT_MANIFEST: &str =
     include_str!(concat!(env!("OUT_DIR"), "/release-input-identity.json"));
 const REMOTE_RELAY_CONFIG: &str = include_str!("../remote-relay.json");
 const EDITKIN_AGENT_SETUP_CONTRACT: &str = include_str!("../../src/shared/agentSetupContract.json");
+/// Publisher identity this build trusts for updates; shared with the Node service so both agree.
+const UPDATE_PUBLISHER_PIN: &str = include_str!("../../src/shared/updatePublisherPin.json");
 
 fn editkin_agent_setup_contract() -> Result<Value, String> {
     serde_json::from_str(EDITKIN_AGENT_SETUP_CONTRACT)
@@ -1192,8 +1194,9 @@ fn begin_update_launch(app: &AppHandle) -> Result<bool, String> {
             .map(Path::new)
             .filter(|path| path.exists())
         {
-            spawn_installer(previous)?;
-            app.exit(0);
+            if launch_verified_rollback_installer(previous) {
+                app.exit(0);
+            }
         }
         return Ok(false);
     }
@@ -1219,8 +1222,9 @@ fn begin_update_launch(app: &AppHandle) -> Result<bool, String> {
             .map(Path::new)
             .filter(|path| path.exists())
         {
-            spawn_installer(previous)?;
-            app.exit(0);
+            if launch_verified_rollback_installer(previous) {
+                app.exit(0);
+            }
         }
         return Ok(false);
     }
@@ -1290,6 +1294,131 @@ fn verify_authenticode(
             "Authenticode 身分不符合：{status} / {subject} / {sha256}"
         ))
     }
+}
+
+/// Publisher identity compiled into this build. The update manifest is never trusted to state it.
+struct UpdatePublisherPin {
+    manifest_url: String,
+    signature_subject: String,
+    signature_sha256: String,
+}
+
+/// Returns the pinned publisher, or None when this build ships no update channel (every field null).
+fn parse_update_publisher_pin(document: &str) -> Result<Option<UpdatePublisherPin>, String> {
+    let value: Value = serde_json::from_str(document)
+        .map_err(|error| format!("更新發布者釘選無法解析：{error}"))?;
+    let object = value.as_object().ok_or("更新發布者釘選不是物件")?;
+    let mut keys = object.keys().map(String::as_str).collect::<Vec<_>>();
+    keys.sort_unstable();
+    if keys != ["manifestUrl", "schema", "signatureSha256", "signatureSubject"] {
+        return Err("更新發布者釘選欄位不是封閉集合".into());
+    }
+    if object["schema"].as_str() != Some("editkin.update-publisher-pin/v1") {
+        return Err("更新發布者釘選 schema 不支援".into());
+    }
+    let (manifest_url, subject, sha256) = (
+        &object["manifestUrl"],
+        &object["signatureSubject"],
+        &object["signatureSha256"],
+    );
+    if manifest_url.is_null() && subject.is_null() && sha256.is_null() {
+        return Ok(None);
+    }
+    let (Some(manifest_url), Some(subject), Some(sha256)) =
+        (manifest_url.as_str(), subject.as_str(), sha256.as_str())
+    else {
+        return Err("更新發布者釘選必須同時設定 manifestUrl、signatureSubject 與 signatureSha256，或全部為 null".into());
+    };
+    let subject = subject.trim();
+    if subject.is_empty() || subject.len() > 1024 || subject.chars().any(char::is_control) {
+        return Err("更新發布者釘選 signatureSubject 不合法".into());
+    }
+    if !lower_sha256(Some(sha256)) {
+        return Err("更新發布者釘選 signatureSha256 必須是小寫 SHA-256".into());
+    }
+    if !manifest_url.starts_with("https://")
+        || manifest_url
+            .chars()
+            .any(|character| character.is_control() || character.is_whitespace() || character == '#')
+    {
+        return Err("更新發布者釘選 manifestUrl 必須是無 fragment 的 HTTPS URL".into());
+    }
+    Ok(Some(UpdatePublisherPin {
+        manifest_url: manifest_url.into(),
+        signature_subject: subject.into(),
+        signature_sha256: sha256.into(),
+    }))
+}
+
+/// Only development builds may redirect the update channel; a release build follows its pinned manifest URL.
+fn select_update_manifest_url(
+    debug_build: bool,
+    environment: Option<String>,
+    pin: Option<&UpdatePublisherPin>,
+) -> Option<String> {
+    environment
+        .filter(|_| debug_build)
+        .or_else(|| pin.map(|pin| pin.manifest_url.clone()))
+}
+
+fn same_update_path(left: &Path, right: &Path) -> bool {
+    if cfg!(windows) {
+        PathBuf::from(left.to_string_lossy().to_lowercase())
+            == PathBuf::from(right.to_string_lossy().to_lowercase())
+    } else {
+        left == right
+    }
+}
+
+/// Rechecks the exact staged bytes right before they are executed: canonical cache path, no
+/// symlink or junction, a regular file, and the size and SHA-256 recorded when it was staged.
+fn verify_staged_installer(
+    update_root: &Path,
+    artifact: &str,
+    size: u64,
+    sha256: &str,
+) -> Result<(), String> {
+    if size == 0 || !lower_sha256(Some(sha256)) {
+        return Err("已暫存更新的身分不合法".into());
+    }
+    let directory = update_root.join(format!("sha256-{sha256}"));
+    let installer = directory.join("installer.exe");
+    if !same_update_path(Path::new(artifact), &installer) {
+        return Err("更新檔路徑不符合已驗證的快取身分".into());
+    }
+    for component in [update_root, directory.as_path(), installer.as_path()] {
+        let metadata = fs::symlink_metadata(component)
+            .map_err(|error| format!("更新快取無法檢查：{error}"))?;
+        if metadata.file_type().is_symlink() {
+            return Err("更新快取拒絕 symlink／junction".into());
+        }
+    }
+    let (actual, total, _) = bounded_file_sha256(&installer, size)
+        .map_err(|error| format!("已暫存的更新檔無法驗證：{error}"))?;
+    if total != size || actual != sha256 {
+        return Err("已暫存的更新檔大小或 SHA-256 不符，拒絕啟動".into());
+    }
+    Ok(())
+}
+
+/// Runs the previous installer only if it carries the pinned publisher signature; returns whether
+/// it started. A refusal is logged and never blocks the app from starting.
+fn launch_verified_rollback_installer(previous: &Path) -> bool {
+    let launched = parse_update_publisher_pin(UPDATE_PUBLISHER_PIN).and_then(|pin| {
+        let pin = pin.ok_or_else(|| {
+            String::from("此版本沒有內建釘選的發布者 Authenticode 身分，拒絕執行 rollback installer")
+        })?;
+        verify_authenticode(
+            &previous.to_string_lossy(),
+            &pin.signature_subject,
+            &pin.signature_sha256,
+        )?;
+        spawn_installer(previous)
+    });
+    if let Err(error) = &launched {
+        eprintln!("Rollback installer refused: {error}");
+    }
+    launched.is_ok()
 }
 
 fn string_field<'a>(value: &'a Value, field: &str) -> Result<&'a str, String> {
@@ -5264,9 +5393,13 @@ fn start_update_job(
             "message": "macOS 自動更新會在 Developer ID 簽署與 Apple 公證頻道啟用後開放；目前不會執行 Windows installer。"
         }));
     }
-    let manifest_url = env::var("EDITKIN_UPDATE_MANIFEST_URL")
-        .or_else(|_| env::var("HAO_EDITOR_UPDATE_MANIFEST_URL"));
-    let Ok(manifest_url) = manifest_url else {
+    let environment_manifest_url = env::var("EDITKIN_UPDATE_MANIFEST_URL")
+        .or_else(|_| env::var("HAO_EDITOR_UPDATE_MANIFEST_URL"))
+        .ok();
+    let pin = parse_update_publisher_pin(UPDATE_PUBLISHER_PIN)?;
+    let Some(manifest_url) =
+        select_update_manifest_url(cfg!(debug_assertions), environment_manifest_url, pin.as_ref())
+    else {
         return Ok(
             json!({ "status": "unconfigured", "message": "更新頻道尚未設定；HTTPS／SHA-256／rollback 引擎已啟用。" }),
         );
@@ -5387,22 +5520,34 @@ fn install_update(app: AppHandle, state: State<'_, AppState>) -> Result<Value, S
         return Ok(json!({ "started": false, "message": "沒有已驗證、待安裝的更新。" }));
     };
     let artifact = string_field(&pending, "artifactPath")?;
-    let signature = pending.get("signatureSubject").and_then(Value::as_str);
-    let fingerprint = pending.get("signatureSha256").and_then(Value::as_str);
+    let sha256 = string_field(&pending, "sha256")?;
+    let size = pending
+        .get("size")
+        .and_then(Value::as_u64)
+        .ok_or("缺少欄位：size")?;
+    let publisher = parse_update_publisher_pin(UPDATE_PUBLISHER_PIN)?;
     let editkin_override = env::var("EDITKIN_ALLOW_UNSIGNED_UPDATES").ok();
     let legacy_override = env::var("HAO_EDITOR_ALLOW_UNSIGNED_UPDATES").ok();
-    let unsigned_allowed = unsigned_update_override_allowed(
-        cfg!(debug_assertions),
-        editkin_override.as_deref(),
-        legacy_override.as_deref(),
-    );
-    if (signature.is_none() || fingerprint.is_none()) && !unsigned_allowed {
+    if publisher.is_none()
+        && !unsigned_update_override_allowed(
+            cfg!(debug_assertions),
+            editkin_override.as_deref(),
+            legacy_override.as_deref(),
+        )
+    {
         return Ok(
-            json!({ "started": false, "message": "更新沒有完整 Authenticode subject／certificate fingerprint，release 模式拒絕執行。" }),
+            json!({ "started": false, "message": "此版本沒有內建釘選的發布者 Authenticode 身分，release 模式拒絕執行 installer。" }),
         );
     }
-    if let (Some(subject), Some(sha256)) = (signature, fingerprint) {
-        verify_authenticode(artifact, subject, sha256)?;
+    let update_root = application_cache_root(&app)?.join("updates");
+    verify_staged_installer(&update_root, artifact, size, sha256)?;
+    // The expected signer is the compiled-in publisher, never the values the manifest advertised.
+    if let Some(publisher) = &publisher {
+        verify_authenticode(
+            artifact,
+            &publisher.signature_subject,
+            &publisher.signature_sha256,
+        )?;
     }
     let confirmed = MessageDialog::new()
         .set_level(MessageLevel::Info)
@@ -5435,14 +5580,17 @@ fn install_update(app: AppHandle, state: State<'_, AppState>) -> Result<Value, S
         "createdAt": SystemTime::now().duration_since(UNIX_EPOCH).map_err(|error| error.to_string())?.as_secs().to_string(),
         "launchAttempts": 0
     });
-    if let Some(previous) = env::var("EDITKIN_PREVIOUS_INSTALLER")
+    // Only development builds may name a previous installer through the environment.
+    let previous_override = env::var("EDITKIN_PREVIOUS_INSTALLER")
         .ok()
-        .as_deref()
-        .or(previous_installer)
-    {
+        .filter(|_| cfg!(debug_assertions));
+    if let Some(previous) = previous_override.as_deref().or(previous_installer) {
         transaction["previousInstaller"] = json!(previous);
     }
     write_update_transaction(&transaction_path, &transaction)?;
+    // Recheck the same staged bytes after the confirmation and the transaction write,
+    // immediately before executing that exact installer path.
+    verify_staged_installer(&update_root, artifact, size, sha256)?;
     spawn_installer(Path::new(artifact))?;
     let exit_handle = app.clone();
     thread::spawn(move || {
@@ -10540,6 +10688,125 @@ mod tests {
             Some("1")
         ));
         assert!(unsigned_update_override_allowed(true, Some("1"), None));
+    }
+
+    fn update_pin_document(manifest_url: Value, subject: Value, sha256: Value) -> String {
+        json!({
+            "schema": "editkin.update-publisher-pin/v1",
+            "manifestUrl": manifest_url,
+            "signatureSubject": subject,
+            "signatureSha256": sha256,
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn update_publisher_pin_is_all_or_nothing_and_canonical() {
+        let url = json!("https://updates.example/stable.json");
+        let subject = json!("CN=Editkin Studio");
+        let sha = json!("a".repeat(64));
+        assert!(
+            parse_update_publisher_pin(&update_pin_document(Value::Null, Value::Null, Value::Null))
+                .unwrap()
+                .is_none()
+        );
+        let pin = parse_update_publisher_pin(&update_pin_document(
+            url.clone(),
+            json!(" CN=Editkin Studio "),
+            sha.clone(),
+        ))
+        .unwrap()
+        .unwrap();
+        assert_eq!(pin.signature_subject, "CN=Editkin Studio");
+        assert_eq!(pin.manifest_url, "https://updates.example/stable.json");
+        for document in [
+            update_pin_document(Value::Null, subject.clone(), sha.clone()),
+            update_pin_document(url.clone(), Value::Null, sha.clone()),
+            update_pin_document(url.clone(), subject.clone(), Value::Null),
+            update_pin_document(json!("http://updates.example/stable.json"), subject.clone(), sha.clone()),
+            update_pin_document(json!("https://updates.example/stable.json#x"), subject.clone(), sha.clone()),
+            update_pin_document(url.clone(), json!("  "), sha.clone()),
+            update_pin_document(url.clone(), subject.clone(), json!("A".repeat(64))),
+        ] {
+            assert!(parse_update_publisher_pin(&document).is_err(), "{document}");
+        }
+        let mut extra: Value =
+            serde_json::from_str(&update_pin_document(url.clone(), subject.clone(), sha.clone())).unwrap();
+        extra["extra"] = json!(true);
+        assert!(parse_update_publisher_pin(&extra.to_string()).is_err());
+        extra.as_object_mut().unwrap().remove("extra");
+        extra["schema"] = json!("editkin.update-publisher-pin/v2");
+        assert!(parse_update_publisher_pin(&extra.to_string()).is_err());
+        assert!(parse_update_publisher_pin(UPDATE_PUBLISHER_PIN).is_ok());
+    }
+
+    #[test]
+    fn release_builds_ignore_manifest_url_environment_and_follow_the_pin() {
+        let pin = UpdatePublisherPin {
+            manifest_url: "https://updates.example/stable.json".into(),
+            signature_subject: "CN=Editkin Studio".into(),
+            signature_sha256: "a".repeat(64),
+        };
+        let attacker = Some("https://attacker.example/stable.json".to_string());
+        assert_eq!(
+            select_update_manifest_url(false, attacker.clone(), Some(&pin)).as_deref(),
+            Some("https://updates.example/stable.json")
+        );
+        assert_eq!(select_update_manifest_url(false, attacker.clone(), None), None);
+        assert_eq!(select_update_manifest_url(true, attacker.clone(), Some(&pin)), attacker);
+        assert_eq!(
+            select_update_manifest_url(true, None, Some(&pin)).as_deref(),
+            Some("https://updates.example/stable.json")
+        );
+    }
+
+    fn staged_installer_fixture(label: &str, bytes: &[u8]) -> (PathBuf, PathBuf, String) {
+        let root = env::temp_dir().join(format!(
+            "editkin-staged-update-{label}-{}-{}",
+            std::process::id(),
+            unix_time_ms()
+        ));
+        let mut hasher = Sha256::new();
+        hasher.update(bytes);
+        let sha256 = sha256_hex(hasher);
+        let directory = root.join(format!("sha256-{sha256}"));
+        fs::create_dir_all(&directory).unwrap();
+        let installer = directory.join("installer.exe");
+        fs::write(&installer, bytes).unwrap();
+        (root, installer, sha256)
+    }
+
+    #[test]
+    fn staged_installer_must_match_the_recorded_bytes_and_cache_path() {
+        let bytes = b"signed installer fixture";
+        let size = bytes.len() as u64;
+        let (root, installer, sha256) = staged_installer_fixture("verify", bytes);
+        let artifact = installer.to_str().unwrap();
+        assert!(verify_staged_installer(&root, artifact, size, &sha256).is_ok());
+        // Same size, different bytes: swapped after staging (for example during the confirmation dialog).
+        fs::write(&installer, b"signed installer fixturX").unwrap();
+        assert!(verify_staged_installer(&root, artifact, size, &sha256).is_err());
+        fs::write(&installer, b"short").unwrap();
+        assert!(verify_staged_installer(&root, artifact, size, &sha256).is_err());
+        fs::write(&installer, bytes).unwrap();
+        assert!(verify_staged_installer(&root, artifact, size, &sha256).is_ok());
+        let elsewhere = root.join("elsewhere.exe");
+        fs::copy(&installer, &elsewhere).unwrap();
+        assert!(verify_staged_installer(&root, elsewhere.to_str().unwrap(), size, &sha256).is_err());
+        assert!(verify_staged_installer(&root, artifact, size, &"b".repeat(64)).is_err());
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn staged_installer_rejects_a_symlinked_cache_entry() {
+        let bytes = b"signed installer fixture";
+        let (root, installer, sha256) = staged_installer_fixture("symlink", bytes);
+        let real = root.join("real.exe");
+        fs::rename(&installer, &real).unwrap();
+        std::os::unix::fs::symlink(&real, &installer).unwrap();
+        assert!(verify_staged_installer(&root, installer.to_str().unwrap(), bytes.len() as u64, &sha256).is_err());
+        fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

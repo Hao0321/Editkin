@@ -5,6 +5,7 @@ import { access, mkdir, mkdtemp, open, readFile, realpath, rename, rm, stat, wri
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createNativeAutoRoto, type NativeAutoRotoReceipt } from "../render/nativeCore";
+import { readBoundedFile } from "../shared/boundedFile";
 import {
   createProductAutoRotoRouteReceipt,
   parseProductAutoRotoRouteReceipt,
@@ -327,12 +328,14 @@ function validProductResult(value: unknown, expected: ExpectedNativeAutoRotoShap
 async function measureFrozenArtifacts(result: NativeAutoRotoReceipt, frameBytes: number): Promise<NativeAutoRotoReceipt> {
   if (result.frames.some((frame) => !frame.alphaPath.toLowerCase().endsWith(".png"))) throw new Error("Auto Roto preview 副檔名不合法");
   const expectedSequenceBytes = frameBytes * result.frames.length;
-  if (expectedSequenceBytes <= 0 || expectedSequenceBytes > PRODUCT_AUTO_ROTO_MAX_ALPHA_BYTES
-    || (await stat(result.sequencePath)).size !== expectedSequenceBytes) throw new Error("Auto Roto matte sequence 長度超出安全 envelope");
+  if (expectedSequenceBytes <= 0 || expectedSequenceBytes > PRODUCT_AUTO_ROTO_MAX_ALPHA_BYTES) throw new Error("Auto Roto matte sequence 長度超出安全 envelope");
   const sequenceDigest = createHash("sha256");
   const alphaHashes: string[] = [];
   const handle = await open(result.sequencePath, "r");
   try {
+    // Size is taken from the handle that is read, so the path cannot be swapped between check and use.
+    const sequenceInfo = await handle.stat();
+    if (!sequenceInfo.isFile() || sequenceInfo.size !== expectedSequenceBytes) throw new Error("Auto Roto matte sequence 長度超出安全 envelope");
     for (let frame = 0; frame < result.frames.length; frame += 1) {
       const alpha = Buffer.allocUnsafe(frameBytes);
       let offset = 0;
@@ -349,17 +352,13 @@ async function measureFrozenArtifacts(result: NativeAutoRotoReceipt, frameBytes:
   }
   const previewHashes = new Array<string>(result.frames.length);
   let totalPreviewBytes = 0;
-  for (const frame of result.frames) {
-    const bytes = (await stat(frame.alphaPath)).size;
-    if (bytes < 32 || bytes > PRODUCT_AUTO_ROTO_MAX_PREVIEW_BYTES
-      || (totalPreviewBytes += bytes) > PRODUCT_AUTO_ROTO_MAX_PREVIEW_TOTAL_BYTES) throw new Error("Auto Roto preview PNG 超出安全 envelope");
-  }
   let cursor = 0;
   await Promise.all(Array.from({ length: Math.min(PRODUCT_AUTO_ROTO_PREVIEW_READ_CONCURRENCY, result.frames.length) }, async () => {
     while (cursor < result.frames.length) {
       const index = cursor;
       cursor += 1;
-      const preview = await readFile(result.frames[index].alphaPath);
+      const preview = await readBoundedFile(result.frames[index].alphaPath, PRODUCT_AUTO_ROTO_MAX_PREVIEW_BYTES, { followSymlinks: true, messages: { tooLarge: "Auto Roto preview PNG 超出安全 envelope" } });
+      if (preview.length < 32 || (totalPreviewBytes += preview.length) > PRODUCT_AUTO_ROTO_MAX_PREVIEW_TOTAL_BYTES) throw new Error("Auto Roto preview PNG 超出安全 envelope");
       if (preview.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") throw new Error("Auto Roto preview 不是 PNG");
       previewHashes[index] = sha256(preview);
     }

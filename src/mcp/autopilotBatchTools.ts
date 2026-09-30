@@ -1,5 +1,6 @@
 import { basename, dirname, join, relative, resolve } from "node:path";
-import { readFile, readdir, realpath, stat } from "node:fs/promises";
+import { readdir, realpath, stat } from "node:fs/promises";
+import { readBoundedFile } from "../shared/boundedFile";
 import { createHash } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
@@ -21,8 +22,7 @@ import { readProject, resolveProjectPath, resolveRenderPath, resolveWorkspaceMed
 const batchJobs = new AutopilotBatchJobManager();
 
 async function boundedJson(path: string, limit = 4 * 1024 * 1024) {
-  if ((await stat(path)).size > limit) throw new Error("批次或計畫超出有界檔案大小");
-  return JSON.parse(await readFile(path, "utf8"));
+  return JSON.parse((await readBoundedFile(path, limit, { followSymlinks: true, messages: { tooLarge: "批次或計畫超出有界檔案大小" } })).toString("utf8"));
 }
 function payload(result: { content: Array<{ type: string; text?: string }> }) {
   return JSON.parse(result.content.find(item => item.type === "text")?.text ?? "{}");
