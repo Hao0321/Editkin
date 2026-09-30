@@ -555,6 +555,8 @@ export interface MobileRemoteStatus {
   trustedCount?: number;
   devices: MobileRemoteDevice[];
   pairingExpiresAt?: string;
+  /** True once a device consumed the single-use pairing token. */
+  pairingConsumed?: boolean;
   url?: string;
   transport?: "lan" | "https-tunnel" | "cloud-relay";
   warning?: string;

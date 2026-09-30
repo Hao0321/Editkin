@@ -66,6 +66,10 @@ jobs:
           cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol staged_installer_
       - name: Verify the native Windows media path classifier
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol windows_network_and_device_paths_are_not_local_media
+      - name: Verify private remote state permissions and advertised hosts
+        run: |
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol private_json_is_owner_only_even_when_replacing_a_readable_file -- --nocapture
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --features community-desktop,tauri/custom-protocol remote_allowed_hosts_names_only_the_configured_tunnel_host -- --nocapture
       - name: Inspect the Linux GLib dependency path
         run: cargo tree --locked --manifest-path src-tauri/Cargo.toml --target x86_64-unknown-linux-gnu --features community-desktop,tauri/custom-protocol -i glib
       - name: Audit the complete desktop lockfile

@@ -1056,6 +1056,60 @@ fn write_json_atomic(path: &Path, value: &Value) -> Result<(), String> {
     fs::rename(&temporary, path).map_err(|error| error.to_string())
 }
 
+/// Owner-only permissions (`0700` directories, `0600` files) on unix, so another
+/// local account cannot read a stored secret; Windows relies on the per-user
+/// profile ACL.
+#[cfg(unix)]
+fn restrict_to_owner(path: &Path, mode: u32) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(mode)).map_err(|error| error.to_string())
+}
+
+#[cfg(not(unix))]
+fn restrict_to_owner(_path: &Path, _mode: u32) -> Result<(), String> {
+    Ok(())
+}
+
+/// On Unix, use an owner-only parent and a `0600` temporary file. Windows relies
+/// on the application-data directory's existing ACLs; those are not changed here.
+fn write_private_json_atomic(path: &Path, value: &Value) -> Result<(), String> {
+    let parent = path.parent().ok_or("private JSON path has no directory")?;
+    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    restrict_to_owner(parent, 0o700)?;
+    let temporary = PathBuf::from(format!(
+        "{}.{}.tmp",
+        path.to_string_lossy(),
+        std::process::id()
+    ));
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let _ = fs::remove_file(&temporary);
+    let written = options.open(&temporary).and_then(|mut file| {
+        file.write_all(
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(value).map_err(std::io::Error::other)?
+            )
+            .as_bytes(),
+        )?;
+        file.sync_all()
+    });
+    if let Err(error) = written {
+        let _ = fs::remove_file(&temporary);
+        return Err(error.to_string());
+    }
+    #[cfg(windows)]
+    if path.exists() {
+        fs::remove_file(path).map_err(|error| error.to_string())?;
+    }
+    fs::rename(&temporary, path).map_err(|error| error.to_string())
+}
+
 fn validate_update_transaction(value: &Value) -> Result<(), String> {
     let object = value.as_object().ok_or("更新 transaction 不是物件")?;
     let status = object.get("status").and_then(Value::as_str).unwrap_or("");
@@ -3715,6 +3769,19 @@ fn lan_ipv4() -> String {
         .unwrap_or_else(|_| "127.0.0.1".into())
 }
 
+/// Host names (no port) the Remote server may see besides IP literals and
+/// `localhost`: the public HTTPS tunnel the user configured, if any.
+fn remote_allowed_hosts(public_tunnel_origin: Option<&str>) -> String {
+    public_tunnel_origin
+        .and_then(|origin| origin.split_once("://").map(|(_, rest)| rest))
+        .and_then(|rest| rest.split(['/', '?', '#']).next())
+        .map(|authority| authority.rsplit('@').next().unwrap_or(authority))
+        .map(|authority| authority.split(':').next().unwrap_or(authority))
+        .map(str::to_ascii_lowercase)
+        .filter(|host| !host.is_empty())
+        .unwrap_or_default()
+}
+
 fn pairing_token() -> Result<String, String> {
     let mut bytes = [0_u8; 16];
     getrandom::fill(&mut bytes).map_err(|error| error.to_string())?;
@@ -3746,6 +3813,7 @@ struct MobileRelayIdentity {
 fn mobile_relay_identity_path(app: &AppHandle) -> Result<PathBuf, String> {
     let root = application_data_root(app)?.join("mobile-remote");
     fs::create_dir_all(&root).map_err(|error| error.to_string())?;
+    restrict_to_owner(&root, 0o700)?;
     Ok(root.join("relay-identity.json"))
 }
 
@@ -3758,6 +3826,8 @@ fn mobile_relay_identity(app: &AppHandle) -> Result<MobileRelayIdentity, String>
                 && identity.room.chars().all(|value| value.is_ascii_hexdigit())
                 && identity.secret.len() >= 48
             {
+                // Identities written before owner-only permissions existed.
+                restrict_to_owner(&path, 0o600)?;
                 return Ok(identity);
             }
         }
@@ -3768,7 +3838,7 @@ fn mobile_relay_identity(app: &AppHandle) -> Result<MobileRelayIdentity, String>
         secret: format!("{}{}", pairing_token()?, pairing_token()?),
         created_at_ms: unix_time_ms(),
     };
-    write_json_atomic(
+    write_private_json_atomic(
         &path,
         &serde_json::to_value(&identity).map_err(|error| error.to_string())?,
     )?;
@@ -5031,13 +5101,23 @@ fn start_mobile_remote(
             let remote = remote_state.as_mut().expect("Remote state exists");
             match remote.child.try_wait() {
                 Ok(None) => {
-                    let connected = fs::read_to_string(&remote.devices_path)
+                    let device_status = fs::read_to_string(&remote.devices_path)
                         .ok()
-                        .and_then(|content| serde_json::from_str::<Value>(&content).ok())
+                        .and_then(|content| serde_json::from_str::<Value>(&content).ok());
+                    let connected = device_status
+                        .as_ref()
                         .and_then(|value| value.get("connectedCount").and_then(Value::as_u64))
                         .unwrap_or(0)
                         > 0;
-                    if connected || unix_time_ms() < remote.pairing_expires_at_ms {
+                    // The pairing token is single use: once a device consumed it, the
+                    // link is dead, so a new pairing needs a fresh server and token.
+                    let pairing_consumed = device_status
+                        .as_ref()
+                        .and_then(|value| value.get("pairingConsumed").and_then(Value::as_bool))
+                        .unwrap_or(false);
+                    if connected
+                        || (unix_time_ms() < remote.pairing_expires_at_ms && !pairing_consumed)
+                    {
                         reuse_result = Some((|| {
                             write_json_atomic(&remote.snapshot_path, &snapshot)?;
                             Clipboard::new()
@@ -5157,6 +5237,10 @@ fn start_mobile_remote(
         .env("EDITKIN_REMOTE_DEVICES", &devices_path)
         .env("EDITKIN_REMOTE_TRUSTED_DEVICES", &trusted_devices_path)
         .env("EDITKIN_REMOTE_HEALTH_PROBE_ID", &health_probe_id)
+        .env(
+            "EDITKIN_REMOTE_ALLOWED_HOSTS",
+            remote_allowed_hosts(public_tunnel_origin.as_deref()),
+        )
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -10668,6 +10752,43 @@ mod tests {
         ] {
             assert!(!is_windows_network_path(path), "{path}");
         }
+    }
+
+    #[test]
+    fn remote_allowed_hosts_names_only_the_configured_tunnel_host() {
+        assert_eq!(remote_allowed_hosts(None), "");
+        assert_eq!(
+            remote_allowed_hosts(Some("https://Editkin.Example.com/path?x=1")),
+            "editkin.example.com"
+        );
+        assert_eq!(
+            remote_allowed_hosts(Some("https://user@tunnel.example:8443")),
+            "tunnel.example"
+        );
+        assert_eq!(remote_allowed_hosts(Some("not a url")), "");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn private_json_is_owner_only_even_when_replacing_a_readable_file() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = env::temp_dir().join(format!("editkin-private-json-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let path = root.join("mobile-remote").join("relay-identity.json");
+        write_private_json_atomic(&path, &json!({ "secret": "one" })).unwrap();
+        let mode = |target: &Path| fs::metadata(target).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&path), 0o600);
+        assert_eq!(mode(path.parent().unwrap()), 0o700);
+
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        write_private_json_atomic(&path, &json!({ "secret": "two" })).unwrap();
+        assert_eq!(mode(&path), 0o600);
+        assert!(fs::read_to_string(&path).unwrap().contains("two"));
+
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        restrict_to_owner(&path, 0o600).unwrap();
+        assert_eq!(mode(&path), 0o600);
+        fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
