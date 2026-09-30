@@ -24,6 +24,7 @@ import {
 import type { EditProject, MediaAsset } from "../src/domain/types";
 import { registerBatchIpc } from "./batchIpc";
 import { registerUpdateIpc } from "./updateIpc";
+import { assertLocalMediaPath } from "../src/shared/localMediaPath";
 
 protocol.registerSchemesAsPrivileged([{
   scheme: "editkin-media",
@@ -39,6 +40,7 @@ function mediaPathKey(path: string): string {
 
 function mediaUrl(path: string): string {
   const absolute = resolve(path);
+  assertLocalMediaPath(absolute);
   approvedMediaPaths.add(mediaPathKey(absolute));
   return `editkin-media://local/${Buffer.from(absolute, "utf8").toString("base64url")}`;
 }
