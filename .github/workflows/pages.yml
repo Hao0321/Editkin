@@ -34,6 +34,10 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          # Adds the browser-only Content-Security-Policy meta tag; desktop
+          # builds leave it unset and keep their shell-specific policy.
+          EDITKIN_WEB_CSP: "1"
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

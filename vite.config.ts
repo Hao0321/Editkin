@@ -1,6 +1,7 @@
 import { configDefaults, defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import sourceTestExclusions from "./source-test-exclusions.json";
+import { WEB_CONTENT_SECURITY_POLICY } from "./src/shared/webContentSecurityPolicy";
 
 const nodeTestFiles = [
   "scripts/build-creative-previews.test.mjs",
@@ -28,7 +29,22 @@ export default defineConfig(({ command }) => ({
   // and static render faces stay in Tauri/Electron resources and are loaded
   // through bounded desktop commands instead of being duplicated in the EXE.
   publicDir: command === "build" ? ".web-public" : "public",
-  plugins: [react()],
+  plugins: [
+    react(),
+    // Opt-in: the desktop shells build the same dist and must keep their own
+    // policy, so only the Pages workflow sets EDITKIN_WEB_CSP=1. head-prepend
+    // is required because a meta CSP only governs content parsed after it.
+    ...(command === "build" && process.env.EDITKIN_WEB_CSP === "1"
+      ? [{
+          name: "editkin-web-csp",
+          transformIndexHtml: () => [{
+            tag: "meta",
+            attrs: { "http-equiv": "Content-Security-Policy", content: WEB_CONTENT_SECURITY_POLICY },
+            injectTo: "head-prepend" as const,
+          }],
+        }]
+      : []),
+  ],
   test: {
     // Retained fail-before experiments are replayed explicitly against their
     // captured source; they are not current product regression entry points.

@@ -10,6 +10,8 @@ With an independently installed FFmpeg and ffprobe on `PATH`, run `npm run test:
 
 `npm run source:verify:self-test` checks the source verifier's negative controls. `npm run source:verify` checks the exact initial publication snapshot and its hash manifest. `npm run source:scan` checks the current checkout, including pull requests, for private paths, unexpected binaries, key patterns, and the CI permission boundary while allowing ordinary text source changes. New binary assets need maintainer review and a refreshed rights record. These checks support maintainer review; they cannot decide whether arbitrary contributor code is malicious.
 
+The GitHub Pages build adds a Content-Security-Policy `<meta>` tag (policy in [webContentSecurityPolicy.ts](../src/shared/webContentSecurityPolicy.ts)) only when `EDITKIN_WEB_CSP=1` is set for `npm run build`; the Pages workflow sets it. Desktop builds leave it unset because Tauri injects its own policy and Electron loads the same `dist` over `file://`. Pages cannot send response headers, and `frame-ancestors` is ignored in a meta policy, so the browser build has no clickjacking protection from CSP; that needs a host that can set headers.
+
 ## Desktop and release path
 
 The Rust and Tauri source is included for development. The desktop media pipeline needs platform-specific runtimes and generated color/font products. A developer must fetch or build those from their upstream sources and comply with their licenses. The existing internal release scripts may expect owner-only creative packs or signing inputs; their failure in this community checkout is an explicit limitation, not a request to obtain the maintainer's private files.
