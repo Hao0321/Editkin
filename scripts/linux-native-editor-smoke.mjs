@@ -96,6 +96,8 @@ if (!process.argv[2] || process.argv[2] === "--help") {
     throw new Error(`${name} timed out: ${JSON.stringify(last)}`);
   }
   async function click(selector) {
+    report.input = { selector };
+    mark(`native-click: ${selector}`);
     const element = await command("POST", "/element", { using: "css selector", value: selector });
     assert(element?.[elementKey], `Missing W3C element: ${selector}`);
     const path = `/element/${encodeURIComponent(element[elementKey])}`;
@@ -104,6 +106,8 @@ if (!process.argv[2] || process.argv[2] === "--help") {
     await command("POST", `${path}/click`, {});
   }
   async function replaceText(selector, text, index = 0) {
+    report.input = { selector, index };
+    mark(`native-text-input: ${selector} [${index}]`);
     const elements = await command("POST", "/elements", { using: "css selector", value: selector });
     const id = elements[index]?.[elementKey];
     assert(id, `Missing editable W3C element: ${selector} [${index}]`);
@@ -135,7 +139,7 @@ if (!process.argv[2] || process.argv[2] === "--help") {
     const save=document.querySelector('[data-testid="save-state"]');
     return {url:location.href,ready:document.readyState,desktop:window.haoDesktop?.isDesktop===true,ipc:typeof window.__TAURI_INTERNALS__?.invoke==='function',
       brand:document.querySelector('.brand-copy strong')?.textContent,toolbar:visible(document.querySelector('[data-testid="editor-toolbar"]')),
-      welcome:visible(document.querySelector('[data-testid="first-project-start"]')),workspace:document.querySelector('.app-shell')?.dataset.workspaceMode,
+      welcome:visible(document.querySelector('[data-testid="first-project-start"]')),guide:visible(document.querySelector('[data-testid="guide-skip"]')),workspace:document.querySelector('.app-shell')?.dataset.workspaceMode,
       blocked:document.querySelector('.app-shell')?.dataset.shortcutsBlocked,clipNames:[...document.querySelectorAll('.timeline-clip:not(.caption) strong')].map(n=>n.textContent),
       captions,captionInput:document.querySelector('[data-testid="caption-text-input"]')?.value,undoEnabled:!!undo&&!undo.disabled,redoEnabled:!!redo&&!redo.disabled,saveFailed:!!save?.querySelector('.red'),saveState:save?.textContent,status:document.querySelector('.status-bar')?.textContent};
   `);
@@ -264,8 +268,14 @@ if (!process.argv[2] || process.argv[2] === "--help") {
     const initialRecovery = await evaluateAsync("window.haoDesktop.loadRecovery()");
     assert.equal(initialRecovery.found, false, "Isolated profile must not restore an existing user project");
     assert.equal(initialRecovery.reason, "missing", "Initial native recovery read must succeed with missing state");
-    if (await evaluate("return !!document.querySelector('[data-testid=\"guide-skip\"]');")) await click('[data-testid="guide-skip"]');
+    // The welcome screen and first-run guide are separate lazy chunks. A single
+    // query can miss the guide before it mounts and click the covered welcome UI.
+    mark("wait-for-visible-first-run-guide");
+    await poll("First-run guide is ready for native input", healthyState, (state) => state.guide && state.blocked === "true");
+    await click('[data-testid="guide-skip"]');
+    await poll("First-run guide is dismissed", healthyState, (state) => !state.guide && state.blocked === "false" && state.welcome);
     await click('[data-testid="explore-editor-button"]');
+    await poll("Editor workspace is mounted", healthyState, (state) => state.workspace === "editor" && state.blocked === "false");
     for (const selector of [".project-menu", ".project-menu-group", '[data-testid="workspace-controls"]']) {
       if (!await evaluate("return !!document.querySelector(arguments[0])?.open;", [selector])) await click(`${selector} > summary`);
     }
@@ -333,9 +343,21 @@ if (!process.argv[2] || process.argv[2] === "--help") {
     report.status = "GREEN";
     mark("focused-native-journey-complete");
   } catch (error) {
-    report.failure = { stage: report.stage, message: error.message, stack: error.stack };
+    report.failure = { stage: report.stage, input: report.input, message: error.message, stack: error.stack };
     if (session && !controller.signal.aborted) {
       try { report.failure.ui = await readState(); } catch (probeError) { report.failure.uiProbeError = probeError.message; }
+      if (report.input) {
+        try {
+          report.failure.hitTest = await evaluate(`
+            const target=document.querySelectorAll(arguments[0])[arguments[1]??0];
+            if(!target)return {found:false};
+            const r=target.getBoundingClientRect();
+            const x=(Math.max(0,r.left)+Math.min(innerWidth,r.right))/2,y=(Math.max(0,r.top)+Math.min(innerHeight,r.bottom))/2;
+            const hit=document.elementFromPoint(x,y);
+            return {found:true,target:{tag:target.tagName,classes:target.className,rect:{x:r.x,y:r.y,width:r.width,height:r.height}},point:{x,y},hit:hit?{tag:hit.tagName,classes:hit.className,testId:hit.dataset.testid}:null,intercepted:!!hit&&!target.contains(hit)};
+          `, [report.input.selector, report.input.index ?? 0]);
+        } catch (probeError) { report.failure.hitTestError = probeError.message; }
+      }
       try { report.failure.screenshot = await screenshot("failure"); } catch (captureError) { report.failure.screenshotError = captureError.message; }
     }
     process.exitCode = 1;
@@ -356,6 +378,6 @@ if (!process.argv[2] || process.argv[2] === "--help") {
     await writeFile(resolve(workspace, "driver.stderr.txt"), stderr, { flag: "wx" });
     const reportPath = resolve(workspace, "report.json");
     await writeFile(reportPath, json(report), { flag: "wx" });
-    process.stdout.write(json({ status: report.status, scope: report.scope, executable: report.executable, reportPath, screenshot: report.afterScreenshot?.path, failure: report.failure?.message, cleanupFailure: report.sessionCleanupError ?? report.processCleanupError }));
+    process.stdout.write(json({ status: report.status, scope: report.scope, executable: report.executable, reportPath, screenshot: report.afterScreenshot?.path, failure: report.failure, cleanupFailure: report.sessionCleanupError ?? report.processCleanupError }));
   }
 }
