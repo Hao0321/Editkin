@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Editkin Community Debug",
+  "identifier": "studio.hao.editkin.communitydebug",
+  "build": {
+    "devUrl": "http://127.0.0.1:5173/?workspace=editor"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Editkin Community Debug",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1080,
+        "minHeight": 720,
+        "backgroundColor": "#eaf2ff"
+      }
+    ]
+  },
+  "bundle": {
+    "active": false,
+    "resources": null
+  }
+}

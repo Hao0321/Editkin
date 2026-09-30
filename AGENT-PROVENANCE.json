@@ -1,0 +1,405 @@
+{
+  "schema": "editkin.agent-provenance/v1",
+  "originId": "urn:uuid:d366cab7-d5a4-44d8-b80d-4c7ce4daf65d",
+  "attribution": "djguan-jpg",
+  "profile": "https://github.com/djguan-jpg",
+  "modified": "2026-10-01",
+  "upstream": {
+    "commit": "41163ea553f79fd58abe5d7bedea91af6a2d1c38",
+    "license": "GPL-3.0-or-later"
+  },
+  "hashConvention": "sha256-utf8-bom-removed-lf",
+  "files": [
+    {
+      "path": "AGENT-NOTICE.md",
+      "scope": "license-and-scope",
+      "license": "GPL-3.0-or-later",
+      "sha256": "25fddc219bf7be5563d177ef8dd1085d76168490a8c2613ed24cd2998ae74675"
+    },
+    {
+      "path": "LICENSE",
+      "scope": "license-and-scope",
+      "license": "GPL-3.0-or-later",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "LICENSES/AGPL-3.0-or-later.txt",
+      "scope": "license-and-scope",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0"
+    },
+    {
+      "path": "config/agent-provenance-scope.json",
+      "scope": "license-and-scope",
+      "license": "GPL-3.0-or-later",
+      "sha256": "0bb46d951a97387e839b66b6e858688e83c2e64743504837d5e5c365f5ab9025"
+    },
+    {
+      "path": "docs/AGENT_EDITOR_PROTOCOL.md",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "cf1c4edd62d5c2739647b7a4d1482827b0dcec52203e1edf901031104c51b0b3"
+    },
+    {
+      "path": "scripts/agent-provenance.mjs",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "091e689fabdbe9c142429539670c4ebfaefa6676266ec2ae558f50ad3cdc713d"
+    },
+    {
+      "path": "scripts/build-web-public.mjs",
+      "scope": "gpl-integration",
+      "license": "GPL-3.0-or-later",
+      "sha256": "05c9a691aa7bea25ab73d277faa04866579c1d88bd5a57ad511669bff2179d97"
+    },
+    {
+      "path": "scripts/community-desktop-dev.mjs",
+      "scope": "gpl-integration",
+      "license": "GPL-3.0-or-later",
+      "sha256": "503e0992c9dcfb29f190ad0c2bf4f6a635ad270ebd3fd335b25d1c828b3e058a"
+    },
+    {
+      "path": "scripts/community-portable-build.mjs",
+      "scope": "gpl-integration",
+      "license": "GPL-3.0-or-later",
+      "sha256": "e2beb01572566321afeb636a39fab5960c988766e964b04d097d1cd525beae6e"
+    },
+    {
+      "path": "scripts/lib/agent-provenance.mjs",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "f310ea97409e6ca1746d668db1377908473a79c82cbcf0a07eaeec971adf24c3"
+    },
+    {
+      "path": "scripts/lib/agent-provenance.test.mjs",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "c43e33377fb288b03204372696e29e96095cb4cc2fc3301c3e6e98b58a66bcc6"
+    },
+    {
+      "path": "scripts/lib/embedded-agent-runtime.mjs",
+      "scope": "gpl-integration",
+      "license": "GPL-3.0-or-later",
+      "sha256": "1767d467a12957afc7e0070ef8495c25ce36c36cf165518230ec8a320d55c98a"
+    },
+    {
+      "path": "scripts/lib/original-agent-skills.mjs",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "12722533801d7630e6c14e38dd584d5c2dcfeac243fd51a59df2edc2a2bd17ee"
+    },
+    {
+      "path": "scripts/original-agent-skills.mjs",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "ff6ab652e91ab2114916a05a64657599dd90d05189e269f7aa6d281db85dbe12"
+    },
+    {
+      "path": "scripts/review-agent-caption-selection.mjs",
+      "scope": "gpl-integration",
+      "license": "GPL-3.0-or-later",
+      "sha256": "f5e26ac87283104a306809abf2b397c7bcc87ee81c045d8da93e6f8359ee3ceb"
+    },
+    {
+      "path": "scripts/review-agent-protocol-skills.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "01e4336938d458acdfccaad98915e6039e14eb79ee62010c159f1c03f2bff561"
+    },
+    {
+      "path": "src-tauri/src/main.rs",
+      "scope": "gpl-integration",
+      "license": "GPL-3.0-or-later",
+      "sha256": "28293236b55f0a84340b3da71f618d235509532f46f5751bde6a343d56538c06"
+    },
+    {
+      "path": "src-tauri/src/service_pool.rs",
+      "scope": "gpl-integration",
+      "license": "GPL-3.0-or-later",
+      "sha256": "6268a6d3dcb78d42c90f0f847ddd6d1cd867a6ce5a13b8dd3d7200a111c87bf5"
+    },
+    {
+      "path": "src/application/agentLibrary.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "33545e1a889f7ee30668d5a61684a9831a121265085a00ae5c0aec74cc9c0e23"
+    },
+    {
+      "path": "src/application/agentProjectResult.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "fa1cf8dcb68278a1cfcc66bed1e4171030ee303fce4f8425f90a165482a6357b"
+    },
+    {
+      "path": "src/application/agentProjectResult.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "8565a0cdbe55cf14fcf513bd43ca9fbd66737225525c9aee416013437f3ee9c5"
+    },
+    {
+      "path": "src/application/agentProviders.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "a96a8439b130f8475b6ee8e77cd7ed5107196cb609b7d8e4914f735ed7440e8a"
+    },
+    {
+      "path": "src/application/agentProviders.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "2584c1e8d2350013e8b6de8d1dee73b561b4f29e614b574c015c605409db299f"
+    },
+    {
+      "path": "src/application/agentTaskGuidance.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "57b0f73be2b6921bf1b96c62fc117e0d6ec5a4f46905f9aa202939cdede8d660"
+    },
+    {
+      "path": "src/application/agentTaskGuidance.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "3ade2bff976859399b6aae162b7be902cb6b375ab02c4ddc80f60076859d0832"
+    },
+    {
+      "path": "src/desktop/apiTypes.ts",
+      "scope": "gpl-integration",
+      "license": "GPL-3.0-or-later",
+      "sha256": "7664ac6d1aa883b66e3bf93f35b2772b87ff817a49b5886ec51aaa92be7b7384"
+    },
+    {
+      "path": "src/desktop/tauriBridge.ts",
+      "scope": "gpl-integration",
+      "license": "GPL-3.0-or-later",
+      "sha256": "e2d9aa254f81f00fb7e6417771212293e69e62e5eedf3906a40de4a354d38195"
+    },
+    {
+      "path": "src/mcp/agentGateway.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "d283c93ef47a950d891af012fbf3ee5ee767cbe3cf219767886900dea4b7c6b5"
+    },
+    {
+      "path": "src/mcp/agentGatewaySchemas.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "148a51d2d71cfe4ca7f89dfdae1bdf118317de7a752503ea78a6e4e30ebee0fb"
+    },
+    {
+      "path": "src/mcp/agentResultStore.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "90c9e18f0da40672a8177247d26f59ff363b6a2289cd97ca4a7bb30dc5061178"
+    },
+    {
+      "path": "src/mcp/agentResultStore.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "a0d412b8ceeecfe6b921199bf583a560385c952d457612711ae4d9f40017027d"
+    },
+    {
+      "path": "src/mcp/agentRunArgument.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "4936ed259ed90191ead994a7aa82c658c46be1661d8707c5350e2ce8cd4dc39e"
+    },
+    {
+      "path": "src/mcp/agentRunArgument.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "bc0f34002c87c0d5bf8ec2700905706f31a2648e4bb461913ce948ebb3d330ab"
+    },
+    {
+      "path": "src/mcp/agentSkillResources.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "c9bedc64364de4f8e8c999dacb70e300ea70d970d36bd709c84268ea0ddf0651"
+    },
+    {
+      "path": "src/mcp/agentSkillResources.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "f1d68762d4ffebc1053469bcb0a4ccb54decf0c4395a4f0d8363580f665de066"
+    },
+    {
+      "path": "src/mcp/agentToolBoundary.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "5cdd1887d76264f676f2afd10543f368d158bac590f81effc0d2280ac4f15236"
+    },
+    {
+      "path": "src/mcp/agentToolBoundary.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "71410f318fab48257a49baa9e0108940ab50124bd9cc068856524e0a7faf3026"
+    },
+    {
+      "path": "src/mcp/kitWorkflowBridge.ts",
+      "scope": "gpl-integration",
+      "license": "GPL-3.0-or-later",
+      "sha256": "2be8d134b973c0daab017317415a69ed1ee302ea485681e54bd0f9d18b74f5fa"
+    },
+    {
+      "path": "src/service/acpToolContent.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "a8b3b00975232954eead0fed435d31b60575fae21ee5ec862c1288fd79519af9"
+    },
+    {
+      "path": "src/service/acpToolContent.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "f25f1b825dab978a63b308e83f5bbd657b39e77db2d18a8d813b2bf5bc87e2da"
+    },
+    {
+      "path": "src/service/agentLibraryStore.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "15d40bb716ca7c370d6e323017e0df7566fe167ded972d487495e0241220d4e5"
+    },
+    {
+      "path": "src/service/agentLibraryStore.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "d7f599e6c3a577d6c7e84b5ab7743de3233539320230c7445f268d06dfb74baa"
+    },
+    {
+      "path": "src/service/cli.ts",
+      "scope": "gpl-integration",
+      "license": "GPL-3.0-or-later",
+      "sha256": "92fcfaec637bdae7efb43c5532d5244e09fb61dcc05a437cb9a0773ae5dbf63e"
+    },
+    {
+      "path": "src/service/openCodeAcp.lifecycle.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "36d53ed70d4994a36c786744520dc496323d2a17c208a26afc952dfe595e3654"
+    },
+    {
+      "path": "src/service/openCodeAcp.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "9ac1b3585e9cfc6f7c5a26c744360c4eaaa9a97bd0f666b6a8331046efc5beeb"
+    },
+    {
+      "path": "src/service/openCodeAcp.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "4979ad89d084c428ffd5895a9d9f0a992784bc3bf57eb4fb7ef10dcd0d4af1cb"
+    },
+    {
+      "path": "src/service/openCodeEnvironment.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "49ef6872de19b197a71524dead02994bd189fa2659ca42a6e4dbd778dd47d8f5"
+    },
+    {
+      "path": "src/service/openCodeEnvironment.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "73f69e52eb0f359f049ee8058ab85396d7ea5e75d397ad3bea58d411ae9d2a2d"
+    },
+    {
+      "path": "src/service/openCodeGateway.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "1e002fc433ae66d7c4aabdd01904df4d00c9c0690d0500619cfa3ff3539b95df"
+    },
+    {
+      "path": "src/service/openCodeGateway.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "54e9dbd11b2fac0704db57ad233d9b45d19811207dfb971c0f5b397b9662cd4d"
+    },
+    {
+      "path": "src/service/openCodePrompt.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "e2b993b61599674ca0494ec063226ea716bf9fcb75a4a01fd97da6643e6012d4"
+    },
+    {
+      "path": "src/service/openCodePrompt.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "a040d758e27459752abe8451dd4bf620825e992a446a973926215c3e284a0b37"
+    },
+    {
+      "path": "src/service/openCodeProviders.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "b5051ff14a4d4457d1bad3f2526ab56b3763b171c678afdd41cd793c4a880ffc"
+    },
+    {
+      "path": "src/service/openCodeProviders.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "bf42ad9c005e3d43b0a5e49e666f866201dfed1e63dd20c17b1d1e6b3d7e6578"
+    },
+    {
+      "path": "src/shared/originalAgentSkills.json",
+      "scope": "gpl-integration",
+      "license": "GPL-3.0-or-later",
+      "sha256": "99f69e61fc7137d49183b13dca3e3e3b055334bdfc646124171f59145687e22b"
+    },
+    {
+      "path": "src/ui/AgentLibraryPanel.tsx",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "25c8ede887dd244adaa60029bfcb941714f1c00ec68b7ef0fb6fa943d621043c"
+    },
+    {
+      "path": "src/ui/AgentModelPicker.test.tsx",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "d8bf9d879a3aff3396f221263108eeec332cd403997396be80822bfc6b6a8dbe"
+    },
+    {
+      "path": "src/ui/AgentModelPicker.tsx",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "e0831ed9db72645b77f8d641aee6b26587184a9a31667f028455af15d18e2ba7"
+    },
+    {
+      "path": "src/ui/AgentProviderSettings.tsx",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "4f62013f70338f5eb8abdaa67359314fd533baf186bd926aac9e6b13c3823731"
+    },
+    {
+      "path": "src/ui/OpenCodeAgentDock.tsx",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "b2067d7d8c10d90e89980a66c8d63b1bdd849d0ec553dfa2df326f376390a75c"
+    },
+    {
+      "path": "src/ui/agentDock.css",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "7a827660abcfe0fc8d51ce8abdff648bd5bc688d6d1170f51d07742fbeea534c"
+    },
+    {
+      "path": "src/ui/agentEventLog.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "a9e7dcb78161e8f61dd738d3ed3965d591115c2171ed6f538a6d6a02109e2b12"
+    },
+    {
+      "path": "src/ui/agentModelChoices.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "eed3a834ee6f78684d828fb1e40d0d84e6c1cc607c359637f26b8c803a0ac365"
+    },
+    {
+      "path": "src/ui/agentSelectionContext.test.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "2c7f76ba8bc42cfea6c56377962ffe1dd9343e2b1ebbb1f82c5dd8e15704b19c"
+    },
+    {
+      "path": "src/ui/agentSelectionContext.ts",
+      "scope": "new-agent-module",
+      "license": "AGPL-3.0-or-later",
+      "sha256": "10aef92126cad781235a2eb6010898437830318fdee8f91849808a2a9f7731b8"
+    }
+  ],
+  "sourceDigest": "96cc17d628090f89889ccc0b43f68dcac6eec684eb2e4416f6215143c5545315"
+}

@@ -2,7 +2,9 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import { summarizeProject } from "../domain/editGraph";
 import { findAsset } from "../domain/editGraph";
-import { resolve } from "node:path";
+import { basename, isAbsolute, relative, resolve, sep } from "node:path";
+import { realpathSync, statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { creativeAssetIdFromUri, resolveCreativeLibraryAsset } from "../application/creativeLibrary";
 import { applyCommand } from "../domain/commands";
 import {
@@ -15,6 +17,8 @@ import {
   type CurrentAutopilotPlan,
   parseAutopilotPlan,
 } from "../application/autopilotPlan";
+import { createAutopilotV4Fixture } from "../application/autopilotPlanFixture";
+import { MOTION_TREATMENT_FAMILIES } from "../application/motionTreatment";
 import {
   assertAutopilotPlanSourceCurrent,
   autopilotAuditReceiptSchema,
@@ -54,7 +58,7 @@ import {
   writeAutopilotLearningEvent,
   writePendingAutopilotReceipt,
   writeProject,
-  resolveWorkspaceMediaPath,
+  resolveProjectAssetMediaPath,
 } from "./storage";
 import { creativePackRoot, personalMusicRoot, personalVisualRoot } from "./toolRuntime";
 import { verifyAutoColorDecisions } from "../application/autoColorEvidence";
@@ -81,7 +85,7 @@ async function resolveAutopilotAssetSource(project: Awaited<ReturnType<typeof re
   const asset = findAsset(project, assetId);
   const creativeId = creativeAssetIdFromUri(asset.uri);
   if (creativeId) return (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath;
-  return resolveWorkspaceMediaPath(asset.uri);
+  return resolveProjectAssetMediaPath(asset.uri);
 }
 
 function parseProductAutopilotPlan(input: unknown): CurrentAutopilotPlan {
@@ -102,6 +106,48 @@ async function verifyCurrentMaterialEvidence(plan: CurrentAutopilotPlan, project
 
 export function registerAutopilotTools(server: McpServer): void {
   registerAutopilotDesignTools(server);
+  server.registerTool("get_autopilot_plan_structure", {
+    description: "回傳 v4 計畫的短版結構範例，供本機 Agent 對照欄位而不必展開全部 command union。範例包含虛構故事與假雜湊，不能直接提交；真正計畫仍須讀素材、Kit 收據和當次 design brief，並由原 Kit controller 與 audit 驗證。",
+    inputSchema: z.object({}),
+  }, async () => {
+    const example = createAutopilotV4Fixture();
+    return textResult({ status: "EXAMPLE_ONLY", schema: example.schema,
+      warning: "Synthetic structural example only. Never use its story, model, material IDs, hashes, design choices or commands as evidence for the current project.",
+      replaceFromCurrentRun: ["source", "route", "budget", "inference", "materialEvidence", "extensions", "aesthetic", "editorial", "commands"],
+      addFromCurrentDesignBrief: ["designEvidence", "editorial.motionTreatment"],
+      designEvidenceShape: { schema: "editkin.autopilot-design-evidence/v1", request: {
+        format: "<route.format>", domain: "<route.domain>", topic: "<current story topic>", duration: "<seconds>",
+        beats: [{ id: "<narrative beat id>", role: "first_frame|chapter|proof|comparison|process|payoff|thumbnail|lower_third|breath",
+          energy: "<0..1>", subject: "<actual primaryFocus>" }] },
+        projectSha256: "<design brief response>", sourceSha256: "<design brief response>", briefSha256: "<design brief response>",
+        decisions: [{ beatId: "<narrative beat id>", recipeSha256: "<beat page response>",
+          application: "<how the recipe changes actual visible or audible commands>", commandIndexes: ["<visible command index>"] }] },
+      motionTreatmentFamilies: MOTION_TREATMENT_FAMILIES,
+      example });
+  });
+  server.registerTool("validate_autopilot_plan_draft", {
+    description: "唯讀檢查完整 v4 草稿的 schema 與內部交叉綁定。傳入 plan 物件，或工作區內名為 plan.v4.json 的 planPath；回傳精確錯誤供修正。這不是 Kit 收據或來源 audit，不會改專案。",
+    inputSchema: z.object({ plan: z.unknown().optional(), planPath: z.string().optional() }),
+  }, async ({ plan: supplied, planPath }) => {
+    try {
+      if ((supplied === undefined) === (planPath === undefined)) throw Error("Provide exactly one of plan or planPath");
+      let input = supplied;
+      if (planPath !== undefined) {
+        const workspace = process.env.EDITKIN_WORKSPACE;
+        if (!workspace || !isAbsolute(workspace) || !planPath || basename(planPath).toLowerCase() !== "plan.v4.json")
+          throw Error("planPath must name a workspace plan.v4.json");
+        const base = realpathSync(workspace), file = realpathSync(resolve(base, planPath));
+        const rel = relative(base, file);
+        if (!rel || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel) || !statSync(file).isFile() || statSync(file).size > 1024 * 1024)
+          throw Error("planPath must be a JSON file within the workspace and at most 1 MiB");
+        input = JSON.parse(await readFile(file, "utf8"));
+      }
+      const plan = parseProductAutopilotPlan(input);
+      return textResult({ status: "GREEN_DRAFT_SCHEMA", schema: plan.schema,
+        planSha256: autopilotPlanSha256(plan), commandCount: autopilotCommands(plan).length,
+        note: "Structural validation only; complete the original Kit plan step and run audit_autopilot_plan before any apply." });
+    } catch (error) { return errorResult(error); }
+  });
   server.registerTool("get_autopilot_contract", {
     description: "取得 Editkin 與目前 video-autopilot skill 的低 Token 整合契約；回傳規則族、最新版 model-adaptive editorial schema 與邊界，不載入私人規則全文或整個記憶庫。",
     inputSchema: z.object({}),

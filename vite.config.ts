@@ -19,6 +19,16 @@ const nodeTestFiles = [
   "src/shared/visualAssetRights.test.mjs",
 ];
 
+const lanOrigin = process.env.EDITKIN_PNY_ORIGIN;
+if (lanOrigin) {
+  const endpoint = new URL(lanOrigin);
+  const host = endpoint.hostname;
+  if (endpoint.protocol !== "http:" || !(/^(?:127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+)$/.test(host))
+    || endpoint.username || endpoint.password || endpoint.pathname !== "/" || endpoint.search || endpoint.hash) {
+    throw new Error("EDITKIN_PNY_ORIGIN must be an HTTP loopback or private LAN address");
+  }
+}
+
 export default defineConfig(({ command }) => ({
   // Electron/Tauri load the production UI from a file:// URL. Absolute
   // `/assets/*` URLs resolve from the filesystem root and leave a blank
@@ -68,5 +78,13 @@ export default defineConfig(({ command }) => ({
   },
   server: {
     strictPort: true,
+    // The LAN endpoint is supplied by the operator at launch; never commit it.
+    ...(lanOrigin ? { proxy: {
+      "/__local_llm/pny": {
+        target: lanOrigin,
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace(/^\/__local_llm\/pny/, ""),
+      },
+    } } : {}),
   },
 }));

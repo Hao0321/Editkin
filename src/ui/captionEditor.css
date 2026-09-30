@@ -1,3 +1,42 @@
+.caption-review-controls {
+  display: grid;
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-1);
+}
+.caption-review-heading, .caption-text-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.caption-review-heading strong { font-size: 12px; }
+.caption-review-heading span, .caption-review-controls small, .caption-text-actions span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.caption-review-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.caption-review-actions button, .caption-text-actions button {
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--soft);
+  font-size: 10px;
+  cursor: pointer;
+}
+.caption-review-actions button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.caption-review-actions button:disabled, .caption-text-actions button:disabled { opacity: .45; cursor: default; }
+.caption-text-editor { display: grid; gap: 6px; }
+.caption-text-editor textarea { min-height: 76px; font-size: 13px; line-height: 1.6; }
+.caption-text-editor textarea[aria-invalid="true"] { border-color: var(--accent-2); }
+.caption-text-actions { align-items: start; }
+.caption-text-actions button { flex: 0 0 auto; }
+
 .caption-translation-editor {
   display: grid;
   gap: 5px;

@@ -176,6 +176,7 @@ export const PRODUCT_REQUIRED_OUTPUT_PATHS = Object.freeze([
   "desktop-dist/mcp.mjs",
   "desktop-dist/mcp.mjs.material-color-identity.json",
   "desktop-dist/service.mjs",
+  "desktop-dist/service.mjs.material-color-identity.json",
   "desktop-dist/remote.mjs",
   ".creative-packs/hao-creator-library/editkin-pack.json",
   `${OWNER_VISUAL_OUTPUT_PREFIX}${OWNER_VISUAL_GRANT.document.path}`,

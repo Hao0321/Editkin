@@ -14,12 +14,13 @@ export function assessUiMeasurement(measurement) {
   if (overflowX > 0 || overflowY > 0) fail("document-overflow", "編輯器文件層不得溢位", { overflowX, overflowY });
   else pass("document-overflow", "文件層無水平或垂直溢位");
 
-  const missingFlow = Object.entries(measurement.primaryFlow).filter(([, visible]) => !visible).map(([name]) => name);
-  if (missingFlow.length) fail("primary-flow", "四步主流程必須直接可見", { missingFlow });
-  else pass("primary-flow", "加入素材、自動剪輯、拖曳微調、輸出影片皆直接可見");
-
   const welcomeMode = measurement.workspaceMode === "welcome";
-  const expectedBeginnerActions = welcomeMode ? ["加入影片"] : ["加入素材", "一鍵自動完成", "輸出影片"];
+  const requiredControls = welcomeMode ? ["import"] : ["import", "auto-complete", "render"];
+  const missingFlow = requiredControls.filter((name) => !measurement.primaryControls.some((control) => control.name === name && control.width > 0 && control.height > 0));
+  if (missingFlow.length) fail("primary-flow", "主要操作必須能直接找到", { missingFlow });
+  else pass("primary-flow", "加入素材、粗剪與輸出入口清楚可見");
+
+  const expectedBeginnerActions = welcomeMode ? ["加入影片"] : ["加入素材", "本機粗剪", "輸出影片"];
   const wrongBeginnerActions = measurement.beginnerActions.length !== expectedBeginnerActions.length
     || expectedBeginnerActions.some((label) => !measurement.beginnerActions.some((actual) => actual.includes(label)));
   if (wrongBeginnerActions) fail("beginner-actions", welcomeMode ? "首次畫面只能有一個清楚的主行動" : "剪輯工作區只能有三個清楚的主行動", { expectedBeginnerActions, actual: measurement.beginnerActions });
@@ -97,10 +98,10 @@ export function selfTestUiUsability() {
   const valid = {
     ...shared,
     workspaceMode: "editor",
-    beginnerActions: ["加入素材", "一鍵自動完成", "輸出影片"],
+    beginnerActions: ["加入素材", "本機粗剪", "輸出影片"],
     visibleDecisionCount: 12,
     disabledDecisionCount: 0,
-    primaryControls: [{ name: "import", width: 100, height: 44 }],
+    primaryControls: [{ name: "import", width: 100, height: 44 }, { name: "auto-complete", width: 100, height: 44 }, { name: "render", width: 100, height: 44 }],
   };
   const validWelcome = {
     ...shared,
@@ -115,7 +116,7 @@ export function selfTestUiUsability() {
   if (assessUiMeasurement(validWelcome).status !== "GREEN") throw new Error("UI evaluator rejected its valid welcome control");
   const mutations = [
     ["document-overflow", { document: { ...valid.document, scrollWidth: 1281 } }],
-    ["primary-flow", { primaryFlow: { ...valid.primaryFlow, agent: false } }],
+    ["primary-flow", { primaryControls: valid.primaryControls.filter((control) => control.name !== "auto-complete") }],
     ["beginner-actions", { beginnerActions: ["加入素材", "輸出影片"] }],
     ["decision-density", { visibleDecisionCount: 15 }],
     ["disabled-clutter", { disabledDecisionCount: 4 }],

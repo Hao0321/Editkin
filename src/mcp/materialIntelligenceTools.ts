@@ -18,7 +18,7 @@ import {
   MATERIAL_KEYFRAME_MAX_RESPONSE_BYTES,
   paginateAgentRows,
 } from "../application/agentContextBudget";
-import { readProject, resolveWorkspaceMediaPath, workspaceRoot } from "./storage";
+import { readProject, resolveProjectAssetMediaPath, workspaceRoot } from "./storage";
 import { personalVisualRoot } from "./toolRuntime";
 import { materialPreparationJobs } from "../application/materialPreparationJobs";
 
@@ -55,7 +55,7 @@ function runtime() {
 async function resolveAssetSource(uri: string): Promise<string> {
   const creativeId = creativeAssetIdFromUri(uri);
   if (creativeId) return (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath;
-  return resolveWorkspaceMediaPath(uri);
+  return resolveProjectAssetMediaPath(uri);
 }
 
 export function compactMaterialKeyframe(frame: MaterialKeyframe) {

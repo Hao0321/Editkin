@@ -84,6 +84,7 @@ const TAURI_RUNTIME_SOURCES = {
   "node.exe": "vendor/node/win32-x64/node.exe",
   "remote.mjs": "desktop-dist/remote.mjs",
   "service.mjs": "desktop-dist/service.mjs",
+  "service.mjs.material-color-identity.json": "desktop-dist/service.mjs.material-color-identity.json",
   "THIRD_PARTY_NOTICES.md": "release/THIRD_PARTY_NOTICES.md",
   "whisper-cli.exe": "vendor/whisper/win32-x64/whisper-cli.exe",
   "WHISPER-LICENSE.txt": "vendor/whisper/win32-x64/WHISPER-LICENSE.txt",

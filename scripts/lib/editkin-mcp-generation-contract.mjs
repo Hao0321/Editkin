@@ -60,6 +60,7 @@ export const EDITKIN_RELEASE_RUNTIME_FILES = Object.freeze([
   "node.exe",
   "remote.mjs",
   "service.mjs",
+  "service.mjs.material-color-identity.json",
   "THIRD_PARTY_NOTICES.md",
   "whisper-cli.exe",
   "WHISPER-LICENSE.txt",

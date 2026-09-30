@@ -305,7 +305,8 @@ async function prepareMaterialContent(
   }
 
   const keyframes: MaterialKeyframe[] = [];
-  const samples = request.kind === "audio" ? [] : selectMaterialKeyframeTimes(request.duration, scene.cuts, identity.maxKeyframes, identity.keyframeTimes)
+  const samples = request.kind === "audio" ? [] : (request.kind === "image" ? [0]
+    : selectMaterialKeyframeTimes(request.duration, scene.cuts, identity.maxKeyframes, identity.keyframeTimes))
     .map((time, index) => ({ id: `kf-${index + 1}`, time, sceneIndex: scene.cuts.filter(cut => cut.time <= time).length }));
   const visualRequest = {
     sourcePath: request.sourcePath, sourceSha256, sourceStart: request.sourceStart, duration: request.duration,

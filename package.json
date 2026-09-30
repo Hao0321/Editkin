@@ -17,6 +17,9 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "test:journey": "tsx scripts/public-source-journey.ts",
+    "desk:preflight": "node scripts/autopilot-desk-preflight.mjs",
+    "desk:community": "node scripts/community-desktop-dev.mjs",
+    "desk:portable-preview": "node scripts/community-portable-build.mjs",
     "source:verify": "node scripts/verify-public-source.mjs",
     "source:verify:self-test": "node scripts/verify-public-source.mjs --self-test",
     "source:scan": "node scripts/verify-public-source.mjs --scan",
@@ -25,7 +28,7 @@
   "dependencies": {
     "@modelcontextprotocol/client": "2.0.0",
     "@modelcontextprotocol/server": "2.0.0",
-    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/api": "^2.12.0",
     "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",

@@ -192,7 +192,7 @@ export function evaluateThemeParity(themeCss: string, sources: ThemeCssSource[] 
     }
     const block = blocks[theme][0];
     if (!block) continue;
-    const expectedScheme = "light";
+    const expectedScheme = theme === "volt" ? "dark" : "light";
     if (block.declarations["color-scheme"] !== expectedScheme) {
       findings.push({ code: "color-scheme", theme, detail: block.declarations["color-scheme"] ?? "missing" });
     }
