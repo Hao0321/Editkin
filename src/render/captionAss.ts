@@ -3,6 +3,7 @@ import { resolveBundledFontFace } from "../typography/fontFaces";
 import { bundledFontAssMetrics } from "../typography/fontEmMetrics";
 import { motionGraphicV2FrameReceipt, motionGraphicV2LayoutReceipt } from "../motion/compositionV2";
 import { motionPanelPaths } from "../motion/panelGeometry";
+import { motionVectorPaths } from "../motion/vectorGeometry";
 
 function assColor(hex: string, opacityMultiplier = 1): string {
   const clean = hex.replace("#", "").padEnd(6, "F");
@@ -121,7 +122,18 @@ function motionGraphicV2Events(project: EditProject, graphic: MotionGraphic, bun
     const frame = motionGraphicV2FrameReceipt(project, graphic, timelineFrame, layout);
     const start = assMotionFrameTime(timelineFrame, project.fps);
     const end = assMotionFrameTime(timelineFrame + 1, project.fps);
-    if (frame.backgroundOpacity > .001) {
+    if (graphic.vectorV2 && frame.vectorState) {
+      const state = frame.vectorState;
+      const x = roundAss(layout.box.x + state.translateXPixels), y = roundAss(layout.box.y + state.translateYPixels);
+      for (const path of motionVectorPaths(graphic, layout, frame)) {
+        const drawing = `{\\an7\\pos(${x},${y})\\p1\\fscx${roundAss(state.scale * 100)}\\fscy${roundAss(state.scale * 100)}\\bord0\\shad0${assOverrideColor(path.color, 1, state.opacity)}}${path.ass}{\\p0}`;
+        events.push(`Dialogue: 1,${start},${end},Motion,,0,0,0,,${drawing}`);
+      }
+      continue;
+    }
+    // Transparent-background typography belongs inside the scene, without a
+    // residual panel stroke. Accent still colors the glyph shadow.
+    if (frame.backgroundOpacity > .001 && !/^#[0-9a-f]{6}00$/i.test(graphic.backgroundColor)) {
       const box = layout.box;
       const drawing = `{\\an7\\pos(${roundAss(box.x)},${roundAss(box.y)})\\p1\\bord0\\shad0${assOverrideColor(graphic.backgroundColor, 1, frame.backgroundOpacity)}}${panel.fillAss}{\\p0}`;
       events.push(`Dialogue: 1,${start},${end},Motion,,0,0,0,,${drawing}`);

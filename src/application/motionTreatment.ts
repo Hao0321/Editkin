@@ -34,6 +34,12 @@ export type MotionTreatment = z.infer<typeof motionTreatmentSchema>;
 export function motionCommandFamilies(command: EditorCommand): MotionTreatmentFamily[] {
   if (command.type === "batch") return [...new Set(command.commands.flatMap(motionCommandFamilies))];
   const families = new Set<MotionTreatmentFamily>();
+  if (command.type === "set_mesh_3d_scene" && command.scene?.enabled) {
+    families.add("vfx");
+    if (command.scene.segments.some(s => s.cameraKeyframes.length || s.objects.some(o => o.keyframes.length))) families.add("transitions_camera");
+    if (command.scene.segments.some(s => s.objects.some(o => o.geometry.kind === "text"))) families.add("title");
+    families.add("motion");
+  }
   if (command.type === "add_motion_graphic") {
     const graphic = command.graphic;
     families.add(graphic.kind === "title" ? "title" : graphic.kind === "card" ? "cards" : "hud");

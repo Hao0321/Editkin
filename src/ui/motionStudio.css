@@ -317,6 +317,14 @@
   box-sizing: border-box;
   overflow: visible;
 }
+.motion-graphic-v2[data-motion-vector] { z-index: 7; }
+.floating-source-slots,
+.motion-vector-controls { display: grid; gap: 7px; margin: 10px 0; }
+.floating-source-slots label,
+.motion-vector-controls label { display: grid; gap: 4px; font-size: 11px; }
+.floating-source-slots input,
+.floating-source-slots select,
+.motion-vector-controls input { width: 100%; min-width: 0; }
 .motion-graphic-v2 > span {
   position: absolute;
   z-index: 1;

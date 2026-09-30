@@ -2,6 +2,10 @@ import index from "../generated/fontFaceIndex.json";
 
 type FontFamilyEntry = readonly [family: string, id: string, weights: readonly number[]];
 
+export function bundledFontFamilies(): readonly string[] {
+  return (index as unknown as readonly FontFamilyEntry[]).map(([name]) => name);
+}
+
 /** Numeric tokens in physical aliases (e.g. "... 850") are not valid unquoted
  * CSS family identifiers. ASS uses the raw name; CSS consumers need a string. */
 export function cssFontFamily(family: string | undefined): string | undefined {

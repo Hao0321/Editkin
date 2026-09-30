@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { materializeMesh3dProject, renderMesh3dVideo } from "./mesh3dRender";
 import { collectRenderArtifactIdentity } from "./renderArtifactIdentity";
 import { renderReviewContentJson } from "../shared/renderReviewContent";
 import { spawn } from "node:child_process";
@@ -392,6 +393,15 @@ export async function renderProject(project: EditProject, outputPath: string, op
 
 async function renderProjectContent(project: EditProject, outputPath: string, options: RenderOptions): Promise<RenderResult> {
   validateProject(project);
+  if (project.scene3d?.enabled) {
+    const workspace = await mkdtemp(join(tmpdir(), "editkin-mesh3d-"));
+    try {
+      const path = join(workspace, "mesh-scene.mp4");
+      const receipt = await renderMesh3dVideo(project, path, options);
+      const result = await renderResolvedProject(materializeMesh3dProject(project, path, receipt.durationSeconds), outputPath, { ...options, preferGpu: false });
+      return { ...result, planner: `${result.planner}+shared-cpu-triangle-zbuffer/v1`, mesh3dPipeline: receipt };
+    } finally { await rm(workspace, { recursive: true, force: true }); }
+  }
   if (options.deliveryProfile === HIGH_BIT_DEPTH_ALPHA_PROFILE) assertHighBitDepthAlphaDeliveryProject(project, outputPath);
   if (project.compositions.length === 0) return renderResolvedProject(project, outputPath, options);
   const workspace = await mkdtemp(join(tmpdir(), "editkin-precomp-"));

@@ -1,7 +1,8 @@
+import type { Mesh3dScene } from "../motion/mesh3dScene";
 export * from "./visualTypes";
 import type {
   CaptionCue, CaptionStyle, ClipLayerState, ColorAdjustments, ColorManagementSettings, CreativeTransition, MediaAsset, MotionTrack,
-  ParticleSimulationSettings, Scene25dSettings, TemplateElementOwner, TimelineTrack, Transform2D, Transform3D,
+  FloatingVideoFrame, ParticleSimulationSettings, Scene25dSettings, TemplateElementOwner, TimelineTrack, Transform2D, Transform3D,
 } from "./visualTypes";
 
 
@@ -34,7 +35,10 @@ export interface AestheticReview {
   machineBlockers: string[];
   completedAt?: string;
   benchmarkReview?: AestheticBenchmarkReview;
+  reviewer?: "human" | "agent";
 }
+
+export type AestheticReviewPolicy = { mode: "human" } | { mode: "agent_reference_comparison"; authorization: string };
 
 export interface AestheticSystem {
   schema: "editkin.aesthetic-system/v1";
@@ -49,7 +53,8 @@ export interface AestheticSystem {
   avoid: string[];
   sharedDnaSha256: string;
   dimensions: AestheticDimension[];
-  scoreContract: { passScore: number; blockBelow: number; minimumDimensionRating: number; humanReviewRequired: true };
+  scoreContract: { passScore: number; blockBelow: number; minimumDimensionRating: number; humanReviewRequired: boolean };
+  reviewPolicy?: AestheticReviewPolicy;
   review: AestheticReview;
 }
 
@@ -108,6 +113,21 @@ export interface MotionGraphicV2Layout {
   widthMode?: "fixed" | "fit_content";
 }
 
+/** Editkin-authored geometric layers; no HTML, CSS animation or component payload. */
+export type MotionVectorV2 = {
+  schema: "editkin.motion-vector/v1";
+  heightPixels: number;
+  revealFrames: number;
+} & (
+  | { kind: "rule" | "panel" | "ellipse" }
+  | { kind: "step_progress"; steps: number; activeStep: number; gapPixels: number }
+  | { kind: "dot_grid"; spacingPixels: number; dotRadiusPixels: number }
+  | { kind: "line_grid"; spacingPixels: number; lineWidthPixels: number; majorEvery: number }
+  | { kind: "connection_field"; seed: number; points: number; dotRadiusPixels: number; lineWidthPixels: number;
+      burstFrames: number; gatherStartFrame: number; gatherFrames: number; connectStartFrame: number; connectFrames: number;
+      groupColors?: [string, string, string] }
+);
+
 export interface MotionGraphic {
   schema: MotionCompositionSchema;
   id: string;
@@ -139,6 +159,7 @@ export interface MotionGraphic {
   offsetY: number;
   motionV2?: MotionGraphicV2Motion;
   layoutV2?: MotionGraphicV2Layout;
+  vectorV2?: MotionVectorV2;
   templateOwner?: TemplateElementOwner;
 }
 
@@ -166,6 +187,8 @@ export interface TemplateCreativeSnapshot {
   effectPresetIds: string[];
   transitionIn: CreativeTransition | null;
   transitionOut: CreativeTransition | null;
+  floatingFrame?: FloatingVideoFrame | null;
+  transform?: Transform2D;
 }
 
 export interface TemplateApplicationSnapshot {
@@ -185,6 +208,7 @@ export interface TemplateApplicationState {
   createdAt: string;
   before: TemplateApplicationSnapshot;
   applied: TemplateApplicationSnapshot;
+  generatedClips?: { clipId: string; trackId: string }[];
 }
 
 export interface DirectorState {
@@ -210,6 +234,7 @@ export interface EditComposition {
   director: DirectorState;
   colorManagement?: ColorManagementSettings;
   scene25d?: Scene25dSettings;
+  scene3d?: Mesh3dScene;
   particleSimulation?: ParticleSimulationSettings;
   updatedAt: string;
 }
@@ -226,6 +251,7 @@ export interface EditProject {
   aestheticSystem?: AestheticSystem;
   colorManagement?: ColorManagementSettings;
   scene25d?: Scene25dSettings;
+  scene3d?: Mesh3dScene;
   particleSimulation?: ParticleSimulationSettings;
   assets: MediaAsset[];
   compositions: EditComposition[];

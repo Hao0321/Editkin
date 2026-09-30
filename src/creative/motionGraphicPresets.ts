@@ -4,6 +4,8 @@ import { initializeStudioCreativeAssets, STUDIO_MOTION_ASSETS } from "./studioAs
 import { initializeWave2Registry } from "./wave2Registry";
 import { TRAVEL_EDITORIAL_PRESETS } from "./travelEditorialPresets";
 import { LOWER_THIRD_PRESETS } from "./lowerThirdPresets";
+import { REEL_MOTION_PRESETS } from "./reelMotionPresets";
+import { NATIVE_VECTOR_PRESETS } from "./nativeVectorPresets";
 
 export type { MotionGraphicPreset } from "./motionGraphicPresetTypes";
 
@@ -104,6 +106,8 @@ export function motionGraphicPresets(): readonly MotionGraphicPreset[] {
   const wave2 = initializeWave2Registry();
   const items: MotionGraphicPreset[] = [
     ...BUILTIN_MOTION_PRESETS.map((item) => ({ ...item, seed: { ...item.seed } })),
+    ...REEL_MOTION_PRESETS.map((item) => ({ ...item, seed: { ...item.seed } })),
+    ...NATIVE_VECTOR_PRESETS.map((item) => ({ ...item, seed: { ...item.seed } })),
     ...TRAVEL_EDITORIAL_PRESETS.map((item) => ({ ...item, seed: { ...item.seed } })),
     ...LOWER_THIRD_PRESETS.flatMap((item) => [
       { id: item.nameBar.presetId!, name: item.nameBar.name!, family: `人物字幕條 · ${item.name}`, license: "MIT", provenance: "Editkin original editable lower-third preset", renderer: "hao-motion-composition/v2" as const, seed: { ...item.nameBar }, routing: { semanticRoles: ["speaker_name", "identity"], formats: ["9:16", "16:9", "1:1"] as Array<"9:16" | "16:9" | "1:1">, requires: ["none"] as Array<"none">, avoidWhen: ["identity_unverified", "dense_lower_frame"], intensity: "low" as const } },

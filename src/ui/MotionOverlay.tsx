@@ -3,6 +3,7 @@ import { cssFontFamily, resolveBundledFontFace } from "../typography/fontFaces";
 import { motionGraphicFrame } from "../motion/composition";
 import { motionGraphicV2FrameReceipt, motionGraphicV2LayoutReceipt } from "../motion/compositionV2";
 import { motionPanelPaths } from "../motion/panelGeometry";
+import { motionVectorPaths } from "../motion/vectorGeometry";
 import "./motionStudio.css";
 
 interface MotionOverlayProps {
@@ -21,6 +22,18 @@ export default function MotionOverlay({ project, playhead, trackingSelectionEnab
           const layout = motionGraphicV2LayoutReceipt(project, graphic);
           const frame = motionGraphicV2FrameReceipt(project, graphic, Math.round(playhead * project.fps), layout);
           if (!frame.visible) return null;
+          if (graphic.vectorV2 && frame.vectorState) {
+            const state = frame.vectorState;
+            return <div key={graphic.id} className="motion-graphic-v2" data-testid="motion-vector-v2"
+              data-motion-vector={graphic.vectorV2.kind} data-motion-layout-receipt={layout.receiptId} style={{
+                left: `${layout.box.x / project.width * 100}%`, top: `${layout.box.y / project.height * 100}%`,
+                width: `${layout.box.width / project.width * 100}%`, height: `${layout.box.height / project.height * 100}%`,
+              }}><svg className="motion-v2-background" viewBox={`0 0 ${layout.box.width} ${layout.box.height}`} preserveAspectRatio="none" aria-hidden="true">
+                <g opacity={state.opacity} transform={`translate(${state.translateXPixels} ${state.translateYPixels}) scale(${state.scale})`}>
+                  {motionVectorPaths(graphic, layout, frame).map((path, index) => <path key={index} d={path.svg} fill={path.color} fillRule="nonzero" />)}
+                </g>
+              </svg></div>;
+          }
           const states = new Map(frame.segments.map((segment) => [segment.segmentId, segment]));
           const panel = motionPanelPaths(layout.box.width, layout.box.height, graphic.cornerRadius ?? 10, graphic.outlineWidth ?? 2);
           return <div key={graphic.id} className={`motion-graphic-v2 motion-${graphic.kind}`} data-testid="motion-graphic-v2" data-motion-preset={graphic.presetId} data-font-weight-substituted={face?.weightSubstituted} title={face?.weightSubstituted ? `字重 ${face.requestedWeight} → ${face.fontWeight}` : undefined} data-motion-layout-receipt={layout.receiptId} style={{
@@ -28,10 +41,10 @@ export default function MotionOverlay({ project, playhead, trackingSelectionEnab
             width: `${layout.box.width / project.width * 100}%`, height: `${layout.box.height / project.height * 100}%`,
             color: graphic.textColor,
           }}>
-            <svg className="motion-v2-background" viewBox={`0 0 ${layout.box.width} ${layout.box.height}`} preserveAspectRatio="none" aria-hidden="true" style={{ opacity: frame.backgroundOpacity }}>
+            {!/^#[0-9a-f]{6}00$/i.test(graphic.backgroundColor) && <svg className="motion-v2-background" viewBox={`0 0 ${layout.box.width} ${layout.box.height}`} preserveAspectRatio="none" aria-hidden="true" style={{ opacity: frame.backgroundOpacity }}>
               <path d={panel.fillSvg} fill={graphic.backgroundColor} />
               {panel.borderSvg && <path d={panel.borderSvg} fill={graphic.accentColor} fillRule="nonzero" />}
-            </svg>
+            </svg>}
             {layout.segments.map((segment) => {
               const state = states.get(segment.id)!;
               return <span key={segment.id} style={{

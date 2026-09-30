@@ -83,6 +83,10 @@ function commandInternal(project: EditProject, command: EditorCommand, context?:
       clip.transform = { ...clip.transform, ...command.patch };
       break;
     }
+    case "set_mesh_3d_scene": {
+      if (command.scene) project.scene3d = structuredClone(command.scene); else delete project.scene3d;
+      break;
+    }
     case "configure_scene_25d": {
       if (!command.enabled) {
         project.scene25d = undefined;

@@ -1,5 +1,5 @@
 import standardJson from "../creative/editkinAestheticStandard.json";
-import type { AestheticSystem, EditorialProfileId } from "../domain/types";
+import type { AestheticReviewPolicy, AestheticSystem, EditorialProfileId } from "../domain/types";
 import { AESTHETIC_BENCHMARKS, BENCHMARK_AXES } from "../domain/aestheticBenchmarks";
 export { scoreAestheticReview } from "../domain/aestheticReview";
 
@@ -38,11 +38,12 @@ export function aestheticDomainForProfile(profile: EditorialProfileId): string {
   return PROFILE_DOMAIN[profile];
 }
 
-export function resolveAestheticSystem(profile: EditorialProfileId, format = "shorts"): AestheticSystem {
-  return resolveAestheticSystemForDomain(aestheticDomainForProfile(profile), format);
+export function resolveAestheticSystem(profile: EditorialProfileId, format = "shorts", reviewPolicy?: AestheticReviewPolicy): AestheticSystem {
+  return resolveAestheticSystemForDomain(aestheticDomainForProfile(profile), format, reviewPolicy);
 }
 
-export function resolveAestheticSystemForDomain(domain: string, format = "shorts"): AestheticSystem {
+export function resolveAestheticSystemForDomain(domain: string, format = "shorts", reviewPolicy?: AestheticReviewPolicy): AestheticSystem {
+  if (reviewPolicy?.mode === "agent_reference_comparison" && !reviewPolicy.authorization.trim()) throw new Error("自主美術審查需要創作者明確授權");
   const selectedFormat = normalizeFormat(format);
   const route = EDITKIN_AESTHETIC_STANDARD.domain_routes[domain] ?? EDITKIN_AESTHETIC_STANDARD.domain_routes.general;
   const family = EDITKIN_AESTHETIC_STANDARD.style_families[route.primary];
@@ -73,9 +74,10 @@ export function resolveAestheticSystemForDomain(domain: string, format = "shorts
       passScore: EDITKIN_AESTHETIC_STANDARD.score_contract.pass_score,
       blockBelow: EDITKIN_AESTHETIC_STANDARD.score_contract.block_below,
       minimumDimensionRating: EDITKIN_AESTHETIC_STANDARD.score_contract.minimum_dimension_rating,
-      humanReviewRequired: true,
+      humanReviewRequired: reviewPolicy?.mode !== "agent_reference_comparison",
     },
-    review: { status: "REVIEW", score: 0, ratings: {}, machineBlockers: [] },
+    ...(reviewPolicy ? { reviewPolicy: structuredClone(reviewPolicy) } : {}),
+    review: { status: "REVIEW", score: 0, ratings: {}, machineBlockers: [], ...(reviewPolicy?.mode === "agent_reference_comparison" ? { reviewer: "agent" as const } : {}) },
   };
 }
 
@@ -90,10 +92,11 @@ export function compactAestheticContract() {
     domainIds: Object.keys(EDITKIN_AESTHETIC_STANDARD.domain_routes),
     passScore: EDITKIN_AESTHETIC_STANDARD.score_contract.pass_score,
     humanReviewRequired: true,
+    supportedReviewModes: ["human", "agent_reference_comparison"],
     benchmarkReview: {
       schema: "editkin.aesthetic-benchmark-review/v1",
       axes: BENCHMARK_AXES.map(id => ({ id, minimumScore: 7, outOf: 10, itemIds: AESTHETIC_BENCHMARKS[id].map(item => item.id) })),
-      policy: "Eight subcriteria per axis derive the existing two dimension ratings; never double-count. Each needs output-bound frame observations. Missing current output or human review is REVIEW, not certification.",
+      policy: "Eight subcriteria per axis derive the existing two dimension ratings; never double-count. Each needs output-bound frame observations. Agent review requires an explicit creator policy and is recorded separately from human approval. Missing output or visual observations remains REVIEW.",
     },
     privacy: "anonymous compiled principles only; no personal paths, accounts, names or reference artwork",
   } as const;

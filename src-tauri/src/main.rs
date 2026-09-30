@@ -770,6 +770,86 @@ fn bounded_color_asset_relative_path(relative_path: &str) -> Result<PathBuf, Str
     Ok(PathBuf::from(directory).join(file_name))
 }
 
+#[tauri::command(async)]
+fn read_mesh_3d_font(app: AppHandle, weight: u16) -> Result<tauri::ipc::Response, String> {
+    const MAX_BYTES: u64 = 16 * 1024 * 1024;
+    if weight != 700 && weight != 900 {
+        return Err("3D 字型只接受內建 Noto Sans TC 700／900".into());
+    }
+    let runtime = runtime_paths(&app)?;
+    let root = fs::canonicalize(&runtime.font_root).map_err(|error| error.to_string())?;
+    let relative = format!("render/EditkinFace-noto-sans-tc-{weight}.ttf");
+    let target = runtime.font_root.join(&relative);
+    let canonical = fs::canonicalize(&target).map_err(|error| error.to_string())?;
+    if !canonical.starts_with(&root) {
+        return Err("3D 字型不可指向字型目錄之外".into());
+    }
+    let manifest_path = runtime.font_root.join("editkin-open-fonts.json");
+    let (mut manifest_file, manifest_before) = open_remote_file_no_follow(&manifest_path)?;
+    if manifest_before.len > 1024 * 1024 {
+        return Err("3D 字型 manifest 超出安全大小".into());
+    }
+    let mut manifest_bytes = Vec::new();
+    Read::by_ref(&mut manifest_file)
+        .take(1024 * 1024 + 1)
+        .read_to_end(&mut manifest_bytes)
+        .map_err(|error| error.to_string())?;
+    if manifest_bytes.len() as u64 != manifest_before.len
+        || remote_file_identity(&manifest_file)? != manifest_before
+        || remote_file_identity_at_path(&manifest_path)? != Some(manifest_before)
+    {
+        return Err("3D 字型 manifest 在讀取時改變".into());
+    }
+    let manifest: Value =
+        serde_json::from_slice(&manifest_bytes).map_err(|error| error.to_string())?;
+    let face = manifest
+        .get("fonts")
+        .and_then(Value::as_array)
+        .and_then(|fonts| {
+            fonts
+                .iter()
+                .find(|font| font.get("family").and_then(Value::as_str) == Some("Noto Sans TC"))
+        })
+        .and_then(|font| font.get("faces"))
+        .and_then(Value::as_array)
+        .and_then(|faces| {
+            faces
+                .iter()
+                .find(|face| face.get("weight").and_then(Value::as_u64) == Some(weight as u64))
+        })
+        .ok_or_else(|| "3D 物理字型 manifest 不合法".to_string())?;
+    let expected_sha = face
+        .get("sha256")
+        .and_then(Value::as_str)
+        .filter(|value| valid_sha256(value))
+        .ok_or_else(|| "3D 物理字型 SHA 不合法".to_string())?;
+    if manifest.get("schemaVersion").and_then(Value::as_u64) != Some(2)
+        || face.get("file").and_then(Value::as_str) != Some(relative.as_str())
+    {
+        return Err("3D 物理字型 manifest 不合法".into());
+    }
+    let (mut file, before) = open_remote_file_no_follow(&target)?;
+    if before.len == 0
+        || before.len > MAX_BYTES
+        || face.get("bytes").and_then(Value::as_u64) != Some(before.len)
+    {
+        return Err("3D 物理字型超出安全大小".into());
+    }
+    let mut bytes = Vec::with_capacity(before.len as usize);
+    Read::by_ref(&mut file)
+        .take(MAX_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| error.to_string())?;
+    if bytes.len() as u64 != before.len
+        || remote_file_identity(&file)? != before
+        || remote_file_identity_at_path(&target)? != Some(before)
+        || format!("{:x}", Sha256::digest(&bytes)) != expected_sha
+    {
+        return Err("3D 物理字型在讀取時改變或 SHA 不符".into());
+    }
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 #[tauri::command]
 fn read_color_asset(app: AppHandle, relative_path: String) -> Result<String, String> {
     const MAX_COLOR_ASSET_BYTES: u64 = 64 * 1024 * 1024;
@@ -10194,6 +10274,7 @@ fn main() {
             compile_plugin_tool,
             import_creative_asset,
             preview_creative_asset,
+            read_mesh_3d_font,
             read_color_asset,
             prepare_media,
             smart_cut_media,

@@ -1,6 +1,5 @@
-import { createMotionGraphic } from "../motion/composition";
 import { applyCommand, type EditorCommand } from "../domain/commands";
-import type { EditProject, EditorialProfileId, MotionGraphic, MotionGraphicKind } from "../domain/types";
+import type { EditProject, EditorialProfileId } from "../domain/types";
 import { resolveAestheticSystem } from "./editkinAesthetic";
 import type { CinematicRecipeId } from "../creative/cinematicLanguage";
 import {
@@ -13,7 +12,7 @@ import {
 
 export type LongFormTemplateId = "hao_tutorial" | "product_deep_dive" | "proof_case_study" | "documentary_explainer" | "interview_story" | "narrative_vlog";
 
-export const LONG_FORM_TEMPLATE_FEATURES = ["剪輯節奏", "純白字幕", "標題", "字卡", "動態圖", "VFX", "標籤", "語意轉場", "調色"] as const;
+export const LONG_FORM_TEMPLATE_FEATURES = ["敘事節奏", "純白字幕規則", "來源優先", "語意提示規劃", "安靜觀看"] as const;
 
 export interface LongFormTemplateDefinition {
   id: LongFormTemplateId;
@@ -63,32 +62,6 @@ export const LONG_FORM_WHITE_CAPTION_STYLE = {
   translationItalic: false,
 };
 
-function boundDuration(start: number, duration: number, end: number, fps: number): number {
-  return Math.max(1 / fps, Math.min(duration, Math.max(1 / fps, end - start)));
-}
-
-function longGraphicSeed(template: LongFormTemplateDefinition, kind: MotionGraphicKind): Partial<MotionGraphic> {
-  const identity = { presetId: `editkin.template/long/${template.id}/${kind}` };
-  if (kind === "title") return { ...identity, x: 0.07, y: 0.1, width: 0.62, fontSize: 64, textColor: template.text, backgroundColor: "#080A10D9", accentColor: template.accent, animation: "slide_up" };
-  if (kind === "card") return { ...identity, x: 0.54, y: 0.66, width: 0.39, fontSize: 38, textColor: template.text, backgroundColor: template.surface, accentColor: template.accent, animation: "fade" };
-  if (kind === "tag") return { ...identity, x: 0.07, y: 0.76, width: 0.23, fontSize: 30, textColor: "#07110A", backgroundColor: template.accent, accentColor: template.text, animation: "spring_soft" };
-  return { ...identity, x: 0.81, y: 0.1, width: 0.12, fontSize: 52, textColor: template.text, backgroundColor: template.accent, accentColor: template.surface, animation: "pop" };
-}
-
-function addLongGraphics(commands: EditorCommand[], template: LongFormTemplateDefinition, identity: TemplateApplicationIdentity, start: number, end: number, fps: number, idFactory: (prefix: string) => string): void {
-  const specs: Array<{ kind: MotionGraphicKind; text: string; offset: number; duration: number }> = [
-    { kind: "title", text: template.copy.title, offset: 0, duration: 3.6 },
-    { kind: "tag", text: template.copy.tag, offset: 3.8, duration: 4.2 },
-    { kind: "counter", text: template.copy.counter, offset: 5.2, duration: 2.8 },
-    { kind: "card", text: template.copy.card, offset: 7.8, duration: 4.5 },
-  ];
-  for (const spec of specs) {
-    const graphicStart = Math.min(end - 1 / fps, start + spec.offset);
-    const graphic = createMotionGraphic(idFactory(`long-template-${spec.kind}`), spec.kind, spec.text, graphicStart, boundDuration(graphicStart, spec.duration, end, fps));
-    commands.push({ type: "add_motion_graphic", graphic: { ...graphic, ...longGraphicSeed(template, spec.kind), templateOwner: templateElementOwner(identity, spec.kind) } });
-  }
-}
-
 export function buildLongFormTemplateCommand(project: EditProject, templateId: string, idFactory: (prefix: string) => string): EditorCommand {
   const template = LONG_FORM_TEMPLATES.find((item) => item.id === templateId);
   if (!template) throw new Error(`未知長片模板：${templateId}`);
@@ -104,34 +77,17 @@ export function buildLongFormTemplateCommand(project: EditProject, templateId: s
   const projectEnd = Math.max(...visualClips.map((clip) => clip.timelineStart + clip.duration));
   const configurationCommands: EditorCommand[] = [
     { type: "set_editorial_profile", profile: template.profile },
-    { type: "set_aesthetic_system", aestheticSystem: resolveAestheticSystem(template.profile, "longform") },
+    { type: "set_aesthetic_system", aestheticSystem: resolveAestheticSystem(template.profile, "longform", baseProject.aestheticSystem?.reviewPolicy) },
     { type: "set_caption_style", patch: LONG_FORM_WHITE_CAPTION_STYLE },
   ];
-  for (const clip of visualClips) configurationCommands.push({ type: "set_clip_creative", clipId: clip.id, patch: { lookPresetId: template.lookPresetId, effectPresetIds: [...template.effectPresetIds] } });
-  const tolerance = 0.5 / baseProject.fps;
-  for (const track of visualTracks) {
-    const clips = [...track.clips].sort((left, right) => left.timelineStart - right.timelineStart);
-    for (let index = 0; index < clips.length - 1; index += 1) {
-      const current = clips[index];
-      const next = clips[index + 1];
-      if (Math.abs(current.timelineStart + current.duration - next.timelineStart) > tolerance) continue;
-      const transition = { presetId: template.introTransitionPresetId, duration: Math.min(0.4, current.duration, next.duration) };
-      configurationCommands.push({ type: "set_clip_creative", clipId: current.id, patch: { transitionOut: transition } }, { type: "set_clip_creative", clipId: next.id, patch: { transitionIn: transition } });
-    }
-  }
   const appliedProject = applyCommand(baseProject, { type: "batch", commands: configurationCommands });
   const commands: EditorCommand[] = [
     ...templateApplicationCleanupCommands(project),
     ...configurationCommands,
   ];
-  if (!baseProject.captions.length) {
-    const captionStart = Math.min(first.timelineStart + first.duration - 1 / baseProject.fps, first.timelineStart + 0.6);
-    commands.push({ type: "add_caption", caption: { id: idFactory("long-template-caption"), text: template.copy.caption, start: captionStart, duration: boundDuration(captionStart, 3, first.timelineStart + first.duration, baseProject.fps), templateOwner: templateElementOwner(identity, "demo_caption") } });
-  }
-  addLongGraphics(commands, template, identity, first.timelineStart, first.timelineStart + first.duration, baseProject.fps, idFactory);
   const markerSpecs = [
-    { at: first.timelineStart, title: `長片模板 · ${template.name}`, note: `${LONG_FORM_TEMPLATE_FEATURES.join("／")}；逐句字幕固定純白，強調元素只走獨立圖卡軌。鏡頭路由 ${template.cinematicRecipeId} 必須由 Video Autopilot 素材證據 gate 通過後再編譯。` },
-    { at: Math.min(projectEnd, first.timelineStart + template.cadence.introSeconds), title: "30 秒承諾檢查", note: "封面與標題承諾應在此之前以真畫面兌現。" },
+    { at: first.timelineStart, title: `長片模板 · ${template.name}`, note: `${LONG_FORM_TEMPLATE_FEATURES.join("／")}；保留原片尺寸、剪點、調色與聲音；不插入示範文案、底板或固定圖卡。依已觀察的畫面與旁白，用短文字／焦點線條做少量提示，提示後回到乾淨畫面。逐句字幕固定純白。鏡頭路由 ${template.cinematicRecipeId} 必須由 Video Autopilot 素材證據 gate 通過後再編譯。` },
+    { at: Math.min(projectEnd, first.timelineStart + template.cadence.introSeconds), title: "開場承諾檢查", note: "封面與標題承諾應在此之前以真畫面兌現。" },
     { at: Math.min(projectEnd, first.timelineStart + template.cadence.rehookSeconds), title: "Re-hook／節奏換氣", note: `一般視覺重置約 ${template.cadence.visualResetSeconds} 秒；依內容呼吸，不固定快切。` },
   ];
   markerSpecs.forEach((marker, index) => commands.push({ type: "add_director_marker", marker: { id: idFactory(`long-template-marker-${index}`), time: marker.at, title: marker.title, note: marker.note, kind: "beat", status: "open", createdAt: identity.createdAt, templateOwner: templateElementOwner(identity, `pace_marker_${index + 1}`) } }));

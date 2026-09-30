@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
@@ -52,6 +52,7 @@ import { assertStaticSourceWhiteBalance } from "./linearWhiteBalanceSupport";
 import { compositeFrameClock } from "./compositeFrameClock";
 import { floatingFrameBackdropLavfi, floatingFrameFfmpegFilters } from "../motion/floatingVideoFrame";
 import { pixelMatteSamplingFilters } from "./pixelMatteSampling";
+import { animatedGeometryCanvas, fixedAnimatedAffineFilters } from "./animatedGeometryCanvas";
 
 export function encoderArgs(encoder: VideoEncoder): string[] {
   if (encoder === "prores_ks") return highBitDepthAlphaEncoderArgs();
@@ -147,6 +148,7 @@ function compositorVideoFilters(input: CompositeInput, outputLabel: string, plan
   // position/color keyframes force a needless full-frame geometry round trip.
   const scaleNeeded = composed.scale !== "1" || transitionScaleExpression(clip) !== "1";
   const rotationNeeded = composed.rotation !== "0";
+  const fixedAffineFilters = fixedAnimatedAffineFilters(project, clip, plan.width, plan.height);
   const layoutFilters = clip.layout ? [
     `crop=${Math.max(2, Math.round(plan.width * clip.layout.crop.width))}:${Math.max(2, Math.round(plan.height * clip.layout.crop.height))}:${Math.max(0, Math.round(plan.width * clip.layout.crop.x))}:${Math.max(0, Math.round(plan.height * clip.layout.crop.y))}`,
     `scale=${Math.max(2, Math.round(plan.width * clip.layout.viewport.width))}:${Math.max(2, Math.round(plan.height * clip.layout.viewport.height))}:flags=lanczos`,
@@ -162,7 +164,7 @@ function compositorVideoFilters(input: CompositeInput, outputLabel: string, plan
     ...(hueNeeded ? [`hue=h='${hue}'`] : []),
     ...effects,
     ...(clip.floatingFrame ? floatingFrameFfmpegFilters(clip.floatingFrame, plan.width, plan.height, plan.fps) : []),
-    ...alphaAwareGeometry([
+    ...alphaAwareGeometry(fixedAffineFilters ?? [
       ...(scaleNeeded ? [`scale='iw*(${scale})':'ih*(${scale})':eval=frame`] : []),
       ...(rotationNeeded ? [rotateWithUnclippedBounds(rotation)] : []),
     ]),
@@ -246,7 +248,7 @@ function overlayPositionedFilter(baseLabel: string, inputLabel: string, outputLa
   // the same center. Static geometry continues to use actual negotiated w/h.
   const localScale = trackMatteSource ? composed.scale : `(${composed.scale})*(${transitionScaleExpression(clip, transitionTime)})`;
   let extentWidth = "w", extentHeight = "h";
-  if (/\b(?:t|T|n|N)\b/.test(localScale)) {
+  if (/\b(?:t|T|n|N)\b/.test(localScale) && (trackMatteSource || !animatedGeometryCanvas(project, clip, plan.width, plan.height))) {
     const baseWidth = !trackMatteSource && clip.layout ? Math.max(2, Math.round(plan.width * clip.layout.viewport.width)) : plan.width;
     const baseHeight = !trackMatteSource && clip.layout ? Math.max(2, Math.round(plan.height * clip.layout.viewport.height)) : plan.height;
     const scaledWidth = `max(1,trunc(${baseWidth}*(${localScale})))`;
@@ -511,12 +513,18 @@ export async function renderComposite(
       filters.push(`[voicemix]atrim=duration=${finite(plan.duration)},asetpts=PTS-STARTPTS[aout]`);
     }
   }
+  const graph = filters.join(";");
+  // Compound animation expressions can exceed Windows' command-line limit.
+  // Use one owned UTF-8 graph file instead of truncating the authored scene.
+  const graphPath = graph.length > 10_000 ? `${output}.${randomUUID()}.ffgraph` : undefined;
+  if (graphPath) await writeFile(graphPath, graph, { encoding: "utf8", flag: "wx" });
   args.push(
-    "-filter_complex", filters.join(";"), "-map", "[vout]", "-map", "[aout]",
+    ...(graphPath ? ["-filter_complex_script", graphPath] : ["-filter_complex", graph]), "-map", "[vout]", "-map", "[aout]",
     ...encoderArgs(encoder), "-pix_fmt", pixelFormat,
     ...outputColorMetadataArgs(encoder, !preserveHighBitDepthAlpha && project.colorManagement?.mode === "aces2" ? project.colorManagement.outputTransform : "rec709_sdr"),
     "-c:a", preserveHighBitDepthAlpha ? "pcm_s24le" : "aac", ...(preserveHighBitDepthAlpha ? [] : ["-b:a", "192k"]), "-ar", "48000", "-ac", "2",
     "-t", finite(plan.duration), "-video_track_timescale", "90000", "-movflags", "+faststart", output,
   );
-  await runProcess(ffmpegPath, args, timeoutMs);
+  try { await runProcess(ffmpegPath, args, timeoutMs); }
+  finally { if (graphPath) await rm(graphPath, { force: true }); }
 }

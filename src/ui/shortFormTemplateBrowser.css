@@ -2,6 +2,14 @@
 .short-template-browser > header { display: grid; gap: 5px; }
 .short-template-browser > header strong { font-size: 16px; line-height: 1.35; }
 .short-template-browser > header span { color: var(--muted); font-size: 13px; line-height: 1.55; }
+.native-template-setup { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.native-template-setup header, .native-template-setup label { display: grid; gap: 6px; min-width: 0; font-size: 13px; }
+.native-template-setup small { color: var(--muted); line-height: 1.5; }
+.native-template-setup input, .native-template-setup select { width: 100%; min-width: 0; min-height: 38px; box-sizing: border-box; color: var(--ink); border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); padding: 7px; }
+.native-template-setup input[type="color"] { padding: 3px; }
+.native-template-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.native-template-row button { min-height: 40px; border: 1px solid var(--line); border-radius: 7px; background: var(--accent-soft); color: var(--ink); cursor: pointer; }
+.native-template-row button:disabled { opacity: .45; cursor: default; }
 
 .template-format-tabs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; padding: 5px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); }
 .template-format-tabs button { min-width: 0; min-height: 48px; padding: 8px; overflow: hidden; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
@@ -36,6 +44,10 @@
 .template-6 .template-title { width: 26px; height: 26px; background: #ff367e; }
 .template-6 .template-caption { box-shadow: 0 -13px #fff,0 -26px #fff; }
 .long-template-card { grid-template-columns: 112px minmax(0,1fr); }
+.long-narrative-preview { height: 82px; margin-top: 4px; padding: 12px; border-radius: 8px; background: #27303b; color: #e9edf3; display: flex; flex-direction: column; justify-content: center; gap: 7px; }
+.long-narrative-preview span { font-size: 12px; font-weight: 650; }
+.long-narrative-preview i { width: 22px; height: 2px; background: var(--template-accent); }
+.long-narrative-preview small { font-size: 10px; opacity: .75; }
 .long-preview { height: 82px; margin-top: 4px; }
 .long-preview .template-title { top: 10px; width: 58px; height: 9px; }
 .long-preview .template-tag { top: 24px; }

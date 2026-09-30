@@ -61,6 +61,7 @@ export interface MotionGraphicV2FrameReceipt {
   visible: boolean;
   backgroundOpacity: number;
   segments: MotionGraphicV2SegmentFrame[];
+  vectorState?: MotionGraphicV2SegmentFrame;
 }
 
 const round = (value: number): number => Math.round(value * 1_000_000) / 1_000_000;
@@ -85,6 +86,9 @@ function layoutSourceSignature(project: EditProject, graphic: MotionGraphic): st
     fontSize: graphic.fontSize, fontFamily: graphic.fontFamily ?? "Noto Sans TC",
     fontWeight: graphic.fontWeight ?? 700, letterSpacing: graphic.letterSpacing ?? 0,
     sequenceUnit: graphic.motionV2!.sequence.unit,
+    // Schema parsing reorders object keys on reopen. Identity binds semantic
+    // geometry, not insertion order, so the same saved scene keeps its receipt.
+    vector: graphic.vectorV2 ? Object.fromEntries(Object.entries(graphic.vectorV2).sort(([a], [b]) => a.localeCompare(b))) : undefined,
     layout: {safeArea: {top: layout.safeArea.top, right: layout.safeArea.right,
       bottom: layout.safeArea.bottom, left: layout.safeArea.left},
       maxLines: layout.maxLines, minFontSize: layout.minFontSize,
@@ -211,6 +215,22 @@ export function motionGraphicV2LayoutReceipt(project: EditProject, graphic: Moti
   const slotWidth = Math.min(graphic.width * project.width, safeRect.width);
   if (slotWidth < 16) throw new Error(`動態圖卡 ${graphic.id} 的 safe-area 可用寬度不足`);
   const slotX = clamp(graphic.x * project.width, safeRect.x, safeRect.x + safeRect.width - slotWidth);
+  if (graphic.vectorV2) {
+    const height = graphic.vectorV2.heightPixels;
+    if (height > safeRect.height) throw new Error("向量高度超出 safe-area，請縮小圖形");
+    const vector = graphic.vectorV2;
+    if (vector.kind === "step_progress" && slotWidth - vector.gapPixels * (vector.steps - 1) < vector.steps) throw new Error("章節進度間隔沒有留下可用寬度");
+    if (vector.kind === "dot_grid" && Math.ceil(slotWidth / vector.spacingPixels) * Math.ceil(height / vector.spacingPixels) > 512) throw new Error("點陣超出每層 512 點預算");
+    if (vector.kind === "line_grid" && Math.ceil(slotWidth / vector.spacingPixels) + Math.ceil(height / vector.spacingPixels) > 256) throw new Error("網格超出每層 256 線預算");
+    const base = {
+      schema: "hao.motion-layout-receipt/v2" as const, sourceSignature: layoutSourceSignature(project, graphic),
+      graphicId: graphic.id, projectWidth: project.width, projectHeight: project.height,
+      safeRect: { x: round(safeRect.x), y: round(safeRect.y), width: round(safeRect.width), height: round(safeRect.height) },
+      box: { x: round(slotX), y: round(clamp(graphic.y * project.height, safeRect.y, safeRect.y + safeRect.height - height)), width: round(slotWidth), height },
+      fontSize: graphic.fontSize, lineHeight: 0, padding: 0, lineCount: 0, unitCount: 1, segments: [],
+    };
+    return { ...base, receiptId: receiptIdentity(base) };
+  }
   const initialFontSize = Math.floor(graphic.fontSize);
   const minimumFontSize = Math.ceil(config.minFontSize);
   for (let fontSize = initialFontSize; fontSize >= minimumFontSize; fontSize -= 1) {
@@ -329,23 +349,26 @@ export function motionGraphicV2FrameReceipt(project: EditProject, graphic: Motio
   const exitRanks = orderedRanks(layout.unitCount, motion.sequence.exitOrder);
   const exitTotalFrames = motion.exit.durationFrames + Math.max(0, layout.unitCount - 1) * motion.sequence.staggerFrames;
   const exitSequenceStart = durationFrames - exitTotalFrames;
-  const segments = layout.segments.map((segment): MotionGraphicV2SegmentFrame => {
-    const entranceDelay = entranceRanks[segment.unitIndex] * motion.sequence.staggerFrames;
-    const exitDelay = exitRanks[segment.unitIndex] * motion.sequence.staggerFrames;
+  const stateAt = (unitIndex: number, segmentId: string): MotionGraphicV2SegmentFrame => {
+    const entranceDelay = entranceRanks[unitIndex] * motion.sequence.staggerFrames;
+    const exitDelay = exitRanks[unitIndex] * motion.sequence.staggerFrames;
     const entrance = evaluateMotionGraphicV2Easing(phaseProgress(localFrame, entranceDelay, motion.entrance.durationFrames), motion.entrance.easing);
     const exit = evaluateMotionGraphicV2Easing(phaseProgress(localFrame - exitSequenceStart, exitDelay, motion.exit.durationFrames), motion.exit.easing);
     return {
-      segmentId: segment.id,
+      segmentId,
       opacity: round(clamp((motion.entrance.opacity + (1 - motion.entrance.opacity) * entrance) * (1 + (motion.exit.opacity - 1) * exit), 0, 1)),
       scale: round((motion.entrance.scale + (1 - motion.entrance.scale) * entrance) * (1 + (motion.exit.scale - 1) * exit)),
       translateXPixels: round(motion.entrance.offsetXPixels * (1 - entrance) + motion.exit.offsetXPixels * exit),
       translateYPixels: round(motion.entrance.offsetYPixels * (1 - entrance) + motion.exit.offsetYPixels * exit),
     };
-  });
+  };
+  const segments = layout.segments.map(segment => stateAt(segment.unitIndex, segment.id));
+  const vectorState = graphic.vectorV2 ? stateAt(0, `${graphic.id}:vector`) : undefined;
   if (segments.length * durationFrames > MOTION_V2_MAX_SEGMENT_FRAMES) throw new Error(`v2 formal event 預算超過 ${MOTION_V2_MAX_SEGMENT_FRAMES}`);
   return {
     schema: "hao.motion-frame-receipt/v2", graphicId: graphic.id, layoutReceiptId: layout.receiptId, timelineFrame, localFrame, visible: true,
-    backgroundOpacity: round(Math.max(0, ...segments.map((segment) => segment.opacity))), segments,
+    backgroundOpacity: round(Math.max(0, vectorState?.opacity ?? 0, ...segments.map((segment) => segment.opacity))), segments,
+    ...(vectorState ? { vectorState } : {}),
   };
 }
 

@@ -24,14 +24,15 @@ function contour(width: number, height: number, radius: number, inset = 0, rever
 
 /** One inside-stroke geometry for both SVG preview and ASS output. CSS border
  * widths snap to device pixels, so they cannot represent this authored contour. */
-export function motionPanelPaths(width: number, height: number, radius: number, outlineWidth: number) {
+export function motionPanelPaths(width: number, height: number, radius: number, outlineWidth: number, origin = { x: 0, y: 0 }) {
   if (![width, height, radius, outlineWidth].every(Number.isFinite) || width <= 0 || height <= 0) throw new Error("Invalid motion panel geometry");
   const border = Math.max(0, Math.min(outlineWidth, width / 2, height / 2));
   const outer = contour(width, height, radius);
   const inner = border > 0 && width > border * 2 && height > border * 2
     ? contour(width - border * 2, height - border * 2, Math.max(0, radius - border), border, true) : [];
-  const ass = (commands: PathCommand[]) => commands.map(c => `${c.op} ${c.points.join(" ")}`).join(" ");
-  const svg = (commands: PathCommand[]) => commands.map(c => `${c.op === "b" ? "C" : c.op.toUpperCase()} ${c.points.join(" ")}`).join(" ");
+  const points = (command: PathCommand) => command.points.map((value, index) => rounded(value + (index % 2 ? origin.y : origin.x))).join(" ");
+  const ass = (commands: PathCommand[]) => commands.map(c => `${c.op} ${points(c)}`).join(" ");
+  const svg = (commands: PathCommand[]) => commands.map(c => `${c.op === "b" ? "C" : c.op.toUpperCase()} ${points(c)}`).join(" ");
   return {
     fillAss: ass(outer), fillSvg: `${svg(outer)} Z`,
     borderAss: border > 0 ? ass([...outer, ...inner]) : "",

@@ -63,14 +63,17 @@ const graphicEventSchema = z.strictObject({
   kind: z.enum([
     "title_card", "context_card", "tracked_value_label", "challenge_ledger", "telemetry_callout",
     "subject_sheen", "money_burst", "proof_freeze", "scale_ladder", "map", "diagram",
-    "lower_third_name", "lower_third_affiliation",
+    "lower_third_name", "lower_third_affiliation", "native_shape",
   ]),
   purpose: z.enum(["context", "stakes", "proof", "state_change", "identity", "payoff"]),
-  message: boundedText(180),
+  message: z.string().trim().max(180),
   evidenceRefs: z.array(evidenceRefSchema).min(1).max(8),
   trackingId: idSchema.optional(),
   matteId: idSchema.optional(),
 }).superRefine((event, context) => {
+  if (event.kind === "native_shape" ? event.message !== "" : event.message.length === 0) {
+    context.addIssue({ code: "custom", path: ["message"], message: "圖形層必須使用空 message；文字事件必須有可見文字" });
+  }
   if (event.kind === "tracked_value_label" && !event.trackingId) {
     context.addIssue({ code: "custom", path: ["trackingId"], message: "tracked_value_label 必須指定 trackingId" });
   }

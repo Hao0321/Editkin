@@ -1,3 +1,4 @@
+import type { Mesh3dScene } from "../motion/mesh3dScene";
 import type { SmartCutKeepRange } from "./smartCut";
 import type {
   CaptionCue,
@@ -57,6 +58,7 @@ export type EditorCommand =
   | { type: "compact_track"; trackId: string }
   | { type: "smart_cut_clip"; clipId: string; keepRanges: SmartCutKeepRange[]; segmentIds: string[] }
   | { type: "update_clip_transform"; clipId: string; patch: Partial<Transform2D> }
+  | { type: "set_mesh_3d_scene"; scene?: Mesh3dScene }
   | { type: "configure_scene_25d"; enabled: boolean }
   | { type: "set_scene_25d_settings"; settings: Scene25dSettings }
   | { type: "update_clip_transform_3d"; clipId: string; patch: Partial<Transform3D> }

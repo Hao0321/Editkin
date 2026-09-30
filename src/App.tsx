@@ -291,14 +291,14 @@ function App() {
     const hasBackground = project.tracks.some((track) => track.kind === "video" && track.id !== selectedClip.trackId && track.clips.some((clip) => clip.timelineStart < selectedClip.timelineStart + selectedClip.duration && clip.timelineStart + clip.duration > selectedClip.timelineStart));
     runCommand({ type: "batch", commands }, `已套用${name}畫中畫${hasBackground ? "" : "；再把底圖或主影片放到主畫面軌即可看到雙層"}。`);
   };
-  const applyShortFormTemplate = async (templateId: string) => {
+  const applyShortFormTemplate = async (templateId: string, content?: import("./application/shortFormTemplates").ShortFormTemplateContent) => {
     const task = projectSession.beginTask(project);
     try {
       const { buildShortFormTemplateCommand, SHORT_FORM_TEMPLATES } = await import("./application/shortFormTemplates");
       if (!acceptProjectTask(task, setStatus, "套用短影音模板")) return;
       const template = SHORT_FORM_TEMPLATES.find((item) => item.id === templateId);
       if (!template) throw new Error("找不到短影音模板");
-      const command = buildShortFormTemplateCommand(project, templateId, (prefix) => makeId(prefix));
+      const command = buildShortFormTemplateCommand(project, templateId, (prefix) => makeId(prefix), content);
       runCommand(command, `已套用「${template.name}」；每個片段、字卡與效果仍可單獨修改。`);
     } catch (error) {
       if (acceptProjectTask(task, setStatus, "套用短影音模板")) setStatus(error instanceof Error ? error.message : "無法套用短影音模板");

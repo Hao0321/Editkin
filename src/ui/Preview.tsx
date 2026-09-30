@@ -6,7 +6,7 @@ import { isMediaPreviewCurrent } from "../application/mediaDerivativeColor";
 import { compileClipAlphaPlan, type ClipAlphaPlan } from "../domain/clipAlphaPlan";
 import { animatedClipState } from "../domain/editGraph";
 import { isTransformMotionBlurInstance } from "../domain/transformMotionBlur";
-import { FLOATING_FRAME_BACKDROP_CSS, FLOATING_FRAME_MEDIA_FIT, floatingFrameCssMatrix, floatingFrameFeatherPixels, floatingFrameGeometry } from "../motion/floatingVideoFrame";
+import { FLOATING_FRAME_BACKDROP_CSS, FLOATING_FRAME_MEDIA_FIT, floatingFrameCornerRadiusPixels, floatingFrameCssMatrix, floatingFrameFeatherPixels, floatingFrameGeometry, floatingFrameMatteShadow } from "../motion/floatingVideoFrame";
 import type { CaptionCue, CaptionStyle, ColorAdjustments, EditProject, LayerBlendMode, NormalizedRect, Transform2D } from "../domain/types";
 import { combineLookColor, previewEffectFilter, previewTransitionState } from "../creative/corePack";
 import { formatTime } from "../lib/format";
@@ -18,6 +18,7 @@ import { nextAutomaticPreviewRepair } from "./previewRepairQueue";
 import { useNativeAudioPreviewPlayback, type NativeAudioTransportState } from "../desktop/useNativeAudioPreviewPlayback";
 import "./captionPreview.css";
 
+const Mesh3dPreview = lazy(() => import("./Mesh3dPreview"));
 const MotionOverlay = lazy(() => import("./MotionOverlay"));
 
 function cssBlendMode(mode: LayerBlendMode): CSSProperties["mixBlendMode"] {
@@ -375,7 +376,7 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
         onPointerMove={trackingSelectionEnabled ? (event) => updateSelection(event, false) : undefined}
         onPointerUp={trackingSelectionEnabled ? (event) => updateSelection(event, true) : undefined}
       >
-        {nativeGpuPreview ? <div className="native-gpu-surface-slot" aria-label="原生 GPU swap-chain 預覽" data-testid="native-gpu-surface" /> : gpuPreviewUrl ? <img className="preview-layer" src={gpuPreviewUrl} alt="原生 GPU 合成預覽" data-testid="gpu-preview-frame" /> : linearWbFallbackBlocked ? <div className="empty-preview" role="status" data-testid="linear-white-balance-preview-unavailable"><strong>線性白平衡預覽尚不可用</strong><span>目前相容預覽無法準確顯示這項調色，已停止顯示未調整原片。請使用已驗證的原生合成預覽或檢查正式輸出。</span></div> : layers.length > 0 ? layers.map((layer, index) => {
+        {project.scene3d?.enabled ? <Suspense fallback={<div role="status">準備 3D 場景…</div>}><Mesh3dPreview project={project} playhead={playhead} playing={playing} layers={layers}/></Suspense> : nativeGpuPreview ? <div className="native-gpu-surface-slot" aria-label="原生 GPU swap-chain 預覽" data-testid="native-gpu-surface" /> : gpuPreviewUrl ? <img className="preview-layer" src={gpuPreviewUrl} alt="原生 GPU 合成預覽" data-testid="gpu-preview-frame" /> : linearWbFallbackBlocked ? <div className="empty-preview" role="status" data-testid="linear-white-balance-preview-unavailable"><strong>線性白平衡預覽尚不可用</strong><span>目前相容預覽無法準確顯示這項調色，已停止顯示未調整原片。請使用已驗證的原生合成預覽或檢查正式輸出。</span></div> : layers.length > 0 ? layers.map((layer, index) => {
           const { clip, asset, source } = layer;
           const displayClip = layer.displayClip ?? clip;
           const displayProject = layer.displayProject ?? project;
@@ -456,19 +457,23 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
             const frame = displayClip.floatingFrame;
             const geometry = floatingFrameGeometry(frame, displayProject.width, displayProject.height, localTime);
             const prism = frame.style === "prism";
+            const matte = frame.style === "matte";
+            const shadow = floatingFrameMatteShadow(displayProject.width, displayProject.height);
+            const cqw = (pixels: number) => `${pixels / displayProject.width * 100}cqw`;
             const feather = `${floatingFrameFeatherPixels(displayProject.width, displayProject.height) / displayProject.width * 100}cqw`;
             const featherMask = `linear-gradient(to right, transparent 0, black ${feather}, black calc(100% - ${feather}), transparent 100%), linear-gradient(to bottom, transparent 0, black ${feather}, black calc(100% - ${feather}), transparent 100%)`;
             return <div key={clip.id} className="preview-layer" style={style} data-testid="preview-floating-video-frame">
               <div style={{ position: "absolute", inset: 0, transformOrigin: "0 0",
-                transform: floatingFrameCssMatrix(geometry.quad, stageDimensions.width, stageDimensions.height) }}>
+                transform: floatingFrameCssMatrix(geometry.quad, stageDimensions.width, stageDimensions.height),
+                filter: matte ? `drop-shadow(${cqw(shadow.x)} ${cqw(shadow.y)} ${cqw(shadow.blur)} rgba(8,11,13,${shadow.opacity}))` : undefined }}>
                 <div style={{ position: "absolute", boxSizing: "border-box", overflow: "hidden",
                   left: `${geometry.left / displayProject.width * 100}%`, top: `${geometry.top / displayProject.height * 100}%`,
                   width: `${geometry.outerWidth / displayProject.width * 100}%`, height: `${geometry.outerHeight / displayProject.height * 100}%`,
                   maskImage: featherMask, WebkitMaskImage: featherMask, maskComposite: "intersect", WebkitMaskComposite: "source-in",
-                  borderRadius: `${Math.max(5, Math.round(geometry.border * 1.6)) / displayProject.width * 100}cqw`,
-                  border: `${geometry.border / displayProject.width * 100}cqw solid ${prism ? "#101D32" : "#16181D"}`,
-                  borderTopColor: prism ? "#96CCD3" : "#D4C3A5", borderRightColor: prism ? "#456C78" : "#66645E",
-                  boxShadow: `inset 0 0 ${geometry.border / displayProject.width * 80}cqw ${prism ? "rgba(150,204,211,.10)" : "rgba(212,195,165,.10)"}, ${geometry.border / displayProject.width * 80}cqw ${geometry.border / displayProject.width * 120}cqw ${geometry.border / displayProject.width * 220}cqw ${prism ? "rgba(23,56,73,.30)" : "rgba(71,68,62,.30)"}, 0 ${geometry.border / displayProject.width * 210}cqw ${geometry.border / displayProject.width * 360}cqw rgba(0,0,0,.32)` }}>
+                  borderRadius: `${floatingFrameCornerRadiusPixels(frame, displayProject.width, displayProject.height, geometry.border) / displayProject.width * 100}cqw`,
+                  border: `${geometry.border / displayProject.width * 100}cqw solid ${matte ? "#121516" : prism ? "#101D32" : "#16181D"}`,
+                  borderTopColor: matte ? "#303536" : prism ? "#96CCD3" : "#D4C3A5", borderRightColor: matte ? "#23282A" : prism ? "#456C78" : "#66645E",
+                  boxShadow: matte ? undefined : `inset 0 0 ${geometry.border / displayProject.width * 80}cqw ${prism ? "rgba(150,204,211,.10)" : "rgba(212,195,165,.10)"}, ${geometry.border / displayProject.width * 80}cqw ${geometry.border / displayProject.width * 120}cqw ${geometry.border / displayProject.width * 220}cqw ${prism ? "rgba(23,56,73,.30)" : "rgba(71,68,62,.30)"}, 0 ${geometry.border / displayProject.width * 210}cqw ${geometry.border / displayProject.width * 360}cqw rgba(0,0,0,.32)` }}>
                   <video key={`${clip.id}:${source}`} ref={node => { if (node) mediaRefs.current.set(clip.id, node); else mediaRefs.current.delete(clip.id); }}
                     src={source} playsInline muted={nativeAudio.mode === "native" || clip.volume <= 0} preload="auto"
                     style={{ display: "block", width: "100%", height: "100%", objectFit: FLOATING_FRAME_MEDIA_FIT }} data-testid="preview-video"
@@ -492,7 +497,9 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
             const mediaStyle = {
               position: "absolute" as const,
               left: `${-crop.x / crop.width * 100}%`, top: `${-crop.y / crop.height * 100}%`,
-              width: `${100 / crop.width}%`, height: `${100 / crop.height}%`, objectFit: "fill" as const,
+              // Crop coordinates refer to the contain-padded project canvas,
+              // exactly as in ffmpegComposite; fill stretches mixed-aspect slots.
+              width: `${100 / crop.width}%`, height: `${100 / crop.height}%`, objectFit: "contain" as const,
             };
             return <div key={clip.id} style={wrapperStyle} data-testid="preview-layout-layer">
               {alphaProcessingRequired
@@ -533,6 +540,7 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
           </div>
         )}
         {!nativeGpuPreview&&!gpuPreviewUrl&&layers.filter(layer=>mediaFailures[failureKey(layer.clip.id,layer.source)]).map(layer=>{const failure=mediaFailures[failureKey(layer.clip.id,layer.source)]!;return <div key={`error:${layer.clip.id}`} role="alert" data-testid="preview-media-error" style={{position:"absolute",inset:"12px",zIndex:100,background:"var(--surface)",color:"var(--ink)",padding:16,fontSize:16,overflow:"auto"}}><strong>「{failure.name}」預覽無法顯示</strong><p>{onRebuildPreview&&layer.asset.kind==="video"?"預覽無法解碼或讀取。可重建預覽；原片與既有剪輯保留。":"預覽無法解碼或讀取。請重新載入並確認來源仍可讀取；原片與既有剪輯保留。"}</p>{onRebuildPreview&&layer.asset.kind==="video"&&<><button type="button" style={{fontSize:16,minHeight:44}} disabled={previewRepair?.phase==="preparing"} onClick={()=>void onRebuildPreview(layer.asset.id)}>重建預覽</button>{previewRepair?.assetId===layer.asset.id&&<p role="status">{previewRepair.message}</p>}{previewRepair?.phase==="preparing"&&previewRepair.assetId!==layer.asset.id&&<p role="status">正在重建另一份素材的預覽，完成後即可重建這份素材。</p>}</>}<details><summary>查看原因</summary><p>{failure.detail}</p></details><button type="button" style={{fontSize:16,minHeight:44}} onClick={()=>{const node=mediaRefs.current.get(layer.clip.id),image=imageRefs.current.get(layer.clip.id);if(node)node.load();else if(image)image.src=layer.source;}}>重新載入預覽</button></div>;})}
+        {project.scene3d?.enabled && layers.filter(layer => layer.asset.kind === "video" && layer.clip.volume > 0).map(({clip,source}) => <audio key={`mesh-audio:${clip.id}:${source}`} ref={node=>{if(node)mediaRefs.current.set(clip.id,node);else mediaRefs.current.delete(clip.id);}} src={source} preload="auto" muted={nativeAudio.mode === "native"}/>)}
         {audioLayers.map(({ clip, source }) => (
           <audio key={`audio:${clip.id}:${source}`} ref={(node) => { if (node) mediaRefs.current.set(clip.id, node); else mediaRefs.current.delete(clip.id); }} src={source} preload="auto" muted={nativeAudio.mode === "native"} />
         ))}

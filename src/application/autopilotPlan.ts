@@ -239,6 +239,7 @@ const NATIVE_GRAPHIC_KINDS = {
   scale_ladder: new Set(["counter", "card"]),
   map: new Set(["card"]),
   diagram: new Set(["card"]),
+  native_shape: new Set(["card"]),
   lower_third_name: new Set(["card"]),
   lower_third_affiliation: new Set(["tag"]),
 } as const;
@@ -283,6 +284,7 @@ function assertVisibleEditorialExecution(plan: CurrentAutopilotPlan): void {
     }
     const graphic = commandById.get(event.id);
     if (!graphic) throw new Error(`editorial graphic 沒有對應 add_motion_graphic 命令：${event.id}`);
+    if ((event.kind === "native_shape") !== Boolean(graphic.vectorV2)) throw new Error(`editorial graphic ${event.id} 的向量／文字事件種類不一致`);
     if (event.presetVariant) assertMotionPresetVariantBinding(graphic, event.presetId, event.presetVariant);
     else assertMotionGraphicPresetBinding(graphic, event.presetId);
     const allowedKinds = NATIVE_GRAPHIC_KINDS[event.kind];
@@ -446,6 +448,12 @@ export function compactAutopilotContract() {
     planes: AUTOPILOT_CONTRACT.planes,
     ruleFamilies: AUTOPILOT_CONTRACT.ruleFamilies.map(({ id, integration }) => ({ id, integration })),
     aesthetic: AUTOPILOT_CONTRACT.aesthetic,
+    visualReview: {
+      step: "visual-review", policyBound: true,
+      modes: ["human", "agent_reference_comparison"],
+      outcomeCheckpoints: ["human_review", "agent_review"],
+      agentEvidence: "Exact project/render hashes, full decode, continuous motion observation and timestamped dimension findings; never human approval.",
+    },
     designExecution: {
       tool: "get_autopilot_design_brief", planPath: "designEvidence", schema: "editkin.autopilot-design-evidence/v1",
       pages: "context, then beat:<id> for each narrative beat; follow nextOffset until hasMore=false",

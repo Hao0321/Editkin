@@ -82,6 +82,6 @@ export function createMotionGraphic(id: string, kind: MotionGraphicKind, text: s
     schema: resolvedSeed?.schema ?? "hao.motion-composition/v1", id, timelineStart, duration, trackId, trackingMode: trackId ? "anchor" : undefined,
     name: preset.name, x: preset.x, y: preset.y, width: preset.width, fontSize: preset.fontSize,
     textColor: preset.textColor, backgroundColor: preset.backgroundColor, accentColor: preset.accentColor,
-    animation: preset.animation, offsetX: trackId ? 0.015 : 0, offsetY: trackId ? -0.02 : 0, ...resolvedSeed, kind, text,
+    animation: preset.animation, offsetX: trackId ? 0.015 : 0, offsetY: trackId ? -0.02 : 0, ...resolvedSeed, kind, text: resolvedSeed?.vectorV2 ? "" : text,
   };
 }

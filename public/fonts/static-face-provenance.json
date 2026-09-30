@@ -1,0 +1,114 @@
+{
+  "schema": "editkin.static-font-provenance/v1",
+  "generator": "scripts/build-static-font-pack.py",
+  "generatorSha256": "99f55dea720032317c0d3ff0b73aa7509a34d0f25d93e95d225b695a9e86c71e",
+  "fontToolsVersion": "4.43.0",
+  "families": [
+    {
+      "id": "noto-sans-tc",
+      "sourceSha256": "864727d210d54f2537bbe23b3a839436c3992af72de9322af5270897246bd44f",
+      "licenseSha256": "1c05c68c34f9708415aada51f17e1b0092d2cea709bf4a94cd38114f9e73d7d9",
+      "axes": {
+        "wght": [
+          100.0,
+          100.0,
+          900.0
+        ]
+      },
+      "weights": [
+        100,
+        150,
+        200,
+        250,
+        300,
+        350,
+        400,
+        450,
+        500,
+        550,
+        600,
+        650,
+        700,
+        750,
+        800,
+        850,
+        900
+      ]
+    },
+    {
+      "id": "noto-serif-tc",
+      "sourceSha256": "0077e18f57c6908f4a000969880940bdb0dad057c0e8d98b49dc364c3d1b09c6",
+      "licenseSha256": "5e0da210fb04058a8c0087985d2d456b931c2579811a49655721d3cf0c36b6d6",
+      "axes": {
+        "wght": [
+          200.0,
+          200.0,
+          900.0
+        ]
+      },
+      "weights": [
+        200,
+        250,
+        300,
+        350,
+        400,
+        450,
+        500,
+        550,
+        600,
+        650,
+        700,
+        750,
+        800,
+        850,
+        900
+      ]
+    },
+    {
+      "id": "lxgw-wenkai-mono-tc",
+      "sourceSha256": "ea6707f71c862f4f255cbe510148b676ca8f5360872633de88694f8004f3f8b3",
+      "licenseSha256": "4fff27d35db0e22cd81d58da6f20e09f415cf354a3338e3cf1fc0eb9222c7174",
+      "axes": {},
+      "weights": [
+        400
+      ]
+    },
+    {
+      "id": "bebas-neue",
+      "sourceSha256": "08e4623805102d819f58601e46e345648846075e363b2ceb23313c2d1c83ec73",
+      "licenseSha256": "72082f6cb4d04be2ecf7cc7d9e1e7d73787f0af8a5a278a47cade70c16b78341",
+      "axes": {},
+      "weights": [
+        400
+      ]
+    },
+    {
+      "id": "fredoka",
+      "sourceSha256": "2ba02e68b152868aef9ba28e24b3648c7d457fe6f25c761f2c2c53fb61a73fc8",
+      "licenseSha256": "5c9e7eee5c6b25f4b05b8d53b2e470ea4962f9ced742d044a98f7d95d1375bab",
+      "axes": {
+        "wght": [
+          300.0,
+          300.0,
+          700.0
+        ],
+        "wdth": [
+          75.0,
+          100.0,
+          125.0
+        ]
+      },
+      "weights": [
+        300,
+        350,
+        400,
+        450,
+        500,
+        550,
+        600,
+        650,
+        700
+      ]
+    }
+  ]
+}

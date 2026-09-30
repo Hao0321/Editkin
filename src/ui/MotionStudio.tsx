@@ -4,8 +4,13 @@ import type { MediaAsset, MotionGraphic, MotionGraphicKind, MotionGraphicPresetS
 import { formatTime } from "../lib/format";
 import { EDITKIN_MOTION } from "../motion/identity";
 import { FLOATING_VIDEO_FRAME_PRESETS, floatingVideoFramePreset } from "../motion/floatingVideoFrame";
-import { FLOATING_FRAME_SCENE_PRESETS, type FloatingFrameScenePresetId } from "../motion/floatingFrameScenes";
+import { FLOATING_FRAME_SCENE_PRESETS, type FloatingFrameScenePresetId, type FloatingFrameSceneBindings } from "../motion/floatingFrameScenes";
+import FloatingFrameSourceSlots from "./FloatingFrameSourceSlots";
+import ReferenceMotionTemplateControls, { type ManualReferenceMotionTemplate } from "./ReferenceMotionTemplateControls";
+import MotionVectorControls from "./MotionVectorControls";
 import { MOTION_CLIP_PRESETS, type MotionClipPresetId } from "../motion/motionClipPresets";
+import { NATIVE_VECTOR_PRESETS } from "../creative/nativeVectorPresets";
+import { REEL_MOTION_PRESETS } from "../creative/reelMotionPresets";
 import type { FloatingVideoFrame, TimelineClip } from "../domain/types";
 import "./motionStudio.css";
 
@@ -13,9 +18,12 @@ export interface MotionStudioProps {
   asset: MediaAsset;
   clip?: TimelineClip;
   onSetFloatingFrame?: (frame?: FloatingVideoFrame) => void;
-  onApplyFloatingScene?: (preset: FloatingFrameScenePresetId) => void;
+  onApplyFloatingScene?: (preset: FloatingFrameScenePresetId, sources?: FloatingFrameSceneBindings) => void;
+  sceneAssets?: readonly MediaAsset[];
   portraitCanvas?: boolean;
   onApplyClipMotionPreset?: (preset: MotionClipPresetId) => void;
+  onApplyReferenceMotionTemplate?: (input: ManualReferenceMotionTemplate) => void;
+  projectFps?: number;
   motionTracks: MotionTrack[];
   trackingBusy: boolean;
   trackingSelectionActive: boolean;
@@ -30,7 +38,7 @@ export interface MotionStudioProps {
   onDeleteMotionGraphic: (graphicId: string) => void;
 }
 
-export default function MotionStudio({ asset, clip, onSetFloatingFrame, onApplyFloatingScene, portraitCanvas = false, onApplyClipMotionPreset, motionTracks, trackingBusy, trackingSelectionActive, trackingSelection, onBeginMotionTrack, onCorrectMotionTrack, onDeleteMotionTrack, onAddMotionGraphic, wave2Presets, motionGraphics, onUpdateMotionGraphic, onDeleteMotionGraphic }: MotionStudioProps) {
+export default function MotionStudio({ asset, clip, onSetFloatingFrame, onApplyFloatingScene, sceneAssets = [], portraitCanvas, onApplyClipMotionPreset, onApplyReferenceMotionTemplate, projectFps, motionTracks, trackingBusy, trackingSelectionActive, trackingSelection, onBeginMotionTrack, onCorrectMotionTrack, onDeleteMotionTrack, onAddMotionGraphic, wave2Presets, motionGraphics, onUpdateMotionGraphic, onDeleteMotionGraphic }: MotionStudioProps) {
   return <div className="motion-controls" aria-label="動態圖卡與追蹤">
     <div className="creative-heading"><div><span className="eyebrow">{EDITKIN_MOTION.name}</span><strong>{EDITKIN_MOTION.label}</strong></div><small>文字可編輯</small></div>
     <div className="motion-quick-grid" data-testid="motion-template-previews">
@@ -40,20 +48,21 @@ export default function MotionStudio({ asset, clip, onSetFloatingFrame, onApplyF
       <button type="button" className="motion-preset-card title" onClick={() => onAddMotionGraphic("title", undefined, findMotionGraphicPreset("v2-word-cascade").seed)}><span><b>逐詞登場</b><i>motion v2</i></span><small>＋ 彈性逐詞主標</small></button>
     </div>
     {asset.kind === "video" && clip && <>
+      <ReferenceMotionTemplateControls key={`reference-${clip.id}`} clip={clip} assets={sceneAssets} portrait={portraitCanvas} fps={projectFps} onApply={onApplyReferenceMotionTemplate} />
       <details className="floating-video-frame-controls" data-testid="floating-video-frame-controls">
         <summary>影片浮空框 <small>原片即時嵌入 · 2.5D 透視</small></summary>
         <p>選一段自己的影片套用；框體、角度、大小可編輯，正式輸出保留原片畫面。</p>
         <div className="motion-quick-grid">
           {FLOATING_VIDEO_FRAME_PRESETS.map(preset => <button type="button" key={preset.id} className="motion-preset-card card"
             onClick={() => onSetFloatingFrame?.(floatingVideoFramePreset(preset.id))}
-            disabled={!onSetFloatingFrame || (preset.id === "portrait_orbit" && !portraitCanvas)}
-            title={preset.id === "portrait_orbit" && !portraitCanvas ? "請先建立直式專案" : undefined}
+            disabled={!onSetFloatingFrame || (preset.id === "portrait_orbit" && portraitCanvas === false)}
             data-testid={`floating-frame-${preset.id}`}><span><b>{preset.name}</b><i>{preset.yawDegrees}°</i></span><small>＋ 套用</small></button>)}
           {FLOATING_FRAME_SCENE_PRESETS.map(preset => <button type="button" key={preset.id} className="motion-preset-card card"
-            title={portraitCanvas ? preset.description : "請先建立直式專案"}
-            onClick={() => onApplyFloatingScene?.(preset.id)} disabled={!portraitCanvas || !onApplyFloatingScene || Boolean(clip.floatingFrame)}
-            data-testid={`floating-scene-${preset.id}`}><span><b>{preset.name}</b><i>三層可編輯影片</i></span><small>＋ 套用</small></button>)}
+            title={preset.description}
+            onClick={() => onApplyFloatingScene?.(preset.id)} disabled={!onApplyFloatingScene || Boolean(clip.floatingFrame) || portraitCanvas === false}
+            data-testid={`floating-scene-${preset.id}`}><span><b>{preset.name}</b><i>同片三窗 · 可編輯</i></span><small>＋ 套用</small></button>)}
         </div>
+        <FloatingFrameSourceSlots key={clip.id} clip={clip} assets={sceneAssets} disabled={Boolean(clip.floatingFrame) || portraitCanvas === false} onApply={onApplyFloatingScene} />
         {clip.floatingFrame && <div className="transform-grid">
           <label>畫面大小<input type="range" min="0.3" max="0.82" step="0.01" value={clip.floatingFrame.size}
             onChange={event => onSetFloatingFrame?.({ ...clip.floatingFrame!, size: Number(event.target.value) })} /><output>{Math.round(clip.floatingFrame.size * 100)}%</output></label>
@@ -80,6 +89,13 @@ export default function MotionStudio({ asset, clip, onSetFloatingFrame, onApplyF
         {clip.keyframes.length > 0 && <small>此片段已有關鍵幀，為保留既有動畫，預設按鈕已停用。</small>}
       </details>
     </>}
+    <details className="wave2-motion-library" data-testid="native-reel-motion-library">
+      <summary>資訊與空間 Motion <small>可編輯圖形 · 逐格動畫</small></summary>
+      <div className="wave2-motion-grid">{[...REEL_MOTION_PRESETS, ...NATIVE_VECTOR_PRESETS].map(preset => <button type="button" key={preset.id}
+        data-testid={`native-motion-${preset.id}`} onClick={() => onAddMotionGraphic(preset.seed.kind ?? "card", undefined, preset.seed)}>
+        <span>{preset.name}</span>
+      </button>)}</div>
+    </details>
     <details className="hologram-motion-library" data-testid="hologram-motion-library">
       <summary>全息／追蹤文字 <small>{HOLOGRAM_MOTION_PRESETS.length} 款 · 可即時改字</small></summary>
       <div className="hologram-motion-grid">
@@ -100,9 +116,10 @@ export default function MotionStudio({ asset, clip, onSetFloatingFrame, onApplyF
     </details>
     {motionGraphics.length > 0 && <div className="motion-graphic-list">
       {motionGraphics.map((graphic) => <div key={graphic.id}>
-        <input value={graphic.text} aria-label={`${graphic.name}文字`} onChange={(event) => onUpdateMotionGraphic(graphic.id, { text: event.target.value })} />
+        {!graphic.vectorV2 && <input value={graphic.text} aria-label={`${graphic.name}文字`} onChange={(event) => onUpdateMotionGraphic(graphic.id, { text: event.target.value })} />}
         <span>{formatTime(graphic.timelineStart)} · {graphic.name}{graphic.visualStyle && graphic.visualStyle !== "solid_panel" ? ` · ${graphic.visualStyle}` : ""}</span>
-        {graphic.schema === "hao.motion-composition/v2" && graphic.layoutV2 && <label className="motion-width-mode">底框
+        {graphic.vectorV2 && <MotionVectorControls graphic={graphic} onUpdate={patch => onUpdateMotionGraphic(graphic.id, patch)} />}
+        {graphic.schema === "hao.motion-composition/v2" && graphic.layoutV2 && !graphic.vectorV2 && <label className="motion-width-mode">底框
           <select aria-label={`${graphic.name}底框寬度`} value={graphic.layoutV2.widthMode ?? "fixed"} onChange={(event) => onUpdateMotionGraphic(graphic.id, { layoutV2: { ...graphic.layoutV2!, widthMode: event.target.value as "fixed" | "fit_content" } })}>
             <option value="fixed">固定寬度</option><option value="fit_content">貼合文字</option>
           </select>

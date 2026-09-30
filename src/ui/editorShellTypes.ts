@@ -75,7 +75,7 @@ export interface EditorShellProps {
   addAssetToTimeline: (assetId: string, mode?: "timeline" | "pip", placement?: { trackId: string; timelineStart: number }) => void;
   makeSelectedPictureInPicture: (layout?: ClipLayout, name?: string) => void;
   precomposeSelected: () => void;
-  applyShortFormTemplate: (templateId: string) => Promise<void>;
+  applyShortFormTemplate: (templateId: string, content?: import("../application/shortFormTemplates").ShortFormTemplateContent) => Promise<void>;
   applyLongFormTemplate: (templateId: string) => Promise<void>;
   addLowerThird: (presetId: LowerThirdPresetId, personName: string, organization: string) => void;
   clearTemplateApplication: () => void;

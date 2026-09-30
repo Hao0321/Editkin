@@ -35,6 +35,9 @@ function allowedBinary(path, rights) {
   return false;
 }
 function sensitivePattern(text) { return sensitive.some(pattern => pattern.test(text)); }
+function isRootWorktreeMetadata(path, text) {
+  return path === ".git" && text.length <= 4096 && /^gitdir: [^\0\r\n]+\r?\n?$/.test(text);
+}
 function relativeModuleWithinRoot(sourcePath, specifier) {
   const target = resolve(root, dirname(sourcePath), specifier);
   const rel = relative(root, target);
@@ -56,12 +59,19 @@ async function* walk(rel = "") {
     const child = rel ? `${rel}/${name}` : name;
     const childStat = await lstat(resolve(root, child));
     if (childStat.isDirectory() && (ignoredGeneratedDirs.has(name) || name.startsWith(".web-public-") || name.startsWith("target-") || name.startsWith("product-"))) continue;
+    if (child === ".git" && childStat.isFile() && childStat.size <= 4096
+      && isRootWorktreeMetadata(child, await readFile(resolve(root, child), "utf8"))) continue;
     yield* walk(child);
   }
 }
 
 if (process.argv.includes("--self-test")) {
   let negativeControls = 0;
+  if (!isRootWorktreeMetadata(".git", "gitdir: /temporary/repository/worktrees/candidate\n")) throw new Error("Worktree metadata positive control rejected");
+  for (const [path, text] of [["src/.git", "gitdir: /temporary/repository"], [".git", "unknown private material"], [".git", "gitdir: /tmp\nextra"], [".git", "gitdir: " + "x".repeat(4096)]]) {
+    if (isRootWorktreeMetadata(path, text)) throw new Error("Non-metadata source incorrectly excluded");
+    negativeControls++;
+  }
   for (const bad of ["../escape", "/absolute", "src/../escape", "C:/absolute", ""]) {
     if (safeRelative(bad)) throw new Error(`Path negative control accepted: ${bad}`);
     negativeControls++;

@@ -14,6 +14,8 @@ const TRAVEL_EDITORIAL_IDS = [
 ] as const;
 const EXPECTED_PRESET_IDS = [
   "surface-track", "v2-word-cascade", ...TRAVEL_EDITORIAL_IDS,
+  "reel_spatial_headline", "reel_editorial_step",
+  "reel_step_progress", "reel_rule_reveal", "reel_dot_grid", "reel_line_grid", "reel_native_panel", "reel_native_disc", "reel_connection_field",
   "lower_third_clean_blue_name", "lower_third_clean_blue_unit",
   "lower_third_documentary_white_name", "lower_third_documentary_white_unit",
   "lower_third_signal_lime_name", "lower_third_signal_lime_unit",
@@ -47,10 +49,10 @@ function surfaceTrackingProject() {
 }
 
 describe("shared motion graphic preset registry", () => {
-  it("exposes exactly the 64 known built-in, lower-third, travel, hologram, Studio and Wave 2 presets", () => {
+  it("exposes exactly the 73 known presets including original native vectors", () => {
     const presets = motionGraphicPresets();
-    expect(EXPECTED_PRESET_IDS).toHaveLength(64);
-    expect(presets).toHaveLength(64);
+    expect(EXPECTED_PRESET_IDS).toHaveLength(73);
+    expect(presets).toHaveLength(73);
     expect(presets.map((item) => item.id).sort()).toEqual([...EXPECTED_PRESET_IDS].sort());
     expect(new Set(presets.map((item) => item.id)).size).toBe(presets.length);
     expect(presets.every((item) => item.seed.presetId === item.id && item.license && item.provenance)).toBe(true);
@@ -58,8 +60,8 @@ describe("shared motion graphic preset registry", () => {
 
   it("returns a compact low-token index and expands one exact editable seed on demand", () => {
     const compact = compactMotionGraphicPresets();
-    expect(compact).toHaveLength(64);
-    expect(new Set(compact.map((item) => item.id)).size).toBe(64);
+    expect(compact).toHaveLength(73);
+    expect(new Set(compact.map((item) => item.id)).size).toBe(73);
     expect(compact.every((item) => !Object.hasOwn(item, "seed"))).toBe(true);
     expect(compact).toEqual(motionGraphicPresets().map((preset) => ({
       id: preset.id, name: preset.name, family: preset.family, license: preset.license,
@@ -85,12 +87,12 @@ describe("shared motion graphic preset registry", () => {
         surface ? "surface-fixture" : undefined, preset.seed);
       const command = editorCommandSchema.parse({ type: "add_motion_graphic", graphic });
       const added = applyCommand(initial, command);
-      const edited = applyCommand(added, { type: "update_motion_graphic", graphicId: graphic.id, patch: { text: "改字" } });
+      const edited = applyCommand(added, { type: "update_motion_graphic", graphicId: graphic.id, patch: { text: preset.seed.vectorV2 ? "" : "改字" } });
       const reopened = projectSchema.parse(JSON.parse(JSON.stringify(edited)));
       expect(initial.motionGraphics, id).toHaveLength(0);
-      expect(added.motionGraphics[0].text, id).toBe("Editkin");
+      expect(added.motionGraphics[0].text, id).toBe(preset.seed.vectorV2 ? "" : "Editkin");
       expect(reopened.motionGraphics, id).toHaveLength(1);
-      expect(reopened.motionGraphics[0].text, id).toBe("改字");
+      expect(reopened.motionGraphics[0].text, id).toBe(preset.seed.vectorV2 ? "" : "改字");
       expect(assertMotionGraphicPresetBinding(reopened.motionGraphics[0], id), id).toBe(preset);
     }
   });

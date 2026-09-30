@@ -142,10 +142,10 @@ export function registerAutopilotTools(server: McpServer): void {
 
   server.registerTool("resolve_autopilot_inference_route", {
     description: "依剪輯任務與品質優先級回傳模型／reasoning effort 建議、第二次複核要求，以及 hash-bound Markdown 小型路由。這是官方定位加本地政策，不冒充模型品質實測；JSON plan 與語意 gate 才是執行真相。",
-    inputSchema: z.object({ taskClass: inferenceTaskClassSchema, priority: inferencePrioritySchema }),
-  }, async ({ taskClass, priority }) => {
-    const route = recommendInferenceRoute(taskClass, priority);
-    const markdown = renderInferenceRouterMarkdown(taskClass, priority);
+    inputSchema: z.object({ taskClass: inferenceTaskClassSchema, priority: inferencePrioritySchema, preferredModelId: z.string().trim().regex(/^[a-zA-Z0-9._:/-]{1,128}$/).optional() }),
+  }, async ({ taskClass, priority, preferredModelId }) => {
+    const route = recommendInferenceRoute(taskClass, priority, preferredModelId);
+    const markdown = renderInferenceRouterMarkdown(taskClass, priority, preferredModelId);
     return textResult({ status: "GREEN", route, context: { protocol: "markdown-router+json-contract/v1", markdown, markdownRouterSha256: inferenceRouterSha256(markdown) } });
   });
 
