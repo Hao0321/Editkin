@@ -1,6 +1,7 @@
 import { configDefaults, defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import sourceTestExclusions from "./source-test-exclusions.json";
+import { editkinPwa } from "./scripts/vite-plugin-pwa";
 
 const nodeTestFiles = [
   "scripts/build-creative-previews.test.mjs",
@@ -28,7 +29,7 @@ export default defineConfig(({ command }) => ({
   // and static render faces stay in Tauri/Electron resources and are loaded
   // through bounded desktop commands instead of being duplicated in the EXE.
   publicDir: command === "build" ? ".web-public" : "public",
-  plugins: [react()],
+  plugins: [react(), editkinPwa({ enabled: process.env.EDITKIN_PWA === "1" })],
   test: {
     // Retained fail-before experiments are replayed explicitly against their
     // captured source; they are not current product regression entry points.

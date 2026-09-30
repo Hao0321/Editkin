@@ -10,6 +10,17 @@ With an independently installed FFmpeg and ffprobe on `PATH`, run `npm run test:
 
 `npm run source:verify:self-test` checks the source verifier's negative controls. `npm run source:verify` checks the exact initial publication snapshot and its hash manifest. `npm run source:scan` checks the current checkout, including pull requests, for private paths, unexpected binaries, key patterns, and the CI permission boundary while allowing ordinary text source changes. New binary assets need maintainer review and a refreshed rights record. These checks support maintainer review; they cannot decide whether arbitrary contributor code is malicious.
 
+## Browser PWA build
+
+`EDITKIN_PWA=1 npm run build` produces an installable, offline-capable variant of the browser build; the GitHub Pages workflow sets it. The default `npm run build`, which the desktop shells use, adds no manifest and no service worker and behaves as before.
+
+The PWA build adds `manifest.webmanifest`, `sw.js`, `pwa-register.js`, and two icons under `icons/` (copies of files already reviewed in `src-tauri/icons`, so no new binary is introduced). `start_url` and `scope` are relative, so the app works under a Pages sub-path.
+
+- **Cache policy:** the service worker precaches the app shell (HTML, JS, CSS, manifest, icons) under a version derived from the file set. Fonts are cached only after the app requests them. Demo videos, benchmarks, and user media are never cached.
+- **Navigation:** network first, with the cached `index.html` as the offline fallback.
+- **Updates:** a new worker waits and never replaces a running session. After a fresh page load it activates only if no other tab still uses the previous version, and it then deletes the old shell cache.
+- **Offline limits:** the interface opens without a network, but the browser build still has no project persistence, no automatic editing, and no video export. The demo clip needs a network connection.
+
 ## Desktop and release path
 
 The Rust and Tauri source is included for development. The desktop media pipeline needs platform-specific runtimes and generated color/font products. A developer must fetch or build those from their upstream sources and comply with their licenses. The existing internal release scripts may expect owner-only creative packs or signing inputs; their failure in this community checkout is an explicit limitation, not a request to obtain the maintainer's private files.
