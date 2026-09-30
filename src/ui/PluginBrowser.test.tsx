@@ -87,6 +87,21 @@ describe("PluginBrowser", () => {
     expect(html).not.toContain("manifestSha256");
   });
 
+  it("warns that a native effect runs unsandboxed and that its hash does not prove authorship", () => {
+    const nativeRegistry = structuredClone(registry);
+    nativeRegistry.plugins[0].capabilities[0] = {
+      ...nativeRegistry.plugins[0].capabilities[0],
+      id: "native-gain",
+      kind: "effect",
+      runtimeType: "native_effect",
+      commandScopes: [],
+    };
+    const native = renderToStaticMarkup(<PluginBrowser registry={nativeRegistry} hasSelectedClip />);
+    expect(native).toContain("原生程式碼，未沙箱");
+    expect(native).toContain("不證明作者身分");
+    expect(renderToStaticMarkup(<PluginBrowser registry={registry} hasSelectedClip />)).not.toContain("未沙箱");
+  });
+
   it("allows a project-scoped tool without pretending project scope means full-program duration", () => {
     const projectRegistry = structuredClone(registry);
     projectRegistry.plugins[0].capabilities[0] = {

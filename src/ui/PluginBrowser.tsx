@@ -129,6 +129,7 @@ export default function PluginBrowser({ registry, loading, busyId, hasSelectedCl
                     <span className="plugin-kind">{KIND_LABEL[capability.kind] ?? capability.kind}</span>
                     <strong>{capability.name}</strong>
                     <p>{capability.description}</p>
+                    {capability.runtimeType === "native_effect" && <p className="workflow-skill-safety" role="note"><b>原生程式碼，未沙箱</b>：此效果會載入外掛自帶的程式庫，以你的使用者權限執行，可讀取你的檔案與網路。SHA-256 只證明檔案與 manifest 一致，不證明作者身分；請只安裝來自你信任來源的外掛。</p>}
                     {planningOnly && <p className="workflow-skill-safety"><b>只讀規劃</b>：不能執行程式或直接修改專案；實際剪輯仍須通過同一份 v4 plan audit。</p>}
                     <div className="plugin-role-list">
                       {projectOnly && <small>專案</small>}

@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -35,6 +35,27 @@ async function fixtureRoot(value: unknown = manifest): Promise<string> {
   await mkdir(directory);
   await writeFile(join(directory, "editkin-plugin.json"), JSON.stringify(value));
   return root;
+}
+
+async function nativePluginFixture() {
+    const root = await mkdtemp(join(tmpdir(), "editkin-native-plugin-test-"));
+    const directory = join(root, "fixture");
+    await mkdir(directory);
+    const library = Buffer.from("diagnostic native library fixture");
+    const librarySha256 = createHash("sha256").update(library).digest("hex");
+    await writeFile(join(directory, "effect.dll"), library);
+    const native = {
+      schema: "editkin.plugin/v1", id: "test.native.effect", name: "Native", version: "2.0.0", minimumHostVersion: "0.15.0",
+      publisher: { name: "Fixture" }, license: { spdx: "MIT", commercialUse: true }, permissions: ["render.effect"],
+      capabilities: [{
+        id: "gain", name: "Gain", description: "Native gain", kind: "effect", automation: "manual", semanticRoles: [], formats: ["any"], requires: [], avoidWhen: [],
+        parameters: [{ id: "gain", name: "Gain", type: "number", default: 1, min: 0, max: 2 }, { id: "enabled", name: "Enabled", type: "boolean", default: true }],
+        runtime: { type: "native_effect", abiVersion: 2, entrySymbol: "editkin_effect_plugin_v2", libraries: { [`${process.platform}-${process.arch}`]: { path: "effect.dll", sha256: librarySha256 } }, supportedFormats: ["rgba32_float"], maxTemporalRadius: 0, timeoutMs: 100 },
+      }],
+    };
+    const text = JSON.stringify(native);
+    await writeFile(join(directory, "editkin-plugin.json"), text);
+    return { root, directory, native, text };
 }
 
 describe("Editkin plugin registry", () => {
@@ -203,23 +224,7 @@ describe("Editkin plugin registry", () => {
   });
 
   it("resolves a hash-pinned numeric native effect instance and blocks identity drift", async () => {
-    const root = await mkdtemp(join(tmpdir(), "editkin-native-plugin-test-"));
-    const directory = join(root, "fixture");
-    await mkdir(directory);
-    const library = Buffer.from("diagnostic native library fixture");
-    const librarySha256 = createHash("sha256").update(library).digest("hex");
-    await writeFile(join(directory, "effect.dll"), library);
-    const native = {
-      schema: "editkin.plugin/v1", id: "test.native.effect", name: "Native", version: "2.0.0", minimumHostVersion: "0.15.0",
-      publisher: { name: "Fixture" }, license: { spdx: "MIT", commercialUse: true }, permissions: ["render.effect"],
-      capabilities: [{
-        id: "gain", name: "Gain", description: "Native gain", kind: "effect", automation: "manual", semanticRoles: [], formats: ["any"], requires: [], avoidWhen: [],
-        parameters: [{ id: "gain", name: "Gain", type: "number", default: 1, min: 0, max: 2 }, { id: "enabled", name: "Enabled", type: "boolean", default: true }],
-        runtime: { type: "native_effect", abiVersion: 2, entrySymbol: "editkin_effect_plugin_v2", libraries: { [`${process.platform}-${process.arch}`]: { path: "effect.dll", sha256: librarySha256 } }, supportedFormats: ["rgba32_float"], maxTemporalRadius: 0, timeoutMs: 100 },
-      }],
-    };
-    const text = JSON.stringify(native);
-    await writeFile(join(directory, "editkin-plugin.json"), text);
+    const { root, native, text } = await nativePluginFixture();
     const registry = await discoverInstalledPlugins([root]);
     expect(registry.diagnostics).toEqual([]);
     const installed = findInstalledCapability(registry, native.id, "gain");
@@ -235,6 +240,31 @@ describe("Editkin plugin registry", () => {
       id: "stale", pluginId: native.id, capabilityId: "gain", pluginVersion: native.version,
       manifestSha256: "0".repeat(64), enabled: true, parameters: {},
     })).toThrow(/identity/);
+  });
+
+  it("re-checks the plugin root when binding, even if discovery state is stale", async () => {
+    const { root, directory, native, text } = await nativePluginFixture();
+    const registry = await discoverInstalledPlugins([root]);
+    expect(registry.diagnostics).toEqual([]);
+    const instance = {
+      id: "instance", pluginId: native.id, capabilityId: "gain", pluginVersion: native.version,
+      manifestSha256: createHash("sha256").update(text).digest("hex"), enabled: true, parameters: {},
+    };
+    expect(resolveNativeEffectBinding(registry, instance).libraryPath).toBe(await realpath(join(directory, "effect.dll")));
+
+    // The library became a symlink to a file outside the plugin after discovery.
+    const outside = join(root, "outside.dll");
+    await writeFile(outside, "not the reviewed library");
+    await rm(join(directory, "effect.dll"));
+    await symlink(outside, join(directory, "effect.dll"), "file");
+    expect(() => resolveNativeEffectBinding(registry, instance)).toThrow(/越過外掛目錄/);
+
+    // A stale in-memory library path that leaves the plugin root is refused before any file access.
+    const platform = `${process.platform}-${process.arch}`;
+    const runtime = findInstalledCapability(registry, native.id, "gain").capability.runtime;
+    if (runtime.type !== "native_effect") throw new Error("fixture must be native");
+    runtime.libraries[platform]!.path = "../outside.dll";
+    expect(() => resolveNativeEffectBinding(registry, instance)).toThrow(/越過外掛目錄/);
   });
 
   it("rebinds a bounded GPU effect graph to the installed manifest and rejects stale identity", async () => {

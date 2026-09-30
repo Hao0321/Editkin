@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { access, readFile, readdir, realpath } from "node:fs/promises";
 import { delimiter, dirname, isAbsolute, relative, resolve } from "node:path";
 import { editorCommandSchema } from "../domain/schema";
@@ -307,10 +308,21 @@ export function resolveNativeEffectBinding(registry: PluginRegistry, instance: N
   const platform = `${process.platform}-${process.arch}`;
   const library = capability.runtime.libraries[platform];
   if (!library) throw new Error(`原生效果不支援目前平台 ${platform}`);
+  // Discovery state can be stale (the file may have been replaced by a symlink
+  // since), so the within-root check is repeated on the canonical path here.
+  const declaredPath = resolve(plugin.root, library.path);
+  if (!isWithin(plugin.root, declaredPath)) throw new Error(`原生程式庫越過外掛目錄：${instance.pluginId}/${instance.capabilityId}`);
+  let libraryPath: string;
+  try {
+    libraryPath = realpathSync(declaredPath);
+    if (!isWithin(realpathSync(plugin.root), libraryPath)) throw new Error("outside");
+  } catch {
+    throw new Error(`找不到原生程式庫，或其 symlink/junction 越過外掛目錄：${instance.pluginId}/${instance.capabilityId}`);
+  }
   return {
     plugin,
     capability: capability as ResolvedNativeEffectBinding["capability"],
-    libraryPath: resolve(plugin.root, library.path),
+    libraryPath,
     numericParameters,
   };
 }

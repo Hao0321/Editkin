@@ -9,3 +9,11 @@ No automated verifier can prove that a pull request contains no malicious logic.
 5. **Runtime boundary:** external Skills, plugins, models, and media are untrusted inputs. Review requested permissions, use explicit user installation, and keep private user files and credentials out of telemetry and logs. A repository badge or popularity does not grant trust.
 
 The community source build currently has no signed installer claim. The 39 integration suites listed in [source-test-exclusions.json](../source-test-exclusions.json) need external runtimes, the separate video-autopilot skill, or generated release products; the default CI result does not cover them. The Windows Authenticode installer suite runs only on Windows. See [RELEASE.md](RELEASE.md) for the remaining official binary gate.
+
+## Native effect plugins
+
+- **Not sandboxed:** a native effect plugin is a shared library (`.dll`/`.so`/`.dylib`) that Editkin loads with `LoadLibrary`/`dlopen`. It runs in a short-lived `hao-core` worker process, not inside the editor window, so a crash cannot take the editor down. The worker still has your user privileges: a malicious plugin can read your files and use the network. Install native plugins only from sources you trust. The plugin list says this next to every native effect.
+- **What the hash proves:** the library SHA-256 comes from the plugin's own manifest. It proves the library matches that manifest, not who wrote it, so it is an integrity check and not an endorsement.
+- **Verified bytes are the loaded bytes:** discovery checks that the library path stays inside the plugin directory after resolving symlinks and junctions. The worker then reads the library once, hashes those bytes, and writes them to a private read-only copy under `<Editkin cache>/.verified-plugin-libraries/<sha256>/`; that copy is what gets loaded. Replacing the file in the plugin directory after the check therefore cannot change what runs, and an existing copy is re-hashed and must be a regular file before reuse.
+- **Binding time:** resolving a native effect for rendering repeats the within-plugin-directory check on the canonical path, so stale discovery state cannot point the worker outside the plugin directory.
+- **Not implemented:** a first-use confirmation naming the plugin and hash, and running plugins in a separate low-privilege process.

@@ -153,10 +153,82 @@ pub struct EffectProcessV2 {
 
 type EffectEntryV2 = unsafe extern "C" fn(*const EffectProcessV2) -> i32;
 
-pub fn sha256_file(path: &Path) -> Result<String, String> {
-    let bytes = fs::read(path).map_err(|error| format!("read {}: {error}", path.display()))?;
-    let digest = Sha256::digest(bytes);
-    Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
+fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+/// Returns a private, read-only copy of the plugin library whose bytes were
+/// hashed and compared with the manifest, so the file that gets loaded is the
+/// file that was verified. Loading the plugin directory's own path would leave
+/// a window in which the file can be swapped after the hash check.
+///
+/// The copy lives under `staging_root/<sha256>/`, which must be an
+/// application-owned directory (never the plugin directory). An existing copy
+/// is reused only after it is re-hashed and found to be a regular file.
+fn stage_verified_library(
+    source: &Path,
+    expected_sha256: &str,
+    staging_root: &Path,
+) -> Result<PathBuf, String> {
+    let bytes = fs::read(source).map_err(|error| format!("read {}: {error}", source.display()))?;
+    let actual = sha256_hex(&bytes);
+    if !expected_sha256.eq_ignore_ascii_case(&actual) {
+        return Err("effect plugin library hash mismatch".into());
+    }
+    let file_name = source
+        .file_name()
+        .ok_or("effect plugin library path has no file name")?;
+    let directory = staging_root.join(&actual);
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder
+        .create(&directory)
+        .map_err(|error| format!("create {}: {error}", directory.display()))?;
+    let target = directory.join(file_name);
+    if let Ok(existing) = fs::symlink_metadata(&target) {
+        if existing.is_file() && fs::read(&target).is_ok_and(|content| sha256_hex(&content) == actual)
+        {
+            return Ok(target);
+        }
+        fs::remove_file(&target)
+            .map_err(|error| format!("replace staged library {}: {error}", target.display()))?;
+    }
+    let temporary = directory.join(format!(".{}.tmp", std::process::id()));
+    let _ = fs::remove_file(&temporary);
+    let written = (|| -> std::io::Result<()> {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        drop(file);
+        let mut permissions = fs::metadata(&temporary)?.permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(&temporary, permissions)?;
+        fs::rename(&temporary, &target)
+    })();
+    if let Err(error) = written {
+        let _ = fs::remove_file(&temporary);
+        return Err(format!("stage effect plugin library: {error}"));
+    }
+    Ok(target)
+}
+
+fn library_staging_root(output_path: &Path) -> Result<PathBuf, String> {
+    output_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .map(|parent| parent.join(".verified-plugin-libraries"))
+        .ok_or_else(|| "effect plugin output path has no cache directory".to_string())
 }
 
 fn decode_f32(bytes: &[u8]) -> Result<Vec<f32>, String> {
@@ -220,10 +292,11 @@ pub fn run_plugin_worker(
     {
         return Err("plugin does not support RGBA32F host boundary".into());
     }
-    let actual_hash = sha256_file(&request.library_path)?;
-    if !manifest.library_sha256.eq_ignore_ascii_case(&actual_hash) {
-        return Err("effect plugin library hash mismatch".into());
-    }
+    let library_path = stage_verified_library(
+        &request.library_path,
+        &manifest.library_sha256,
+        &library_staging_root(&request.output_path)?,
+    )?;
     let pixel_count = request
         .width
         .checked_mul(request.height)
@@ -236,10 +309,11 @@ pub fn run_plugin_worker(
     }
     let mut output = vec![0.0_f32; input.len()];
     let identity = cache_identity(&manifest, &request, &input_bytes);
-    // SAFETY: the library hash and ABI manifest are checked before loading; all
-    // buffers remain alive and correctly sized for the duration of the call.
+    // SAFETY: the loaded file is the private copy whose bytes were hashed against
+    // the manifest, and the ABI manifest is checked before loading; all buffers
+    // remain alive and correctly sized for the duration of the call.
     let result = unsafe {
-        let library = libloading::Library::new(&request.library_path)
+        let library = libloading::Library::new(&library_path)
             .map_err(|error| format!("load effect plugin: {error}"))?;
         if manifest.abi_version == EFFECT_ABI_V1 {
             let call = EffectProcessV1 {
@@ -357,6 +431,7 @@ pub fn sequence_temp_output_path(output_path: &Path, process_id: u32) -> PathBuf
 fn run_plugin_sequence_inner(
     request: &EffectPluginSequenceRequest,
     manifest: &EffectPluginManifest,
+    library_path: &Path,
     temporary_output: &Path,
 ) -> Result<EffectPluginSequenceWorkerReceipt, String> {
     let pixel_count = request
@@ -431,11 +506,12 @@ fn run_plugin_sequence_inner(
     }
     let mut output_digest = Sha256::new();
 
-    // SAFETY: the worker owns the validated, hash-pinned library for the entire
-    // sequence. Function pointers are copied only while that library is alive;
-    // frame buffers remain fixed-size and live for each call.
+    // SAFETY: the worker loads the private copy whose bytes were hashed against
+    // the manifest, for the entire sequence. Function pointers are copied only
+    // while that library is alive; frame buffers remain fixed-size and live for
+    // each call.
     unsafe {
-        let library = libloading::Library::new(&request.library_path)
+        let library = libloading::Library::new(library_path)
             .map_err(|error| format!("load effect plugin: {error}"))?;
         #[derive(Clone, Copy)]
         enum Entry {
@@ -607,12 +683,13 @@ pub fn run_plugin_sequence_worker(
     {
         return Err("plugin does not support RGBA32F host boundary".into());
     }
-    let actual_hash = sha256_file(&request.library_path)?;
-    if !manifest.library_sha256.eq_ignore_ascii_case(&actual_hash) {
-        return Err("effect plugin library hash mismatch".into());
-    }
+    let library_path = stage_verified_library(
+        &request.library_path,
+        &manifest.library_sha256,
+        &library_staging_root(&request.output_path)?,
+    )?;
     let temporary_output = sequence_temp_output_path(&request.output_path, std::process::id());
-    let result = run_plugin_sequence_inner(&request, &manifest, &temporary_output);
+    let result = run_plugin_sequence_inner(&request, &manifest, &library_path, &temporary_output);
     if result.is_err() {
         let _ = fs::remove_file(&temporary_output);
     }
@@ -640,6 +717,81 @@ mod tests {
             frame_duration_denominator: 30,
             parameters: vec![0.8, 0.25, 0.0],
         }
+    }
+
+    fn staging_fixture(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "editkin-plugin-stage-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(root.join("plugin")).unwrap();
+        root
+    }
+
+    #[test]
+    fn staged_library_is_a_private_copy_of_the_hashed_bytes() {
+        let root = staging_fixture("copy");
+        let source = root.join("plugin").join("effect.bin");
+        fs::write(&source, b"verified library").unwrap();
+        let expected = sha256_hex(b"verified library");
+        let staged =
+            stage_verified_library(&source, &expected, &root.join("cache")).unwrap();
+        assert_ne!(staged, source);
+        assert!(staged.starts_with(root.join("cache")));
+
+        // Swapping the plugin file after verification must not change what is loaded.
+        fs::write(&source, b"malicious replacement").unwrap();
+        assert_eq!(fs::read(&staged).unwrap(), b"verified library");
+        // ...and a later run over the replaced file is rejected outright.
+        assert_eq!(
+            stage_verified_library(&source, &expected, &root.join("cache")).unwrap_err(),
+            "effect plugin library hash mismatch"
+        );
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn staged_library_rejects_a_hash_mismatch_without_writing() {
+        let root = staging_fixture("mismatch");
+        let source = root.join("plugin").join("effect.bin");
+        fs::write(&source, b"library").unwrap();
+        let wrong = sha256_hex(b"other");
+        assert!(stage_verified_library(&source, &wrong, &root.join("cache")).is_err());
+        assert!(!root.join("cache").exists());
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn tampered_or_symlinked_staged_copy_is_replaced_not_reused() {
+        let root = staging_fixture("tamper");
+        let source = root.join("plugin").join("effect.bin");
+        fs::write(&source, b"library").unwrap();
+        let expected = sha256_hex(b"library");
+        let cache = root.join("cache");
+        let staged = stage_verified_library(&source, &expected, &cache).unwrap();
+
+        let mut permissions = fs::metadata(&staged).unwrap().permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        permissions.set_readonly(false);
+        fs::set_permissions(&staged, permissions).unwrap();
+        fs::write(&staged, b"tampered").unwrap();
+        let again = stage_verified_library(&source, &expected, &cache).unwrap();
+        assert_eq!(fs::read(&again).unwrap(), b"library");
+
+        #[cfg(unix)]
+        {
+            let decoy = root.join("decoy");
+            fs::write(&decoy, b"library").unwrap();
+            fs::remove_file(&again).unwrap();
+            std::os::unix::fs::symlink(&decoy, &again).unwrap();
+            let replaced = stage_verified_library(&source, &expected, &cache).unwrap();
+            assert!(!fs::symlink_metadata(&replaced).unwrap().file_type().is_symlink());
+        }
+        fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
