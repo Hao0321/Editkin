@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -23,6 +24,12 @@ describe.each([
     const file = join(root, "empty");
     await writeFile(file, "");
     expect((await read(file, 0)).length).toBe(0);
+  });
+
+  it.skipIf(process.platform === "win32")("rejects a FIFO before reading even when links are followed", async () => {
+    const fifo = join(root, "synthetic-fifo");
+    execFileSync("mkfifo", [fifo]);
+    await expect(read(fifo, 100, { followSymlinks: true, messages: { notRegular: "not regular" } })).rejects.toThrow("not regular");
   });
 
   it("rejects directories", async () => {

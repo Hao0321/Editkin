@@ -1,10 +1,9 @@
-import { readFile } from "node:fs/promises";
 import { Console } from "node:console";
 import { isAbsolute, resolve } from "node:path";
 import { exportVideo } from "../application/exportVideo";
 import { inspectMedia } from "../application/inspectMedia";
 import { generateMediaDerivatives } from "../application/mediaDerivatives";
-import { parseProject, readProjectFile, writeProjectFileAtomic } from "../application/projectFiles";
+import { parseProject, readProjectFile, readProjectText, writeProjectFileAtomic } from "../application/projectFiles";
 import { clearRecoveryFile, readRecoveryFile, writeRecoveryFileAtomic } from "../application/recoveryFiles";
 import { analyzeSmartCut } from "../application/smartCut";
 import { transcribeAutomaticCaptions } from "../application/automaticCaptions";
@@ -115,7 +114,7 @@ async function dispatch(request: ServiceRequest): Promise<unknown> {
   }
   if (request.command === "parse_project") {
     const input = request.payload.path
-      ? JSON.parse(await readFile(String(request.payload.path), "utf8"))
+      ? JSON.parse(await readProjectText(String(request.payload.path)))
       : request.payload.project;
     return parseProject(input);
   }
