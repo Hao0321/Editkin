@@ -16,7 +16,7 @@ Motion presets include an editable floating video frame with softened outer edge
 
 ## Browser build
 
-The web build (`npm run build`, or `npm run dev` locally) is a browser fallback of the desktop UI, not the full product. It can import media, preview it, and edit the timeline. It cannot run automatic editing (which needs the desktop build's local Whisper and FFmpeg engines) or render a video: "Export project" downloads the EditGraph JSON only. Projects are not autosaved or restored; reloading the page discards them. If a web build is published, for example through GitHub Pages, treat it as a try-out of the interface. Use the desktop build for real editing and output.
+The web build (`npm run build`, or `npm run dev` locally) provides a browser version of the desktop UI. It can import media, preview it, and edit the timeline. Automatic workflows that need local Whisper or FFmpeg, including speech transcription and media analysis, require the desktop build. The browser cannot render a video: "Export project" downloads the EditGraph JSON only. Projects are not autosaved or restored; reloading the page discards them. A published web build, for example through GitHub Pages, lets people try the interface. Use the desktop build for those automatic workflows and video output.
 
 ## Build the source
 
