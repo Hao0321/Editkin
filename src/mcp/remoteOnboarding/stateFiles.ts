@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { constants } from "node:fs";
 import { link, lstat, mkdir, open, rename, unlink } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { MAX_JSON_BYTES } from "./constants";
@@ -38,18 +39,30 @@ async function readBoundedUtf8(handle: Awaited<ReturnType<typeof open>>): Promis
 }
 
 export async function readJson(path: string, hooks: RemoteJsonReadHooks = {}): Promise<unknown | undefined> {
-  let metadata;
-  try { metadata = await lstat(path); }
+  // Open first. O_NOFOLLOW rejects a final symlink on platforms that support
+  // it; O_NONBLOCK prevents a substituted FIFO from hanging before fstat.
+  // Windows still rejects reparse paths through the identity witness below.
+  let handle: Awaited<ReturnType<typeof open>>;
+  try { handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)); }
   catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ELOOP") throw new Error("Remote 設定檔 symlink/reparse 路徑已拒絕");
+    if (code === "ENOENT") {
+      const missing = await lstat(path).catch((cause: NodeJS.ErrnoException) => {
+        if (cause.code === "ENOENT") return undefined;
+        throw cause;
+      });
+      if (missing?.isSymbolicLink()) throw new Error("Remote 設定檔 symlink/reparse 路徑已拒絕");
+      return undefined;
+    }
     throw error;
   }
-  if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.size > MAX_JSON_BYTES) {
-    throw new Error("Remote 設定檔必須是小型本機一般檔案；symlink/reparse 路徑已拒絕");
-  }
-  const handle = await open(path, "r");
   try {
     const openedBefore = await handle.stat();
+    const metadata = await lstat(path);
+    if (metadata.isSymbolicLink() || !metadata.isFile() || metadata.size > MAX_JSON_BYTES) {
+      throw new Error("Remote 設定檔必須是小型本機一般檔案；symlink/reparse 路徑已拒絕");
+    }
     if (!openedBefore.isFile() || openedBefore.size > MAX_JSON_BYTES
       || openedBefore.dev !== metadata.dev || openedBefore.ino !== metadata.ino
       || openedBefore.size !== metadata.size) {
