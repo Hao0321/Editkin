@@ -16,7 +16,7 @@ interface AgentPanelProps {
   semanticAutoEditBusy?: boolean;
   semanticAutoEditStage?: SemanticAutoEditStage;
   onOpenAgentConnect?: () => void;
-  /** Set when the runtime cannot run the local engines (browser build); the one-click actions are disabled with this reason. */
+  /** Set when the runtime cannot run local engines; Web Audio Smart Cut remains available. */
   unavailableReason?: string;
   hasMedia: boolean;
 }
@@ -62,7 +62,7 @@ export function AgentPanel({ status, onSubmit, onSmartCut, smartCutBusy = false,
                 {unavailableReason && <p className="agent-unavailable-note" data-testid="agent-unavailable-note">{unavailableReason}</p>}
                 <div className="automation-actions" aria-label="一鍵自動剪輯">
                   {onOpenAgentConnect && <button type="button" className="agent-long-source" onClick={onOpenAgentConnect} title="讓你的 Codex／Claude 看懂一支長片，再拆成多個獨立可編輯 Reels"><b>AI</b><span>長片拆多支 Reels</span></button>}
-                  {onSmartCut && <button type="button" className="smart-cut-button" onClick={onSmartCut} disabled={smartCutBusy || !hasMedia || Boolean(unavailableReason)} title={unavailableReason ?? (hasMedia ? "自動找出並刪除停頓" : "請先加入你的影片")} data-testid="smart-cut-button"><b aria-hidden="true">✂</b><span><strong>{smartCutBusy ? "分析中…" : "刪掉停頓"}</strong><small>自動找出空白</small></span></button>}
+                  {onSmartCut && <button type="button" className="smart-cut-button" onClick={onSmartCut} disabled={smartCutBusy || !hasMedia} title={hasMedia ? "自動找出並刪除停頓；網頁版限 32 MiB、全長 5 分鐘以內的單／雙聲道素材" : "請先加入你的影片"} data-testid="smart-cut-button"><b aria-hidden="true">✂</b><span><strong>{smartCutBusy ? "分析中…" : "刪掉停頓"}</strong><small>自動找出空白</small></span></button>}
                   {onAutomaticCaptions && <div className="automatic-caption-choice">
                     <label htmlFor="automatic-caption-mode">字幕類型</label>
                     <select id="automatic-caption-mode" value={captionMode} onChange={(event) => setCaptionMode(event.target.value as "original" | "bilingual-en")} disabled={automaticCaptionsBusy} data-testid="automatic-caption-mode">

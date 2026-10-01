@@ -65,8 +65,8 @@ export function EditorShell(props: EditorShellProps) {
     acceptTrackingSelection, startPodcastDirector, submitAgentInstruction, runCommand, updateAnimatedClipProperty,
     addMotionGraphic, addCaption, addTrack, addAssetToTimeline, makeSelectedPictureInPicture, precomposeSelected, applyShortFormTemplate, applyLongFormTemplate, addLowerThird, clearTemplateApplication, splitSelected, deleteSelected,
   } = props;
-  // The browser build has no local Whisper/FFmpeg/Rust engines; say so up front instead of failing after a click.
-  const engineUnavailableReason = isDesktop ? undefined : "網頁版沒有本機 Whisper／FFmpeg 引擎，這項功能需要桌面版。";
+  // Web Audio Smart Cut is available; the other automated workflows still need local engines.
+  const engineUnavailableReason = isDesktop ? undefined : "字幕、場景分析與完整自動剪輯需要桌面版的本機 Whisper／FFmpeg 引擎。";
   const selectedAsset = selectedClip ? project.assets.find((asset) => asset.id === selectedClip.assetId) : undefined;
   const hasUserMedia = project.assets.some((asset) => asset.id !== "asset-demo");
   const showWelcome = !hasUserMedia && !demoWorkspaceOpened;

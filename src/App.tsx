@@ -147,6 +147,7 @@ function App() {
     projectSession,
     project,
     selectedClip,
+    runtimeUrls,
     onCommand: runCommand,
     onStatus: setStatus,
     onRuntimeUrls: (urls) => setRuntimeUrls((current) => ({ ...current, ...urls })),

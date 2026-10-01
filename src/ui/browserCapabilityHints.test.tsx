@@ -19,14 +19,16 @@ function agentPanel(unavailableReason?: string) {
 }
 
 describe("browser capability hints", () => {
-  it("disables every engine-backed one-click action with the reason instead of failing after a click", () => {
+  it("keeps Web Audio Smart Cut available while disabling engine-backed actions", () => {
     const html = agentPanel(REASON);
-    for (const id of ["semantic-edit-panel-button", "smart-cut-button", "automatic-caption-button", "scene-split-button"]) {
+    for (const id of ["semantic-edit-panel-button", "automatic-caption-button", "scene-split-button"]) {
       const tag = button(html, id);
       expect(tag, id).toContain("disabled");
       expect(tag, id).toContain(REASON);
     }
     expect(html).toContain('data-testid="agent-unavailable-note"');
+    expect(button(html, "smart-cut-button")).not.toContain("disabled");
+    expect(button(html, "smart-cut-button")).not.toContain(REASON);
   });
 
   it("leaves the actions enabled and shows no note when the engines exist", () => {

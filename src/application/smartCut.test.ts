@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseSilenceDetect, planSmartCutReference } from "./smartCut";
+import { parseSilenceDetect } from "./smartCut";
+import { planSmartCutReference } from "./smartCutPlan";
 
 describe("Smart Cut analysis", () => {
   it("parses paired, leading and trailing FFmpeg silence events", () => {
