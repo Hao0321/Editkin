@@ -230,7 +230,11 @@ async function renderSceneLinearAces2DisplayProject(
 }
 
 async function renderResolvedProject(project: EditProject, outputPath: string, options: RenderOptions, alphaIntermediate = false): Promise<RenderResult> {
-  const { initializeWave2Registry } = await import("../creative/wave2Registry");
+  const [{ initializeStudioCreativeAssets }, { initializeWave2Registry }] = await Promise.all([
+    import("../creative/studioAssets"),
+    import("../creative/wave2Registry"),
+  ]);
+  initializeStudioCreativeAssets();
   initializeWave2Registry();
   const alphaDelivery = !alphaIntermediate && options.deliveryProfile === HIGH_BIT_DEPTH_ALPHA_PROFILE;
   const preserveHighBitDepthAlpha = alphaIntermediate || alphaDelivery;

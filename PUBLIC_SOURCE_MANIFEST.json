@@ -4451,8 +4451,8 @@
     },
     {
       "path": "src/application/autopilotPlan.ts",
-      "bytes": 33409,
-      "sha256": "1f87b7b08c98d958d71330949f7abd0886d6d4e34bcc7f60987c84d6572a9d62",
+      "bytes": 33547,
+      "sha256": "4f5b2968b4f7b5fef08f7a199490e52c470a54037e8b28e555d509f1a6aa3f7a",
       "origin": "src/application/autopilotPlan.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -4577,8 +4577,8 @@
     },
     {
       "path": "src/application/editorialPlan.ts",
-      "bytes": 10890,
-      "sha256": "49d770bf4f8e505ff3e0156cca16785cf3e5e843159896467a01b11ff895e519",
+      "bytes": 10904,
+      "sha256": "d1482d971428d10a51aa5a51d4ad7d359acbf9edb39f0fc0a35bcc59366e5134",
       "origin": "src/application/editorialPlan.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -4615,6 +4615,20 @@
       "bytes": 4883,
       "sha256": "0c657d2ad1fca889ffc947d1924fc251178da6369ca9de937d30b3eacb44a34e",
       "origin": "src/application/hdrMetadataContract.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/illustratedMusicVideoCompiler.test.ts",
+      "bytes": 11433,
+      "sha256": "cd5e900ca46343b9f017275f0fe17e146b541e918ec1498bc5af6700ff9ddf19",
+      "origin": "src/application/illustratedMusicVideoCompiler.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/illustratedMusicVideoCompiler.ts",
+      "bytes": 20466,
+      "sha256": "bfb1603f24e7d98be771dbe508dc3ea3d51e959c6a11d20a4f660897489d9e3c",
+      "origin": "src/application/illustratedMusicVideoCompiler.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -4986,6 +5000,20 @@
       "bytes": 6248,
       "sha256": "9e73f20cc6c11a3254749baaf0b537f5d68cb5484dc057d19b8974bad3f446bb",
       "origin": "src/application/motionTreatment.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/musicVideoDraftCompiler.test.ts",
+      "bytes": 7886,
+      "sha256": "cd9e28c91aa56c024ee95f9aa217d62124c4d14321528327778dd7ec4f631078",
+      "origin": "src/application/musicVideoDraftCompiler.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/application/musicVideoDraftCompiler.ts",
+      "bytes": 11587,
+      "sha256": "c2352e34cc3f1a79e2b92558739656a253cdfa47441a1bbb2017daedc8f4857e",
+      "origin": "src/application/musicVideoDraftCompiler.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -5669,15 +5697,15 @@
     },
     {
       "path": "src/creative/motionGraphicPresets.test.ts",
-      "bytes": 10048,
-      "sha256": "34e1efecfde62e57d64dc4b4902a9725be017c56ae2c689e3b6c96d9af53c3c1",
+      "bytes": 10271,
+      "sha256": "cfefb4794715fe4d7711efa6849abda59a55835206b9ed557a60fd64dc8eb61c",
       "origin": "src/creative/motionGraphicPresets.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/creative/motionGraphicPresets.ts",
-      "bytes": 13849,
-      "sha256": "112111607de6527389f764cdfb5ec9b35107b63fc4a9609ebdda6657b1423143",
+      "bytes": 24713,
+      "sha256": "aec2b595985dce321e9188db037e76ced59d59f6ed5eddb703e6fb5c13e2290c",
       "origin": "src/creative/motionGraphicPresets.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -6684,8 +6712,8 @@
     },
     {
       "path": "src/main.tsx",
-      "bytes": 843,
-      "sha256": "d67c7b484a9903157a99902dde431763bd479a3a798943c0d9f5f39278c4136d",
+      "bytes": 1264,
+      "sha256": "451d8672d077f7b35b117357afb3e4add5eb5c35be387e20110fe4d7b2e2eb44",
       "origin": "src/main.tsx",
       "rights": "GPL-3.0-or-later"
     },
@@ -6757,6 +6785,13 @@
       "bytes": 3369,
       "sha256": "59c35884ef2b3f2653d08c583aaa540216092c717c41c084fc823c4f993dd222",
       "origin": "src/mcp/montageTools.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
+      "path": "src/mcp/musicVideoTools.ts",
+      "bytes": 5924,
+      "sha256": "9959674e1c17af5a7ffa1f5a8dbfb2972ca1da20b8c1b8d214db49dd7843d0c4",
+      "origin": "src/mcp/musicVideoTools.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -6845,8 +6880,8 @@
     },
     {
       "path": "src/mcp/server.ts",
-      "bytes": 46181,
-      "sha256": "c4972ac436e9f9eefd86472e73722ad313d8ba2774cc23538f1d2821167632b9",
+      "bytes": 46277,
+      "sha256": "a8042612219da0b09ce4d259a7c5e2c9e77db65cf3c891f5294cdf443bf05e96",
       "origin": "src/mcp/server.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -7244,15 +7279,15 @@
     },
     {
       "path": "src/render/ffmpeg.ts",
-      "bytes": 24723,
-      "sha256": "b6ce72655c19aa4a62811e6c714c63ab5070a0ce860a25af6c8107c77b467fcd",
+      "bytes": 24861,
+      "sha256": "d158b34c56a17c03a69967202b4576fbcb8f18795ef8326b624f8764388008c8",
       "origin": "src/render/ffmpeg.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/render/ffmpegComposite.ts",
-      "bytes": 32478,
-      "sha256": "ed640063553a4d9be0aaa237bc40dc9d818451b636f3fa7755001fd83b95332b",
+      "bytes": 33160,
+      "sha256": "7eb1f605d60886949cdf9ac9ae427adf8b26f6a2534cd377ecb1c284c590ab7e",
       "origin": "src/render/ffmpegComposite.ts",
       "rights": "GPL-3.0-or-later"
     },

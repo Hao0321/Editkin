@@ -39,6 +39,7 @@ import { registerRenderTools } from "./renderTools";
 import { registerPluginTools } from "./pluginTools";
 import { registerRotoKeyerAutopilotTools } from "./rotoKeyerAutopilotTools";
 import { registerMontageTools } from "./montageTools";
+import { registerMusicVideoTools } from "./musicVideoTools";
 import { registerAutoColorTools } from "./autoColorTools";
 import { registerRemoteOnboardingTools } from "./remoteOnboardingTools";
 import { creativePackRoot, errorResult, personalMusicRoot, personalVisualRoot, textResult } from "./toolRuntime";
@@ -89,6 +90,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
   registerPluginTools(server);
   registerRotoKeyerAutopilotTools(server);
   registerMontageTools(server);
+  registerMusicVideoTools(server);
   registerAutoColorTools(server);
   registerRemoteOnboardingTools(server);
 
