@@ -10,7 +10,7 @@ function decoder(pcm: Float32Array, sampleRate = 1000) {
   return decodeAudioData;
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("browser Smart Cut analysis", () => {
   it("analyzes only the trimmed source interval and returns relative frame ranges", async () => {
@@ -74,5 +74,35 @@ describe("browser Smart Cut analysis", () => {
     // 301 samples at 1 Hz represent 301 seconds, exceeding the metadata duration.
     decoder(new Float32Array(301), 1);
     await expect(analyzeBrowserSmartCut(request)).rejects.toThrow("5 分鐘");
+  });
+
+  it("times out a stalled local source read and aborts the fetch", async () => {
+    vi.useFakeTimers(); decoder(new Float32Array(4000));
+    let signal: AbortSignal | undefined, failure: unknown;
+    vi.stubGlobal("fetch", vi.fn((_url: string, options: RequestInit) => {
+      signal = options?.signal ?? undefined;
+      return new Promise((_resolve, reject) => signal?.addEventListener("abort", () => reject(signal!.reason)));
+    }));
+    const work = analyzeBrowserSmartCut(request).catch(error => { failure = error; });
+    await vi.advanceTimersByTimeAsync(30_001);
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toMatch(/逾時/);
+    expect(signal?.aborted).toBe(true); await work;
+  });
+
+  it("discards canceled decoding and prevents concurrent native decoders until it settles", async () => {
+    const decode = decoder(new Float32Array(4000).fill(1));
+    let finish!: (value: Awaited<ReturnType<typeof decode>>) => void;
+    decode.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const controller = new AbortController(); let failure: unknown;
+    const work = analyzeBrowserSmartCut({ ...request, signal: controller.signal }).catch(error => { failure = error; });
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    controller.abort(new Error("取消分析"));
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect((failure as Error)?.message).toContain("取消分析"); await work;
+    await expect(analyzeBrowserSmartCut(request)).rejects.toThrow(/上一次/);
+    finish({ duration: 4, length: 4000, sampleRate: 1000, numberOfChannels: 1, getChannelData: () => new Float32Array(4000).fill(1) });
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    expect((await analyzeBrowserSmartCut(request)).removedFrames).toBe(0);
   });
 });

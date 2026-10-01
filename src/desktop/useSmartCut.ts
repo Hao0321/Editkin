@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { EditorCommand } from "../domain/commands";
 import type { EditProject, TimelineClip } from "../domain/types";
 import { makeId } from "../lib/format";
@@ -20,15 +20,26 @@ interface UseSmartCutOptions {
 export function useSmartCut({ api, project, projectSession, selectedClip, runtimeUrls, onCommand, onStatus }: UseSmartCutOptions) {
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
+  const mounted = useRef(true);
+  const analysis = useRef<AbortController | undefined>(undefined);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; analysis.current?.abort(); };
+  }, []);
   const run = async () => {
     if (pending.current) return;
     const task = projectSession.beginTask(project);
-    const current = () => acceptProjectTask(task, onStatus, "智慧去停頓");
+    const current = () => mounted.current && acceptProjectTask(task, onStatus, "智慧去停頓");
     if (!current()) return;
     if (!selectedClip) return onStatus("請先選一段有人聲的影片或聲音片段。");
     const asset = project.assets.find((item) => item.id === selectedClip.assetId);
     if (!asset || asset.kind === "image") return onStatus("智慧去停頓只支援含聲音的影片或音訊。");
     pending.current = true;
+    const controller = api ? undefined : new AbortController();
+    analysis.current = controller;
+    const unsubscribe = controller ? projectSession.subscribe(() => {
+      if (!task.isCurrent()) controller.abort(new Error("專案已修改，請重新執行智慧去停頓。"));
+    }) : undefined;
     try {
       setBusy(true);
       onStatus("正在本機分析聲音停頓；素材不會上傳…");
@@ -38,6 +49,7 @@ export function useSmartCut({ api, project, projectSession, selectedClip, runtim
       }) : await analyzeBrowserSmartCut({
         sourceUrl: runtimeUrls?.[asset.id], sourceDuration: asset.duration,
         sourceStart: selectedClip.sourceStart, duration: selectedClip.duration, fps: project.fps,
+        signal: controller!.signal,
       });
       if (!current()) return;
       if (result.removedFrames <= 0) return onStatus("沒有偵測到足夠長的停頓，Timeline 保持原樣。");
@@ -49,7 +61,10 @@ export function useSmartCut({ api, project, projectSession, selectedClip, runtim
     } catch (error) {
       if (!current()) return;
       onStatus(error instanceof Error ? `智慧去停頓失敗：${error.message}` : "智慧去停頓失敗");
-    } finally { pending.current = false; setBusy(false); }
+    } finally {
+      unsubscribe?.(); analysis.current = undefined; pending.current = false;
+      if (mounted.current) setBusy(false);
+    }
   };
   return { busy, run };
 }
