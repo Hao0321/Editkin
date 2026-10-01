@@ -16,7 +16,7 @@ afterEach(() => { lifecycle.cleanups.splice(0).forEach(clean => clean()); vi.cle
 
 function fixture() {
   const project = createDemoProject(), session = createProjectSession(project);
-  const result = { blob: new Blob(["encoded fixture"]), extension: "mp4" as const, encoder: "fixture", width: 1280, height: 720, fps: 30 };
+  const result = { blob: new Blob(["encoded fixture"]), extension: "mp4" as const, encoder: "H.264 / AAC" as const, width: 1280, height: 720, fps: 30 };
   let resolve!: (value: typeof result) => void;
   let reject!: (error: unknown) => void;
   vi.mocked(renderBrowserDraft).mockImplementationOnce(() => new Promise((yes, no) => { resolve = yes; reject = no; }));

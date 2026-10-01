@@ -10,6 +10,7 @@ vi.mock("../render/browserDraftCanvas", () => ({
 // tests do not replace actual browser/decoded-output verification.
 function browser() {
   const tracks = [{ stop: vi.fn() }, { stop: vi.fn() }];
+  type Track = typeof tracks[number];
   const nodes: Array<{ disconnect: ReturnType<typeof vi.fn> }> = [];
   const elements: Media[] = [];
   const audioContexts: Audio[] = [];
@@ -19,10 +20,10 @@ function browser() {
   const callbacks = new Map<number, FrameRequestCallback>();
   let nextFrame = 0;
   class Stream {
-    constructor(public tracks: typeof tracks) {}
+    constructor(public tracks: Track[]) {}
     getTracks() { return this.tracks; }
     getAudioTracks() { return this.tracks; }
-    addTrack(track: typeof tracks[number]) { this.tracks.push(track); }
+    addTrack(track: Track) { this.tracks.push(track); }
   }
   class Media extends EventTarget {
     static HAVE_CURRENT_DATA = 2;
