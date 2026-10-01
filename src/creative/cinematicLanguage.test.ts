@@ -15,6 +15,7 @@ describe("cinematic language registry", () => {
     expect(compactCinematicLanguageIndex().recipes.filter((item) => Object.hasOwn(item, "compilerTool"))).toEqual([
       expect.objectContaining({ id: "beat_aligned_montage", compilerTool: "compile_beat_montage" }),
     ]);
+    expect(compactCinematicLanguageIndex().shotSelectionStyles).toHaveLength(9);
   });
 
   it("fails closed or selects a declared planning fallback from explicit evidence", () => {

@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { BULLET_TIME_CAPABILITIES, CINEMATIC_LANGUAGE_RECIPES, type BulletTimeCapability, type CinematicLanguageRecipe } from "../creative/cinematicLanguage";
+import { SHOT_SELECTION_STYLES, type ShotSelectionStyle } from "../creative/shotSelectionStyles";
 import { LOOK_PRESETS, TRANSITION_PRESETS } from "../creative/corePack";
 import "./cinematicLanguageExplorer.css";
 
-export type CinematicExplorerGroup = "language" | "montage" | "bullet-time";
+export type CinematicExplorerGroup = "language" | "montage" | "bullet-time" | "shot-selection";
 
 const RECIPE_DESCRIPTIONS: Record<CinematicLanguageRecipe["id"], string> = {
   spatial_orientation: "先交代空間，再接人物與細節，避免觀眾看不懂位置關係。",
@@ -64,7 +65,8 @@ function requirementLabel(requirement: string): string {
   return REQUIREMENT_LABELS[requirement] ?? requirement.replaceAll("_", " ");
 }
 
-export function cinematicExplorerItems(group: CinematicExplorerGroup): readonly CinematicLanguageRecipe[] | readonly BulletTimeCapability[] {
+export function cinematicExplorerItems(group: CinematicExplorerGroup): readonly CinematicLanguageRecipe[] | readonly BulletTimeCapability[] | readonly ShotSelectionStyle[] {
+  if (group === "shot-selection") return SHOT_SELECTION_STYLES;
   if (group === "bullet-time") return BULLET_TIME_CAPABILITIES;
   if (group === "montage") return CINEMATIC_LANGUAGE_RECIPES.filter((recipe) => recipe.family === "montage");
   return CINEMATIC_LANGUAGE_RECIPES.filter((recipe) => recipe.family !== "montage");
@@ -90,11 +92,21 @@ function BulletTimeCard({ capability }: { capability: BulletTimeCapability }) {
   </article>;
 }
 
+function ShotSelectionCard({ guide }: { guide: ShotSelectionStyle }) {
+  return <article className="cinematic-recipe-card" data-execution-status="review_aid_only">
+    <header><strong>{guide.name}</strong><span className="capability-state planning">逐鏡選材</span></header>
+    <p>{guide.purpose}</p>
+    <div className="evidence-requirements"><b>優先尋找的鏡頭證據</b><ul>{guide.priorities.map(({ signal, reason }) => <li key={signal}>{reason}</li>)}</ul></div>
+    <footer>{guide.exception} 需核對來源、使用權與情節用途；建議不會直接改動時間軸。</footer>
+  </article>;
+}
+
 export function CinematicLanguageExplorer() {
   const [group, setGroup] = useState<CinematicExplorerGroup>("montage");
   const recipes = cinematicExplorerItems(group);
   const tabs: Array<{ id: CinematicExplorerGroup; label: string; count: number }> = [
     { id: "language", label: "鏡頭語言", count: cinematicExplorerItems("language").length },
+    { id: "shot-selection", label: "選鏡風格", count: cinematicExplorerItems("shot-selection").length },
     { id: "montage", label: "蒙太奇", count: cinematicExplorerItems("montage").length },
     { id: "bullet-time", label: "子彈時間", count: cinematicExplorerItems("bullet-time").length },
   ];
@@ -113,7 +125,9 @@ export function CinematicLanguageExplorer() {
       {tabs.map((tab) => <button type="button" role="tab" key={tab.id} aria-selected={group === tab.id} className={group === tab.id ? "active" : ""} onClick={() => setGroup(tab.id)}>{tab.label}<small>{tab.count}</small></button>)}
     </nav>
     <div className="cinematic-recipe-list" role="tabpanel" data-testid={`cinematic-group-${group}`}>
-      {group === "bullet-time"
+      {group === "shot-selection"
+        ? (recipes as readonly ShotSelectionStyle[]).map((guide) => <ShotSelectionCard key={guide.id} guide={guide} />)
+        : group === "bullet-time"
         ? (recipes as readonly BulletTimeCapability[]).map((capability) => <BulletTimeCard key={capability.id} capability={capability} />)
         : (recipes as readonly CinematicLanguageRecipe[]).map((recipe) => <RecipeCard key={recipe.id} recipe={recipe} />)}
     </div>
