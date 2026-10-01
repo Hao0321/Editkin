@@ -21,6 +21,9 @@ interface ToolbarProps {
   onUndo: () => void;
   onRedo: () => void;
   onExport: () => void;
+  onExportGraph?: () => void;
+  exportBusy?: boolean;
+  onCancelExport?: () => void;
   onExportOpenExrSequence?: () => void;
   onExportAlphaMaster?: () => void;
   onOpenAgentConnect: () => void;
@@ -54,6 +57,9 @@ export function Toolbar({
   onUndo,
   onRedo,
   onExport,
+  onExportGraph,
+  exportBusy = false,
+  onCancelExport,
   onExportOpenExrSequence,
   onExportAlphaMaster,
   onOpenAgentConnect,
@@ -135,6 +141,7 @@ export function Toolbar({
                   </select>
                 </div>
                 <button type="button" onClick={(event) => { const menu = event.currentTarget.closest<HTMLDetailsElement>("details.project-menu"); if (menu) menu.open = false; onDirectorConsole(); }} data-testid="director-console-button"><span>◉</span><div>導演台<small>標記重點並集中審片</small></div></button>
+                {!isDesktop && onExportGraph && <button type="button" onClick={onExportGraph} data-testid="export-graph-button"><span>↓</span><div>下載專案 JSON<small>保留可編輯的 EditGraph，不是影片</small></div></button>}
                 {isDesktop && <>
                   <strong>專案與連線</strong>
                   <button type="button" onClick={onNew} data-testid="new-project-button"><span>＋</span><div>新增空白專案<small>從零開始剪一支影片</small></div></button>
@@ -152,9 +159,10 @@ export function Toolbar({
           </div>
         </details>}
 
-        {workspaceMode === "editor" && <button type="button" className="primary-button export-action" onClick={onExport} disabled={!hasUserMedia} title={hasUserMedia ? (isDesktop ? "輸出完成影片" : "下載專案檔（.editkin.json）；網頁版無法輸出影片，請用桌面版") : "請先加入自己的影片"} data-testid="render-button" data-beginner-action="輸出影片">
-          <span className="button-step">4</span>{isDesktop ? "輸出影片" : "匯出專案"}
+        {workspaceMode === "editor" && <button type="button" className="primary-button export-action" onClick={onExport} disabled={!hasUserMedia || exportBusy} title={hasUserMedia ? (isDesktop ? "輸出完成影片" : "即時錄製草稿影片（最長 5 分鐘、長邊 1280、最多 30 fps）；請保持分頁在前景，非 Rust／GPU 正式輸出") : "請先加入自己的影片"} data-testid="render-button" data-beginner-action="輸出影片">
+          <span className="button-step">4</span>{exportBusy ? "草稿輸出中…" : isDesktop ? "輸出影片" : "輸出草稿"}
         </button>}
+        {exportBusy && onCancelExport && <button type="button" className="secondary-action" onClick={onCancelExport} data-testid="cancel-export-button">取消匯出</button>}
       </nav>
     </header>
   );

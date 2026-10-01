@@ -33,7 +33,7 @@ describe("MotionOverlay v1 project-pixel preview geometry", () => {
       const stages = [["large", 1000, 600], ["small", 500, 300]] as const;
       const content = `<!doctype html><html><head><meta charset="utf-8"><style>${styles}</style></head><body style="margin:0">${stages.map(([name, width, height]) => `<div id="${name}-viewport" class="preview-viewport" style="width:${width}px;height:${height}px"><div id="${name}-stage" class="preview-stage" style="--canvas-aspect:0.5625">${markup}</div></div>`).join("")}<pre id="metrics"></pre><script>document.querySelector('#metrics').textContent=JSON.stringify(${JSON.stringify(stages.map(([name]) => name))}.map(name=>{const stage=document.querySelector('#'+name+'-stage');const graphic=stage.querySelector('.motion-graphic');const style=getComputedStyle(graphic);return {name,stageWidth:stage.getBoundingClientRect().width,fontSize:Number.parseFloat(style.fontSize),letterSpacing:Number.parseFloat(style.letterSpacing)};}));</script></body></html>`;
       writeFileSync(file, content);
-      const output = execFileSync(chrome, ["--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", `--user-data-dir=${join(sandbox, "profile")}`, "--dump-dom", pathToFileURL(file).href], { encoding: "utf8", timeout: 25_000, windowsHide: true, maxBuffer: 2_000_000 });
+      const output = execFileSync(chrome, ["--headless=new", "--disable-gpu", "--disable-background-networking", "--disable-component-update", "--disable-extensions", "--no-first-run", "--no-default-browser-check", `--user-data-dir=${join(sandbox, "profile")}`, "--dump-dom", pathToFileURL(file).href], { encoding: "utf8", timeout: 45_000, windowsHide: true, maxBuffer: 2_000_000 });
       const match = output.match(/<pre id="metrics">([^<]+)<\/pre>/);
       expect(match, "Chrome must return actual computed styles").not.toBeNull();
       const metrics = JSON.parse(match![1]) as Array<{ name: string; stageWidth: number; fontSize: number; letterSpacing: number }>;
@@ -48,9 +48,11 @@ describe("MotionOverlay v1 project-pixel preview geometry", () => {
       const oldFixedPx = Math.max(14, graphic.fontSize * .45);
       expect(Math.abs(oldFixedPx - 72 * metrics[1].stageWidth / project.width)).toBeGreaterThan(1);
     } finally {
-      rmSync(sandbox, { recursive: true, force: true });
+      // Chrome children can briefly retain profile handles after --dump-dom
+      // exits on Windows. Retry only removal of this test's isolated directory.
+      rmSync(sandbox, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
     }
-  }, 30_000);
+  }, 60_000);
 });
 
 describe("MotionOverlay v2", () => {
