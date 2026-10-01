@@ -1,5 +1,5 @@
 import type { EditProject } from "../domain/types";
-import { browserDraftPlan, BROWSER_DRAFT_CODECS, BROWSER_DRAFT_MAX_BYTES } from "./browserDraftPlan";
+import { browserDraftPlan, BROWSER_DRAFT_CODECS, BROWSER_DRAFT_MAX_BYTES, BROWSER_DRAFT_MAX_SOURCE_BYTES, BROWSER_DRAFT_MAX_SOURCE_PIXELS } from "./browserDraftPlan";
 import { drawBrowserDraftFrame, loadBrowserDraftFonts, type BrowserDraftMedia } from "../render/browserDraftCanvas";
 
 function abortReason(signal: AbortSignal): unknown {
@@ -21,16 +21,26 @@ function waitForMedia(element: HTMLMediaElement | HTMLImageElement, ready: () =>
   });
 }
 
-function waitForPreparation(promise: Promise<unknown>, signal: AbortSignal) {
+function waitForPreparation(promise: Promise<unknown>, signal: AbortSignal, message = "瀏覽器音訊或字型準備逾時；請允許音訊播放後重試。") {
   return new Promise<void>((resolve, reject) => {
     const clean = () => { clearTimeout(timer); signal.removeEventListener("abort", abort); };
     const abort = () => { clean(); reject(abortReason(signal)); };
-    const timer = setTimeout(() => { clean(); reject(new Error("瀏覽器音訊或字型準備逾時；請允許音訊播放後重試。")); }, 15_000);
+    const timer = setTimeout(() => { clean(); reject(new Error(message)); }, 15_000);
     signal.addEventListener("abort", abort, { once: true });
     promise.then(() => { clean(); resolve(); }, error => { clean(); reject(error); });
     if (signal.aborted) abort();
   });
 }
+
+function checkSourceGeometry(width: number, height: number) {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0
+    || width > 8192 || height > 8192 || width * height > BROWSER_DRAFT_MAX_SOURCE_PIXELS) {
+    throw new Error("草稿素材的解碼尺寸超過限制（8192 邊長／16 MiPixels）；請縮小素材或使用桌面版。");
+  }
+}
+
+// Cleanup must continue even when one browser resource is already unusable.
+function release(action: () => void) { try { action(); } catch { /* Best effort per resource. */ } }
 
 export async function renderBrowserDraft(project: EditProject, runtimeUrls: Record<string, string>, options: {
   signal: AbortSignal;
@@ -52,12 +62,15 @@ export async function renderBrowserDraft(project: EditProject, runtimeUrls: Reco
   const signal = controller.signal;
   const abort = () => controller.abort(abortReason(options.signal));
   const visibility = () => { if (document.visibilityState !== "visible") controller.abort(new Error("草稿需即時錄製；分頁已移至背景，匯出已停止，請保持前景後重試。")); };
+  const pagehide = () => controller.abort(new Error("分頁已關閉或離開，草稿匯出已停止。"));
   options.signal.addEventListener("abort", abort, { once: true });
   document.addEventListener("visibilitychange", visibility);
+  window.addEventListener("pagehide", pagehide);
   if (options.signal.aborted) abort();
   const media: BrowserDraftMedia[] = [];
   const nodes: AudioNode[] = [];
   let stream: MediaStream | undefined;
+  let audioStream: MediaStream | undefined;
   let audio: AudioContext | undefined;
   let recorder: MediaRecorder | undefined;
   let frame = 0;
@@ -68,7 +81,18 @@ export async function renderBrowserDraft(project: EditProject, runtimeUrls: Reco
     audio = new AudioContext();
     await waitForPreparation(audio.resume(), signal);
     const destination = audio.createMediaStreamDestination();
+    audioStream = destination.stream;
     nodes.push(destination);
+    await waitForPreparation((async () => {
+      let bytes = 0;
+      for (const source of new Set(plan.clips.map(clip => clip.source))) {
+        signal.throwIfAborted();
+        const response = await fetch(source, { signal, credentials: "omit", redirect: "error" });
+        if (!response.ok) throw new Error("無法讀取本頁匯入的素材；請重新匯入後重試。");
+        bytes += (await response.blob()).size;
+        if (bytes > BROWSER_DRAFT_MAX_SOURCE_BYTES) throw new Error("草稿來源檔案合計超過 128 MiB；請縮小素材或使用桌面版。");
+      }
+    })(), signal, "草稿來源檔案讀取逾時；請重新匯入後重試。");
     const gains = new Map<HTMLMediaElement, GainNode>();
     for (const entry of plan.clips) {
       const element = entry.asset.kind === "image" ? new Image() : document.createElement(entry.asset.kind === "video" ? "video" : "audio");
@@ -76,12 +100,14 @@ export async function renderBrowserDraft(project: EditProject, runtimeUrls: Reco
       if (element instanceof HTMLImageElement) {
         element.src = entry.source;
         await waitForMedia(element, () => element.complete && element.naturalWidth > 0, signal);
+        checkSourceGeometry(element.naturalWidth, element.naturalHeight);
       } else {
         if (element instanceof HTMLVideoElement) element.playsInline = true;
         element.preload = "auto";
         element.src = entry.source;
         element.load();
         await waitForMedia(element, () => element.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA, signal);
+        if (element instanceof HTMLVideoElement) checkSourceGeometry(element.videoWidth, element.videoHeight);
         if (!Number.isFinite(element.duration) || entry.clip.sourceStart + entry.clip.duration > element.duration + 1 / project.fps) {
           throw new Error(`「${entry.asset.name}」的素材長度不足以輸出這份剪輯。`);
         }
@@ -113,15 +139,18 @@ export async function renderBrowserDraft(project: EditProject, runtimeUrls: Reco
     await new Promise<void>((resolve, reject) => {
       let finished = false, complete = false, bytes = 0, progress = -1, paintedFrame = -1;
       let startedAt = clock.currentTime, lastFrameAt = performance.now();
+      let stopStartedAt = 0;
+      let watchdog: ReturnType<typeof setInterval> | undefined;
       const started = new Set<HTMLMediaElement>();
       const clean = () => {
+        clearInterval(watchdog);
         cancelAnimationFrame(frame); signal.removeEventListener("abort", aborted); clock.removeEventListener("statechange", audioState);
         media.forEach(({ element }) => element.removeEventListener("error", mediaError));
       };
       const fail = (error: unknown) => {
         if (finished) return;
         finished = true; clean();
-        if (recording.state !== "inactive") recording.stop();
+        if (recording.state !== "inactive") release(() => recording.stop());
         reject(error);
       };
       const aborted = () => fail(abortReason(signal));
@@ -149,6 +178,7 @@ export async function renderBrowserDraft(project: EditProject, runtimeUrls: Reco
           const time = clock.currentTime - startedAt;
           if (time >= plan.duration) {
             complete = true;
+            stopStartedAt = now;
             media.forEach(item => { if (item.element instanceof HTMLMediaElement) item.element.pause(); });
             recording.stop(); return;
           }
@@ -178,7 +208,19 @@ export async function renderBrowserDraft(project: EditProject, runtimeUrls: Reco
       signal.addEventListener("abort", aborted, { once: true });
       clock.addEventListener("statechange", audioState);
       media.forEach(({ element }) => element.addEventListener("error", mediaError));
-      try { recording.start(1000); startedAt = clock.currentTime; tick(); } catch (error) { fail(error); }
+      try {
+        signal.throwIfAborted();
+        if (clock.state !== "running") throw new Error("瀏覽器暫停了音訊時鐘，草稿匯出已停止。");
+        recording.start(1000); startedAt = clock.currentTime;
+        watchdog = setInterval(() => {
+          if (complete) {
+            if (performance.now() - stopStartedAt >= 15_000) fail(new Error("瀏覽器錄製器停止逾時，沒有下載不完整的草稿。"));
+          } else if (performance.now() - lastFrameAt > 1000) {
+            fail(new Error("草稿錄製的畫面時鐘中斷超過一秒；請保持前景後重試。"));
+          }
+        }, 250);
+        tick();
+      } catch (error) { fail(error); }
     });
     signal.throwIfAborted();
     const blob = new Blob(chunks, { type: recorder.mimeType || selected.mimeType });
@@ -189,14 +231,22 @@ export async function renderBrowserDraft(project: EditProject, runtimeUrls: Reco
     cancelAnimationFrame(frame);
     options.signal.removeEventListener("abort", abort);
     document.removeEventListener("visibilitychange", visibility);
-    if (recorder?.state !== undefined && recorder.state !== "inactive") recorder.stop();
-    stream?.getTracks().forEach(track => track.stop());
+    window.removeEventListener("pagehide", pagehide);
+    controller.abort();
+    if (recorder) {
+      recorder.ondataavailable = null; recorder.onerror = null; recorder.onstop = null;
+      if (recorder.state !== "inactive") release(() => recorder!.stop());
+    }
+    new Set([...(stream?.getTracks() ?? []), ...(audioStream?.getTracks() ?? [])]).forEach(track => release(() => track.stop()));
     media.forEach(({ element }) => {
-      if (element instanceof HTMLMediaElement) { element.pause(); element.removeAttribute("src"); element.load(); }
-      else element.removeAttribute("src");
+      if (element instanceof HTMLMediaElement) release(() => element.pause());
+      release(() => element.removeAttribute("src"));
+      if (element instanceof HTMLMediaElement) release(() => element.load());
     });
-    nodes.forEach(node => node.disconnect());
-    if (audio && audio.state !== "closed") await audio.close();
+    nodes.forEach(node => release(() => node.disconnect()));
+    if (audio && audio.state !== "closed") {
+      try { await waitForPreparation(audio.close(), new AbortController().signal, "音訊資源關閉逾時。"); } catch { /* Do not mask the export result with a cleanup error. */ }
+    }
   }
 }
 

@@ -5,6 +5,8 @@ import { combineLookColor } from "../creative/corePack";
 export const BROWSER_DRAFT_MAX_SECONDS = 300;
 export const BROWSER_DRAFT_MAX_CLIPS = 32;
 export const BROWSER_DRAFT_MAX_BYTES = 128 * 1024 * 1024;
+export const BROWSER_DRAFT_MAX_SOURCE_BYTES = 128 * 1024 * 1024;
+export const BROWSER_DRAFT_MAX_SOURCE_PIXELS = 4096 * 4096;
 
 export const BROWSER_DRAFT_CODECS = [
   { mimeType: "video/mp4;codecs=avc1.42E01E,mp4a.40.2", extension: "mp4", label: "H.264 / AAC" },
