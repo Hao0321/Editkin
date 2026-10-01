@@ -12,6 +12,7 @@ interface UseAutomaticEditingOptions {
   project: EditProject;
   projectSession: ProjectSession;
   selectedClip?: TimelineClip;
+  runtimeUrls?: Record<string, string>;
   onCommand: (command: EditorCommand, message: string) => void;
   onStatus: (message: string) => void;
   onRuntimeUrls?: (urls: Record<string, string>) => void;

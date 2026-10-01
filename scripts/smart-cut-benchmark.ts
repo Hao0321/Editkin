@@ -4,7 +4,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { cpus, hostname, platform, release } from "node:os";
 import { dirname, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
-import { planSmartCutReference } from "../src/application/smartCut";
+import { planSmartCutReference } from "../src/application/smartCutPlan";
 // @ts-ignore JavaScript evaluator is intentionally runnable without the TypeScript toolchain.
 import { assessSmartCutBenchmark } from "./lib/smart-cut-gate.mjs";
 

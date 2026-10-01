@@ -13,6 +13,7 @@ import { useSceneDetection } from "./useSceneDetection";
 // Actual hook bodies and real session/commands, but deliberately not a React renderer
 // or browser claim. One hook invocation preserves the real closure across deferred I/O.
 vi.mock("react", () => ({
+  useEffect: () => {},
   useState: (initial: unknown) => [initial, () => {}],
   useRef: (initial: unknown) => ({ current: initial }),
 }));
