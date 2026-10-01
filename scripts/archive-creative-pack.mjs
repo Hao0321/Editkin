@@ -1,4 +1,5 @@
-import { copyFile, readFile, rename, rm, stat } from "node:fs/promises";
+import { copyFile, readFile, rename, rm } from "node:fs/promises";
+import { readRegularFile } from "./lib/regular-file.mjs";
 import { constants, createReadStream } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
@@ -16,8 +17,7 @@ const manifestPath = resolve(packRoot, "editkin-pack.json");
 const artifactRoot = resolve(workspaceRoot, ".rd/artifacts");
 const output = resolve(artifactRoot, `Hao-Creator-Library-${packageJson.version}.editkin-pack.zip`);
 
-await stat(manifestPath);
-const pack = JSON.parse(await readFile(manifestPath, "utf8"));
+const pack = JSON.parse((await readRegularFile(manifestPath)).toString("utf8"));
 if (evaluateCreativePack(pack, { root: packRoot }).status !== "GREEN") throw new Error("Cannot archive an invalid public creative pack");
 async function digest(path) {
   const hash = createHash("sha256");

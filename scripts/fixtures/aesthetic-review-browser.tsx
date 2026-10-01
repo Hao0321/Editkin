@@ -114,7 +114,7 @@ function Controller() {
   return <><style>{styles}</style><main className="aesthetic-fixture-controller"><h1>美感審查 · 真元件驗收頁</h1><p>這是 UI 與資料回寫測試，不是影片美感通過證明。所有預填評分／binding 都是明示合成資料。請操作實際群組、評分、時間碼、理由、儲存、滾輪與 Undo。</p>
     <div className="aesthetic-fixture-controls"><label>iframe 寬度<select data-testid="aesthetic-fixture-width" value={width} onChange={event => setWidth(Number(event.target.value))}>{[390, 900, 1440].map(value => <option key={value} value={value}>{value}px</option>)}</select></label><label>主題<select value={theme} onChange={event => setTheme(event.target.value as EditorTheme)}>{EDITOR_THEMES.map(value => <option key={value} value={value}>{THEME_LABELS[value]}</option>)}</select></label></div>
     <div className="aesthetic-fixture-controls">{[["blank", "空白草稿"], ["owner", "模擬目前輸出"], ["no-owner", "移除輸出綁定"], ["switch-owner", "切換另一份輸出"], ["complete-fixture", "預載完整合成資料（未審）"], ["legacy-fixture", "舊存檔 PASSED 反例"], ["long-fixture", "超長無空白反例"], ["playhead", "播放頭移到 6.4 秒"], ["undo", "Undo 真命令"], ["reopen", "重新開啟"], ["measure", "擷取真實幾何"]].map(([id, label]) => <button type="button" key={id} data-testid={`aesthetic-fixture-${id}`} onClick={() => action(id)}>{label}</button>)}</div>
-    <iframe ref={frame} key={`${width}-${theme}`} title="美感審查真元件視窗" data-testid="aesthetic-viewport" src={`./aesthetic-review-browser.html?frame=1&theme=${theme}`} style={{ width, height: 800 }} />
+    <iframe ref={frame} key={`${width}-${theme}`} title="美感審查真元件視窗" data-testid="aesthetic-viewport" src={`./aesthetic-review-browser.html?frame=1&theme=${encodeURIComponent(theme)}`} style={{ width, height: 800 }} />
     <h2>可見觀測 JSON · 不自動宣告 PASS</h2><pre data-testid="aesthetic-review-report">{JSON.stringify(report, null, 2)}</pre>
   </main></>;
 }

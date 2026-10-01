@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { readRegularFile } from "./lib/regular-file.mjs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { build } from "esbuild";
 import { productReleaseManifestFindings } from "./lib/build-input-identity.mjs";
@@ -252,7 +253,7 @@ async function inventoryTree(rootInput: string): Promise<InventoryEntry[]> {
         output.push({ path, kind: "directory" });
         await visit(absolute);
       } else if (info.isFile()) {
-        const bytes = await readFile(absolute);
+        const bytes = await readRegularFile(absolute);
         output.push({ path, kind: "file", bytes: bytes.length, sha256: sha256(bytes) });
       } else {
         output.push({ path, kind: "other" });
@@ -333,7 +334,7 @@ async function collectInputInventory(roots: readonly string[]): Promise<ReceiptI
     const info = await lstat(target);
     if (info.isSymbolicLink()) throw new Error(`Build input is a symlink/junction: ${normalize(relation)}`);
     if (info.isFile()) {
-      const bytes = await readFile(target);
+      const bytes = await readRegularFile(target);
       output.push({ path: normalize(relation), bytes: bytes.length, sha256: sha256(bytes) });
       return;
     }
@@ -376,7 +377,7 @@ async function receiptInputsCurrent(entries: unknown, expected: ReceiptInput[] |
     try {
       const info = await lstat(target);
       if (!info.isFile() || info.isSymbolicLink()) return { passed: false, reason: "input-not-regular-file" };
-      const bytes = await readFile(target);
+      const bytes = await readRegularFile(target);
       const currentSha256 = sha256(bytes);
       if (bytes.length !== entry.bytes || currentSha256 !== entry.sha256) return {
         passed: false,
@@ -411,7 +412,7 @@ async function readOptional(path: string): Promise<Buffer | undefined> {
     await assertNoSymlinkAncestry(appRoot, path);
     const info = await lstat(path);
     if (!info.isFile() || info.isSymbolicLink()) return undefined;
-    return await readFile(path);
+    return await readRegularFile(path);
   } catch {
     return undefined;
   }

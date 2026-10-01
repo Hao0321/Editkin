@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { readFile, stat, writeFile, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { readFile, writeFile, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { fileIdentity } from "./lib/regular-file.mjs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 
@@ -822,8 +823,7 @@ async function main(): Promise<void> {
     },
     manifest: {
       path: manifestPath,
-      bytes: (await stat(manifestPath)).size,
-      sha256: sha256(await readFile(manifestPath)),
+      ...await fileIdentity(manifestPath),
     },
     thresholds: THRESHOLDS,
     facts,

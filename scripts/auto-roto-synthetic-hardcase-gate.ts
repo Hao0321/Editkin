@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { fileIdentity } from "./lib/regular-file.mjs";
 import { join, resolve } from "node:path";
 import { analyzeAutoRoto } from "../src/application/autoRoto";
 import { AUTO_ROTO_SAM21_ENGINE } from "../src/application/autoRotoModelRouter";
@@ -137,7 +138,7 @@ async function main(): Promise<void> {
     schema: "editkin.auto-roto-synthetic-hardcase-gate/v1", ...verdict, metrics,
     perFrameSupportJ: supportJ, result: { engine: result.engine, qualityState: result.qualityState, elapsedMs: result.elapsedMs, model: result.sam2Model },
     artifacts: {
-      source: { path: sourcePath, bytes: (await stat(sourcePath)).size, sha256: sha256(await readFile(sourcePath)) },
+      source: { path: sourcePath, ...await fileIdentity(sourcePath) },
       truth: { path: truthPath, bytes: generated.alpha.length, sha256: sha256(generated.alpha) },
       thinTruth: { path: thinPath, bytes: generated.thin.length, sha256: sha256(generated.thin) },
       matte: { path: result.sequencePath, bytes: predicted.length, sha256: sha256(predicted) },

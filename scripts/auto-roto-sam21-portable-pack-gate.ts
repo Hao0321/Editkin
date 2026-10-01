@@ -1,5 +1,6 @@
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { fileIdentity } from "./lib/regular-file.mjs";
 import { join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { bindSam21VideoPack, probeSam21VideoPackRuntime } from "../src/application/autoRotoVideoModel";
@@ -23,7 +24,7 @@ async function walk(root: string, directory = root): Promise<Array<{ path: strin
     else if (entry.isFile()) {
       const path = relative(root, target).replaceAll("\\", "/");
       if (!["manifest.json", "pack-receipt.json", "pack-receipt.sig"].includes(path)) {
-        files.push({ path, bytes: (await stat(target)).size, sha256: hash(await readFile(target)) });
+        files.push({ path, ...await fileIdentity(target) });
       }
     }
   }

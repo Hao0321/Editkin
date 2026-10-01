@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { createHash, createPrivateKey, createPublicKey, sign } from "node:crypto";
 import { cp, copyFile, lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { fileIdentity } from "./lib/regular-file.mjs";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -55,7 +56,7 @@ async function walkPayload(root, directory = root) {
     else if (metadata.isFile()) {
       const path = relative(root, target).replaceAll("\\", "/");
       if (!["manifest.json", "pack-receipt.json", "pack-receipt.sig"].includes(path)) {
-        files.push({ path, bytes: metadata.size, sha256: sha256(await readFile(target)) });
+        files.push({ path, ...await fileIdentity(target) });
       }
     }
   }

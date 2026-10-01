@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, readFile, realpath } from "node:fs/promises";
+import { readRegularFile } from "./lib/regular-file.mjs";
 import { basename, delimiter, dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -173,7 +174,8 @@ async function readCanonicalJson(path, maximumBytes, label) {
     throw new Error(`${label} is not a bounded regular file`);
   }
   if (!samePath(await realpath(path), path)) throw new Error(`${label} traverses a link or junction`);
-  const bytes = await readFile(path);
+  const bytes = await readRegularFile(path);
+  if (bytes.length <= 0 || bytes.length > maximumBytes) throw new Error(`${label} is not a bounded regular file`);
   const value = JSON.parse(bytes.toString("utf8"));
   if (canonicalJson(value) !== bytes.toString("utf8")) throw new Error(`${label} is not canonical closed-world JSON`);
   return { bytes, value };

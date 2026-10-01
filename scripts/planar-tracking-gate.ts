@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { fileIdentity } from "./lib/regular-file.mjs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { analyzeMotionTrack } from "../src/application/motionTracking";
@@ -239,7 +240,8 @@ async function ensureDataset(): Promise<DatasetManifest> {
   try {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as DatasetManifest;
     if (manifest.schema !== "editkin.planar-tracking-dataset/v1" || manifest.generator !== "editkin.planar-fixture/v1") throw new Error("stale planar dataset");
-    if ((await stat(videoPath)).size <= 0 || sha256(await readFile(videoPath)) !== manifest.videoSha256) throw new Error("planar video identity mismatch");
+    const video = await fileIdentity(videoPath);
+    if (video.bytes <= 0 || video.sha256 !== manifest.videoSha256) throw new Error("planar video identity mismatch");
     if (manifest.truth.length !== FRAME_COUNT || manifest.rawSha256 !== generateFixture().rawSha256) throw new Error("planar annotation identity mismatch");
     return manifest;
   } catch {

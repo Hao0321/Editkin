@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { fileIdentity } from "./lib/regular-file.mjs";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
@@ -882,7 +883,7 @@ try {
     status,
     failures,
     facts: built.facts,
-    evidence: { bytes: (await lstat(evidencePath)).size, sha256: sha256(await readFile(evidencePath)), artifactIdentity: built.artifactEvidence },
+    evidence: { ...await fileIdentity(evidencePath), artifactIdentity: built.artifactEvidence },
     engines: {
       selfAuthored: { id: built.evidence.engines.selfAuthored.id, implementationSha256: built.evidence.engines.selfAuthored.implementation.sha256 },
       samResearchControl: {
