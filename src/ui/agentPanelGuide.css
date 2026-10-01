@@ -5,3 +5,13 @@
 @media(max-width:1380px){.agent-primary-workbench{grid-template-columns:minmax(220px,1fr) minmax(150px,.5fr)}}@media(max-height:760px){.agent-safe-note{display:none}.agent-long-source span{display:none}.agent-primary-workbench>.auto-complete-button,.agent-panel-disclosure>summary{min-height:64px}.agent-primary-workbench>.auto-complete-button{max-height:none}.agent-workbench{grid-template-rows:36px 36px}}
 
 .agent-unavailable-note{margin:0 0 8px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--soft);font-size:11px;line-height:1.5}
+
+/* Keep nested tools in the disclosure flow so overflow cannot clip their hit targets. */
+.agent-panel-disclosure-body .agent-secondary-row { display: grid; }
+.agent-panel-disclosure-body .agent-tools .automation-actions {
+  position: static;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
