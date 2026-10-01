@@ -11,6 +11,7 @@ import { useProjectRecovery } from "./desktop/useProjectRecovery";
 import { useAutomaticEditing } from "./desktop/useAutomaticEditing";
 import { useBatchAutoEdit } from "./desktop/useBatchAutoEdit";
 import { useDesktopActions } from "./desktop/useDesktopActions";
+import { useBrowserDraftExport } from "./desktop/useBrowserDraftExport";
 import type { OpenProjectResult } from "./desktop/types";
 import { compileAgentInstruction, isAutomaticCaptionInstruction, isSceneSplitInstruction, isSemanticAutoEditInstruction, isSmartCutInstruction } from "./domain/agent";
 import type { EditorCommand } from "./domain/commands";
@@ -525,8 +526,12 @@ function App() {
   });
   const mobile = useMobileRemote({ api: window.haoDesktop, snapshot: mobileSnapshot, onInstruction: submitAgentInstruction, onStatus: setStatus });
 
-  const { renderVideo, renderOpenExrSequence, renderAlphaMaster } = createAppRenderActions({
-    api: window.haoDesktop, project, setStatus, session: projectSession,
+  const browserDraft = useBrowserDraftExport({
+    project, runtimeUrls, session: projectSession, onStatus: setStatus, onStart: () => setPlaying(false),
+  });
+
+  const { exportGraph, renderVideo, renderOpenExrSequence, renderAlphaMaster } = createAppRenderActions({
+    api: window.haoDesktop, project, setStatus, session: projectSession, renderBrowserDraft: browserDraft.render,
     onArtifactReady: async (snapshot, artifact) => {
       if (!projectSession.isCurrentSession(sessionId)) return false;
       const bound = await aestheticOutputOwner.bind(snapshot, artifact);
@@ -561,6 +566,7 @@ function App() {
     selectedClipAtPlayhead, selectedCaption, transitionNeighbors, selectedMotionTracks, activeLayers,
     activeAudioLayers, runtimeUrls, status, setStatus, trackingMode, setTrackingMode, trackingSelection,
     setTrackingSelection, trackingBusy, recovery, desktopActions, automatic, creativeLibrary, batchAutoEdit, mobile,
+    exportGraph, draftExportBusy: browserDraft.busy, cancelDraftExport: browserDraft.cancel,
     newProject, openProject, saveProject, undoEdit, redoEdit, renderVideo, renderOpenExrSequence, renderAlphaMaster, importFiles,
     acceptTrackingSelection, startPodcastDirector, submitAgentInstruction, runCommand, updateAnimatedClipProperty,
     addMotionGraphic, addCaption, addTrack, addAssetToTimeline, makeSelectedPictureInPicture, precomposeSelected, applyShortFormTemplate, applyLongFormTemplate, addLowerThird, clearTemplateApplication, splitSelected, deleteSelected,

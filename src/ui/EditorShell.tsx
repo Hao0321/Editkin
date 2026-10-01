@@ -62,6 +62,7 @@ export function EditorShell(props: EditorShellProps) {
     activeAudioLayers, runtimeUrls, status, setStatus, trackingMode, setTrackingMode, trackingSelection,
     setTrackingSelection, trackingBusy, recovery, desktopActions, automatic, creativeLibrary, batchAutoEdit, mobile,
     newProject, openProject, saveProject, undoEdit, redoEdit, renderVideo, renderOpenExrSequence, renderAlphaMaster, importFiles,
+    exportGraph, draftExportBusy, cancelDraftExport,
     acceptTrackingSelection, startPodcastDirector, submitAgentInstruction, runCommand, updateAnimatedClipProperty,
     addMotionGraphic, addCaption, addTrack, addAssetToTimeline, makeSelectedPictureInPicture, precomposeSelected, applyShortFormTemplate, applyLongFormTemplate, addLowerThird, clearTemplateApplication, splitSelected, deleteSelected,
   } = props;
@@ -198,6 +199,9 @@ export function EditorShell(props: EditorShellProps) {
         onUndo={undoEdit}
         onRedo={redoEdit}
         onExport={renderVideo}
+        onExportGraph={exportGraph}
+        exportBusy={draftExportBusy}
+        onCancelExport={cancelDraftExport}
         onExportOpenExrSequence={() => void renderOpenExrSequence()}
         onExportAlphaMaster={() => void renderAlphaMaster()}
         onOpenAgentConnect={() => { setReturnToRemoteAfterAgent(false); setAgentConnectOpened(true); }}

@@ -61,6 +61,9 @@ export interface EditorShellProps {
   undoEdit: () => void;
   redoEdit: () => void;
   renderVideo: () => Promise<void>;
+  exportGraph: () => void;
+  draftExportBusy: boolean;
+  cancelDraftExport: () => void;
   renderOpenExrSequence: () => Promise<void>;
   renderAlphaMaster: () => Promise<void>;
   importFiles: (files: File[]) => Promise<void>;

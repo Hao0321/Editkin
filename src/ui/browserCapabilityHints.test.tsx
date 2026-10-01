@@ -2,7 +2,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { AgentPanel } from "./AgentPanel";
 import { EditingProfilePicker } from "./EditingProfilePicker";
-import { Toolbar } from "./Toolbar";
 
 const REASON = "網頁版沒有本機 Whisper／FFmpeg 引擎，這項功能需要桌面版。";
 const noop = () => undefined;
@@ -44,18 +43,4 @@ describe("browser capability hints", () => {
     expect(/<button[^>]*speaker-director-button[^>]*>/.exec(render())![0]).not.toContain("disabled");
   });
 
-  it("explains in the toolbar that the browser export is a project file, not a video", () => {
-    const props: Parameters<typeof Toolbar>[0] = {
-      projectName: "P", hasUserMedia: true, workspaceMode: "editor", theme: "sky", onThemeChange: noop, dirty: false, recoveryState: "idle",
-      playhead: 0, canUndo: false, canRedo: false, isDesktop: false, onNew: noop, onOpen: noop, onSave: noop, onUndo: noop, onRedo: noop,
-      onExport: noop, onOpenAgentConnect: noop, onCheckUpdates: noop, onDirectorConsole: noop, onHelp: noop,
-      onAutoEdit: noop, autoEditUnavailableReason: REASON,
-    };
-    const web = renderToStaticMarkup(Toolbar(props));
-    expect(button(web, "semantic-edit-button")).toContain("disabled");
-    expect(button(web, "render-button")).toContain("網頁版無法輸出影片");
-    const desktop = renderToStaticMarkup(Toolbar({ ...props, isDesktop: true, autoEditUnavailableReason: undefined }));
-    expect(button(desktop, "render-button")).toContain("輸出完成影片");
-    expect(button(desktop, "semantic-edit-button")).not.toContain("disabled");
-  });
 });

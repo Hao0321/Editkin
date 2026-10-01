@@ -11,13 +11,18 @@ export function createAppRenderActions(input: {
   setStatus: Dispatch<SetStateAction<string>>;
   session?: ProjectSession;
   onArtifactReady?: (project: EditProject, artifact: RenderArtifactIdentity) => Promise<boolean>;
+  renderBrowserDraft?: () => Promise<void>;
 }) {
   const exportGraph = () => {
     downloadEditGraph(input.project);
     input.setStatus("已匯出 Editkin EditGraph。");
   };
   const renderVideo = async () => {
-    if (!input.api) return exportGraph();
+    if (!input.api) {
+      if (input.renderBrowserDraft) return input.renderBrowserDraft();
+      input.setStatus("目前執行環境沒有草稿影片匯出器。");
+      return;
+    }
     const task = input.session?.beginTask(input.project);
     if (task && !task.isCurrent()) return;
     try {
