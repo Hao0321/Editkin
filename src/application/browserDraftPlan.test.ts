@@ -8,7 +8,8 @@ const urls = { "asset-demo": "blob:local-import" };
 describe("browser draft export admission", () => {
   it("requires live imported sources rather than fetching persisted paths or remote URLs", () => {
     const project = createDemoProject();
-    for (const sources of [{}, { "asset-demo": "https://example.com/private.mp4" }, { "asset-demo": "file:///private.mp4" }]) {
+    const invalidSources: Record<string, string>[] = [{}, { "asset-demo": "https://example.com/private.mp4" }, { "asset-demo": "file:///private.mp4" }];
+    for (const sources of invalidSources) {
       expect(() => browserDraftPlan(project, sources)).toThrow(/重新匯入/);
     }
     expect(browserDraftPlan(project, urls).clips[0].source).toBe(urls["asset-demo"]);
