@@ -12,7 +12,7 @@ function vectorPreset(id: string, name: string, vector: MotionVectorV2, width: n
       x: .08, y, width, fontSize: 32, fontFamily: "Noto Sans TC", fontWeight: 700,
       outlineWidth: vector.kind === "panel" ? 2 : 0, shadowDepth: 0, cornerRadius: 10,
       textColor: vector.kind === "line_grid" ? "#175CD330" : "#24211E", backgroundColor: vector.kind === "panel" ? "#F9F4EBF5" : "#DAD3C8",
-      accentColor: vector.kind === "line_grid" ? "#175CD31C" : vector.kind === "dot_grid" ? "#77706440" : "#BF6848",
+      accentColor: vector.schema === "editkin.motion-vector-annotation/v1" ? "#175CD3" : vector.kind === "line_grid" ? "#175CD31C" : vector.kind === "dot_grid" ? "#77706440" : "#BF6848",
       vectorV2: vector,
       motionV2: { sequence: { unit: "all", order: "forward", exitOrder: "forward", staggerFrames: 0 },
         entrance: { durationFrames: 8, offsetXPixels: 0, offsetYPixels: 0, scale: 1, opacity: 0, easing: { type: "ease_out" } },
@@ -25,6 +25,7 @@ function vectorPreset(id: string, name: string, vector: MotionVectorV2, width: n
 export const NATIVE_VECTOR_PRESETS: readonly MotionGraphicPreset[] = [
   vectorPreset("reel_step_progress", "章節分段進度", { schema: "editkin.motion-vector/v1", kind: "step_progress", heightPixels: 12, revealFrames: 18, steps: 6, activeStep: 1, gapPixels: 12 }, .84, .085),
   vectorPreset("reel_rule_reveal", "短線揭露", { schema: "editkin.motion-vector/v1", kind: "rule", heightPixels: 5, revealFrames: 14 }, .64, .275),
+  vectorPreset("reel_ink_annotation", "文字上方刪線", { schema: "editkin.motion-vector-annotation/v1", kind: "rule", heightPixels: 4, revealFrames: 7 }, .64, .275),
   vectorPreset("reel_dot_grid", "紙面點陣", { schema: "editkin.motion-vector/v1", kind: "dot_grid", heightPixels: 480, revealFrames: 1, spacingPixels: 42, dotRadiusPixels: 1.4 }, .84, .32),
   vectorPreset("reel_line_grid", "藍白網格", { schema: "editkin.motion-vector/v1", kind: "line_grid", heightPixels: 480,
     revealFrames: 1, spacingPixels: 72, lineWidthPixels: 1, majorEvery: 4 }, .84, .32),

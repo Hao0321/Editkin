@@ -1,3 +1,4 @@
+import { EditGraphError } from "./editGraphError";
 import type {
   CaptionStyle,
   EditProject,
@@ -54,6 +55,12 @@ function restoreCaptionStyle(current: CaptionStyle, applied: CaptionStyle, befor
  * detached from template ownership and therefore preserved.
  */
 export function clearTemplateApplicationInPlace(project: EditProject): void {
+  const removedIds = new Set(project.motionGraphics.filter(graphic => isTemplateElementOwner(graphic.templateOwner)).map(graphic => graphic.id));
+  for (const scene of project.motionScenes ?? []) {
+    const removed = scene.graphicIds.filter(id => removedIds.has(id));
+    if (removed.length && removed.length !== scene.graphicIds.length) throw new EditGraphError("Template removal would break a mixed-ownership Motion scene; detach/recompose it first");
+  }
+  if (project.motionScenes) project.motionScenes = project.motionScenes.filter(scene => !scene.graphicIds.some(id => removedIds.has(id)));
   project.motionGraphics = project.motionGraphics.filter((graphic) => !isTemplateElementOwner(graphic.templateOwner));
   project.captions = project.captions.filter((caption) => !isTemplateElementOwner(caption.templateOwner));
   project.director.markers = project.director.markers.filter((marker) => !isTemplateElementOwner(marker.templateOwner));

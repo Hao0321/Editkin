@@ -1,7 +1,6 @@
-import { lazy, Suspense, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import "./generated/fontFaces.css";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type Dispatch, type SetStateAction } from "react";
 import { activeMediaLayers } from "./application/previewMedia";
-import { downloadEditGraph } from "./application/exportGraph";
+import { assertBrowserMediaRelink, chooseBrowserFile, missingBrowserMedia, prepareBrowserMediaRelink } from "./application/browserProjectFiles";
 import { buildMobileSnapshot } from "./desktop/mobileSnapshot";
 import { useAutomaticUpdates } from "./desktop/useAutomaticUpdates";
 import { useEditorShortcuts } from "./desktop/useEditorShortcuts";
@@ -19,14 +18,17 @@ import { createUiDemoProject } from "./domain/demo";
 import { dispatchCommandSafely, redo, undo } from "./domain/history";
 import { DEFAULT_CLIP_LAYER, DEFAULT_COLOR, DEFAULT_TRANSFORM, type ClipLayout, type MotionGraphicKind, type MotionGraphicPresetSeed, type NormalizedRect } from "./domain/types";
 import { importBrowserMedia, type ImportedBrowserMedia } from "./lib/browserMedia";
-import { canvasResolutionForAsset, isStarterDemo } from "./application/sourceOrientation";
+import { planImportedMediaTimeline } from "./application/timelineImport";
 import { resolveAestheticSystem } from "./application/editkinAesthetic";
 import { buildLoopingMusicPlan } from "./application/loopingMusic";
 import { makeId } from "./lib/format";
 import { useEditorTheme } from "./ui/useEditorTheme";
 import { usePlayheadTransport } from "./ui/playheadTransport";
+import { isPreviewPlaybackRate, nextShuttleRate, playbackResumeTime, stepPreviewFrame } from "./ui/playbackControlsState";
 import { timelineAssetDuration } from "./ui/timelineAssetDrop";
-import { createMotionGraphic } from "./motion/composition";
+import { planTimelineAssetInsert } from "./application/timelinePlacement";
+import type { TimelineImportPlacement } from "./ui/internalAssetPointerDrag";
+import { createMotionGraphic, legacyMotionGraphicSeed } from "./motion/composition";
 import type { TrackingMode } from "./ui/EditorShell";
 import type { MotionTrack } from "./domain/types";
 const EditorShell = lazy(() => import("./ui/EditorShell").then((module) => ({ default: module.EditorShell })));
@@ -34,12 +36,15 @@ const EditorShell = lazy(() => import("./ui/EditorShell").then((module) => ({ de
 import { DEFAULT_PIP_LAYOUT } from "./application/appDefaults";
 import { createAppProjectFileActions } from "./application/appProjectFileActions";
 import { createProjectSession } from "./application/projectSession";
+import { createMotionGraphicCreationOwner } from "./application/motionGraphicCreationOwner";
 import { acceptProjectTask } from "./application/projectTask";
 import { submitAppAgentInstruction } from "./application/appAgentInstruction";
 import { createAppRenderActions } from "./application/appRenderActions";
+import { createProjectDownloadOwner, type ProjectDownloadLease } from "./application/projectDownloadLease";
 import { createAestheticOutputOwner } from "./application/aestheticOutputOwner";
 import { buildLowerThirdCommand, type LowerThirdPresetId } from "./application/lowerThirds";
 import { templateApplicationCleanupCommands, templateOwnedElementCount } from "./application/templateLifecycle";
+import { MotionGraphicTextDialog } from "./ui/MotionGraphicTextDialog";
 
 function App() {
   const [projectSession] = useState(() => {
@@ -51,12 +56,42 @@ function App() {
   const aestheticOutputOwner = useMemo(() => createAestheticOutputOwner(), [sessionId]);
   const [aestheticOutputVersion, setAestheticOutputVersion] = useState(0);
   const setHistory = projectSession.setHistory;
+  const [projectDownload, setProjectDownload] = useState<ProjectDownloadLease>();
+  const [projectDownloadOwner] = useState(() => createProjectDownloadOwner({ session: projectSession, onChange: setProjectDownload }));
+  useEffect(() => projectDownloadOwner.attach(), [projectDownloadOwner]);
   const { playhead, setPlayhead, seekRevision, onPlaybackClock } = usePlayheadTransport();
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlayingState] = useState(false);
+  const playingRef = useRef(false);
+  const [playbackRate, setPlaybackRateState] = useState(1);
+  const playbackRateRef = useRef(1);
+  const setPlaying: Dispatch<SetStateAction<boolean>> = useCallback((value) => {
+    const next = typeof value === "function" ? value(playingRef.current) : value;
+    if (next === playingRef.current) return;
+    playingRef.current = next;
+    // Starting or pausing invalidates already-queued device progress too.
+    setPlayhead(current => current);
+    setPlayingState(next);
+  }, [setPlayhead]);
+  const setPlaybackRate = useCallback((rate: number) => {
+    if (!isPreviewPlaybackRate(rate) || rate === playbackRateRef.current) return;
+    playbackRateRef.current = rate;
+    setPlayhead(current => current);
+    setPlaybackRateState(rate);
+  }, [setPlayhead]);
   const [selectedClipId, setSelectedClipId] = useState<string | undefined>("clip-demo");
   const [selectedCaptionId, setSelectedCaptionId] = useState<string | undefined>();
   const [runtimeUrls, setRuntimeUrls] = useState<Record<string, string>>({});
+  const [browserRelinkRequired, setBrowserRelinkRequired] = useState(false);
+  const ownedBrowserUrls = useRef(new Map<string, string>());
+  const browserRelinkPending = useRef(false);
+  const releaseBrowserUrls = useCallback(() => {
+    for (const url of ownedBrowserUrls.current.values()) URL.revokeObjectURL(url);
+    ownedBrowserUrls.current.clear();
+  }, []);
+  useEffect(() => releaseBrowserUrls, [releaseBrowserUrls]);
   const [status, setStatus] = useState("選取片段後，直接告訴我你想怎麼改。");
+  const [motionTextRequest, setMotionTextRequest] = useState<{ kind: MotionGraphicKind; trackId?: string; seed?: MotionGraphicPresetSeed;
+    initialText: string; sessionId: number; revision: number; start: number }>();
   const [trackingMode, setTrackingMode] = useState<TrackingMode>();
   const [trackingSelection, setTrackingSelection] = useState<NormalizedRect>();
   const [trackingBusy, setTrackingBusy] = useState(false);
@@ -66,6 +101,25 @@ function App() {
   const project = history.present;
   const currentAestheticArtifact = useMemo(() => aestheticOutputOwner.get(project), [aestheticOutputOwner, aestheticOutputVersion, project]);
   const duration = projectDuration(project);
+  const pausePlayback = useCallback(() => setPlaying(false), [setPlaying]);
+  const togglePlayback = useCallback(() => {
+    if (playingRef.current) { setPlaying(false); return; }
+    if (duration <= 0) return;
+    setPlayhead(current => playbackResumeTime(current, duration, project.fps, playbackRateRef.current));
+    setPlaying(true);
+  }, [duration, project.fps, setPlayhead, setPlaying]);
+  const shuttlePlayback = useCallback((direction: -1 | 1, fastForward = false) => {
+    if (duration <= 0) return;
+    let rate = nextShuttleRate(playbackRateRef.current, playingRef.current, direction);
+    if (fastForward && direction === 1 && rate === 1) rate = 2;
+    setPlaybackRate(rate);
+    setPlayhead(current => playbackResumeTime(current, duration, project.fps, rate));
+    setPlaying(true);
+  }, [duration, project.fps, setPlaybackRate, setPlayhead, setPlaying]);
+  const frameStepPlayback = useCallback((direction: -1 | 1) => {
+    setPlaying(false);
+    setPlayhead(current => stepPreviewFrame(current, duration, project.fps, direction));
+  }, [duration, project.fps, setPlayhead, setPlaying]);
   const activeClip = activeVideoClip(project, playhead);
   const selectedClip = useMemo(() => {
     if (!selectedClipId) return undefined;
@@ -115,11 +169,14 @@ function App() {
       setSelectedCaptionId(undefined);
       setPlayhead(0);
       setPlaying(false);
+      setPlaybackRate(1);
     },
     onStatus: setStatus,
   });
   const loadOpenedProject = (opened: OpenProjectResult) => {
     if (!opened.project) return;
+    releaseBrowserUrls();
+    setBrowserRelinkRequired(!isDesktop);
     projectSession.replaceProject(opened.project, opened.path);
     setRuntimeUrls(opened.runtimeUrls ?? {});
     const firstClip = opened.project.tracks.flatMap((track) => track.clips)[0];
@@ -127,6 +184,7 @@ function App() {
     setSelectedCaptionId(undefined);
     setPlayhead(0);
     setPlaying(false);
+    setPlaybackRate(1);
     setTrackingMode(undefined);
     setTrackingSelection(undefined);
   };
@@ -142,6 +200,15 @@ function App() {
     setStatus(result.error ?? successMessage ?? "操作完成。");
     return !result.error;
   };
+  const motionCreationOwner = useMemo(() => createMotionGraphicCreationOwner({
+    session: projectSession, onCommand: runCommand, onStatus: setStatus,
+  }), [projectSession, sessionId, aestheticOutputOwner]);
+  useEffect(() => motionCreationOwner.attach(), [motionCreationOwner]);
+  useEffect(() => {
+    const cancel = (event: KeyboardEvent) => { if (event.key === "Escape") motionCreationOwner.cancel(); };
+    window.addEventListener("keydown", cancel);
+    return () => window.removeEventListener("keydown", cancel);
+  }, [motionCreationOwner]);
   const automatic = useAutomaticEditing({
     api: window.haoDesktop,
     projectSession,
@@ -208,47 +275,54 @@ function App() {
     }, `已新增一條${label}軌，可重新命名、鎖定或刪除。`);
   };
   const addAssetToTimeline = (assetId: string, mode: "timeline" | "pip" = "timeline", placement?: { trackId: string; timelineStart: number }) => {
+    const project = projectSession.getSnapshot().history.present;
     const asset = project.assets.find((item) => item.id === assetId);
-    if (!asset) return setStatus("找不到要加入的素材。");
-    if (mode === "pip" && asset.kind === "audio") return setStatus("畫中畫需要影片或圖片素材。");
+    if (!asset) { setStatus("找不到要加入的素材。"); return false; }
+    if (mode === "pip" && asset.kind === "audio") { setStatus("畫中畫需要影片或圖片素材。"); return false; }
+    if (placement && mode === "timeline") {
+      const clipId = makeId("clip");
+      try {
+        const planned = planTimelineAssetInsert(project, assetId, placement.trackId, placement.timelineStart, clipId, makeId);
+        if (!runCommand(planned.command, planned.newLayer
+          ? "已放到指定影格並新增圖層；原片段保留，一次復原即可還原。"
+          : "已將素材放到指定影格，可復原。")) return false;
+        setSelectedCaptionId(undefined);
+        setSelectedClipId(clipId);
+        setPlayhead(alignTime(placement.timelineStart, project.fps));
+        return true;
+      } catch (error) { setStatus(error instanceof Error ? error.message : "無法加入素材。"); return false; }
+    }
     const commands: EditorCommand[] = [];
     let trackId: string;
     let timelineStart: number;
     if (mode === "pip") {
-      const existing = project.tracks.find((track) => track.kind === "video" && track.name.startsWith("畫中畫"));
+      const existing = project.tracks.find((track) => track.kind === "video" && !track.locked && track.name.startsWith("畫中畫")
+        && track.clips.every(clip => playhead + timelineAssetDuration(asset, project.fps) <= clip.timelineStart + 1e-6 || playhead >= clip.timelineStart + clip.duration - 1e-6));
       trackId = existing?.id ?? makeId("pip-track");
       if (!existing) commands.push({ type: "add_track", track: { id: trackId, name: `畫中畫 ${project.tracks.filter((track) => track.name.startsWith("畫中畫")).length + 1}`, kind: "video", locked: false, muted: false, clips: [] } });
       timelineStart = alignTime(playhead, project.fps);
     } else {
       const kind = asset.kind === "audio" ? "audio" : "video";
-      const target = placement
-        ? project.tracks.find((track) => track.id === placement.trackId && track.kind === kind && !track.locked)
-        : project.tracks.find((track) => track.kind === kind && !track.locked);
-      if (!target) return setStatus("找不到相容的時間軸軌道。");
-      trackId = target.id;
-      timelineStart = alignTime(placement ? placement.timelineStart : target.clips.reduce((end, clip) => Math.max(end, clip.timelineStart + clip.duration), 0), project.fps);
+      const target = project.tracks.find((track) => track.kind === kind && !track.locked);
+      trackId = target?.id ?? makeId(`${kind}-track`);
+      if (!target) commands.push({ type: "add_track", track: { id: trackId, name: kind === "audio" ? "新增聲音軌" : "新增畫面軌", kind, locked: false, muted: false, clips: [] } });
+      const trackEnd = target?.clips.reduce((end, clip) => Math.max(end, clip.timelineStart + clip.duration), 0) ?? 0;
+      timelineStart = Math.max(0, Math.ceil(trackEnd * project.fps - 1e-7) / project.fps);
     }
     const clipId = makeId(mode === "pip" ? "pip-clip" : "clip");
-    const available = duration > timelineStart ? duration - timelineStart : Math.max(asset.duration || 3, 1);
-    const clipDuration = placement ? timelineAssetDuration(asset, project.fps)
-      : Math.max(1 / project.fps, alignTime(asset.kind === "image" ? Math.min(3, available) : Math.min(asset.duration || 3, available), project.fps));
-    if (placement) {
-      const target = project.tracks.find((track) => track.id === trackId);
-      if (target?.clips.some((clip) => timelineStart + clipDuration > clip.timelineStart + 1e-6
-        && timelineStart < clip.timelineStart + clip.duration - 1e-6)) {
-        return setStatus("目標軌道已有片段；請拖到空白處或另一條相容軌道。");
-      }
-    }
+    const clipDuration = timelineAssetDuration(asset, project.fps);
+    if (clipDuration <= 0) { setStatus("素材不足一個專案影格，無法加入時間軸。"); return false; }
     commands.push({ type: "add_clip", clip: {
       id: clipId, assetId: asset.id, trackId, timelineStart, sourceStart: 0, duration: clipDuration, volume: 1,
       transform: { ...DEFAULT_TRANSFORM }, color: { ...DEFAULT_COLOR }, keyframes: [],
       layout: mode === "pip" ? structuredClone(DEFAULT_PIP_LAYOUT) : undefined,
       layer: { ...DEFAULT_CLIP_LAYER },
     } });
-    runCommand({ type: "batch", commands }, mode === "pip" ? "已加入真正的畫中畫軌道；可拖曳片段並切換角落版型。" : placement ? "已將素材放到指定影格，可復原。" : "已把素材加入時間軸尾端。");
+    if (!runCommand({ type: "batch", commands }, mode === "pip" ? "已加入真正的畫中畫軌道；可拖曳片段並切換角落版型。" : "已把素材加入時間軸尾端。")) return false;
     setSelectedCaptionId(undefined);
     setSelectedClipId(clipId);
     setPlayhead(timelineStart);
+    return true;
   };
   const precomposeSelected = () => {
     if (!selectedClip) return setStatus("請先選取要做成預合成的片段。");
@@ -333,70 +407,34 @@ function App() {
     if (!commands.length) return setStatus("目前沒有已套用的成片模板。");
     runCommand({ type: "batch", commands }, `已還原成套用模板前的設定並移除 ${count} 個模板元素；套用後手動修改的欄位已保留。`);
   };
-  const addImportedMedia = (importedFiles: ImportedBrowserMedia[], options: { backgroundMusic?: boolean } = {}) => {
-    if (!importedFiles.length) return;
+  const addImportedMedia = (importedFiles: ImportedBrowserMedia[], options: { backgroundMusic?: boolean; placement?: TimelineImportPlacement } = {}) => {
+    if (!importedFiles.length) return false;
     // Import is additive: use the live graph, not the render that opened the picker.
     const project = projectSession.getSnapshot().history.present;
     if (options.backgroundMusic) {
       const imported = importedFiles[0];
       const music = buildLoopingMusicPlan(project, imported.asset, () => makeId("music-clip"));
-      if (!runCommand({ type: "batch", commands: music.commands }, `已自動鋪滿 ${music.targetDuration.toFixed(1)} 秒配樂，重複處使用 ${music.crossfade.toFixed(1)} 秒 crossfade，旁白會自動 ducking。`)) return;
+      if (!runCommand({ type: "batch", commands: music.commands }, `已自動鋪滿 ${music.targetDuration.toFixed(1)} 秒配樂，重複處使用 ${music.crossfade.toFixed(1)} 秒 crossfade，旁白會自動 ducking。`)) return false;
       setRuntimeUrls((current) => ({ ...current, [imported.asset.id]: imported.runtimeUrl }));
       setSelectedCaptionId(undefined);
       setSelectedClipId(music.lastClipId);
-      return;
+      return true;
     }
-    const firstVisual = importedFiles.find(({ asset }) => asset.kind !== "audio")?.asset;
-    const replaceStarter = Boolean(firstVisual && isStarterDemo(project));
-    const canvas = firstVisual ? canvasResolutionForAsset(firstVisual) : undefined;
-    let timelineCursor = replaceStarter ? 0 : projectDuration(project);
-    const commands: EditorCommand[] = [];
-    let lastClipId: string | undefined;
-    if (replaceStarter) {
-      commands.push(
-        { type: "delete_clip", clipId: "clip-demo" },
-        { type: "delete_asset", assetId: "asset-demo" },
-      );
-    }
-    if (canvas && (replaceStarter || !project.assets.some((asset) => asset.kind !== "audio"))) {
-      commands.push({ type: "set_project_resolution", width: canvas.width, height: canvas.height });
-    }
-    for (const imported of importedFiles) {
-      const targetTrack = project.tracks.find((track) => (
-        imported.asset.kind === "audio" ? track.kind === "audio" : track.kind === "video"
-      ));
-      if (!targetTrack) throw new Error("找不到適合這份素材的軌道");
-      const clipId = makeId("clip");
-      commands.push(
-        { type: "import_asset", asset: imported.asset },
-        { type: "add_clip", clip: {
-          id: clipId,
-          assetId: imported.asset.id,
-          trackId: targetTrack.id,
-          timelineStart: timelineCursor,
-          sourceStart: 0,
-          duration: imported.asset.duration,
-          volume: 1,
-          transform: { ...DEFAULT_TRANSFORM },
-          color: { ...DEFAULT_COLOR },
-          keyframes: [],
-        } },
-      );
-      timelineCursor += imported.asset.duration;
-      lastClipId = clipId;
-    }
-    const orientationMessage = canvas && (replaceStarter || !project.assets.some((asset) => asset.kind !== "audio"))
-      ? `，已依第一支素材自動設成 ${canvas.label}（${canvas.width}×${canvas.height}）`
-      : "";
-    if (!runCommand({ type: "batch", commands }, `已匯入 ${importedFiles.length} 份素材${orientationMessage}，並從 0 秒依序排好。`)) return;
+    let placement: ReturnType<typeof planImportedMediaTimeline>;
+    try { placement = planImportedMediaTimeline(project, importedFiles.map(item => item.asset), options.placement, makeId); }
+    catch (error) { setStatus(error instanceof Error ? error.message : "指定落點已失效，素材尚未加入。"); return false; }
+    if (!runCommand(placement.command, `已匯入 ${importedFiles.length} 份素材${placement.orientationMessage}，從第 ${Math.round(placement.timelineStart * project.fps)} 幀依序放入${placement.newLayers ? "；重疊處已新增圖層，原素材保留" : ""}。`)) return false;
     setRuntimeUrls((current) => Object.fromEntries([
       ...Object.entries(current),
       ...importedFiles.map(({ asset, runtimeUrl }) => [asset.id, runtimeUrl]),
     ]));
     setSelectedCaptionId(undefined);
-    setSelectedClipId(lastClipId);
+    setSelectedClipId(placement.lastClipId);
+    if (options.placement) setPlayhead(placement.timelineStart);
+    return true;
   };
-  const importFiles = async (files: File[]) => {
+  const importFiles = async (files: File[], placement?: TimelineImportPlacement) => {
+    const intent = placement ? Object.freeze({ ...placement }) : undefined;
     const task = projectSession.beginTask();
     const importedFiles: ImportedBrowserMedia[] = [];
     try {
@@ -408,11 +446,43 @@ function App() {
         }
       }
 
-      addImportedMedia(importedFiles);
+      if (!addImportedMedia(importedFiles, { placement: intent })) for (const item of importedFiles) URL.revokeObjectURL(item.runtimeUrl);
+      else for (const item of importedFiles) ownedBrowserUrls.current.set(item.asset.id, item.runtimeUrl);
     } catch (error) {
       for (const item of importedFiles) URL.revokeObjectURL(item.runtimeUrl);
       if (task.isSessionCurrent()) setStatus(error instanceof Error ? error.message : "無法匯入素材");
     }
+  };
+  const relinkBrowserMedia = async (assetId: string) => {
+    if (isDesktop) return;
+    if (browserRelinkPending.current) { setStatus("正在為另一份素材選檔或驗證；請等它完成。"); return; }
+    const task = projectSession.beginTask();
+    const sourceProject = projectSession.getSnapshot().history.present;
+    const sourceAsset = sourceProject.assets.find(asset => asset.id === assetId);
+    if (!sourceAsset || sourceAsset.compositionId) return;
+    browserRelinkPending.current = true;
+    const sourceIdentity = JSON.stringify(sourceAsset);
+    let prepared: Awaited<ReturnType<typeof prepareBrowserMediaRelink>> | undefined;
+    try {
+      setPlaying(false);
+      const file = await chooseBrowserFile(`${sourceAsset.kind}/*`);
+      if (!file || !task.isSessionCurrent()) return;
+      setStatus(`正在驗證「${sourceAsset.name}」的所選檔案…`);
+      prepared = await prepareBrowserMediaRelink(sourceProject, assetId, file);
+      if (!task.isSessionCurrent()) { prepared.dispose(); return; }
+      const live = projectSession.getSnapshot().history.present;
+      if (JSON.stringify(live.assets.find(asset => asset.id === assetId)) !== sourceIdentity) throw new Error("選檔期間原素材設定已變更，未重新連結。");
+      assertBrowserMediaRelink(live, assetId, prepared.measured);
+      const previous = ownedBrowserUrls.current.get(assetId);
+      if (previous) URL.revokeObjectURL(previous);
+      const runtimeUrl = prepared.runtimeUrl;
+      ownedBrowserUrls.current.set(assetId, runtimeUrl);
+      setRuntimeUrls(current => ({ ...current, [assetId]: runtimeUrl }));
+      setStatus(`已為「${sourceAsset.name}」重新連結瀏覽器預覽；片段 IDs、來源範圍與幀位置保留。${sourceAsset.kind === "image" ? "靜態圖片沒有媒體時長，保留專案編排時長。" : ""}${sourceAsset.derivatives?.sourceSha256 ? "已核對原素材 SHA-256。" : "原專案沒有實體 SHA，僅核對類型、時長與尺寸，無法證明原檔位元相同。"}重開後需再次選檔。`);
+    } catch (error) {
+      prepared?.dispose();
+      if (task.isSessionCurrent()) setStatus(error instanceof Error ? error.message : "素材未重新連結");
+    } finally { browserRelinkPending.current = false; }
   };
   const creativeLibrary = useCreativeLibrary({
     api: window.haoDesktop,
@@ -429,11 +499,38 @@ function App() {
     onCommands: (commands, message) => runCommand({ type: "batch", commands }, message),
   });
   const addMotionGraphic = (kind: MotionGraphicKind, trackId?: string, seed?: MotionGraphicPresetSeed) => {
-    const defaults: Record<MotionGraphicKind, string> = { title: "輸入主標題", card: "輸入重點內容", tag: "追蹤重點", counter: "01" };
-    const text = window.prompt(kind === "tag" ? "追蹤標籤要顯示什麼？" : "圖卡要顯示什麼？", seed?.name ?? defaults[kind])?.trim();
-    if (!text) return;
-    const graphic = createMotionGraphic(makeId("motion"), kind, text, playhead, Math.max(0.5, Math.min(4, duration - playhead || 3)), trackId, seed);
-    runCommand({ type: "add_motion_graphic", graphic }, trackId ? "已把標籤綁到追蹤主體，預覽與輸出會同步移動。" : `已加入 ${graphic.schema} 動態圖卡。`);
+    motionCreationOwner.cancel();
+    setPlaying(false);
+    const defaults: Record<MotionGraphicKind, string> = { title: "輸入主標題", card: "輸入重點內容", tag: trackId ? "追蹤重點" : "重點標籤", counter: "01" };
+    const snapshot = projectSession.getSnapshot();
+    setMotionTextRequest({ kind, trackId, seed, initialText: seed?.name ?? defaults[kind], sessionId: snapshot.sessionId,
+      revision: snapshot.history.present.revision, start: playhead });
+  };
+  const submitMotionGraphicText = (text: string) => {
+    const request = motionTextRequest;
+    setMotionTextRequest(undefined);
+    if (!request) return;
+    const snapshot = projectSession.getSnapshot();
+    if (snapshot.sessionId !== request.sessionId || snapshot.history.present.revision !== request.revision) {
+      setStatus("專案已變更，尚未新增圖文；請重新選擇位置後建立。"); return;
+    }
+    const { kind, trackId, seed, start } = request;
+    const current = projectSession.getSnapshot().history.present;
+    const end = projectDuration(current);
+    if (!trackId && (!seed || seed.schema === "hao.motion-composition/v2")) {
+      void motionCreationOwner.start({ expectedRevision: current.revision, graphicId: makeId("motion"), kind, text,
+        startFrame: Math.round(start * current.fps), preferredDurationFrames: Math.max(1, Math.floor((end > 0 ? 4 : 3) * current.fps)),
+        scope: end > 0 ? "existing_timeline" : "empty_canvas", ...(seed ? { presetId: seed.presetId } : {}) });
+      return;
+    }
+    // Explicit existing tracked/v1 producers remain readable; this is not a
+    // fallback from failed new-v2 preparation and does not certify T11 migration.
+    motionCreationOwner.cancel();
+    try {
+      const graphic = createMotionGraphic(makeId("motion"), kind, text, start, Math.max(0.5, Math.min(4, end - start || 3)), trackId,
+        seed ?? legacyMotionGraphicSeed(kind));
+      runCommand({ type: "add_motion_graphic", graphic }, trackId ? "已把標籤綁到追蹤主體，預覽與輸出會同步移動。" : "已加入明選的相容圖卡。");
+    } catch (error) { setStatus(error instanceof Error ? error.message : String(error)); }
   };
   const acceptTrackingSelection = async (rect: NormalizedRect) => {
     if (trackingPending.current) return;
@@ -494,7 +591,7 @@ function App() {
         setTrackingSelection(undefined);
         return;
       }
-      const graphic = createMotionGraphic(makeId("motion"), "tag", "追蹤重點", playhead, Math.max(0.5, Math.min(selectedClip.timelineStart + selectedClip.duration - playhead, 4)), trackId);
+      const graphic = createMotionGraphic(makeId("motion"), "tag", "追蹤重點", playhead, Math.max(0.5, Math.min(selectedClip.timelineStart + selectedClip.duration - playhead, 4)), trackId, legacyMotionGraphicSeed("tag"));
       runCommand({ type: "batch", commands: [
         { type: "add_motion_track", track },
         { type: "add_motion_graphic", graphic },
@@ -517,7 +614,9 @@ function App() {
   };
   const { newProject, openProject, saveProject } = createAppProjectFileActions({
     api: window.haoDesktop, session: projectSession, loadOpenedProject,
-    setRuntimeUrls, setSelectedClipId, setSelectedCaptionId, setPlayhead, setPlaying,
+    setRuntimeUrls: () => { releaseBrowserUrls(); setBrowserRelinkRequired(false); setRuntimeUrls({}); }, setSelectedClipId, setSelectedCaptionId, setPlayhead,
+    setPlaying, setPlaybackRate,
+    requestProjectDownload: projectDownloadOwner.request,
     setTrackingMode, setTrackingSelection, setStatus,
   });
   const submitAgentInstruction = (instruction: string) => submitAppAgentInstruction(instruction, {
@@ -526,7 +625,7 @@ function App() {
   const mobile = useMobileRemote({ api: window.haoDesktop, snapshot: mobileSnapshot, onInstruction: submitAgentInstruction, onStatus: setStatus });
 
   const { renderVideo, renderOpenExrSequence, renderAlphaMaster } = createAppRenderActions({
-    api: window.haoDesktop, project, setStatus, session: projectSession,
+    api: window.haoDesktop, project, setStatus, session: projectSession, requestProjectDownload: projectDownloadOwner.request,
     onArtifactReady: async (snapshot, artifact) => {
       if (!projectSession.isCurrentSession(sessionId)) return false;
       const bound = await aestheticOutputOwner.bind(snapshot, artifact);
@@ -545,26 +644,32 @@ function App() {
     redo: redoEdit,
     delete: deleteSelected,
     split: splitSelected,
-    play: () => { if (duration > 0) { if (!playing && playhead >= duration) setPlayhead(0); setPlaying((current) => !current); } },
-    "frame-back": () => setPlayhead((current) => Math.max(0, current - 1 / project.fps)),
-    "frame-forward": () => setPlayhead((current) => Math.min(duration, current + 1 / project.fps)),
-    "second-back": () => setPlayhead((current) => Math.max(0, current - 1)),
-    "second-forward": () => setPlayhead((current) => Math.min(duration, current + 1)),
-  }), [duration, playhead, playing, project.fps, projectPath, project, selectedCaption, selectedClip]);
+    play: togglePlayback,
+    pause: pausePlayback,
+    "shuttle-back": () => shuttlePlayback(-1),
+    "shuttle-forward": () => shuttlePlayback(1),
+    "frame-back": () => frameStepPlayback(-1),
+    "frame-forward": () => frameStepPlayback(1),
+    "second-back": () => { setPlaying(false); setPlayhead((current) => Math.max(0, current - 1)); },
+    "second-forward": () => { setPlaying(false); setPlayhead((current) => Math.min(duration, current + 1)); },
+  }), [duration, togglePlayback, pausePlayback, shuttlePlayback, frameStepPlayback, setPlaying, setPlayhead, projectPath, project, selectedCaption, selectedClip]);
   useEditorShortcuts(recovery.ready ? shortcutHandlers : {});
 
   if (!recovery.ready) return <main className="app-loading" aria-busy="true" data-shortcuts-blocked="true">正在檢查未儲存的工作…</main>;
 
   return <Suspense fallback={<main className="app-loading" aria-label="正在載入 Editkin">正在載入 Editkin 剪輯工作區…</main>}><EditorShell currentAestheticArtifact={currentAestheticArtifact} {...{
     history, project, projectSession, duration, theme, setTheme, isDesktop, playhead, setPlayhead, seekRevision, onPlaybackClock, playing, setPlaying,
+    playbackRate, setPlaybackRate, togglePlayback, pausePlayback, shuttlePlayback, frameStepPlayback,
     selectedClipId, setSelectedClipId, selectedCaptionId, setSelectedCaptionId, selectedClip,
     selectedClipAtPlayhead, selectedCaption, transitionNeighbors, selectedMotionTracks, activeLayers,
-    activeAudioLayers, runtimeUrls, status, setStatus, trackingMode, setTrackingMode, trackingSelection,
+    activeAudioLayers, runtimeUrls, missingMedia: isDesktop || !browserRelinkRequired ? [] : missingBrowserMedia(project, runtimeUrls), relinkBrowserMedia,
+    projectDownload, cancelProjectDownload: projectDownloadOwner.cancel, status, setStatus, trackingMode, setTrackingMode, trackingSelection,
     setTrackingSelection, trackingBusy, recovery, desktopActions, automatic, creativeLibrary, batchAutoEdit, mobile,
     newProject, openProject, saveProject, undoEdit, redoEdit, renderVideo, renderOpenExrSequence, renderAlphaMaster, importFiles,
     acceptTrackingSelection, startPodcastDirector, submitAgentInstruction, runCommand, updateAnimatedClipProperty,
     addMotionGraphic, addCaption, addTrack, addAssetToTimeline, makeSelectedPictureInPicture, precomposeSelected, applyShortFormTemplate, applyLongFormTemplate, addLowerThird, clearTemplateApplication, splitSelected, deleteSelected,
-  }} /></Suspense>;
+  }} />{motionTextRequest && <MotionGraphicTextDialog initialText={motionTextRequest.initialText} tracked={Boolean(motionTextRequest.trackId)}
+    onClose={() => setMotionTextRequest(undefined)} onSubmit={submitMotionGraphicText} />}</Suspense>;
 }
 
 export default App;

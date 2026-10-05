@@ -138,11 +138,12 @@ export function createBatchSourceProject(request: {
   duration: number;
   width?: number;
   height?: number;
+  displayAspectRatio?: number;
   sourceSha256: string;
   now: Date;
   editorialProfile?: EditProject["editorialProfile"];
 }): { project: EditProject; clip: TimelineClip } {
-  const canvas = canvasResolutionForAsset({ kind: "video", width: request.width, height: request.height })
+  const canvas = canvasResolutionForAsset({ kind: "video", width: request.width, height: request.height, displayAspectRatio: request.displayAspectRatio })
     ?? { width: 1920, height: 1080 };
   const project = createEmptyProject(safeStem(request.sourcePath), {
     id: `batch-project-${safeJobId(request.jobId)}`,
@@ -161,6 +162,7 @@ export function createBatchSourceProject(request: {
     duration: request.duration,
     width: request.width,
     height: request.height,
+    displayAspectRatio: request.displayAspectRatio,
     role: "primary-source",
     provenance: "user-selected-local-source",
     redistributable: false,
@@ -283,6 +285,7 @@ export async function runBatchAutoEditItem(
       duration: probe.duration,
       width: probe.width,
       height: probe.height,
+      displayAspectRatio: probe.displayAspectRatio,
       sourceSha256,
       now: startedAt,
       editorialProfile: request.editorialProfile,

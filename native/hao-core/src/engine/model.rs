@@ -378,6 +378,10 @@ pub enum NodeOperation {
         #[serde(default)]
         parent: Option<String>,
     },
+    #[serde(rename = "floating_video_frame_2d")]
+    FloatingVideoFrame2d {
+        spec: super::floating_video_frame::FloatingVideoFrameSpec,
+    },
     Camera {
         position: [f32; 3],
         target: [f32; 3],
@@ -493,6 +497,10 @@ pub enum NodeOperation {
         #[serde(default)]
         tracking: Option<MotionGraphicTracking>,
     },
+    NativeMotionPaint {
+        graphic_id: String,
+        track: super::motion_paint_track::NativeMotionPaintTrack,
+    },
     ParticleEmitter {
         #[serde(default)]
         timeline: Option<NodeFrameRange>,
@@ -553,6 +561,7 @@ impl NodeOperation {
             Self::Source { .. } => EngineStage::Decode,
             Self::AutoRoto { .. } => EngineStage::Analysis,
             Self::Transform2d { .. }
+            | Self::FloatingVideoFrame2d { .. }
             | Self::Transform3d { .. }
             | Self::Camera { .. }
             | Self::Light { .. } => EngineStage::Geometry,
@@ -565,7 +574,8 @@ impl NodeOperation {
             | Self::Adjustment { .. }
             | Self::Precomposition { .. }
             | Self::Caption { .. }
-            | Self::MotionGraphic { .. } => EngineStage::Composite,
+            | Self::MotionGraphic { .. }
+            | Self::NativeMotionPaint { .. } => EngineStage::Composite,
             Self::ParticleEmitter { .. } => EngineStage::Simulation,
             Self::Output { .. } => EngineStage::Output,
         }

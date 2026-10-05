@@ -2,15 +2,18 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import { summarizeProject } from "../domain/editGraph";
 import { findAsset } from "../domain/editGraph";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
+import { readBoundedFile } from "../shared/boundedFile";
 import { creativeAssetIdFromUri, resolveCreativeLibraryAsset } from "../application/creativeLibrary";
 import { applyCommand } from "../domain/commands";
+import { readCreatorReviewPolicy, assertCreatorReviewPolicyCurrent, assertProjectReviewPolicy } from "./creatorReviewPolicy";
 import {
   autopilotCommands,
   autopilotPlanCoverage,
   autopilotPlanSchema,
   autopilotPlanSha256,
   assertAutopilotProjectTimelineBinding,
+  getPlanOriginalMotionSources,
   compactAutopilotContract,
   type CurrentAutopilotPlan,
   parseAutopilotPlan,
@@ -24,7 +27,9 @@ import {
   createAutopilotProjectAuditIdentity,
   readLiveAutopilotIdentity,
   verifyAcceptedAutopilotAuditReceipt,
+  sha256Canonical,
 } from "../application/autopilotInvocationIdentity";
+import { prepareOriginalMotionCommitAuthority, verifyOriginalMotionCommitAuthority } from "../application/originalMotionCommitAuthority";
 import {
   inferencePrioritySchema,
   inferenceRouterSha256,
@@ -55,11 +60,15 @@ import {
   writePendingAutopilotReceipt,
   writeProject,
   resolveWorkspaceMediaPath,
+  workspaceRoot,
 } from "./storage";
 import { creativePackRoot, personalMusicRoot, personalVisualRoot } from "./toolRuntime";
 import { verifyAutoColorDecisions } from "../application/autoColorEvidence";
 import { autoColorRuntime } from "./autoColorTools";
 import { registerAutopilotDesignTools, verifyAutopilotDesign } from "./autopilotDesignTools";
+import { verifyCurrentOriginalMotionEvidence } from "./originalMotionWorkflow";
+import type { OriginalSourceOwnerRevisionProof } from "../domain/originalSourceOwnerRevision";
+import type { EditorCommand } from "../domain/commandTypes";
 
 function textResult(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload) }] };
@@ -72,8 +81,39 @@ function errorResult(error: unknown) {
   };
 }
 
-function materialCacheRoot(): string {
-  const modelRoot = process.env.EDITKIN_MODEL_ROOT ?? resolve(process.cwd(), ".editkin-models");
+/** A successful project write is not itself a committed execution receipt.
+ * Read the exact file returned by the commit, and keep the response projection
+ * equal to its persisted content. The issuer seal remains an internal proof. */
+async function readCommittedAutopilotResponseReceipt(
+  pendingPath: string,
+  receiptFile: string,
+  expected: Record<string, unknown>,
+) {
+  if (!pendingPath.endsWith(".pending.json")) throw new Error("Autopilot response requires an owned pending receipt path");
+  const committedPath = pendingPath.replace(/\.pending\.json$/, ".committed.json");
+  if (receiptFile !== basename(committedPath)) throw new Error("Autopilot committed receipt filename differs from the pending receipt");
+  const path = await resolveWorkspaceMediaPath(committedPath);
+  // The writer has no fixed document ceiling. Bound this read by the exact
+  // expected serialization, with room for only its fixed-size original seal
+  // (strict schema/scope, key identity and fixed-size hex proofs), not a new plan cap.
+  const expectedCommitted = { ...expected, state: "committed" };
+  const maxBytes = Buffer.byteLength(`${JSON.stringify(expectedCommitted, null, 2)}\n`, "utf8") + (expected.originalMotionBinding ? 512 : 0);
+  const observed: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(await readBoundedFile(path, maxBytes)));
+  if (!observed || typeof observed !== "object" || Array.isArray(observed)) throw new Error("Autopilot committed receipt is not an object");
+  const persisted = observed as Record<string, unknown>;
+  if (persisted.schema !== "hao.video-autopilot.execution-receipt/v1" || persisted.state !== "committed") {
+    throw new Error("Autopilot persisted receipt must have committed state");
+  }
+  const { issuerSeal: _issuerSeal, ...responseReceipt } = persisted;
+  if (sha256Canonical(responseReceipt) !== sha256Canonical(expectedCommitted)) {
+    throw new Error("Autopilot persisted receipt differs from the committed response identity or content");
+  }
+  if (expected.originalMotionBinding) await verifyOriginalMotionCommitAuthority(persisted);
+  return { ...responseReceipt, receiptFile };
+}
+
+export function materialCacheRoot(): string {
+  const modelRoot = process.env.EDITKIN_MODEL_ROOT ?? resolve(workspaceRoot(), ".editkin-models");
   return process.env.EDITKIN_CACHE_ROOT ?? resolve(modelRoot, "../media-cache");
 }
 
@@ -89,15 +129,29 @@ function parseProductAutopilotPlan(input: unknown): CurrentAutopilotPlan {
   if (plan.schema !== "hao.video-autopilot.edit-plan/v4") {
     throw new Error(`${plan.schema} 僅供匯入相容；產品 audit/apply 只接受 hao.video-autopilot.edit-plan/v4`);
   }
+  autopilotCommands(plan);
   return plan;
 }
 
-async function verifyCurrentMaterialEvidence(plan: CurrentAutopilotPlan, project: Awaited<ReturnType<typeof readProject>>) {
+async function verifyCurrentMaterialEvidence(plan: CurrentAutopilotPlan, project: Awaited<ReturnType<typeof readProject>>, signal?: AbortSignal,
+  revisionAuthority?: { batch: EditorCommand; capture: (proof: OriginalSourceOwnerRevisionProof) => void }) {
+  signal?.throwIfAborted();
   assertAutopilotProjectTimelineBinding(plan, project.fps);
-  return verifyCurrentAutopilotMaterialEvidence(plan.materialEvidence, project, {
+  const exactPlanBatch: Extract<EditorCommand, { type: "batch" }> = { type: "batch", commands: autopilotCommands(plan) };
+  if (revisionAuthority && sha256Canonical(revisionAuthority.batch) !== sha256Canonical(exactPlanBatch)) {
+    throw new Error("Original revision host authority must use this exact plan batch");
+  }
+  const prediction: { proof?: OriginalSourceOwnerRevisionProof } = {};
+  const original = await verifyCurrentOriginalMotionEvidence(plan, project, signal, { batch: exactPlanBatch,
+    capture: proof => { prediction.proof = proof; revisionAuthority?.capture(proof); } });
+  const media = plan.materialEvidence.schema === "hao.editkin.material-intelligence/v1" ? await verifyCurrentAutopilotMaterialEvidence(plan.materialEvidence, project, {
     cacheRoot: materialCacheRoot(),
     resolveSource: (assetId) => resolveAutopilotAssetSource(project, assetId),
-  }, plan.editorial.graphics);
+    ffprobePath: process.env.HAO_FFPROBE_PATH, signal,
+  }, plan.editorial.graphics, plan.editorial.audio.mode === "silent_media" ? { audio: plan.editorial.audio, commands: autopilotCommands(plan) } : undefined,
+    prediction.proof ? { batch: exactPlanBatch, originalSourceOwnerRevisionProof: prediction.proof } : undefined) : undefined;
+  signal?.throwIfAborted();
+  return original ? { original, ...(media ? { media } : {}), receiptCount: media?.receiptCount ?? 0 } : media!;
 }
 
 export function registerAutopilotTools(server: McpServer): void {
@@ -152,16 +206,16 @@ export function registerAutopilotTools(server: McpServer): void {
   server.registerTool("audit_autopilot_plan", {
     description: "在不修改專案的情況下驗證當次 v4 plan，並綁定目前專案 revision、啟用中的 Video Autopilot Skill、workflow contract、匿名 knowledge 與已發現 plugin registry；v3/v2/v1 僅可匯入，產品路徑一律拒絕。",
     inputSchema: z.object({ projectPath: z.string(), plan: autopilotPlanSchema }),
-  }, async ({ projectPath, plan: inputPlan }) => {
-    try { return await auditAutopilotPlan(projectPath, inputPlan); }
+  }, async ({ projectPath, plan: inputPlan }, context) => {
+    try { return await auditAutopilotPlan(projectPath, inputPlan, context.mcpReq.signal); }
     catch (error) { return errorResult(error); }
   });
 
   server.registerTool("apply_autopilot_plan", {
     description: "只套用已由目前 Editkin 程序的 audit_autopilot_plan 簽發、十分鐘內且尚未使用的 v4 receipt。apply 會重算專案、啟用中的 Skill、workflow、knowledge、plugin registry 與素材 identity；任何偽造、重播、過期、竄改或 drift 都 fail-closed，通過後才單次原子寫入。",
     inputSchema: z.object({ projectPath: z.string(), plan: autopilotPlanSchema, auditReceipt: autopilotAuditReceiptSchema }),
-  }, async ({ projectPath, plan: inputPlan, auditReceipt: inputAuditReceipt }) => {
-    try { return await applyAutopilotPlan(projectPath, inputPlan, inputAuditReceipt); }
+  }, async ({ projectPath, plan: inputPlan, auditReceipt: inputAuditReceipt }, context) => {
+    try { return await applyAutopilotPlan(projectPath, inputPlan, inputAuditReceipt, context.mcpReq.signal); }
     catch (error) { return errorResult(error); }
   });
 
@@ -179,8 +233,10 @@ export function registerAutopilotTools(server: McpServer): void {
   });
 }
 
-export async function auditAutopilotPlan(projectPath: string, inputPlan: unknown) {
+export async function auditAutopilotPlan(projectPath: string, inputPlan: unknown, signal?: AbortSignal) {
+  signal?.throwIfAborted();
   const plan = parseProductAutopilotPlan(inputPlan);
+  const reviewPolicy = await readCreatorReviewPolicy();
   const [project, absoluteProjectPath, invocation, pluginRegistry, hostWorkflowProfile] = await Promise.all([
     readProject(projectPath),
     resolveProjectPath(projectPath),
@@ -189,7 +245,8 @@ export async function auditAutopilotPlan(projectPath: string, inputPlan: unknown
     readHostWorkflowProfile(),
   ]);
   assertAutopilotPlanSourceCurrent(plan.source, invocation);
-  const design = await verifyAutopilotDesign(plan, project);
+  let nativePaintOwnerRevisionProof: object | undefined;
+  const design = await verifyAutopilotDesign(plan, project, undefined, { reviewPolicy: reviewPolicy.policy }, proof => { nativePaintOwnerRevisionProof = proof; });
   if (pluginRegistryIdentity(pluginRegistry).sha256 !== invocation.plugins.sha256) throw new Error("Autopilot audit 的 plugin registry snapshot 已漂移");
   const skillSelection = verifyEditkinSkillSelectionReceipt(
     plan.extensions.skillSelection,
@@ -201,7 +258,10 @@ export async function auditAutopilotPlan(projectPath: string, inputPlan: unknown
   const skillCapabilities = resolveSkillCapabilityQueries(pluginRegistry, skillSelection);
   const authorizedProfile = assertSelectionUsesHostWorkflowProfile(hostWorkflowProfile, skillSelection.profileSha256, pluginRegistry);
   const pluginApplications = verifyPluginAutomationApplications(plan.extensions.pluginApplications, pluginRegistry, autopilotCommands(plan), authorizedProfile, skillSelection.compiled.guardrails);
-  const materialEvidence = await verifyCurrentMaterialEvidence(plan, project);
+  const auditBatch: EditorCommand = { type: "batch", commands: structuredClone(autopilotCommands(plan)) };
+  let originalSourceOwnerRevisionProof: object | undefined;
+  const materialEvidence = await verifyCurrentMaterialEvidence(plan, project, signal, { batch: auditBatch,
+    capture: proof => { originalSourceOwnerRevisionProof = proof; } });
   const autoColor = await verifyAutoColorDecisions(plan.autoColor, autopilotCommands(plan), project, autoColorRuntime(project), plan.materialEvidence.receipts);
   const rotoKeyer = await verifyRotoKeyerPlanForProject(
     plan.rotoKeyer,
@@ -213,7 +273,9 @@ export async function auditAutopilotPlan(projectPath: string, inputPlan: unknown
     { ...defaultRotoKeyerRuntimePaths(), cacheRoot: materialCacheRoot() },
     (assetId) => resolveAutopilotAssetSource(project, assetId),
   );
-  const auditCandidate = applyCommand(project, { type: "batch", commands: autopilotCommands(plan) });
+  // applyCommand may normalize nested clip payloads; keep the sealed plan
+  // untouched so the audit hash is exactly what apply will verify.
+  const auditCandidate = applyCommand(project, auditBatch, { nativePaintOwnerRevisionProof, originalSourceOwnerRevisionProof });
   const originalAssets = new Map(project.assets.map((asset) => [asset.id, asset.uri]));
   for (const [id, uri] of originalAssets) {
     const current = auditCandidate.assets.find((asset) => asset.id === id);
@@ -221,17 +283,24 @@ export async function auditAutopilotPlan(projectPath: string, inputPlan: unknown
   }
   const planSha256 = autopilotPlanSha256(plan);
   const planBytes = Buffer.byteLength(JSON.stringify(plan), "utf8");
+  assertProjectReviewPolicy(auditCandidate, reviewPolicy);
+  await assertCreatorReviewPolicyCurrent(reviewPolicy);
+  assertAutopilotPlanSourceCurrent(plan.source, await readLiveAutopilotIdentity());
+  signal?.throwIfAborted();
   const auditReceipt = createAcceptedAutopilotAuditReceipt({
     planSha256,
     project: createAutopilotProjectAuditIdentity(absoluteProjectPath, project),
     invocation,
     materialEvidence: plan.materialEvidence,
+    originalSourceEvidence: getPlanOriginalMotionSources(plan),
   });
   return textResult({ status: "ACCEPTED", planSha256, planBytes, coverage: autopilotPlanCoverage(plan), commandCount: plan.commands.length, materialEvidence, skillSelection: { receiptSha256: skillSelection.receiptSha256, selected: skillSelection.selected.length, capabilityQueries: skillCapabilities.resolutions.length, capabilityCandidates: skillCapabilities.resolutions.reduce((total, resolution) => total + resolution.candidates.length, 0) }, pluginApplications, rotoKeyer, autoColor, design, auditReceipt });
 }
 
-export async function applyAutopilotPlan(projectPath: string, inputPlan: unknown, inputAuditReceipt: unknown) {
+export async function applyAutopilotPlan(projectPath: string, inputPlan: unknown, inputAuditReceipt: unknown, signal?: AbortSignal) {
+  signal?.throwIfAborted();
   const plan = parseProductAutopilotPlan(inputPlan);
+  const reviewPolicy = await readCreatorReviewPolicy();
   const [before, absoluteProjectPath, invocation, pluginRegistry, hostWorkflowProfile] = await Promise.all([
     readProject(projectPath),
     resolveProjectPath(projectPath),
@@ -240,7 +309,8 @@ export async function applyAutopilotPlan(projectPath: string, inputPlan: unknown
     readHostWorkflowProfile(),
   ]);
   assertAutopilotPlanSourceCurrent(plan.source, invocation);
-  const design = await verifyAutopilotDesign(plan, before);
+  let nativePaintOwnerRevisionProof: object | undefined;
+  const design = await verifyAutopilotDesign(plan, before, undefined, { reviewPolicy: reviewPolicy.policy }, proof => { nativePaintOwnerRevisionProof = proof; });
   if (pluginRegistryIdentity(pluginRegistry).sha256 !== invocation.plugins.sha256) throw new Error("Autopilot apply 的 plugin registry snapshot 已漂移");
   const skillSelection = verifyEditkinSkillSelectionReceipt(
     plan.extensions.skillSelection,
@@ -258,8 +328,12 @@ export async function applyAutopilotPlan(projectPath: string, inputPlan: unknown
     project: createAutopilotProjectAuditIdentity(absoluteProjectPath, before),
     invocation,
     materialEvidence: plan.materialEvidence,
+    originalSourceEvidence: getPlanOriginalMotionSources(plan),
   });
-  const materialEvidence = await verifyCurrentMaterialEvidence(plan, before);
+  const applyBatch: EditorCommand = { type: "batch", commands: structuredClone(autopilotCommands(plan)) };
+  let originalSourceOwnerRevisionProof: object | undefined;
+  const materialEvidence = await verifyCurrentMaterialEvidence(plan, before, signal, { batch: applyBatch,
+    capture: proof => { originalSourceOwnerRevisionProof = proof; } });
   const autoColor = await verifyAutoColorDecisions(plan.autoColor, autopilotCommands(plan), before, autoColorRuntime(before), plan.materialEvidence.receipts);
   const rotoKeyer = await verifyRotoKeyerPlanForProject(
     plan.rotoKeyer,
@@ -272,11 +346,19 @@ export async function applyAutopilotPlan(projectPath: string, inputPlan: unknown
     (assetId) => resolveAutopilotAssetSource(before, assetId),
   );
   const originalAssets = new Map(before.assets.map((asset) => [asset.id, asset.uri]));
-  const candidate = applyCommand(before, { type: "batch", commands: autopilotCommands(plan) });
+  const candidate = applyCommand(before, applyBatch, { nativePaintOwnerRevisionProof, originalSourceOwnerRevisionProof });
   for (const [id, uri] of originalAssets) {
     const current = candidate.assets.find((asset) => asset.id === id);
     if (!current || current.uri !== uri) throw new Error(`Autopilot plan 改寫或移除原始素材：${id}`);
   }
+  assertProjectReviewPolicy(candidate, reviewPolicy);
+  const originalMotionEvidence = getPlanOriginalMotionSources(plan);
+  // A missing/unavailable authority must fail before consuming the audit or
+  // writing either the project or a pending execution receipt.
+  const originalCommitKey = originalMotionEvidence ? await prepareOriginalMotionCommitAuthority() : undefined;
+  await assertCreatorReviewPolicyCurrent(reviewPolicy);
+  assertAutopilotPlanSourceCurrent(plan.source, await readLiveAutopilotIdentity());
+  signal?.throwIfAborted();
   consumeAcceptedAutopilotAuditReceipt(auditReceipt);
 
   const coverage = autopilotPlanCoverage(plan);
@@ -301,20 +383,35 @@ export async function applyAutopilotPlan(projectPath: string, inputPlan: unknown
     quality: { inputState: plan.quality.state, outputState: "review_required", certified: false },
     createdAt,
   };
+  signal?.throwIfAborted();
   const pending = await writePendingAutopilotReceipt(projectPath, receiptBase);
-  const project = await writeProject(projectPath, candidate, before.revision);
+  const project = await writeProject(projectPath, candidate, before.revision, { beforeCommit: async () => {
+    signal?.throwIfAborted();
+    await assertCreatorReviewPolicyCurrent(reviewPolicy);
+    if (plan.editorial.audio.mode === "silent_media" || plan.originalMotionEvidence?.schema === "editkin.original-motion-source/v3") await verifyCurrentMaterialEvidence(plan, before, signal);
+    else await verifyCurrentOriginalMotionEvidence(plan, before, signal);
+    assertAutopilotPlanSourceCurrent(plan.source, await readLiveAutopilotIdentity());
+    signal?.throwIfAborted();
+  } });
   const committedAt = new Date().toISOString();
-  const receiptFile = await commitAutopilotReceipt(pending.pendingPath, {
+  const originalCommit = originalMotionEvidence ? { originalMotionEvidence, originalMotionBinding: {
+    schema: "editkin.original-motion-render-binding/v1", originalSourceEvidenceSha256: sha256Canonical(originalMotionEvidence),
+    sceneProjectSha256: sha256Canonical({ motionScenes: project.motionScenes ?? [], motionGraphics: project.motionGraphics }), renderContentSha256: sha256Canonical(project),
+  } } : {};
+  const committedReceipt = {
     ...receiptBase,
     receiptId: pending.receiptId,
     projectRevisionAfter: project.revision,
     projectIdentityAfter: createAutopilotProjectAuditIdentity(absoluteProjectPath, project),
     committedAt,
-  });
+    ...originalCommit,
+  };
+  const receiptFile = await commitAutopilotReceipt(pending.pendingPath, committedReceipt, originalCommitKey);
+  const responseReceipt = await readCommittedAutopilotResponseReceipt(pending.pendingPath, receiptFile, committedReceipt);
   return textResult({
     status: "REVIEW_REQUIRED",
     appliedCommandCount: plan.commands.length,
-    receipt: { ...receiptBase, receiptId: pending.receiptId, receiptFile, projectRevisionAfter: project.revision, projectIdentityAfter: createAutopilotProjectAuditIdentity(absoluteProjectPath, project), committedAt },
+    receipt: responseReceipt,
     summary: summarizeProject(project),
   });
 }

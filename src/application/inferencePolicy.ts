@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import * as z from "zod/v4";
+import { reviewPolicySchema } from "../domain/reviewPolicy";
 
 export const AUTOPILOT_INFERENCE_SCHEMA = "hao.video-autopilot.inference-route/v1" as const;
 export const AUTOPILOT_CONTEXT_PROTOCOL = "markdown-router+json-contract/v1" as const;
@@ -36,7 +37,7 @@ export const inferenceRunSchema = z.strictObject({
     executionMode: z.enum(["direct_apply", "audit_then_apply", "plan_only"]),
     secondPassRequired: z.boolean(),
     humanReviewRequired: z.boolean(),
-    reviewPolicy: z.strictObject({ mode: z.enum(["human", "agent_reference_comparison"]), authorization: z.string().trim().min(1).max(2000).optional() }).optional(),
+    reviewPolicy: reviewPolicySchema.optional(),
   }),
 }).superRefine((run, context) => {
   const agentReview = run.safeguards.reviewPolicy?.mode === "agent_reference_comparison";

@@ -6,13 +6,17 @@ Everything below was derived from the source, configuration, and docs in this ch
 
 ---
 
+## Current contribution baseline — 2026-10-05
+
+Read `docs/DEVELOPMENT_STATUS.md` before implementing a feature. PR #77 and `feat/latest-agent-engine-20261001` contain the current source integration. Extend existing original Motion, painted revision, media/typography and v4 workflow modules instead of creating a second execution pipeline. A complete accepted journey still requires current output and platform evidence; the maintainer ledger remains 3/37. This source update does not certify an installed native runtime or an official installer.
+
 ## 1. What this project is
 
 Editkin (`package.json` name `editkin`, product name "Editkin", version `0.15.0`, author Hao0321 Studio) is a **local-first, AI-native video editor** with an editable timeline.
 
 Core concepts:
 
-- **EditGraph**: the single source of truth for a project (`EditProject`, `src/domain/types.ts`). Current `schemaVersion` is **8**; versions 1–7 are upgraded by `migrateProject` in `src/domain/editGraph.ts`.
+- **EditGraph**: the single source of truth for a project (`EditProject`, `src/domain/types.ts`). Current `schemaVersion` is **9 or 10** (new projects start at 9); legacy versions migrate through `migrateProject` in `src/domain/editGraph.ts`. Version 10 preserves the current painted-media authoring contract.
 - **EditorCommand**: every mutation is a structured command (`src/domain/commandTypes.ts`). The UI, the MCP server, agents, and plugins all go through the same command path.
 - **MCP server** (`npm run mcp`, `src/mcp/server.ts`): lets an external agent inspect media, prepare/audit/apply an editable "v4 plan", and render, using the same commands as the UI. The agent makes editorial decisions; Editkin is the engine.
 - **Video Autopilot Kit** (external repo `Hao0321/video-autopilot-kit`) supplies agent-side editing rules. It is optional and not vendored here; `EDITKIN_VIDEO_AUTOPILOT_SKILL` points at its `codex-skill/video-autopilot/SKILL.md`. `video-autopilot-skill-integration.json` declares `sourcePolicy: "community-optional-skills"` with no dependencies.

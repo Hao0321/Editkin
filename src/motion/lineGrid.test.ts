@@ -41,7 +41,9 @@ describe("native line grid", () => {
   it("rejects thick lines and fractional major intervals, rather than producing solid bands", () => {
     const { project, graphic } = fixture();
     expect(() => motionVectorV2Schema.parse({ ...graphic.vectorV2, majorEvery: 2.5 })).toThrow();
-    graphic.vectorV2 = { ...graphic.vectorV2!, kind: "line_grid", spacingPixels: 8, lineWidthPixels: 8, majorEvery: 4 };
+    const vector = graphic.vectorV2;
+    if (vector?.kind !== "line_grid") throw new Error("Fixture lost line-grid vector");
+    graphic.vectorV2 = { ...vector, spacingPixels: 8, lineWidthPixels: 8, majorEvery: 4 };
     expect(() => validateProject(project)).toThrow(/占滿/);
   });
 });

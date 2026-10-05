@@ -1,9 +1,11 @@
-import { app, BrowserWindow, dialog, ipcMain, net, protocol, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell, type IpcMainInvokeEvent } from "electron";
 import { readBoundedFile } from "../src/shared/boundedFile";
+import { readMesh3dFont } from "../src/render/mesh3dFontSource";
+import { readBundledFontFace } from "../src/render/bundledFontSource";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { AgentTarget } from "../src/application/agentSetup";
-import { compactPluginRegistry, compilePluginCommands, discoverInstalledPlugins, findInstalledCapability } from "../src/plugins/registry";
+import { compactPluginRegistry } from "../src/plugins/registry";
 import { exportVideo } from "../src/application/exportVideo";
 import { inspectMedia } from "../src/application/inspectMedia";
 import { generateMediaDerivatives } from "../src/application/mediaDerivatives";
@@ -24,6 +26,7 @@ import type { EditProject, MediaAsset } from "../src/domain/types";
 import { registerBatchIpc } from "./batchIpc";
 import { launchRollbackInstaller, registerUpdateIpc } from "./updateIpc";
 import { assertLocalMediaPath } from "../src/shared/localMediaPath";
+import { createElectronWorkflowServices, electronWorkflowPaths, registerElectronWorkflowIpc } from "./workflowIpc";
 
 protocol.registerSchemesAsPrivileged([{
   scheme: "editkin-media",
@@ -139,6 +142,13 @@ function boundedColorAssetPath(colorRoot: string, relativePath: string): string 
 }
 
 function registerIpc() {
+  const paths = runtimePaths();
+  const workflow = createElectronWorkflowServices(electronWorkflowPaths(app.getPath("userData"), paths.pluginRoot), {
+    ffprobePath: paths.ffprobe,
+    previewUrl: mediaUrl,
+    openPath: (path) => shell.openPath(path),
+  });
+  registerElectronWorkflowIpc(secureIpcHandle, workflow);
   secureIpcHandle("hao:pick-media", async () => {
     const result = await dialog.showOpenDialog({
       title: "匯入影片、聲音或圖片",
@@ -148,24 +158,7 @@ function registerIpc() {
       ],
     });
     if (result.canceled) return [];
-    const paths = runtimePaths();
-    return Promise.all(result.filePaths.map(async (path, index) => {
-      const kind = /\.(png|jpe?g|webp)$/i.test(path) ? "image" : /\.(mp3|wav|m4a|aac|flac)$/i.test(path) ? "audio" : "video";
-      const probed = await inspectMedia(path, paths.ffprobe);
-      const metadata = kind === "image" ? { ...probed, duration: 5 } : probed;
-      return {
-        asset: {
-          id: `asset-${Date.now()}-${index}`,
-          name: path.split(/[\\/]/).at(-1) ?? path,
-          kind,
-          uri: path,
-          duration: metadata.duration,
-          width: metadata.width,
-          height: metadata.height,
-        },
-        previewUrl: mediaUrl(path),
-      };
-    }));
+    return workflow.importMediaPaths(result.filePaths);
   });
 
   registerBatchIpc({ secureIpcHandle, runtimePaths, runtimeUrlsWithCreative });
@@ -183,11 +176,16 @@ function registerIpc() {
     return bytes.toString("utf8");
   });
 
-  secureIpcHandle("hao:list-installed-plugins", async () => compactPluginRegistry(await discoverInstalledPlugins([runtimePaths().pluginRoot])));
+  secureIpcHandle("hao:read-mesh-3d-font", async (_event, payload: { weight: number }) => readMesh3dFont(runtimePaths().fontRoot,payload?.weight));
+  secureIpcHandle("hao:read-bundled-font-face", async (_event, payload: { faceId: string }) => {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload) || typeof payload.faceId !== "string"
+      || Object.keys(payload).length !== 1) throw new Error("Bundled font request must contain only faceId");
+    return readBundledFontFace(runtimePaths().fontRoot, payload.faceId);
+  });
+
+  secureIpcHandle("hao:list-installed-plugins", async () => compactPluginRegistry(await workflow.readPluginRegistry()));
   secureIpcHandle("hao:compile-plugin-tool", async (_event, payload: { pluginId: string; capabilityId: string; targetClipId: string; parameters?: Record<string, unknown> }) => {
-    const registry = await discoverInstalledPlugins([runtimePaths().pluginRoot]);
-    const { capability } = findInstalledCapability(registry, payload.pluginId, payload.capabilityId);
-    return compilePluginCommands(capability, payload.targetClipId, payload.parameters ?? {});
+    return workflow.compilePluginTool(payload.pluginId, payload.capabilityId, payload.targetClipId, payload.parameters ?? {});
   });
 
   secureIpcHandle("hao:import-creative-asset", async (_event, payload: { assetId: string }) => {
@@ -205,6 +203,7 @@ function registerIpc() {
         duration,
         width: probed.width,
         height: probed.height,
+        displayAspectRatio: probed.displayAspectRatio,
         role: resolved.asset.role,
         bpm: resolved.asset.bpm,
         license: resolved.asset.license,

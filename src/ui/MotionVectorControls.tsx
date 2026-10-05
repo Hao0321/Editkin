@@ -1,4 +1,5 @@
 import type { MotionGraphic, MotionVectorV2 } from "../domain/types";
+import MotionGeometryControls from "./MotionGeometryControls";
 
 type Patch = Partial<Omit<MotionGraphic, "schema" | "id">>;
 
@@ -6,6 +7,7 @@ type Patch = Partial<Omit<MotionGraphic, "schema" | "id">>;
 export default function MotionVectorControls({ graphic, onUpdate }: { graphic: MotionGraphic; onUpdate: (patch: Patch) => void }) {
   const vector = graphic.vectorV2;
   if (!vector) return null;
+  if (vector.kind === "spring_panel") return <MotionGeometryControls graphic={graphic} onUpdate={onUpdate} />;
   const number = (label: string, value: number, min: number, max: number, step: number, change: (value: number) => MotionVectorV2) =>
     <label key={label}>{label}<input aria-label={`${graphic.name}${label}`} type="number" min={min} max={max} step={step} value={value}
       onChange={event => { if (event.target.value && event.target.validity.valid) onUpdate({ vectorV2: change(Number(event.target.value)) }); }} /></label>;

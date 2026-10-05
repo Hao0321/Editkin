@@ -33,6 +33,7 @@ button, summary, select { -webkit-tap-highlight-color: transparent; }
   background: var(--surface);
   box-shadow: none;
 }
+.toolbar:has(.project-menu[open]) { z-index: 85; }
 .brand-lockup { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .brand-mark {
   position: relative;

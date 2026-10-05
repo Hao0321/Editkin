@@ -1,8 +1,8 @@
 import { captionStyleFromPreset } from "../creative/corePack";
-import { createMotionGraphic } from "../motion/composition";
+import { createMotionGraphic, legacyMotionGraphicSeed } from "../motion/composition";
 import { findMotionGraphicPreset } from "../creative/motionGraphicPresets";
 import { applyCommand, type EditorCommand } from "../domain/commands";
-import type { EditProject, EditorialProfileId, MotionGraphic, MotionGraphicKind } from "../domain/types";
+import type { EditProject, EditorialProfileId, MotionGraphicKind, MotionGraphicPresetSeed } from "../domain/types";
 import { resolveAestheticSystem } from "./editkinAesthetic";
 import { buildNativeReelSceneCommands } from "./nativeReelSceneCommands";
 import type { FloatingFrameSceneBindings } from "../motion/floatingFrameScenes";
@@ -112,7 +112,7 @@ function boundedDuration(start: number, requested: number, clipEnd: number, fps:
   return Math.max(1 / fps, Math.min(requested, Math.max(1 / fps, clipEnd - start)));
 }
 
-function graphicSeed(template: ShortFormTemplateDefinition, kind: MotionGraphicKind): Partial<MotionGraphic> {
+function graphicSeed(template: ShortFormTemplateDefinition, kind: MotionGraphicKind): MotionGraphicPresetSeed {
   const { palette } = template;
   if (kind === "title" && template.motionGraphicPresetId) return { ...findMotionGraphicPreset(template.motionGraphicPresetId).seed };
   if (template.id === "editorial_steps") {
@@ -137,8 +137,10 @@ function addTemplateGraphics(commands: EditorCommand[], template: ShortFormTempl
   for (const spec of specs) {
     if (!spec.text.trim()) continue;
     const start = Math.min(firstEnd - 1 / fps, firstStart + spec.offset);
-    const graphic = createMotionGraphic(idFactory(`template-${spec.kind}`), spec.kind, spec.text, start, boundedDuration(start, spec.duration, firstEnd, fps));
-    commands.push({ type: "add_motion_graphic", graphic: { ...graphic, ...graphicSeed(template, spec.kind), templateOwner: templateElementOwner(identity, spec.kind) } });
+    const specSeed = graphicSeed(template, spec.kind);
+    const resolvedSeed = specSeed.schema === "hao.motion-composition/v2" ? specSeed : { ...legacyMotionGraphicSeed(spec.kind), ...specSeed };
+    const graphic = createMotionGraphic(idFactory(`template-${spec.kind}`), spec.kind, spec.text, start, boundedDuration(start, spec.duration, firstEnd, fps), undefined, resolvedSeed);
+    commands.push({ type: "add_motion_graphic", graphic: { ...graphic, templateOwner: templateElementOwner(identity, spec.kind) } });
   }
 }
 

@@ -12,6 +12,7 @@ mod audio_session_desktop;
 mod creative_preview;
 mod gpu_command_worker;
 mod gpu_preview_cache;
+mod gpu_offscreen_preview;
 mod gpu_preview_owner;
 mod gpu_resident_process;
 mod media_probe_fields;
@@ -66,6 +67,10 @@ const REMOTE_RELAY_CONFIG: &str = include_str!("../remote-relay.json");
 const EDITKIN_AGENT_SETUP_CONTRACT: &str = include_str!("../../src/shared/agentSetupContract.json");
 /// Publisher identity this build trusts for updates; shared with the Node service so both agree.
 const UPDATE_PUBLISHER_PIN: &str = include_str!("../../src/shared/updatePublisherPin.json");
+const BUNDLED_FONT_FACE_INDEX: &str = include_str!("../../src/generated/fontFaceIndex.json");
+const BUNDLED_FONT_EM_METRICS: &str = include_str!("../../src/generated/fontEmMetrics.json");
+const MAX_BUNDLED_FONT_FACE_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_BUNDLED_FONT_MANIFEST_BYTES: u64 = 1024 * 1024;
 
 fn editkin_agent_setup_contract() -> Result<Value, String> {
     serde_json::from_str(EDITKIN_AGENT_SETUP_CONTRACT)
@@ -848,6 +853,321 @@ fn read_mesh_3d_font(app: AppHandle, weight: u16) -> Result<tauri::ipc::Response
         return Err("3D 物理字型在讀取時改變或 SHA 不符".into());
     }
     Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct BundledFontFaceSpec {
+    face_id: String,
+    font_family: String,
+    font_weight: u16,
+    font_file: String,
+    sha256: String,
+    manifest_sha256: String,
+    logical_family: String,
+}
+
+// Both inputs are compiled generated assets, never paths or digests from an IPC request.
+fn bundled_font_face_catalog_from(
+    index_json: &str,
+    metrics_json: &str,
+) -> Result<Vec<BundledFontFaceSpec>, String> {
+    let index: Vec<(String, String, Vec<u16>)> =
+        serde_json::from_str(index_json).map_err(|error| format!("內建字型索引不合法：{error}"))?;
+    let metrics: Value = serde_json::from_str(metrics_json)
+        .map_err(|error| format!("內建字型度量索引不合法：{error}"))?;
+    let manifest_sha256 = metrics.get("manifestSha256").and_then(Value::as_str)
+        .filter(|value| valid_sha256(value))
+        .ok_or("內建字型 manifest SHA 不合法")?;
+    let metric_faces = metrics.get("faces").and_then(Value::as_array)
+        .ok_or("內建字型度量索引缺少 faces")?;
+    if index.len() != 5 || metric_faces.len() != 43
+        || metrics.get("schema").and_then(Value::as_str) != Some("editkin.font-em-metrics/v1")
+    {
+        return Err("內建字型索引必須包含精確 43 個物理字型".into());
+    }
+    let mut metric_shas = std::collections::BTreeMap::new();
+    for face in metric_faces {
+        let id = face.get("id").and_then(Value::as_str).ok_or("內建字型缺少 id")?;
+        let sha = face.get("sha256").and_then(Value::as_str)
+            .filter(|value| valid_sha256(value)).ok_or("內建字型 SHA 不合法")?;
+        if metric_shas.insert(id, sha).is_some() {
+            return Err("內建字型度量索引有重複 id".into());
+        }
+    }
+    let mut family_ids = BTreeSet::new();
+    let mut family_names = BTreeSet::new();
+    let mut face_ids = BTreeSet::new();
+    let mut specs = Vec::with_capacity(43);
+    for (logical_family, logical_id, weights) in index {
+        if logical_family.trim().is_empty() || logical_id.is_empty()
+            || !logical_id.bytes().all(|byte| byte.is_ascii_lowercase() || byte == b'-')
+            || logical_id.starts_with('-') || logical_id.ends_with('-')
+            || !family_ids.insert(logical_id.clone())
+            || !family_names.insert(logical_family.clone()) || weights.is_empty()
+        {
+            return Err("內建字型邏輯索引不合法".into());
+        }
+        for font_weight in weights {
+            let face_id = format!("EditkinFace-{logical_id}-{font_weight}");
+            if !(100..=900).contains(&font_weight) || !face_ids.insert(face_id.clone()) {
+                return Err("內建字型索引字重或 id 不合法".into());
+            }
+            let sha256 = metric_shas.get(face_id.as_str()).ok_or("內建字型索引與度量 id 不符")?;
+            specs.push(BundledFontFaceSpec {
+                font_family: format!("EditkinFace {logical_id} {font_weight}"),
+                font_file: format!("render/{face_id}.ttf"),
+                face_id,
+                font_weight,
+                sha256: (*sha256).to_string(),
+                manifest_sha256: manifest_sha256.to_string(),
+                logical_family: logical_family.clone(),
+            });
+        }
+    }
+    if specs.len() != 43 || face_ids.iter().map(String::as_str).collect::<BTreeSet<_>>()
+        != metric_shas.keys().copied().collect::<BTreeSet<_>>()
+    {
+        return Err("內建字型索引與度量必須是相同的精確 43 個 id".into());
+    }
+    Ok(specs)
+}
+
+fn bundled_font_face_spec(face_id: &str) -> Result<BundledFontFaceSpec, String> {
+    bundled_font_face_catalog_from(BUNDLED_FONT_FACE_INDEX, BUNDLED_FONT_EM_METRICS)?
+        .into_iter().find(|spec| spec.face_id == face_id)
+        .ok_or_else(|| "物理字型只接受內建 43 個精確 faceId".to_string())
+}
+
+struct BundledFontDirectory {
+    path: PathBuf,
+    canonical: PathBuf,
+    file: fs::File,
+    identity: RemoteFileIdentity,
+}
+
+fn open_bundled_font_directory(path: &Path) -> Result<BundledFontDirectory, String> {
+    let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    if !metadata.is_dir() || remote_agent_directory_is_link(&metadata) {
+        return Err("物理字型資料夾必須是一般資料夾；link/reparse 已拒絕".into());
+    }
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::{
+            FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+        };
+        options.custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW);
+    }
+    let file = options.open(path).map_err(|error| error.to_string())?;
+    let identity = remote_file_identity(&file)?;
+    if identity.reparse || !file.metadata().map_err(|error| error.to_string())?.is_dir() {
+        return Err("物理字型資料夾 handle 不是一般資料夾".into());
+    }
+    let canonical = fs::canonicalize(path).map_err(|error| error.to_string())?;
+    Ok(BundledFontDirectory { path: path.to_path_buf(), canonical, file, identity })
+}
+
+fn verify_bundled_font_directory(directory: &BundledFontDirectory) -> Result<(), String> {
+    let current = open_bundled_font_directory(&directory.path)?;
+    let same_directory = |identity: RemoteFileIdentity| {
+        identity.storage_id == directory.identity.storage_id
+            && identity.file_id == directory.identity.file_id
+            && identity.reparse == directory.identity.reparse && !identity.reparse
+    };
+    if !directory.file.metadata().map_err(|error| error.to_string())?.is_dir()
+        || !same_directory(remote_file_identity(&directory.file)?)
+        || !same_directory(current.identity) || current.canonical != directory.canonical
+    {
+        return Err("物理字型資料夾在讀取期間被替換或修改".into());
+    }
+    Ok(())
+}
+
+fn open_bundled_font_directory_chain(root: &Path) -> Result<Vec<BundledFontDirectory>, String> {
+    let mut path = PathBuf::new();
+    let mut directories = Vec::new();
+    for component in root.components() {
+        match component {
+            std::path::Component::Prefix(prefix) => {
+                #[cfg(windows)]
+                if !matches!(prefix.kind(), std::path::Prefix::Disk(_) | std::path::Prefix::VerbatimDisk(_)) {
+                    return Err("物理字型 root 必須位於本機磁碟".into());
+                }
+                path.push(prefix.as_os_str());
+            }
+            std::path::Component::RootDir | std::path::Component::Normal(_) => {
+                path.push(component.as_os_str());
+                directories.push(open_bundled_font_directory(&path)?);
+            }
+            _ => return Err("物理字型 root 不可包含相對或父層路徑".into()),
+        }
+    }
+    if directories.last().is_none_or(|directory| directory.path != root) {
+        return Err("物理字型 root ancestor 契約不合法".into());
+    }
+    Ok(directories)
+}
+
+fn verify_bundled_font_directory_chain(directories: &[BundledFontDirectory]) -> Result<(), String> {
+    for directory in directories { verify_bundled_font_directory(directory)?; }
+    Ok(())
+}
+
+struct BundledFontRead {
+    path: PathBuf,
+    canonical: PathBuf,
+    file: fs::File,
+    identity: RemoteFileIdentity,
+    bytes: Vec<u8>,
+}
+
+fn open_bundled_font_file_no_follow(path: &Path) -> Result<(fs::File, RemoteFileIdentity), String> {
+    let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    if !metadata.is_file() || remote_agent_directory_is_link(&metadata) {
+        return Err("物理字型檔案必須是一般檔案；link/reparse 或特殊檔案已拒絕".into());
+    }
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT;
+        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let file = options.open(path).map_err(|error| error.to_string())?;
+    let identity = remote_file_identity(&file)?;
+    if identity.reparse || !identity.regular || !file.metadata().map_err(|error| error.to_string())?.is_file() {
+        return Err("物理字型檔案 handle 必須是一般檔案；link/reparse 或特殊檔案已拒絕".into());
+    }
+    Ok((file, identity))
+}
+
+fn verify_bundled_font_read(read: &BundledFontRead) -> Result<(), String> {
+    if !read.file.metadata().map_err(|error| error.to_string())?.is_file()
+        || remote_file_identity(&read.file)? != read.identity
+        || open_bundled_font_file_no_follow(&read.path)?.1 != read.identity
+        || fs::canonicalize(&read.path).map_err(|error| error.to_string())? != read.canonical
+    {
+        return Err("物理字型檔案在 bounded handle 讀取期間被替換或修改".into());
+    }
+    Ok(())
+}
+
+fn read_bundled_font_file(
+    path: &Path,
+    directory: &BundledFontDirectory,
+    max_bytes: u64,
+) -> Result<BundledFontRead, String> {
+    let canonical = fs::canonicalize(path).map_err(|error| error.to_string())?;
+    if canonical.parent() != Some(directory.canonical.as_path()) {
+        return Err("物理字型檔案不可指向字型目錄之外".into());
+    }
+    let (mut file, before) = open_bundled_font_file_no_follow(path)?;
+    if !file.metadata().map_err(|error| error.to_string())?.is_file()
+        || before.len == 0 || before.len > max_bytes
+    {
+        return Err("物理字型檔案不是一般檔案或超出安全大小".into());
+    }
+    let mut bytes = Vec::with_capacity(before.len as usize);
+    Read::by_ref(&mut file).take(max_bytes + 1).read_to_end(&mut bytes)
+        .map_err(|error| error.to_string())?;
+    if bytes.len() as u64 != before.len || bytes.len() as u64 > max_bytes {
+        return Err("物理字型檔案在 bounded handle 讀取期間被替換或修改".into());
+    }
+    let read = BundledFontRead {
+        path: path.to_path_buf(), canonical, file, identity: before, bytes,
+    };
+    verify_bundled_font_read(&read)?;
+    verify_bundled_font_directory(directory)?;
+    Ok(read)
+}
+
+fn bundled_font_manifest_face_size(
+    manifest_bytes: &[u8],
+    spec: &BundledFontFaceSpec,
+) -> Result<u64, String> {
+    if format!("{:x}", Sha256::digest(manifest_bytes)) != spec.manifest_sha256 {
+        return Err("物理字型 manifest 原始 SHA 與編譯索引不符".into());
+    }
+    let manifest: Value = serde_json::from_slice(manifest_bytes)
+        .map_err(|error| format!("物理字型 manifest 不合法：{error}"))?;
+    let fonts = manifest.get("fonts").and_then(Value::as_array)
+        .ok_or("物理字型 manifest 缺少 fonts")?;
+    if manifest.get("schemaVersion").and_then(Value::as_u64) != Some(2)
+        || manifest.get("id").and_then(Value::as_str) != Some("studio.hao.editkin-open-fonts")
+        || fonts.len() != 5
+    {
+        return Err("物理字型 manifest header 不合法".into());
+    }
+    let face = fonts.iter()
+        .find(|font| font.get("family").and_then(Value::as_str) == Some(spec.logical_family.as_str()))
+        .and_then(|font| font.get("faces")).and_then(Value::as_array)
+        .and_then(|faces| faces.iter().find(|face| face.get("id").and_then(Value::as_str)
+            == Some(spec.face_id.as_str())))
+        .ok_or("物理字型 manifest 缺少指定 face")?;
+    let bytes = face.get("bytes").and_then(Value::as_u64).ok_or("物理字型 manifest 缺少大小")?;
+    if bytes == 0 || bytes > MAX_BUNDLED_FONT_FACE_BYTES
+        || face.get("weight").and_then(Value::as_u64) != Some(u64::from(spec.font_weight))
+        || face.get("file").and_then(Value::as_str) != Some(spec.font_file.as_str())
+        || face.get("family").and_then(Value::as_str) != Some(spec.font_family.as_str())
+        || face.get("sha256").and_then(Value::as_str) != Some(spec.sha256.as_str())
+    {
+        return Err("物理字型 manifest 與編譯 face 契約不符".into());
+    }
+    Ok(bytes)
+}
+
+fn read_bundled_font_face_bytes(
+    font_root: &Path,
+    spec: &BundledFontFaceSpec,
+) -> Result<Vec<u8>, String> {
+    if !font_root.is_absolute() {
+        return Err("物理字型 root 必須是絕對路徑".into());
+    }
+    let ancestors = open_bundled_font_directory_chain(font_root)?;
+    let root = ancestors.last().ok_or("物理字型 root 缺少 ancestor")?;
+    let render = open_bundled_font_directory(&font_root.join("render"))?;
+    if render.canonical.parent() != Some(root.canonical.as_path()) {
+        return Err("物理字型 render 資料夾不可指向字型目錄之外".into());
+    }
+    verify_bundled_font_directory_chain(&ancestors)?;
+    verify_bundled_font_directory(&render)?;
+    let manifest = read_bundled_font_file(
+        &font_root.join("editkin-open-fonts.json"), root, MAX_BUNDLED_FONT_MANIFEST_BYTES,
+    )?;
+    let expected_size = bundled_font_manifest_face_size(&manifest.bytes, spec)?;
+    let face = read_bundled_font_file(
+        &font_root.join(&spec.font_file), &render, MAX_BUNDLED_FONT_FACE_BYTES,
+    )?;
+    if face.bytes.len() as u64 != expected_size || format!("{:x}", Sha256::digest(&face.bytes)) != spec.sha256 {
+        return Err("物理字型實際大小或 SHA 與編譯 face 契約不符".into());
+    }
+    // Retain both original handles through the whole transaction. Equal-byte replacement is still drift.
+    verify_bundled_font_read(&manifest)?;
+    verify_bundled_font_read(&face)?;
+    verify_bundled_font_directory(&render)?;
+    verify_bundled_font_directory_chain(&ancestors)?;
+    Ok(face.bytes)
+}
+
+#[tauri::command(async)]
+fn read_bundled_font_face(app: AppHandle, face_id: String) -> Result<tauri::ipc::Response, String> {
+    // Reject unknown IDs before resolving runtime resources or opening any file.
+    let spec = bundled_font_face_spec(&face_id)?;
+    let runtime = runtime_paths(&app)?;
+    read_bundled_font_face_bytes(&runtime.font_root, &spec).map(tauri::ipc::Response::new)
 }
 
 #[tauri::command]
@@ -6384,6 +6704,8 @@ fn resident_gpu_timeout(command: &str) -> Duration {
         | "video_seek"
         | "video_release"
         | "engine_video_load"
+        | "offscreen_bind"
+        | "engine_video_verify_frame"
         | "engine_video_stage_frame"
         | "engine_video_release"
         | "recover_device" => Duration::from_secs(30),
@@ -6737,76 +7059,130 @@ fn engine_video_binding_keys_match(
             .all(|asset_id| required_assets.contains(asset_id.as_str()))
 }
 
-#[tauri::command]
-async fn load_gpu_engine_video_preview_session(
-    app: AppHandle,
-    session_id: String,
-    graph: Value,
-    asset_bindings: Value,
-    timeline_frame: u64,
-    preview_owner: Option<String>,
-) -> Result<Value, String> {
-    run_gpu_preview_command(app, preview_owner, Some((session_id.clone(), gpu_preview_owner::PreviewResource::EngineVideo)), move |app| {
-        let state = app.state::<AppState>();
-        validate_gpu_session_id(&session_id)?;
-        if graph.get("schema").and_then(Value::as_str) != Some("editkin.engine-graph/v1") {
-            return Err("Common video engine graph schema 不合法".into());
-        }
-        let nodes = graph
-            .get("nodes")
-            .and_then(Value::as_array)
-            .ok_or("Common video engine graph 缺少 nodes")?;
-        if nodes.is_empty() {
-            return Err("Common video engine graph nodes 不得為空".into());
-        }
-        let bindings = asset_bindings
-            .as_object()
-            .ok_or("Common video engine graph assetBindings 必須是 object")?;
-        if !engine_video_binding_keys_match(nodes, bindings)
-            || bindings.values().any(|value| {
-                value.as_str().is_none_or(|path| {
-                    path.is_empty() || path.len() > 32_768 || !Path::new(path).is_file()
-                })
+fn load_gpu_engine_video_preview_inner(app: AppHandle, session_id: String, graph: Value,
+    asset_bindings: Value, timeline_frame: u64, offscreen: bool) -> Result<Value, String> {
+    let state = app.state::<AppState>();
+    validate_gpu_session_id(&session_id)?;
+    if graph.get("schema").and_then(Value::as_str) != Some("editkin.engine-graph/v1") {
+        return Err("Common video engine graph schema 不合法".into());
+    }
+    let nodes = graph
+        .get("nodes")
+        .and_then(Value::as_array)
+        .ok_or("Common video engine graph 缺少 nodes")?;
+    if nodes.is_empty() {
+        return Err("Common video engine graph nodes 不得為空".into());
+    }
+    let bindings = asset_bindings
+        .as_object()
+        .ok_or("Common video engine graph assetBindings 必須是 object")?;
+    if !engine_video_binding_keys_match(nodes, bindings)
+        || bindings.values().any(|value| {
+            value.as_str().is_none_or(|path| {
+                path.is_empty() || path.len() > 32_768 || !Path::new(path).is_file()
             })
-        {
-            return Err("Common video engine graph 必須精確綁定所有有效的本機影片檔".into());
-        }
-        let runtime = runtime_paths(&app)?;
-        let effect_bindings = service_request(
-            &state.services,
-            &runtime,
-            "resolve_gpu_effect_bindings",
-            json!({ "graph": graph.clone() }),
+        })
+    {
+        return Err("Common video engine graph 必須精確綁定所有有效的本機影片檔".into());
+    }
+    let offscreen_size = if offscreen {
+        Some(gpu_offscreen_preview::graph_size(&graph)?)
+    } else { None };
+    let runtime = runtime_paths(&app)?;
+    let effect_bindings = service_request(
+        &state.services,
+        &runtime,
+        "resolve_gpu_effect_bindings",
+        json!({ "graph": graph.clone() }),
+    )?;
+    if effect_bindings.get("schema").and_then(Value::as_str)
+        != Some("editkin.gpu-effect-bindings/v1")
+        || effect_bindings
+            .get("bindings")
+            .and_then(Value::as_object)
+            .is_none_or(|bindings| bindings.len() > 64)
+    {
+        return Err("GPU effect binding resolver 回傳不合法".into());
+    }
+    let receipt = with_gpu_preview_inputs(&app, &[&graph, &asset_bindings, &effect_bindings], |paths| {
+        let graph_path = &paths[0];
+        let bindings_path = &paths[1];
+        let effect_bindings_path = &paths[2];
+        with_resident_gpu(&runtime, &state, |process| {
+        let bound_identity = if let Some((width, height)) = offscreen_size {
+            let (selected_sha, selected_bytes, _) = bounded_file_sha256(&runtime.gpu_compositor, 512 * 1024 * 1024)?;
+            gpu_offscreen_preview::validate_ready(&process.ready, &selected_sha, selected_bytes)?;
+            let retired = resident_gpu_request(process, "engine_video_release", json!({"sessionId": session_id}))?;
+            gpu_offscreen_preview::validate_release(&retired, &session_id)?;
+            let released = resident_gpu_request(process, "surface_release", json!({}))?;
+            if released.get("released").and_then(Value::as_bool).is_none() { return Err("Offscreen target cleanup receipt invalid".into()); }
+            let target = resident_gpu_request(process, "offscreen_bind", json!({"width": width, "height": height}))?;
+            gpu_offscreen_preview::validate_target(&target, process.ready.get("generation").and_then(Value::as_u64).ok_or("GPU generation missing")?,
+                width, height, &selected_sha, selected_bytes)?;
+            Some(target["videoTargetIdentity"].clone())
+        } else { None };
+        let loaded = resident_gpu_request(
+            process,
+            "engine_video_load",
+            json!({
+                "sessionId": session_id,
+                "graphPath": graph_path,
+                "bindingsPath": bindings_path,
+                "effectBindingsPath": effect_bindings_path,
+                "timelineFrame": timeline_frame
+            }),
         )?;
-        if effect_bindings.get("schema").and_then(Value::as_str)
-            != Some("editkin.gpu-effect-bindings/v1")
-            || effect_bindings
-                .get("bindings")
-                .and_then(Value::as_object)
-                .is_none_or(|bindings| bindings.len() > 64)
-        {
-            return Err("GPU effect binding resolver 回傳不合法".into());
+        if bound_identity.as_ref().is_some_and(|identity| loaded.get("videoTargetIdentity") != Some(identity)) {
+            return Err("Offscreen load changed actual target identity".into());
         }
-        let receipt = with_gpu_preview_inputs(&app, &[&graph, &asset_bindings, &effect_bindings], |paths| {
-            let graph_path = &paths[0];
-            let bindings_path = &paths[1];
-            let effect_bindings_path = &paths[2];
-            with_resident_gpu(&runtime, &state, |process| {
-            resident_gpu_request(
-                process,
-                "engine_video_load",
-                json!({
-                    "sessionId": session_id,
-                    "graphPath": graph_path,
-                    "bindingsPath": bindings_path,
-                    "effectBindingsPath": effect_bindings_path,
-                    "timelineFrame": timeline_frame
-                }),
-            )
-            })
+        Ok(loaded)
+        })
+    })?;
+    if !offscreen { state.gpu_playback.bind(native_preview_playback::GraphBinding::from_load(&session_id, &graph, &receipt)?)?; }
+    if offscreen {
+        let target = receipt.get("videoTargetIdentity").ok_or("Offscreen load target missing")?;
+        let (width, height) = offscreen_size.ok_or("Offscreen dimensions missing")?;
+        gpu_offscreen_preview::validate_identity(target, receipt.get("generation").and_then(Value::as_u64).ok_or("Offscreen generation missing")?, width, height)?;
+    }
+    Ok(receipt)
+}
+
+#[tauri::command]
+async fn load_gpu_engine_video_preview_session(app: AppHandle, session_id: String, graph: Value,
+    asset_bindings: Value, timeline_frame: u64, preview_owner: Option<String>) -> Result<Value, String> {
+    run_gpu_preview_command(app, preview_owner, Some((session_id.clone(), gpu_preview_owner::PreviewResource::EngineVideo)), move |app| {
+        load_gpu_engine_video_preview_inner(app, session_id, graph, asset_bindings, timeline_frame, false)
+    }).await
+}
+
+#[tauri::command]
+async fn load_gpu_engine_video_frame_preview_session(app: AppHandle, session_id: String, graph: Value,
+    asset_bindings: Value, timeline_frame: u64, preview_owner: Option<String>) -> Result<Value, String> {
+    if preview_owner.is_none() { return Err("Offscreen preview requires an owned generation".into()); }
+    run_gpu_preview_command(app, preview_owner, Some((session_id.clone(), gpu_preview_owner::PreviewResource::EngineVideo)), move |app| {
+        load_gpu_engine_video_preview_inner(app, session_id, graph, asset_bindings, timeline_frame, true)
+    }).await
+}
+
+#[tauri::command]
+async fn render_gpu_engine_video_preview_frame(app: AppHandle, session_id: String, timeline_frame: u64,
+    tolerance_seconds: f64, preview_owner: Option<String>) -> Result<Value, String> {
+    if preview_owner.is_none() { return Err("Offscreen preview requires an owned generation".into()); }
+    run_gpu_preview_command(app, preview_owner, Some((session_id.clone(), gpu_preview_owner::PreviewResource::EngineVideo)), move |app| {
+        validate_gpu_session_id(&session_id)?;
+        if !tolerance_seconds.is_finite() || tolerance_seconds <= 0.0 || tolerance_seconds > 0.25 { return Err("Offscreen tolerance outside (0,.25]".into()); }
+        let state = app.state::<AppState>();
+        let runtime = runtime_paths(&app)?;
+        let output_path = gpu_preview_frame_path(&app, &session_id, gpu_preview_cache::FrameKind::Video)?;
+        let receipt = with_resident_gpu(&runtime, &state, |process| {
+            resident_gpu_request(process, "engine_video_verify_frame", json!({"sessionId": session_id,
+                "timelineFrame": timeline_frame, "toleranceSeconds": tolerance_seconds, "outputPath": output_path}))
         })?;
-        state.gpu_playback.bind(native_preview_playback::GraphBinding::from_load(&session_id, &graph, &receipt)?)?;
-        Ok(receipt)
+        let (width,height) = gpu_offscreen_preview::validate_frame(&receipt, &session_id, timeline_frame)?;
+        // Copy this exact bounded generated PNG while still on the owner FIFO.
+        // Mutable disk slots are never used as frontend image identity.
+        let (bytes, sha) = gpu_offscreen_preview::read_png(&output_path, width, height)?;
+        Ok(json!({"schema": "editkin.engine-video-png-preview/v1", "pngBytes": bytes, "pngSha256": sha, "receipt": receipt}))
     }).await
 }
 
@@ -6853,13 +7229,16 @@ async fn release_gpu_engine_video_preview_session(
         let state = app.state::<AppState>();
         validate_gpu_session_id(&session_id)?;
         let runtime = runtime_paths(&app)?;
-        with_resident_gpu(&runtime, &state, |process| {
+        let receipt = with_resident_gpu(&runtime, &state, |process| {
             resident_gpu_request(
                 process,
                 "engine_video_release",
                 json!({ "sessionId": session_id }),
             )
-        })
+        })?;
+        gpu_offscreen_preview::validate_release(&receipt, &session_id)?;
+        retire_gpu_session_cache(&app, &session_id, &receipt)?;
+        Ok(receipt)
     }).await
 }
 
@@ -10274,6 +10653,7 @@ fn main() {
             import_creative_asset,
             preview_creative_asset,
             read_mesh_3d_font,
+            read_bundled_font_face,
             read_color_asset,
             prepare_media,
             smart_cut_media,
@@ -10329,6 +10709,8 @@ fn main() {
             load_gpu_engine_preview_session,
             update_gpu_engine_preview_frame,
             load_gpu_engine_video_preview_session,
+            load_gpu_engine_video_frame_preview_session,
+            render_gpu_engine_video_preview_frame,
             present_gpu_engine_video_preview_frame,
             release_gpu_engine_video_preview_session,
             update_gpu_preview_properties,
@@ -10407,6 +10789,273 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const BUNDLED_FONT_TEST_FACE: &str = "EditkinFace-bebas-neue-400";
+
+    struct BundledFontFixture {
+        root: PathBuf,
+        parent: PathBuf,
+        spec: BundledFontFaceSpec,
+        expected: Vec<u8>,
+    }
+
+    impl BundledFontFixture {
+        fn new() -> Self {
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let parent = fs::canonicalize(env::temp_dir()).unwrap();
+            let root = parent.join(format!(
+                "editkin-bundled-font-test-{}-{}-{}",
+                std::process::id(),
+                SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos(),
+                NEXT.fetch_add(1, Ordering::Relaxed),
+            ));
+            fs::create_dir(&root).unwrap();
+            fs::create_dir(root.join("render")).unwrap();
+            let spec = bundled_font_face_spec(BUNDLED_FONT_TEST_FACE).unwrap();
+            let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../public/fonts");
+            let expected = fs::read(source.join(&spec.font_file)).unwrap();
+            assert!(expected.len() < 128 * 1024, "fixture must remain a small physical face");
+            fs::write(root.join(&spec.font_file), &expected).unwrap();
+            fs::copy(source.join("editkin-open-fonts.json"), root.join("editkin-open-fonts.json")).unwrap();
+            Self { root, parent, spec, expected }
+        }
+    }
+
+    impl Drop for BundledFontFixture {
+        fn drop(&mut self) {
+            // Delete only this exclusively created root; never a computed ancestor or alias.
+            let Ok(metadata) = fs::symlink_metadata(&self.root) else { return; };
+            if !metadata.is_dir() || remote_agent_directory_is_link(&metadata) { return; }
+            let Ok(canonical) = fs::canonicalize(&self.root) else { return; };
+            if canonical.parent() == Some(self.parent.as_path())
+                && canonical.file_name().and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with("editkin-bundled-font-test-"))
+                && canonical == self.root
+            {
+                let _ = fs::remove_dir_all(&self.root);
+            }
+        }
+    }
+
+    #[test]
+    fn bundled_font_catalog_is_exact_and_request_cannot_choose_path_or_sha() {
+        let specs = bundled_font_face_catalog_from(BUNDLED_FONT_FACE_INDEX, BUNDLED_FONT_EM_METRICS).unwrap();
+        assert_eq!(specs.len(), 43);
+        assert_eq!(specs.iter().map(|spec| &spec.face_id).collect::<BTreeSet<_>>().len(), 43);
+        for spec in &specs {
+            assert_eq!(bundled_font_face_spec(&spec.face_id).unwrap(), *spec);
+            assert_eq!(spec.font_file, format!("render/{}.ttf", spec.face_id));
+            assert!(valid_sha256(&spec.sha256));
+            assert_eq!(spec.manifest_sha256, "ff9ba35a4faf5db5388a187ee527ee524b39e9971792e85b1bb9d6a2a5ec42d6");
+        }
+        for id in [
+            "", "EditkinFace-noto-sans-tc-701", "EditkinFace-bebas-neue-400 ",
+            " editkinFace-bebas-neue-400", "editkinface-bebas-neue-400",
+            "../EditkinFace-bebas-neue-400", "render/EditkinFace-bebas-neue-400.ttf",
+            "render\\EditkinFace-bebas-neue-400.ttf", "C:\\secret.ttf",
+            "EditkinFace-bebas-neue-400\0", "EditkinFace-bebas-neue-400?sha256=abc",
+        ] {
+            assert!(bundled_font_face_spec(id).is_err(), "{id:?}");
+        }
+    }
+
+    #[test]
+    fn bundled_font_catalog_rejects_conflicting_generated_contracts() {
+        let metrics: Value = serde_json::from_str(BUNDLED_FONT_EM_METRICS).unwrap();
+        let index: Value = serde_json::from_str(BUNDLED_FONT_FACE_INDEX).unwrap();
+        let mut duplicate = metrics.clone();
+        duplicate["faces"][1] = duplicate["faces"][0].clone();
+        let mut missing = metrics.clone();
+        missing["faces"].as_array_mut().unwrap().pop();
+        let mut foreign = metrics.clone();
+        foreign["faces"][0]["id"] = json!("EditkinFace-unknown-100");
+        let mut bad_sha = metrics.clone();
+        bad_sha["faces"][0]["sha256"] = json!("A".repeat(64));
+        let mut bad_manifest_sha = metrics.clone();
+        bad_manifest_sha["manifestSha256"] = json!("0".repeat(63));
+        for changed in [duplicate, missing, foreign, bad_sha, bad_manifest_sha] {
+            assert!(bundled_font_face_catalog_from(BUNDLED_FONT_FACE_INDEX, &changed.to_string()).is_err());
+        }
+        let mut duplicate_weight = index.clone();
+        duplicate_weight[0][2][1] = duplicate_weight[0][2][0].clone();
+        let mut unsafe_id = index.clone();
+        unsafe_id[0][1] = json!("../noto-sans-tc");
+        for changed in [duplicate_weight, unsafe_id] {
+            assert!(bundled_font_face_catalog_from(&changed.to_string(), BUNDLED_FONT_EM_METRICS).is_err());
+        }
+    }
+
+    #[test]
+    fn bundled_font_reader_returns_exact_selected_physical_bytes() {
+        let fixture = BundledFontFixture::new();
+        assert_eq!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap(), fixture.expected);
+        assert!(read_bundled_font_face_bytes(Path::new("relative-font-root"), &fixture.spec).is_err());
+    }
+
+    #[test]
+    fn bundled_font_reader_rejects_raw_manifest_drift_and_overgrowth() {
+        let fixture = BundledFontFixture::new();
+        let manifest_path = fixture.root.join("editkin-open-fonts.json");
+        let original = fs::read(&manifest_path).unwrap();
+        let mut normalized_equivalent = original.clone();
+        normalized_equivalent.push(b'\n');
+        fs::write(&manifest_path, normalized_equivalent).unwrap();
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap_err().contains("原始 SHA"));
+        let oversized = fs::File::create(&manifest_path).unwrap();
+        oversized.set_len(MAX_BUNDLED_FONT_MANIFEST_BYTES + 1).unwrap();
+        drop(oversized);
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap_err().contains("安全大小"));
+    }
+
+    #[test]
+    fn bundled_font_reader_rejects_same_size_corruption_truncation_empty_and_overgrowth() {
+        let fixture = BundledFontFixture::new();
+        let face_path = fixture.root.join(&fixture.spec.font_file);
+        let mut corrupted = fixture.expected.clone();
+        corrupted[0] ^= 1;
+        fs::write(&face_path, corrupted).unwrap();
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap_err().contains("SHA"));
+        fs::write(&face_path, &fixture.expected[..fixture.expected.len() - 1]).unwrap();
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap_err().contains("大小或 SHA"));
+        fs::write(&face_path, b"").unwrap();
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap_err().contains("安全大小"));
+        let oversized = fs::File::create(&face_path).unwrap();
+        oversized.set_len(MAX_BUNDLED_FONT_FACE_BYTES + 1).unwrap();
+        drop(oversized);
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap_err().contains("安全大小"));
+    }
+
+    #[test]
+    fn bundled_font_reader_rejects_non_directory_render_and_directory_swap() {
+        let fixture = BundledFontFixture::new();
+        let render_path = fixture.root.join("render");
+        let render = open_bundled_font_directory(&render_path).unwrap();
+        fs::rename(&render_path, fixture.root.join("render-original")).unwrap();
+        fs::create_dir(&render_path).unwrap();
+        assert!(verify_bundled_font_directory(&render).unwrap_err().contains("被替換"));
+        drop(render);
+        fs::remove_dir(&render_path).unwrap();
+        fs::write(&render_path, b"not a directory").unwrap();
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap_err().contains("一般資料夾"));
+    }
+
+    #[test]
+    fn bundled_font_reader_retains_manifest_handle_and_rejects_identical_byte_replacement() {
+        let fixture = BundledFontFixture::new();
+        let root = open_bundled_font_directory(&fixture.root).unwrap();
+        let path = fixture.root.join("editkin-open-fonts.json");
+        let read = read_bundled_font_file(&path, &root, MAX_BUNDLED_FONT_MANIFEST_BYTES).unwrap();
+        fs::rename(&path, fixture.root.join("manifest-original.json")).unwrap();
+        fs::write(&path, &read.bytes).unwrap();
+        assert_eq!(format!("{:x}", Sha256::digest(fs::read(&path).unwrap())), fixture.spec.manifest_sha256);
+        assert!(verify_bundled_font_read(&read).unwrap_err().contains("被替換"));
+    }
+
+    #[test]
+    fn bundled_font_directory_identity_allows_unrelated_new_siblings() {
+        let fixture = BundledFontFixture::new();
+        let ancestors = open_bundled_font_directory_chain(&fixture.root).unwrap();
+        let render = open_bundled_font_directory(&fixture.root.join("render")).unwrap();
+        fs::write(fixture.root.join("unrelated-root-sibling"), b"unrelated").unwrap();
+        fs::write(fixture.root.join("render/unrelated-render-sibling"), b"unrelated").unwrap();
+        verify_bundled_font_directory_chain(&ancestors).unwrap();
+        verify_bundled_font_directory(&render).unwrap();
+        assert_eq!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap(), fixture.expected);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn bundled_font_reader_rejects_windows_parent_junction_in_owned_fixture() {
+        use std::os::windows::{fs::OpenOptionsExt, io::AsRawHandle};
+        use windows_sys::Win32::Storage::FileSystem::{FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT};
+        // Creating this owned NTFS mount-point fixture needs no shell or symlink privilege.
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn DeviceIoControl(
+                handle: *mut std::ffi::c_void, code: u32,
+                input: *const std::ffi::c_void, input_bytes: u32,
+                output: *mut std::ffi::c_void, output_bytes: u32,
+                returned_bytes: *mut u32, overlapped: *mut std::ffi::c_void,
+            ) -> i32;
+        }
+        let fixture = BundledFontFixture::new();
+        let parent = fixture.root.join("real-parent");
+        let pack = parent.join("pack");
+        fs::create_dir(&parent).unwrap();
+        fs::create_dir(&pack).unwrap();
+        fs::create_dir(pack.join("render")).unwrap();
+        fs::copy(fixture.root.join("editkin-open-fonts.json"), pack.join("editkin-open-fonts.json")).unwrap();
+        fs::copy(fixture.root.join(&fixture.spec.font_file), pack.join(&fixture.spec.font_file)).unwrap();
+        assert_eq!(read_bundled_font_face_bytes(&pack, &fixture.spec).unwrap(), fixture.expected);
+        let alias = fixture.root.join("parent-junction");
+        fs::create_dir(&alias).unwrap();
+        let owned_root = fs::canonicalize(&fixture.root).unwrap();
+        let target = fs::canonicalize(&parent).unwrap();
+        assert!(target.starts_with(&owned_root));
+        assert_eq!(fs::canonicalize(&alias).unwrap().parent(), Some(owned_root.as_path()));
+        let target_string = target.to_str().unwrap();
+        let print = target_string.strip_prefix("\\\\?\\").unwrap_or(target_string);
+        let substitute: Vec<u16> = format!("\\??\\{print}").encode_utf16().collect();
+        let print: Vec<u16> = print.encode_utf16().collect();
+        let data_bytes = 8 + (substitute.len() + print.len() + 2) * 2;
+        assert!(data_bytes < 16 * 1024 && data_bytes <= u16::MAX as usize);
+        let mut buffer = Vec::with_capacity(8 + data_bytes);
+        buffer.extend_from_slice(&0xA0000003_u32.to_le_bytes()); // IO_REPARSE_TAG_MOUNT_POINT
+        buffer.extend_from_slice(&(data_bytes as u16).to_le_bytes());
+        buffer.extend_from_slice(&0_u16.to_le_bytes());
+        buffer.extend_from_slice(&0_u16.to_le_bytes()); // SubstituteNameOffset
+        buffer.extend_from_slice(&((substitute.len() * 2) as u16).to_le_bytes());
+        buffer.extend_from_slice(&(((substitute.len() + 1) * 2) as u16).to_le_bytes());
+        buffer.extend_from_slice(&((print.len() * 2) as u16).to_le_bytes());
+        for unit in substitute.iter().chain([0_u16].iter()).chain(print.iter()).chain([0_u16].iter()) {
+            buffer.extend_from_slice(&unit.to_le_bytes());
+        }
+        let handle = fs::OpenOptions::new().write(true)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT).open(&alias).unwrap();
+        let mut returned = 0_u32;
+        let result = unsafe { DeviceIoControl(
+            handle.as_raw_handle(), 0x000900A4, buffer.as_ptr().cast(), buffer.len() as u32,
+            std::ptr::null_mut(), 0, &mut returned, std::ptr::null_mut(),
+        ) };
+        assert_ne!(result, 0, "owned junction fixture creation failed: {}", std::io::Error::last_os_error());
+        drop(handle);
+        assert!(remote_agent_directory_is_link(&fs::symlink_metadata(&alias).unwrap()));
+        assert!(read_bundled_font_face_bytes(&alias.join("pack"), &fixture.spec)
+            .unwrap_err().contains("link/reparse"));
+        fs::remove_dir(&alias).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bundled_font_reader_rejects_unix_fifo_without_opening_a_blocking_reader() {
+        use std::os::unix::ffi::OsStrExt;
+        let fixture = BundledFontFixture::new();
+        let path = fixture.root.join(&fixture.spec.font_file);
+        fs::remove_file(&path).unwrap();
+        let name = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec)
+            .unwrap_err().contains("特殊檔案"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bundled_font_reader_rejects_file_root_and_render_symlinks() {
+        use std::os::unix::fs::symlink;
+        let fixture = BundledFontFixture::new();
+        let face_path = fixture.root.join(&fixture.spec.font_file);
+        fs::rename(&face_path, fixture.root.join("real-face.ttf")).unwrap();
+        symlink(fixture.root.join("real-face.ttf"), &face_path).unwrap();
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).is_err());
+        fs::remove_file(&face_path).unwrap();
+        fs::rename(fixture.root.join("real-face.ttf"), &face_path).unwrap();
+        fs::rename(fixture.root.join("render"), fixture.root.join("render-original")).unwrap();
+        symlink(fixture.root.join("render-original"), fixture.root.join("render")).unwrap();
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).is_err());
+        let root_alias = fixture.root.join("root-alias");
+        symlink(&fixture.root, &root_alias).unwrap();
+        assert!(read_bundled_font_face_bytes(&root_alias, &fixture.spec).is_err());
+    }
 
     #[test]
     fn color_asset_route_is_closed_to_known_data_files() {

@@ -31,7 +31,8 @@ describe("Editkin Motion floating frame controls", () => {
     orbit?.props.onClick?.();
     expect(setScene).toHaveBeenCalledWith("portrait_duo");
     expect(setScene).toHaveBeenCalledWith("portrait_stack");
-    expect(setFrame.mock.calls[0][0]).toMatchObject({ aspect: "portrait", orbit: { amplitudeDegrees: 24, periodSeconds: 3.6 } });
+    expect(setFrame.mock.calls[0][0]).toMatchObject({ schema: "editkin.floating-video-frame/v2", aspect: "portrait", mediaFit: "contain",
+      motion: { entranceFrames: 6, exitFrames: 6, travelY: .012 }, orbit: { amplitudeDegrees: 24, periodSeconds: 3.6 } });
   });
 
   it("blocks the portrait scene on a landscape canvas", () => {

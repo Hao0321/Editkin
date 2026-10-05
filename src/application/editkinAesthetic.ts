@@ -1,6 +1,7 @@
 import standardJson from "../creative/editkinAestheticStandard.json";
 import type { AestheticReviewPolicy, AestheticSystem, EditorialProfileId } from "../domain/types";
 import { AESTHETIC_BENCHMARKS, BENCHMARK_AXES } from "../domain/aestheticBenchmarks";
+import { normalizeReviewPolicy } from "../domain/reviewPolicy";
 export { scoreAestheticReview } from "../domain/aestheticReview";
 
 interface StandardDimension { label_zh: string; weight: number; question: string }
@@ -26,6 +27,7 @@ const PROFILE_DOMAIN: Record<EditorialProfileId, string> = {
   gaming: "toy",
   food: "food",
   travel: "travel",
+  music_mv: "illustrated_music_mv",
   podcast_on_camera: "interview",
   podcast_no_face: "documentary",
 };
@@ -43,7 +45,10 @@ export function resolveAestheticSystem(profile: EditorialProfileId, format = "sh
 }
 
 export function resolveAestheticSystemForDomain(domain: string, format = "shorts", reviewPolicy?: AestheticReviewPolicy): AestheticSystem {
-  if (reviewPolicy?.mode === "agent_reference_comparison" && !reviewPolicy.authorization.trim()) throw new Error("自主美術審查需要創作者明確授權");
+  if (reviewPolicy !== undefined) {
+    try { reviewPolicy = normalizeReviewPolicy(reviewPolicy); }
+    catch { throw new Error("自主美術審查政策無效，需要創作者明確授權"); }
+  }
   const selectedFormat = normalizeFormat(format);
   const route = EDITKIN_AESTHETIC_STANDARD.domain_routes[domain] ?? EDITKIN_AESTHETIC_STANDARD.domain_routes.general;
   const family = EDITKIN_AESTHETIC_STANDARD.style_families[route.primary];

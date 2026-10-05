@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createEmptyProject } from "../domain/editGraph";
 import { createDemoProject } from "../domain/demo";
-import { createMotionGraphic, motionGraphicFrame, trackRectAt } from "./composition";
+import { createMotionGraphic, legacyMotionGraphicSeed, motionGraphicFrame, trackRectAt } from "./composition";
 import type { MotionTrack } from "../domain/types";
 
 const track: MotionTrack = {
@@ -24,7 +24,7 @@ describe("hao.motion-composition/v1", () => {
 
   it("creates a frame-quantized graphic preset", () => {
     const project = createEmptyProject();
-    const graphic = createMotionGraphic("graphic", "title", "重點", 1, 3);
+    const graphic = createMotionGraphic("graphic", "title", "重點", 1, 3, undefined, legacyMotionGraphicSeed("title"));
     project.motionGraphics.push(graphic);
     const frame = motionGraphicFrame(project, graphic, 1.5);
     expect(frame.visible).toBe(true);
@@ -36,7 +36,7 @@ describe("hao.motion-composition/v1", () => {
 
   it("matches native entry and exit timing instead of disappearing abruptly", () => {
     const project = createEmptyProject();
-    const graphic = createMotionGraphic("graphic", "title", "重點", 1, 3);
+    const graphic = createMotionGraphic("graphic", "title", "重點", 1, 3, undefined, legacyMotionGraphicSeed("title"));
     const entering = motionGraphicFrame(project, graphic, 1.09);
     const sameFrame = motionGraphicFrame(project, graphic, 1.11);
     const holding = motionGraphicFrame(project, graphic, 2);
@@ -67,7 +67,7 @@ describe("hao.motion-composition/v1", () => {
       { ...track.points[1], rotationDegrees: 30, scale: 1.4 },
     ] };
     project.motionTracks = [rotating];
-    const graphic = createMotionGraphic("tracked", "tag", "追蹤", 0, 2, rotating.id);
+    const graphic = createMotionGraphic("tracked", "tag", "追蹤", 0, 2, rotating.id, legacyMotionGraphicSeed("tag"));
     const frame = motionGraphicFrame(project, graphic, .5);
     expect(frame.rotationDegrees).toBeCloseTo(15);
     expect(frame.scale).toBeCloseTo(1.2);

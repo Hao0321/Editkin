@@ -3,6 +3,8 @@ import { DEFAULT_COLOR, particleSimulationEmitters } from "../domain/types";
 import type { ColorAdjustments, EditProject, LayerBlendMode, TimelineClip, Transform2D } from "../domain/types";
 import { buildEngineRenderGraph, motionGraphicTracking, type EngineNode, type EngineRenderGraph } from "./engineGraph";
 import { isTransformMotionBlurInstance, transformMotionBlurParameters } from "../domain/transformMotionBlur";
+import { assertMotionGraphicV2Contract } from "../domain/motionCompositionV2Contract";
+import { nativeMotionPaintTrack, type PreparedNativeMotionPaint } from "../motion/nativeMotionPaint";
 
 export function nativeMediaPath(uri: string): string | undefined {
   if (/^https?:/i.test(uri) || uri.startsWith("local://")) return undefined;
@@ -50,6 +52,11 @@ export interface GpuEngineVideoResourceEstimate {
   temporalResidentBytes: number;
   compositorWorkingBytes: number;
   overlayBytes: number;
+  nativePaintCount: number;
+  nativePaintCpuBytes: number;
+  nativePaintStagingBytes: number;
+  /** Conservative retained geometry/track reserve, not a measured allocation. */
+  nativePaintGeometryBytes: number;
   particleCount: number;
   particleSnapshotCapacityPerEmitter: 2;
   particleSnapshotBytes: number;
@@ -67,29 +74,36 @@ export interface GpuEngineVideoResourceEstimate {
 }
 
 /** Mirrors the native executor's product-owned allocation model before selecting it. */
-export function estimateGpuEngineVideoResources(width: number, height: number, cacheBudgetMb: number, videoLayerCount: number, overlayCount: number, adjustmentCount = 0, matteCount = 0, particleCount = 0, temporalSampleCount = 0, workingBytesPerPixel: 4 | 8 = 4, sceneDepthAttachmentCount = 0, depthOfFieldPassCount = 0): GpuEngineVideoResourceEstimate | undefined {
-  if (![width, height, cacheBudgetMb, videoLayerCount, overlayCount, adjustmentCount, matteCount, particleCount, temporalSampleCount, workingBytesPerPixel, sceneDepthAttachmentCount, depthOfFieldPassCount].every(Number.isSafeInteger)
+export function estimateGpuEngineVideoResources(width: number, height: number, cacheBudgetMb: number, videoLayerCount: number, overlayCount: number, adjustmentCount = 0, matteCount = 0, particleCount = 0, temporalSampleCount = 0, workingBytesPerPixel: 4 | 8 = 4, sceneDepthAttachmentCount = 0, depthOfFieldPassCount = 0, nativePaintCount = 0): GpuEngineVideoResourceEstimate | undefined {
+  if (![width, height, cacheBudgetMb, videoLayerCount, overlayCount, adjustmentCount, matteCount, particleCount, temporalSampleCount, workingBytesPerPixel, sceneDepthAttachmentCount, depthOfFieldPassCount, nativePaintCount].every(Number.isSafeInteger)
     || width <= 0 || height <= 0 || cacheBudgetMb < 64 || videoLayerCount < 1 || overlayCount < 0 || adjustmentCount < 0 || matteCount < 0 || matteCount > videoLayerCount || particleCount < 0 || particleCount > overlayCount
     || (temporalSampleCount !== 0 && (temporalSampleCount < 2 || temporalSampleCount > 8))
     || sceneDepthAttachmentCount < 0 || sceneDepthAttachmentCount > 1 || depthOfFieldPassCount < 0 || depthOfFieldPassCount > 1
-    || (depthOfFieldPassCount === 1 && sceneDepthAttachmentCount !== 1)) return undefined;
+    || (depthOfFieldPassCount === 1 && sceneDepthAttachmentCount !== 1)
+    || nativePaintCount < 0 || nativePaintCount > overlayCount || nativePaintCount > 4
+    || (nativePaintCount > 0 && workingBytesPerPixel !== 8)) return undefined;
   const pixelCount = width * height;
   const bytesPerVideoLayer = pixelCount * 36;
   const temporalResidentRingSlots = Math.max(0, temporalSampleCount - 3);
   const temporalResidentBytes = pixelCount * temporalResidentRingSlots * 12;
   const compositorWorkingBytes = pixelCount * 3 * workingBytesPerPixel;
-  const overlayBytes = pixelCount * 4 * overlayCount;
+  const overlayBytes = pixelCount * 4 * (overlayCount + nativePaintCount);
+  // Native frame plus bounded reusable shadow masks, including offscreen halo.
+  // Reserve the consumer's full mask cap; this is not a measured peak allocation.
+  const nativePaintCpuBytes = (pixelCount * 16 + 64 * 1024 * 1024) * nativePaintCount;
+  const nativePaintStagingBytes = pixelCount * 8 * nativePaintCount;
+  const nativePaintGeometryBytes = nativePaintCount * 16 * 1024 * 1024;
   const particleSnapshotCapacityPerEmitter = 2 as const;
   const particleSnapshotBytes = pixelCount * 4 * particleCount * particleSnapshotCapacityPerEmitter;
   const adjustmentWorkingBytes = adjustmentCount ? pixelCount * 2 * workingBytesPerPixel : 0;
   const sceneDepthBytes = pixelCount * 4 * sceneDepthAttachmentCount;
   const depthOfFieldAdditionalWorkingBytes = 0;
   const maximumFullFramePassesPerPresent = sceneDepthAttachmentCount ? 2 + depthOfFieldPassCount : videoLayerCount + overlayCount + adjustmentCount + 1;
-  const requiredBytes = bytesPerVideoLayer * videoLayerCount + temporalResidentBytes + compositorWorkingBytes + overlayBytes + particleSnapshotBytes + adjustmentWorkingBytes + sceneDepthBytes;
+  const requiredBytes = bytesPerVideoLayer * videoLayerCount + temporalResidentBytes + compositorWorkingBytes + overlayBytes + nativePaintCpuBytes + nativePaintStagingBytes + nativePaintGeometryBytes + particleSnapshotBytes + adjustmentWorkingBytes + sceneDepthBytes;
   const budgetBytes = cacheBudgetMb * 1024 * 1024;
-  const maxVideoLayers = Math.max(0, Math.floor((budgetBytes - temporalResidentBytes - compositorWorkingBytes - overlayBytes - particleSnapshotBytes - adjustmentWorkingBytes - sceneDepthBytes) / bytesPerVideoLayer));
-  if (![pixelCount, bytesPerVideoLayer, temporalResidentRingSlots, temporalResidentBytes, compositorWorkingBytes, overlayBytes, particleSnapshotBytes, adjustmentWorkingBytes, sceneDepthBytes, maximumFullFramePassesPerPresent, requiredBytes, budgetBytes, maxVideoLayers].every(Number.isSafeInteger)) return undefined;
-  return { schema: "editkin.resident-video-resource-plan/v1", pixelCount, bytesPerVideoLayer, workingBytesPerPixel, temporalSampleCount, temporalResidentRingSlots, temporalResidentBytes, compositorWorkingBytes, overlayBytes, particleCount, particleSnapshotCapacityPerEmitter, particleSnapshotBytes, adjustmentCount, matteCount, adjustmentWorkingBytes, sceneDepthAttachmentCount, sceneDepthBytes, depthOfFieldPassCount, depthOfFieldAdditionalWorkingBytes, maximumFullFramePassesPerPresent, requiredBytes, budgetBytes, maxVideoLayers };
+  const maxVideoLayers = Math.max(0, Math.floor((budgetBytes - temporalResidentBytes - compositorWorkingBytes - overlayBytes - nativePaintCpuBytes - nativePaintStagingBytes - nativePaintGeometryBytes - particleSnapshotBytes - adjustmentWorkingBytes - sceneDepthBytes) / bytesPerVideoLayer));
+  if (![pixelCount, bytesPerVideoLayer, temporalResidentRingSlots, temporalResidentBytes, compositorWorkingBytes, overlayBytes, nativePaintCpuBytes, nativePaintStagingBytes, nativePaintGeometryBytes, particleSnapshotBytes, adjustmentWorkingBytes, sceneDepthBytes, maximumFullFramePassesPerPresent, requiredBytes, budgetBytes, maxVideoLayers].every(Number.isSafeInteger)) return undefined;
+  return { schema: "editkin.resident-video-resource-plan/v1", pixelCount, bytesPerVideoLayer, workingBytesPerPixel, temporalSampleCount, temporalResidentRingSlots, temporalResidentBytes, compositorWorkingBytes, overlayBytes, nativePaintCount, nativePaintCpuBytes, nativePaintStagingBytes, nativePaintGeometryBytes, particleCount, particleSnapshotCapacityPerEmitter, particleSnapshotBytes, adjustmentCount, matteCount, adjustmentWorkingBytes, sceneDepthAttachmentCount, sceneDepthBytes, depthOfFieldPassCount, depthOfFieldAdditionalWorkingBytes, maximumFullFramePassesPerPresent, requiredBytes, budgetBytes, maxVideoLayers };
 }
 
 /**
@@ -97,8 +111,8 @@ export function estimateGpuEngineVideoResources(width: number, height: number, c
  * and unsupported typography still stay out of the HWND airspace path so authored content cannot
  * disappear behind a native surface.
  */
-export function canPresentGpuVideoOnNativeSurface(project: EditProject): boolean {
-  return commonVideoCaptionsSupported(project) && commonVideoMotionGraphicsSupported(project);
+export function canPresentGpuVideoOnNativeSurface(project: EditProject, nativeMotionPaint?: PreparedNativeMotionPaint): boolean {
+  return commonVideoCaptionsSupported(project) && commonVideoMotionGraphicsSupported(project, nativeMotionPaint);
 }
 
 const COMMON_VIDEO_CAPTION_FONTS = new Set(["Noto Sans TC", "Noto Serif TC", "LXGW WenKai Mono TC", "Bebas Neue", "Fredoka"]);
@@ -149,9 +163,23 @@ export function commonVideoCaptionsSupported(project: EditProject): boolean {
     && coveredByCommonVideoRange(cue.start, cue.duration, project));
 }
 
-export function commonVideoMotionGraphicsSupported(project: EditProject): boolean {
+export function commonVideoMotionGraphicsSupported(project: EditProject, nativeMotionPaint?: PreparedNativeMotionPaint): boolean {
   if (project.motionGraphics.length > 4) return false;
   return project.motionGraphics.every((graphic) => {
+    if (graphic.paintV1 || graphic.visualStyle === "native_paint") {
+      if (!nativeMotionPaint
+        || project.colorManagement?.mode !== "aces2"
+        || project.colorManagement.configId !== "studio-config-v4.0.0_aces-v2.0_ocio-v2.5"
+        || !["rec709_sdr", "rec2100_pq_1000"].includes(project.colorManagement.outputTransform)
+        || (graphic.compositeLayer ?? "foreground") !== "foreground"
+        || !coveredByCommonVideoRange(graphic.timelineStart, graphic.duration, project)) return false;
+      try {
+        if (!nativeMotionPaint.graphicIds.includes(graphic.id)) return false;
+        assertMotionGraphicV2Contract(graphic, project.fps);
+        nativeMotionPaintTrack(project, nativeMotionPaint, graphic.id);
+        return true;
+      } catch { return false; }
+    }
     if (graphic.schema !== "hao.motion-composition/v1") return false;
     const fontFamily = graphic.fontFamily ?? "Noto Sans TC";
     const fontWeight = graphic.fontWeight ?? 700;

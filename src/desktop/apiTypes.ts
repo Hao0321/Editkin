@@ -23,6 +23,7 @@ import type { GpuPreviewApi, GpuPreviewOwner } from "./gpuPreviewApiTypes";
 
 export interface HaoDesktopApi extends GpuPreviewApi {
   readMesh3dFont?: (weight: number) => Promise<Uint8Array>;
+  readBundledFontFace?: (faceId: string) => Promise<Uint8Array>;
   createGpuPreviewOwner?: () => Promise<GpuPreviewOwner>;
   isDesktop: true;
   pickMedia: () => Promise<PickedMedia[]>;

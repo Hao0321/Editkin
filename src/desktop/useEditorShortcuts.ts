@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-export type EditorShortcutAction = "save" | "save-as" | "undo" | "redo" | "delete" | "split" | "play" | "frame-back" | "frame-forward" | "second-back" | "second-forward";
+export type EditorShortcutAction = "save" | "save-as" | "undo" | "redo" | "delete" | "split" | "play" | "pause" | "shuttle-back" | "shuttle-forward" | "frame-back" | "frame-forward" | "second-back" | "second-forward";
 
 export function shortcutAction(input: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey">, editable = false): EditorShortcutAction | undefined {
   const key = input.key.toLowerCase();
@@ -13,6 +13,9 @@ export function shortcutAction(input: Pick<KeyboardEvent, "key" | "ctrlKey" | "m
   if (key === "delete" || key === "backspace") return "delete";
   if (key === "b") return "split";
   if (key === " ") return "play";
+  if (key === "j") return "shuttle-back";
+  if (key === "k") return "pause";
+  if (key === "l") return "shuttle-forward";
   if (key === "arrowleft") return input.shiftKey ? "second-back" : "frame-back";
   if (key === "arrowright") return input.shiftKey ? "second-forward" : "frame-forward";
   return undefined;
@@ -36,10 +39,12 @@ export function useEditorShortcuts(handlers: Partial<Record<EditorShortcutAction
       const action = shortcutAction(event, isTextEditable(event.target));
       const handler = action ? handlers[action] : undefined;
       if (!handler) return;
-      // Timeline clips are buttons for keyboard accessibility. Keep their
-      // native Space/arrow behavior, but do not suppress history or save after
-      // a pointer drag leaves focus on the clip.
-      if (action && isFocusedButton(event.target) && !["save", "save-as", "undo", "redo"].includes(action)) return;
+      // A timeline clip keeps its own arrow nudges; Space starts the preview
+      // after a pointer drag. Other focused buttons keep native Space actions.
+      const timelinePlay = action === "play" && event.target instanceof HTMLElement && Boolean(event.target.closest(".timeline-clip"));
+      const transportFrame = ["frame-back", "frame-forward", "second-back", "second-forward"].includes(action ?? "")
+        && event.target instanceof HTMLElement && Boolean(event.target.closest(".playback-controls"));
+      if (action && isFocusedButton(event.target) && !timelinePlay && !transportFrame && !["save", "save-as", "undo", "redo", "pause", "shuttle-back", "shuttle-forward"].includes(action)) return;
       event.preventDefault();
       handler();
     };

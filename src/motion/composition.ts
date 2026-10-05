@@ -1,6 +1,7 @@
 import { findClip } from "../domain/editGraph";
 import { motionTrackPoseAt } from "../domain/motionTrackSampling";
 import type { EditProject, MotionGraphic, MotionGraphicKind, MotionGraphicPresetSeed } from "../domain/types";
+import { defaultMotionGraphicV2Seed } from "./defaultGraphicSeedsV2";
 
 export { trackRectAt } from "../domain/motionTrackSampling";
 
@@ -75,11 +76,27 @@ const PRESETS: Record<MotionGraphicKind, Pick<MotionGraphic, "name" | "x" | "y" 
   counter: { name: "數字重點", x: 0.72, y: 0.12, width: 0.2, fontSize: 80, textColor: "#FFFFFF", backgroundColor: "#FF3D9ADD", accentColor: "#FFFFFF", animation: "pop" },
 };
 
-export function createMotionGraphic(id: string, kind: MotionGraphicKind, text: string, timelineStart: number, duration = 3, trackId?: string, seed?: MotionGraphicPresetSeed): MotionGraphic {
+/** Historical unregistered graphics carry no invented stock preset identity. */
+export type LegacyMotionGraphicSeed = Partial<Omit<MotionGraphic, "id" | "timelineStart" | "duration" | "trackId">> & {
+  schema: "hao.motion-composition/v1";
+  presetId?: undefined;
+  motionV2?: undefined;
+  layoutV2?: undefined;
+  vectorV2?: undefined;
+};
+
+/** Explicit compatibility seed for existing tracked and historical producers. */
+export function legacyMotionGraphicSeed(kind: MotionGraphicKind): LegacyMotionGraphicSeed {
+  return { schema: "hao.motion-composition/v1", ...structuredClone(PRESETS[kind]) };
+}
+
+export function createMotionGraphic(id: string, kind: MotionGraphicKind, text: string, timelineStart: number, duration = 3, trackId?: string, seed?: MotionGraphicPresetSeed | LegacyMotionGraphicSeed): MotionGraphic {
+  if (!seed && trackId) throw new Error("新建 v2 圖文尚未支援追蹤；追蹤工具須明確選擇其相容 seed");
   const preset = PRESETS[kind];
-  const resolvedSeed = seed ? structuredClone(seed) : undefined;
+  const resolvedSeed = seed ? structuredClone(seed) : defaultMotionGraphicV2Seed(kind);
   return {
-    schema: resolvedSeed?.schema ?? "hao.motion-composition/v1", id, timelineStart, duration, trackId, trackingMode: trackId ? "anchor" : undefined,
+    schema: resolvedSeed?.schema ?? "hao.motion-composition/v1", id, timelineStart, duration,
+    ...(trackId === undefined ? {} : { trackId }), ...(trackId ? { trackingMode: "anchor" as const } : {}),
     name: preset.name, x: preset.x, y: preset.y, width: preset.width, fontSize: preset.fontSize,
     textColor: preset.textColor, backgroundColor: preset.backgroundColor, accentColor: preset.accentColor,
     animation: preset.animation, offsetX: trackId ? 0.015 : 0, offsetY: trackId ? -0.02 : 0, ...resolvedSeed, kind, text: resolvedSeed?.vectorV2 ? "" : text,

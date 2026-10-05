@@ -1,4 +1,5 @@
 import type { GpuEngineDisplayTransform } from "./nativePreviewTypes";
+import type { NativeFloatingVideoFrameSpec } from "../render/nativeFloatingVideoFrame";
 
 export interface GpuCompositorStatus {
   available: boolean;
@@ -25,7 +26,8 @@ export interface GpuCompositionResult {
 
 export interface GpuResidentEngineStatus {
   available: boolean;
-  ready: { event: "ready"; engine: "editkin-wgpu-resident-engine/v1"; generation: number; adapter: string; backend: string; deviceType: string; videoInteropProtocol?: string };
+  ready: { event: "ready"; engine: "editkin-wgpu-resident-engine/v1"; generation: number; adapter: string; backend: string; deviceType: string; videoInteropProtocol?: string;
+    nativeFloatingVideoFrameContract?: "editkin.native-floating-frame-material/v1" };
   status: { engine: "editkin-wgpu-resident-engine/v1"; generation: number; residentSessions: number; residentVideoSessions?: number; adapter: string; backend: string; deviceType: string; videoBackend?: string };
 }
 
@@ -116,6 +118,12 @@ export interface GpuEngineVideoVisualGraph {
   motionShutterAngle: number;
   motionSamples: Array<[number, number, number, number]>;
   motionSampleFrames: [[number, number, number, number], [number, number, number, number]];
+  /** New floating material uniforms are mandatory only for its explicit node. */
+  floatingPanel?: [number, number, number, number];
+  floatingContent?: [number, number, number, number];
+  floatingMask?: [number, number, number, number];
+  floatingShadow?: [number, number, number, number];
+  floatingColor?: [number, number, number, number];
 }
 
 export interface GpuEngineVideoMotionBlurReceipt {
@@ -186,6 +194,10 @@ export interface GpuEngineVideoResourcePlan {
   temporalResidentBytes: number;
   compositorWorkingBytes: number;
   overlayBytes: number;
+  nativePaintCount?: number;
+  nativePaintCpuBytes?: number;
+  nativePaintStagingBytes?: number;
+  nativePaintGeometryBytes?: number;
   particleSnapshotBytes: number;
   adjustmentWorkingBytes: number;
   sceneDepthAttachmentCount: 0 | 1; sceneDepthBytes: number; depthOfFieldPassCount: 0 | 1;
@@ -225,6 +237,8 @@ export interface GpuEngineVideoLayerLoadResult {
   decodeCadencePhase: number;
   sharedDecoderLayerCount: number;
   initialFrame: { active: boolean; timelineFrame: number; sourceFrame?: number; sourceTimeSeconds?: number };
+  floatingVideoFrame?: NativeFloatingVideoFrameSpec | null;
+  floatingVideoFrameNodeId?: string | null;
 }
 
 export interface GpuEngineVideoControllerReceipt {
@@ -255,6 +269,29 @@ export interface GpuEngineVideoCaptionReceipt {
   textureUploadCount: 1;
   textColor: string;
   singleTextColor: true;
+}
+
+export interface GpuEngineVideoNativeMotionPaintReceipt {
+  nodeId: string;
+  graphicId: string;
+  executor: "editkin.resident-native-motion-paint/v1";
+  sourceSignatureSha256: string;
+  timelineFrame: number;
+  localFrame: number;
+  timeline: { timelineStartFrame: number; sourceStartFrame: 0; durationFrames: number };
+  layerCount: number;
+  workingColorSpace: "linear_rec709";
+  workingFormat: "rgba16float";
+  alphaMode: "premultiplied";
+  cacheHit: boolean;
+  rasterCount: number;
+  textureUploadCount: number;
+  frameRasterCount: number;
+  frameTextureUploadCount: number;
+  frameCpuUploadBytes: number;
+  rasterMilliseconds: number;
+  uploadMilliseconds: number;
+  poses: Array<{ x: number; y: number; scale: number; opacity: number }>;
 }
 
 export interface GpuEngineVideoMotionGraphicReceipt {
@@ -372,7 +409,7 @@ export interface GpuEngineVideoPreviewLoadResult {
   parentCount: number;
   controllerCount: number;
   controllers: GpuEngineVideoControllerReceipt[];
-  compositeMode: "single/v1" | "normal-source-over/v1" | "typed-blend-source-over/v1" | "typed-track-matte/v1" | "resolved-precomposition/v1" | "typed-parent-transform/v1" | "typed-controller-parent/v1" | "video-particle-source-over/v1" | "video-caption-source-over/v1" | "video-motion-graphic-source-over/v1" | "video-trailing-adjustment/v1";
+  compositeMode: "single/v1" | "normal-source-over/v1" | "typed-blend-source-over/v1" | "typed-track-matte/v1" | "resolved-precomposition/v1" | "typed-parent-transform/v1" | "typed-controller-parent/v1" | "video-particle-source-over/v1" | "video-caption-source-over/v1" | "video-motion-graphic-source-over/v1" | "video-native-motion-paint-source-over/v1" | "video-pre-typography-adjustment/v1" | "video-trailing-adjustment/v1";
   layers: GpuEngineVideoLayerLoadResult[];
   visualLayers: GpuEngineVideoVisualGraph[];
   captionCount: number;
@@ -383,6 +420,12 @@ export interface GpuEngineVideoPreviewLoadResult {
   motionGraphicTextureUploads: number;
   motionGraphics: GpuEngineVideoMotionGraphicReceipt[];
   activeMotionGraphics: GpuEngineVideoMotionGraphicReceipt[];
+  nativeMotionPaintCount?: number;
+  nativeMotionPaintTextureUploads?: number;
+  nativeMotionPaintResidentTextureCount?: number;
+  nativeMotionPaintInitialRasterCount?: number;
+  nativeMotionPaintInitialCpuUploadBytes?: number;
+  activeNativeMotionPaints?: GpuEngineVideoNativeMotionPaintReceipt[];
   adjustmentCount: number;
   adjustments: GpuEngineVideoAdjustmentReceipt[];
   particleCount: number;

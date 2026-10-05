@@ -7,6 +7,10 @@ import { motionGraphicV2LayoutReceipt } from "../motion/compositionV2";
 import { REFERENCE_MOTION_TEMPLATES, type ReferenceMotionTemplateInput, type ReferenceMotionTemplateId } from "../motion/referenceMotionTemplates";
 import { buildReferenceMotionTemplateCommands, motionSourceLayout } from "./referenceMotionTemplateCommands";
 import { prepareReferenceMotionTemplate } from "./referenceMotionTemplates";
+import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { bundledFontFaceSpec } from "../typography/bundledFontCatalog";
+import { prepareGlyphRun } from "../typography/preparedGlyphRun";
 
 export function motionTemplateFixture(): EditProject {
   const project = createEmptyProject("Original motion test", { id: "motion-template-test", width: 1080, height: 1920, fps: 30 });
@@ -63,11 +67,14 @@ describe("replaceable reference motion scenes", () => {
     expect(wall.mediaBindings).toHaveLength(7);
     expect(wall.mediaBindings.at(-1)).toMatchObject({ assetId: "source-0", sourceStart: 1, role: "選中素材連續前景（不是新證據）" });
   });
-  it("replacement changes actual compiled media and text; variants bind those exact graphic intervals", () => {
+  it("replacement changes actual compiled media and text; variants bind those exact graphic intervals", async () => {
     const project = motionTemplateFixture(), value = input("comparison_pair");
     value.sources = [{ assetId: "source-8", sourceStart: 3, label: "作品特寫" }]; value.title = "先看手勢";
     let counter = 0;
-    const packet = prepareReferenceMotionTemplate(project, value, p => `${p}-${counter++}`);
+    const packet = await prepareReferenceMotionTemplate(project, value, p => `${p}-${counter++}`, {
+      prepareText: async (faceId, text) => prepareGlyphRun(faceId, text,
+        new Uint8Array(await readFile(join(resolve("public/fonts"), bundledFontFaceSpec(faceId).fontFile)))),
+    });
     expect(packet.mediaBindings[1]).toMatchObject({ assetId: "source-8", sourceStart: 3 });
     expect(packet.editorialGraphics.find(g => g.message === "先看手勢")?.presetVariant?.overrides).toMatchObject({ textColor: "#172033" });
     for (const event of packet.editorialGraphics) {

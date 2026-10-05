@@ -1,3 +1,5 @@
+import type { PreparedGlyphPathCommand } from "../typography/preparedGlyphRun";
+
 type PathCommand = { op: "m" | "l" | "b"; points: number[] };
 const rounded = (value: number) => Math.round(value * 100) / 100;
 
@@ -20,6 +22,16 @@ function contour(width: number, height: number, radius: number, inset = 0, rever
     commands = [{ op: "m", points: commands.at(-1)!.points.slice(-2) }, ...backwards];
   }
   return commands.map(command => ({ ...command, points: command.points.map(value => rounded(value + inset)) }));
+}
+
+/** The same authored rounded contour as SVG/ASS, delivered as numeric native geometry. */
+export function motionPanelContourCommands(width: number, height: number, radius: number): readonly PreparedGlyphPathCommand[] {
+  if (![width, height, radius].every(Number.isFinite) || width <= 0 || height <= 0) throw new Error("Invalid motion panel geometry");
+  return [...contour(width, height, radius).map((command): PreparedGlyphPathCommand => {
+    const p = command.points;
+    if (command.op === "b") return { type: "C", x1: p[0], y1: p[1], x2: p[2], y2: p[3], x: p[4], y: p[5] };
+    return { type: command.op === "m" ? "M" : "L", x: p[0], y: p[1] };
+  }), { type: "Z" }];
 }
 
 /** One inside-stroke geometry for both SVG preview and ASS output. CSS border

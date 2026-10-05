@@ -16,7 +16,8 @@ describe("progressive editing controls", () => {
     expect(html).toContain("<details");
     expect(html).not.toMatch(/<details[^>]*\sopen(?:=|\s|>)/);
     expect(html).toContain("影片類型：");
-    expect((html.match(/role="radio"/g) ?? []).length).toBe(6);
+    expect((html.match(/role="radio"/g) ?? []).length).toBe(7);
+    expect(html).toContain("動畫 MV");
   });
 
   it("keeps auto edit visible and puts free-form and secondary actions behind one disclosure", () => {
@@ -34,6 +35,20 @@ describe("progressive editing controls", () => {
     expect(html).toContain("自訂修改與更多功能");
     expect(html).toContain("data-testid=\"agent-input\"");
     expect(html).not.toMatch(/data-testid="agent-panel-disclosure"[^>]*\sopen(?:=|\s|>)/);
+  });
+
+  it("presents the MV route as AI planning rather than the local rough cut", () => {
+    const html = renderToStaticMarkup(<AgentPanel
+      status="準備完成"
+      hasMedia
+      musicMvMode
+      onSubmit={() => undefined}
+      onSemanticAutoEdit={() => undefined}
+    />);
+    expect(html).toContain("製作 Music MV");
+    expect(html).toContain("AI 規劃 · Editkin 本機執行");
+    expect(html).toContain("連接 AI");
+    expect(html).not.toContain("0 AI 額度");
   });
 
   it("uses one non-duplicated inspector tool strip", () => {

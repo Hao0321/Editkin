@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { runProcess } from "./mediaProcess";
+import { assertRenderActive } from "./renderLifetime";
 
 export interface RenderArtifactIdentity {
   schema: "editkin.render-artifact-identity/v1";
@@ -32,7 +33,8 @@ export async function collectRenderArtifactIdentity(outputPath: string, projectC
   if (!frames.durationFrames) frames = parseOutputFrameIdentity((await probe(ffprobePath, ["-count_frames", ...args], 60_000)).stdout, true);
   if (!frames.durationFrames) throw new Error("輸出幀數無法實測，未簽發身分收據");
   const digest = createHash("sha256");
-  for await (const chunk of createReadStream(outputPath, { highWaterMark: 1024 * 1024 })) digest.update(chunk);
+  for await (const chunk of createReadStream(outputPath, { highWaterMark: 1024 * 1024 })) { assertRenderActive(); digest.update(chunk); }
+  assertRenderActive();
   const after = await stat(outputPath, { bigint: true });
   if (before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeNs !== after.mtimeNs || before.ctimeNs !== after.ctimeNs) throw new Error("輸出在身分驗證期間變更");
   return { schema: "editkin.render-artifact-identity/v1", outputSha256: digest.digest("hex"), bytes: Number(after.size), fps: frames.fps, durationFrames: frames.durationFrames, projectContentSha256 };

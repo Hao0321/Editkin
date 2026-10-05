@@ -52,18 +52,18 @@ export interface TimelineDropLane {
   bottom: number;
 }
 
-export function resolveTimelineDropTarget(
+export function resolveTimelineDropTarget<T extends TimelineDropLane>(
   clientX: number,
   clientY: number,
   trackKind: TimelineDropLane["trackKind"],
-  lanes: TimelineDropLane[],
-): TimelineDropLane | undefined {
+  lanes: readonly T[],
+): T | undefined {
   return lanes.find((lane) => !lane.locked
     && lane.trackKind === trackKind
     && clientX >= lane.left
-    && clientX <= lane.right
+    && clientX < lane.right
     && clientY >= lane.top
-    && clientY <= lane.bottom);
+    && clientY < lane.bottom);
 }
 
 export function alignTimelineTime(value: number, fps: number): number {
@@ -91,7 +91,8 @@ export function resolveTimelineDrag(input: TimelineDragInput): TimelineDragResul
   const deltaPixels = input.currentClientX - input.originClientX + input.currentScrollLeft - input.originScrollLeft;
   let start = alignTimelineTime(input.originStart + deltaPixels / pixelsPerSecond, input.fps);
   let snappedTo: number | undefined;
-  if (input.magnetEnabled !== false && input.snapCandidates?.length) {
+  const originFrame = Math.round(Math.max(0, input.originStart) * fps);
+  if (Math.round(start * fps) !== originFrame && input.magnetEnabled !== false && input.snapCandidates?.length) {
     const thresholdSeconds = TIMELINE_MAGNET_THRESHOLD_PX / pixelsPerSecond;
     let bestDistance = Number.POSITIVE_INFINITY;
     let bestStart = start;
@@ -103,8 +104,7 @@ export function resolveTimelineDrag(input: TimelineDragInput): TimelineDragResul
         if (desiredStart < -1e-7) continue;
         const alignedStart = alignTimelineTime(desiredStart, input.fps);
         // A playhead/origin magnet must not eat a deliberate one-frame move.
-        if (Math.abs(alignedStart - alignTimelineTime(input.originStart, fps)) < 1e-7
-          && Math.abs(deltaPixels) >= pixelsPerSecond / fps * 0.75) continue;
+        if (Math.round(alignedStart * fps) === originFrame) continue;
         // Never show an alignment guide that the final frame-rounded move cannot reach.
         if (Math.abs(alignedStart + offset - target) > 1e-7) continue;
         if (input.isStartAllowed && !input.isStartAllowed(alignedStart)) continue;
@@ -118,7 +118,10 @@ export function resolveTimelineDrag(input: TimelineDragInput): TimelineDragResul
     }
     if (snappedTo !== undefined) start = bestStart;
   }
-  return { start, deltaPixels, moved: Math.abs(deltaPixels) >= TIMELINE_DRAG_THRESHOLD_PX, snappedTo };
+  // A frame is the smallest edit, even when it occupies less than three pixels.
+  // Comparing frames also keeps pointer jitter within the original frame a click.
+  const moved = Math.round(start * fps) !== originFrame;
+  return { start, deltaPixels, moved, snappedTo };
 }
 
 export function resolveTimelineTrim(input: TimelineTrimInput): TimelineTrimResult {
@@ -131,7 +134,7 @@ export function resolveTimelineTrim(input: TimelineTrimInput): TimelineTrimResul
   const pixelsPerSecond = Math.max(1, input.pixelsPerSecond);
   let trimFrames = Math.min(maximumTrimFrames, Math.max(0, Math.round(inwardPixels / pixelsPerSecond * safeFps)));
   let snappedTo: number | undefined;
-  if (inwardPixels > 0 && input.magnetEnabled !== false) {
+  if (trimFrames > 0 && input.magnetEnabled !== false) {
     const pointerTrimFrames = trimFrames;
     let bestDistance = TIMELINE_MAGNET_THRESHOLD_PX / pixelsPerSecond;
     for (const candidate of input.snapCandidates ?? []) {
@@ -151,9 +154,23 @@ export function resolveTimelineTrim(input: TimelineTrimInput): TimelineTrimResul
     trimSeconds: trimFrames / safeFps,
     start: (startFrame + (input.edge === "start" ? trimFrames : 0)) / safeFps,
     duration: (durationFrames - trimFrames) / safeFps,
-    moved: Math.abs(deltaPixels) >= TIMELINE_DRAG_THRESHOLD_PX,
+    moved: trimFrames > 0,
     snappedTo,
   };
+}
+
+/** Clip live lane rectangles to the visible content, excluding labels/ruler.
+ * The UI supplies fresh measurements for every preview and final release. */
+export function visibleTimelineDropLanes<T extends TimelineDropLane>(lanes: readonly T[], viewport: {
+  left: number; right: number; top: number; bottom: number;
+}): T[] {
+  if (![viewport.left, viewport.right, viewport.top, viewport.bottom].every(Number.isFinite)) return [];
+  return lanes.flatMap(lane => {
+    const left = Math.max(lane.left, viewport.left), right = Math.min(lane.right, viewport.right);
+    const top = Math.max(lane.top, viewport.top), bottom = Math.min(lane.bottom, viewport.bottom);
+    return [left, right, top, bottom].every(Number.isFinite) && left < right && top < bottom
+      ? [{ ...lane, left, right, top, bottom }] : [];
+  });
 }
 
 export function timelineTimeAtPointer(clientX: number, laneLeft: number, pixelsPerSecond: number, duration: number, fps: number): number {
@@ -161,12 +178,28 @@ export function timelineTimeAtPointer(clientX: number, laneLeft: number, pixelsP
   return Math.min(Math.max(0, duration), alignTimelineTime(raw, fps));
 }
 
-export function timelineAutoScrollDelta(clientX: number, viewportLeft: number, viewportRight: number, edgePixels = 52, maximumPixels = 28): number {
-  if (clientX < viewportLeft + edgePixels) {
-    return -Math.ceil(maximumPixels * Math.min(1, (viewportLeft + edgePixels - clientX) / edgePixels));
-  }
-  if (clientX > viewportRight - edgePixels) {
-    return Math.ceil(maximumPixels * Math.min(1, (clientX - (viewportRight - edgePixels)) / edgePixels));
-  }
-  return 0;
+/** Horizontal edge scrolling uses elapsed time, not one jump per display frame.
+ * Bounds exclude the sticky labels and scrollbar; leaving them stops scrolling. */
+export function timelineAutoScrollDelta(clientX: number, viewportLeft: number, viewportRight: number, elapsedMs = 1000 / 60): number {
+  if (![clientX, viewportLeft, viewportRight, elapsedMs].every(Number.isFinite)
+    || elapsedMs <= 0 || viewportRight <= viewportLeft || clientX < viewportLeft || clientX >= viewportRight) return 0;
+  const edge = Math.min(52, (viewportRight - viewportLeft) / 2);
+  const leftDistance = clientX - viewportLeft, rightDistance = viewportRight - clientX;
+  const penetration = leftDistance < edge ? -(1 - leftDistance / edge)
+    : rightDistance < edge ? 1 - rightDistance / edge : 0;
+  // A stalled RAF must not move the drop target by several seconds on resume.
+  return penetration * 360 * Math.min(50, elapsedMs) / 1000;
+}
+
+/** Track-stack scrolling has a real-time velocity, independent of refresh rate.
+ * Bounds describe only the visible track content below the sticky ruler. */
+export function timelineTrackAutoScrollDelta(clientY: number, contentTop: number, contentBottom: number, elapsedMs: number): number {
+  if (![clientY, contentTop, contentBottom, elapsedMs].every(Number.isFinite)
+    || elapsedMs <= 0 || contentBottom <= contentTop || clientY < contentTop || clientY >= contentBottom) return 0;
+  const edge = Math.min(36, (contentBottom - contentTop) / 2);
+  const topDistance = clientY - contentTop, bottomDistance = contentBottom - clientY;
+  const penetration = topDistance < edge ? -(1 - topDistance / edge)
+    : bottomDistance < edge ? 1 - bottomDistance / edge : 0;
+  // A stalled frame must not jump across several tracks on resume.
+  return penetration * 360 * Math.min(50, elapsedMs) / 1000;
 }

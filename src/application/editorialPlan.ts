@@ -61,7 +61,7 @@ const graphicEventSchema = z.strictObject({
   presetVariant: motionPresetVariantSchema.optional(),
   range: frameRangeSchema,
   kind: z.enum([
-    "title_card", "context_card", "tracked_value_label", "challenge_ledger", "telemetry_callout",
+    "title_card", "lyric_line", "context_card", "tracked_value_label", "challenge_ledger", "telemetry_callout",
     "subject_sheen", "money_burst", "proof_freeze", "scale_ladder", "map", "diagram",
     "lower_third_name", "lower_third_affiliation", "native_shape",
   ]),
@@ -142,13 +142,15 @@ export const editorialPlanSchema = z.strictObject({
   graphics: z.array(graphicEventSchema).max(64),
   transitions: z.array(transitionSchema).max(128),
   audio: z.strictObject({
+    mode: z.enum(["source_layers", "silent_original", "silent_media"]).optional(),
     dialoguePriority: z.literal(true), blanketWhooshEveryCut: z.literal(false),
-    layers: z.array(audioLayerSchema).min(1).max(32),
+    layers: z.array(audioLayerSchema).max(32),
     impactFrames: z.array(z.number().int().nonnegative()).max(64),
     breathFrames: z.array(z.number().int().nonnegative()).max(64),
   }),
   color: z.strictObject({
-    primaryLookId: idSchema, onePrimaryLook: z.literal(true), shotMatchRequired: z.literal(true), graphicsAfterGrade: z.literal(true),
+    sourceMode: z.enum(["media_grade", "authored_palette"]).optional(),
+    primaryLookId: idSchema, onePrimaryLook: z.literal(true), shotMatchRequired: z.boolean(), graphicsAfterGrade: z.literal(true),
     exceptions: z.array(z.strictObject({ range: frameRangeSchema, reason: boundedText(160) })).max(16),
   }),
   assets: z.strictObject({
@@ -162,6 +164,10 @@ export const editorialPlanSchema = z.strictObject({
     outcomeCheckpoints: z.tuple([z.literal("D2"), z.literal("D7"), z.literal("D28")]),
   }),
 }).superRefine((plan, context) => {
+  if (plan.audio.mode === "silent_original" || plan.audio.mode === "silent_media") {
+    if (plan.audio.layers.length || plan.audio.impactFrames.length || plan.audio.breathFrames.length) context.addIssue({ code: "custom", path: ["audio"], message: plan.audio.mode === "silent_original" ? "Silent original animation cannot claim audio layers or observed audio accents" : "Silent media cannot claim audio layers or observed audio accents" });
+  } else if (!plan.audio.layers.length) context.addIssue({ code: "custom", path: ["audio", "layers"], message: "Media audio requires actual source layers" });
+  if (plan.color.shotMatchRequired !== (plan.color.sourceMode !== "authored_palette")) context.addIssue({ code: "custom", path: ["color"], message: "Only disclosed original palette authoring can mark source shot matching inapplicable" });
   const beatIds = new Set<string>();
   let previousEnd = -1;
   for (const [index, beat] of plan.narrative.beats.entries()) {

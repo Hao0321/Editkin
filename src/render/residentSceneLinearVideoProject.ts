@@ -2,16 +2,20 @@ import { mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import type { EditProject } from "../domain/types";
+import type { SelectedNativeVideoRuntimeIdentity } from "../application/selectedNativeVideoRuntime";
 import type { RenderPlan } from "./planner";
 import type { GpuEngineVideoPreviewGraph } from "./gpuCompositor";
 import { renderResidentSceneLinearVideoSequence, type ResidentSceneLinearVideoSequenceReceipt } from "./residentSceneLinearVideoSequence";
+import { publishRenderOutput, renderLifetimeSignal, renderStageTimeout } from "./renderLifetime";
 
 interface ResidentProjectOptions {
   ffmpegPath?: string;
   ffprobePath?: string;
   gpuCompositorPath?: string;
+  selectedNativeVideoRuntime?: SelectedNativeVideoRuntimeIdentity;
   fontRoot?: string;
   pluginRoots?: string[];
+  signal?: AbortSignal;
 }
 
 interface ResidentProjectProbe {
@@ -71,6 +75,10 @@ export async function renderResidentSceneLinearAces2VideoProject<TEncoder extend
   const ffmpegPath = options.ffmpegPath ?? "ffmpeg";
   const ffprobePath = options.ffprobePath ?? "ffprobe";
   const frameCount = Math.round(plan.duration * project.fps);
+  if (preview.graph.nodes.some(node => node.kind === "native_motion_paint")
+    && (project.colorManagement?.mode !== "aces2" || project.colorManagement.outputTransform !== "rec709_sdr")) {
+    throw new Error("Native paint resident 正式輸出必須保留專案明確 ACES2 rec709_sdr output contract。");
+  }
   if (!residentVideoCoversFormalDuration(project, frameCount)) throw new Error("Scene-linear resident video 正式輸出目前不接受畫面空檔；請補齊底層影像或使用相容輸出路徑。");
   const workspace = await mkdtemp(join(tmpdir(), "editkin-resident-aces2-video-"));
   const requested = resolve(outputPath);
@@ -81,7 +89,9 @@ export async function renderResidentSceneLinearAces2VideoProject<TEncoder extend
     const audioPath = join(workspace, "audio.m4a");
     const receipt = await renderResidentSceneLinearVideoSequence({
       executable: options.gpuCompositorPath, graph: preview.graph, assetBindings: preview.assetBindings,
-      startFrame: 0, frameCount, outputDirectory: sequencePath, timeoutMs, fontRoot: options.fontRoot, pluginRoots: options.pluginRoots,
+      selectedNativeVideoRuntime: options.selectedNativeVideoRuntime,
+      startFrame: 0, frameCount, outputDirectory: sequencePath, timeoutMs: renderStageTimeout(timeoutMs), fontRoot: options.fontRoot, pluginRoots: options.pluginRoots,
+      signal: renderLifetimeSignal() ?? options.signal,
     });
     await renderAudioBed(project, plan, audioPath, ffmpegPath, timeoutMs);
     await runProcess(ffmpegPath, [
@@ -99,8 +109,7 @@ export async function renderResidentSceneLinearAces2VideoProject<TEncoder extend
       || Math.abs(outputProbe.duration - plan.duration) > Math.max(.15, 2 / project.fps)) {
       throw new Error(`Resident ACES2 正式輸出 QA 失敗：duration=${outputProbe.duration}, primaries=${outputProbe.colorPrimaries ?? "unknown"}, transfer=${outputProbe.colorTransfer ?? "unknown"}, matrix=${outputProbe.colorMatrix ?? "unknown"}`);
     }
-    await rm(requested, { force: true });
-    await rename(temporaryOutput, requested);
+    await publishRenderOutput(temporaryOutput, requested);
     const version = await runProcess(ffmpegPath, ["-version"], 10_000);
     return {
       outputPath: requested, duration: outputProbe.duration, encoder,

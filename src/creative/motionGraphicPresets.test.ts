@@ -13,9 +13,12 @@ const TRAVEL_EDITORIAL_IDS = [
   "travel_editorial_hero_dark", "travel_editorial_eyebrow_dark",
 ] as const;
 const EXPECTED_PRESET_IDS = [
+  "generic-title-v2", "generic-card-v2", "generic-tag-v2", "generic-counter-v2",
   "surface-track", "v2-word-cascade", ...TRAVEL_EDITORIAL_IDS,
+  "mv_illustrated_word", "mv_illustrated_word_fast", "mv_illustrated_word_impact", "mv_illustrated_word_ripple",
+  "mv_afterglow_lyric", "mv_afterglow_lyric_fast", "mv_paper_air_lyric", "mv_paper_air_lyric_fast",
   "reel_spatial_headline", "reel_editorial_step",
-  "reel_step_progress", "reel_rule_reveal", "reel_dot_grid", "reel_line_grid", "reel_native_panel", "reel_native_disc", "reel_connection_field",
+  "reel_step_progress", "reel_rule_reveal", "reel_ink_annotation", "reel_dot_grid", "reel_line_grid", "reel_native_panel", "reel_native_disc", "reel_connection_field",
   "lower_third_clean_blue_name", "lower_third_clean_blue_unit",
   "lower_third_documentary_white_name", "lower_third_documentary_white_unit",
   "lower_third_signal_lime_name", "lower_third_signal_lime_unit",
@@ -49,10 +52,10 @@ function surfaceTrackingProject() {
 }
 
 describe("shared motion graphic preset registry", () => {
-  it("exposes exactly the 73 known presets including original native vectors", () => {
+  it("exposes exactly the 86 known presets including original native vectors", () => {
     const presets = motionGraphicPresets();
-    expect(EXPECTED_PRESET_IDS).toHaveLength(73);
-    expect(presets).toHaveLength(73);
+    expect(EXPECTED_PRESET_IDS).toHaveLength(86);
+    expect(presets).toHaveLength(86);
     expect(presets.map((item) => item.id).sort()).toEqual([...EXPECTED_PRESET_IDS].sort());
     expect(new Set(presets.map((item) => item.id)).size).toBe(presets.length);
     expect(presets.every((item) => item.seed.presetId === item.id && item.license && item.provenance)).toBe(true);
@@ -60,8 +63,8 @@ describe("shared motion graphic preset registry", () => {
 
   it("returns a compact low-token index and expands one exact editable seed on demand", () => {
     const compact = compactMotionGraphicPresets();
-    expect(compact).toHaveLength(73);
-    expect(new Set(compact.map((item) => item.id)).size).toBe(73);
+    expect(compact).toHaveLength(86);
+    expect(new Set(compact.map((item) => item.id)).size).toBe(86);
     expect(compact.every((item) => !Object.hasOwn(item, "seed"))).toBe(true);
     expect(compact).toEqual(motionGraphicPresets().map((preset) => ({
       id: preset.id, name: preset.name, family: preset.family, license: preset.license,

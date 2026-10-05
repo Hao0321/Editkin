@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { BULLET_TIME_CAPABILITIES, CINEMATIC_LANGUAGE_RECIPES } from "../creative/cinematicLanguage";
+import { SHOT_SELECTION_STYLES } from "../creative/shotSelectionStyles";
 import { initializeStudioCreativeAssets } from "../creative/studioAssets";
 import { initializeWave2Registry } from "../creative/wave2Registry";
 import { CinematicLanguageExplorer, cinematicExplorerItems } from "./CinematicLanguageExplorer";
@@ -13,6 +14,7 @@ describe("cinematic language explorer", () => {
     expect(cinematicExplorerItems("language")).toHaveLength(8);
     expect(cinematicExplorerItems("montage")).toHaveLength(3);
     expect(cinematicExplorerItems("bullet-time")).toHaveLength(3);
+    expect(cinematicExplorerItems("shot-selection")).toEqual(SHOT_SELECTION_STYLES);
     expect([...cinematicExplorerItems("language"), ...cinematicExplorerItems("montage")]).toHaveLength(CINEMATIC_LANGUAGE_RECIPES.length);
     expect(cinematicExplorerItems("bullet-time")).toEqual(BULLET_TIME_CAPABILITIES);
   });
@@ -36,6 +38,7 @@ describe("cinematic language explorer", () => {
     expect(html).toContain("只產生唯讀 draft command");
     expect(html).toContain("data-compiler-tool=\"compile_beat_montage\"");
     expect(html).toContain("鏡頭語言");
+    expect(html).toContain("選鏡風格");
     expect(html).toContain("蒙太奇");
     expect(html).toContain("子彈時間");
     expect(html).toContain("30 款濾鏡");

@@ -11,7 +11,7 @@ import {
   type MotionTrack,
   type TimelineClip,
 } from "../domain/types";
-import { createMotionGraphic } from "../motion/composition";
+import { createMotionGraphic, legacyMotionGraphicSeed } from "../motion/composition";
 import { resolveAestheticSystem } from "./editkinAesthetic";
 
 export const SKILL_EDITORIAL_BATCH_SCHEMA = "hao.video-autopilot.editorial-batch/v1" as const;
@@ -210,19 +210,19 @@ function clipAtTime(clips: readonly TimelineClip[], time: number): TimelineClip 
 
 function graphicForText(event: SkillEditorialDeliverable["textEvents"][number], duration: number): MotionGraphic | undefined {
   if (event.role === "hook") {
-    const graphic = createMotionGraphic(`graphic-${event.id}`, "title", event.text, event.start, event.end - event.start);
+    const graphic = createMotionGraphic(`graphic-${event.id}`, "title", event.text, event.start, event.end - event.start, undefined, legacyMotionGraphicSeed("title"));
     return { ...graphic, x: 0.07, y: 0.085, width: 0.86, fontSize: 82, backgroundColor: "#151A37EE", accentColor: "#FF4FA3", animation: "pop" };
   }
   if (event.role === "launch") {
-    const graphic = createMotionGraphic(`graphic-${event.id}`, "counter", event.text, event.start, event.end - event.start);
+    const graphic = createMotionGraphic(`graphic-${event.id}`, "counter", event.text, event.start, event.end - event.start, undefined, legacyMotionGraphicSeed("counter"));
     return { ...graphic, x: 0.12, y: 0.68, width: 0.76, fontSize: 74, backgroundColor: "#FF3D9ADD", accentColor: "#FFD84D", animation: "pop" };
   }
   if (event.role === "round") {
-    const graphic = createMotionGraphic(`graphic-${event.id}`, "counter", event.text, event.start, event.end - event.start);
+    const graphic = createMotionGraphic(`graphic-${event.id}`, "counter", event.text, event.start, event.end - event.start, undefined, legacyMotionGraphicSeed("counter"));
     return { ...graphic, x: 0.72, y: 0.1, width: 0.22, fontSize: 58, backgroundColor: "#315CFFDD", accentColor: "#77E4FF" };
   }
   if (event.role === "payoff") {
-    const graphic = createMotionGraphic(`graphic-${event.id}`, "card", event.text, event.start, Math.min(event.end - event.start, duration - event.start));
+    const graphic = createMotionGraphic(`graphic-${event.id}`, "card", event.text, event.start, Math.min(event.end - event.start, duration - event.start), undefined, legacyMotionGraphicSeed("card"));
     return { ...graphic, x: 0.08, y: 0.69, width: 0.84, fontSize: 64, textColor: "#FFFFFF", backgroundColor: "#10162BEE", accentColor: "#FFD84D", animation: "spring_soft" };
   }
   return undefined;
@@ -255,7 +255,7 @@ function trackedCommands(deliverable: SkillEditorialDeliverable, clips: readonly
       lostRatio: 0,
       createdAt: new Date().toISOString(),
     };
-    const graphic = createMotionGraphic(`graphic-${label.id}`, "tag", label.text, label.start, label.end - label.start, trackId);
+    const graphic = createMotionGraphic(`graphic-${label.id}`, "tag", label.text, label.start, label.end - label.start, trackId, legacyMotionGraphicSeed("tag"));
     commands.push(
       { type: "add_motion_track", track },
       { type: "add_motion_graphic", graphic: { ...graphic, width: 0.34, fontSize: 42, backgroundColor: `${label.accentColor}EE`, accentColor: label.accentColor, textColor: "#07110A" } },

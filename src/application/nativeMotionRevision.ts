@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { EditProject } from "../domain/types";
 import { applyCommand } from "../domain/commands";
 import { motionGraphicV2LayoutReceipt } from "../motion/compositionV2";
+import { assertScopedMotionReadingHold } from "./scopedMotionRevision";
 
 export const nativeMotionRevisionSchema = z.strictObject({
   expectedRevision: z.number().int().nonnegative(), graphicId: z.string().min(1),
@@ -12,6 +13,9 @@ export const nativeMotionRevisionSchema = z.strictObject({
     z.strictObject({ kind: z.literal("animation_speed_multiplier"), value: z.number().finite().min(.5).max(2) }),
     z.strictObject({ kind: z.literal("animation_duration_frames"), value: z.number().int().min(1).max(600) }),
     z.strictObject({ kind: z.literal("animation_start_scale"), value: z.number().finite().min(.1).max(4) }),
+    z.strictObject({ kind: z.literal("animation_spring"), stiffness: z.number().finite().min(1).max(1000),
+      damping: z.number().finite().min(0).max(100), mass: z.number().finite().min(.05).max(10),
+      initialVelocity: z.number().finite().min(-20).max(20) }),
   ]),
   evidenceRefs: z.array(z.string().trim().min(1).max(160)).min(1).max(8),
 });
@@ -29,9 +33,12 @@ export function prepareNativeMotionRevision(project: EditProject, raw: NativeMot
   const phase = after[input.phase];
   if (input.change.kind === "animation_speed_multiplier") phase.durationFrames = Math.max(1, Math.round(phase.durationFrames / input.change.value));
   else if (input.change.kind === "animation_duration_frames") phase.durationFrames = input.change.value;
-  else phase.scale = input.change.value;
-  const count = endFrame - startFrame;
-  if (after.entrance.durationFrames + after.exit.durationFrames + Math.ceil(project.fps * .8) > count) throw new Error("修訂會吃掉文字的閱讀停留，請延長這個元素或縮短入出場");
+  else if (input.change.kind === "animation_start_scale") phase.scale = input.change.value;
+  else {
+    const { stiffness, damping, mass, initialVelocity } = input.change;
+    phase.easing = { type: "spring", stiffness, damping, mass, initialVelocity };
+  }
+  assertScopedMotionReadingHold({ ...graphic, motionV2: after }, project.fps);
   const command = { type: "update_motion_graphic" as const, graphicId: graphic.id, patch: { motionV2: after } };
   const applied = applyCommand(project, command);
   const oldReceipt = motionGraphicV2LayoutReceipt(project, graphic), newReceipt = motionGraphicV2LayoutReceipt(applied, applied.motionGraphics.find(item => item.id === graphic.id)!);

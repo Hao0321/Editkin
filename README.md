@@ -1,5 +1,10 @@
 # Editkin
 
+## Current development snapshot — 2026-10-05
+
+The active source integration is [PR #77](https://github.com/Hao0321/Editkin/pull/77), branch `feat/latest-agent-engine-20261001`. Feature contributors should inspect that branch and [Development status](docs/DEVELOPMENT_STATUS.md) before starting work. It includes the current original Motion authoring, painted media revision, project schema 9/10 and workspace changes. Maintainer acceptance remains 3 of 37 complete strengthening journeys; source features in the remaining areas are still being verified. Official desktop downloads follow a separate release process.
+
+
 [繁體中文說明](README.zh-TW.md)
 
 Editkin is a local-first video editor with an editable timeline, a shared EditGraph, and structured commands for AI tools. This repository is the community source edition. It includes neutral default presets and synthetic demo footage. It does not contain the maintainer's private creative packs, music, personal Skills, model weights, signing credentials, or prebuilt media runtimes.

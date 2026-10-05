@@ -17,7 +17,7 @@ export function EditingProfilePicker({ profile, hasVideo, trackingBusy, onChange
   const disclosure = useRef<HTMLDetailsElement>(null);
   const selected = EDITORIAL_PROFILES.find((item) => item.id === profile) ?? EDITORIAL_PROFILES[0];
   const aesthetic = resolveAestheticSystem(selected.id, "shorts");
-  const icons: Record<EditorialProfileId, string> = { auto: "✦", gaming: "◈", food: "●", travel: "⌁", podcast_on_camera: "◉", podcast_no_face: "♫" };
+  const icons: Record<EditorialProfileId, string> = { auto: "✦", gaming: "◈", food: "●", travel: "⌁", music_mv: "♫", podcast_on_camera: "◉", podcast_no_face: "◇" };
   return (
     <details ref={disclosure} className="editing-profile-picker" aria-label="剪輯類型" data-testid="editing-profile-picker">
       <summary>

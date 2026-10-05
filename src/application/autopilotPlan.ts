@@ -1,3 +1,7 @@
+import { assertOriginalMotionSceneV4Boundary } from "./originalMotionSceneV4Boundary";
+import { canonicalOriginalMaterialEvidenceSchema, canonicalOriginalMotionSourceSetSchema,
+  assertCanonicalOriginalMotionSourcePlanBinding, canonicalOriginalVisibleProjection, originalSourceRows,
+  ORIGINAL_SOURCE_REVISION_CAPABILITY, ORIGINAL_PAINTED_MEDIA_SOURCE_REVISION_CAPABILITY, type CanonicalOriginalMotionSourceSet } from "./originalMotionSourceSets";
 import { createHash } from "node:crypto";
 import { canonicalJson } from "../shared/canonicalJson";
 import * as z from "zod/v4";
@@ -25,9 +29,12 @@ import {
 } from "../plugins/skillPack";
 import { pluginAutomationApplicationSchema } from "../plugins/automationContract";
 import { EDITKIN_MOTION } from "../motion/identity";
+import { EDITKIN_ENGINE_CONTINUITY } from "../motion/engineContinuity";
+import { ORIGINAL_MOTION_DISPLAY_PAINT_CAPABILITY, ORIGINAL_MOTION_ELEMENT_ANIMATION_CAPABILITY } from "./originalMotionScene2d";
 import { assertMotionTreatmentBinding, MOTION_TREATMENT_FAMILIES, summarizeMotionTreatment } from "./motionTreatment";
 import { designEvidenceSchema, assertDesignDecisionBinding } from "./autopilotDesignContract";
 import { assertAutoColorCommandBinding, autoColorBindingsSchema } from "./autoColorDecision";
+import { referenceMotionPlanSchema, referenceMotionRequestedIndexes, referenceMotionVisibleProjection } from "./referenceMotionPlan";
 
 export const AUTOPILOT_PLAN_SCHEMA_V1 = "hao.video-autopilot.edit-plan/v1" as const;
 export const AUTOPILOT_PLAN_SCHEMA_V2 = "hao.video-autopilot.edit-plan/v2" as const;
@@ -161,7 +168,9 @@ export const currentAutopilotPlanSchema = z.strictObject({
   assurances: assuranceSchema,
   quality: qualitySchema,
   inference: inferenceRunSchema,
-  materialEvidence: materialEvidenceSchema,
+  materialEvidence: z.union([materialEvidenceSchema, canonicalOriginalMaterialEvidenceSchema]),
+  originalMotionEvidence: canonicalOriginalMotionSourceSetSchema.optional(),
+  referenceMotion: referenceMotionPlanSchema.optional(),
   extensions: z.strictObject({
     skillSelection: editkinSkillSelectionReceiptSchema,
     pluginApplications: z.array(pluginAutomationApplicationSchema).max(16),
@@ -231,6 +240,7 @@ export function isCurrentAutopilotPlan(plan: AutopilotPlan): plan is CurrentAuto
 
 const NATIVE_GRAPHIC_KINDS = {
   title_card: new Set(["title"]),
+  lyric_line: new Set(["title"]),
   context_card: new Set(["card"]),
   tracked_value_label: new Set(["tag"]),
   challenge_ledger: new Set(["counter"]),
@@ -245,7 +255,7 @@ const NATIVE_GRAPHIC_KINDS = {
 } as const;
 
 function assertVisibleEditorialExecution(plan: CurrentAutopilotPlan): void {
-  const graphicCommands = plan.commands
+  const graphicCommands = canonicalOriginalVisibleProjection(getPlanOriginalMotionSources(plan), referenceMotionVisibleProjection(plan.referenceMotion, plan.commands as EditorCommand[]))
     .filter((command): command is Extract<EditorCommand, { type: "add_motion_graphic" }> => command.type === "add_motion_graphic")
     .map((command) => command.graphic);
   const commandById = new Map(graphicCommands.map((graphic) => [graphic.id, graphic]));
@@ -358,15 +368,16 @@ function closeEnough(left: number, right: number): boolean {
  */
 export function assertAutopilotProjectTimelineBinding(plan: CurrentAutopilotPlan, projectFps: number): void {
   if (!Number.isFinite(projectFps) || projectFps <= 0) throw new Error("Autopilot project fps 不合法，無法綁定 editorial frame range");
-  const commands = plan.commands.filter((command): command is Extract<EditorCommand, { type: "add_motion_graphic" }> => command.type === "add_motion_graphic");
+  const commands = canonicalOriginalVisibleProjection(getPlanOriginalMotionSources(plan), referenceMotionVisibleProjection(plan.referenceMotion, plan.commands as EditorCommand[])).filter((command): command is Extract<EditorCommand, { type: "add_motion_graphic" }> => command.type === "add_motion_graphic");
   for (const event of plan.editorial.graphics) {
     const lowerThird = event.kind === "lower_third_name" || event.kind === "lower_third_affiliation";
-    if (!lowerThird && !event.presetVariant) continue;
-    const label = lowerThird ? "人物字幕條" : "圖文變體";
+    const lyricLine = event.kind === "lyric_line";
+    if (!lowerThird && !lyricLine && !event.presetVariant) continue;
+    const label = lowerThird ? "人物字幕條" : lyricLine ? "MV 歌詞" : "圖文變體";
     const matches = commands.filter((command) => command.graphic.id === event.id);
     if (matches.length !== 1) throw new Error(`${label} ${event.id} 必須正好綁定一個 add_motion_graphic command`);
     const graphic = matches[0].graphic;
-    if (event.presetVariant) assertMotionGraphicV2Contract(graphic, projectFps);
+    if (event.presetVariant || lyricLine) assertMotionGraphicV2Contract(graphic, projectFps);
     const expectedStart = event.range.startFrame / projectFps;
     const expectedEnd = event.range.endFrame / projectFps;
     const fullDuration = expectedEnd - expectedStart;
@@ -388,6 +399,29 @@ export function parseAutopilotPlan(input: unknown): AutopilotPlan {
   const plan = autopilotPlanSchema.parse(input);
   if (new Set(plan.budget.selectedMemoryRuleIds).size !== plan.budget.selectedMemoryRuleIds.length) throw new Error("Autopilot plan 含重複 memory rule id");
   if (isCurrentAutopilotPlan(plan)) {
+    referenceMotionRequestedIndexes(plan.referenceMotion, plan.commands as EditorCommand[]);
+    const originalSources = getPlanOriginalMotionSources(plan);
+    assertOriginalMotionSceneV4Boundary(plan.commands as EditorCommand[], originalSources);
+    if (originalSources) {
+      if (originalSourceRows(originalSources).some(source => !source.authoringSource)) throw new Error("Original Motion v4 requires actual file-bound authored sources");
+      assertCanonicalOriginalMotionSourcePlanBinding(originalSources, plan.commands as EditorCommand[], plan.editorial);
+    }
+    const standalone = plan.materialEvidence.schema === "editkin.original-motion-source/v1" || plan.materialEvidence.schema === "editkin.original-motion-source/v2";
+    if (originalSources && originalSourceRows(originalSources).some(source => source.authoring.intent !== (standalone ? "standalone_showcase" : "authored_overlay"))) throw new Error("Original Motion source intent differs from the material route");
+    if (originalSources?.schema === "editkin.original-motion-source/v2" && (!standalone || plan.referenceMotion)) throw new Error("Original Motion owner revision initially requires a standalone single-owner plan without reference instances");
+    if (originalSources?.schema === "editkin.original-motion-source/v3" && (standalone || plan.referenceMotion
+      || plan.materialEvidence.schema !== "hao.editkin.material-intelligence/v1" || !plan.materialEvidence.receipts.length
+      || plan.extensions.pluginApplications.length || plan.rotoKeyer || plan.autoColor)) {
+      throw new Error("Painted owner revision requires unchanged real media evidence and one complete original owner; standalone/reference/plugin/media mutations are not this scope");
+    }
+    if (standalone) {
+      const authoredIndexes = new Set(originalSources!.sources.flatMap(source => source.commands.map(command => command.commandIndex)));
+      if (plan.commands.some((command, index) => command.type !== "set_aesthetic_system" && !authoredIndexes.has(index))) throw new Error("Standalone original commands must all resolve to actual authored sources");
+      const originalTypes = originalSources!.schema === "editkin.original-motion-source/v2"
+        ? ["set_aesthetic_system", "revise_original_motion_scene_graphic"] : ["set_aesthetic_system", "add_motion_graphic", "add_motion_scene"];
+      if (plan.commands.some(command => !originalTypes.includes(command.type))) throw new Error("Standalone original authoring cannot fabricate clip, audio or media commands");
+      if (plan.rotoKeyer || plan.autoColor || plan.editorial.audio.mode !== "silent_original" || plan.editorial.color.sourceMode !== "authored_palette") throw new Error("Standalone original authoring requires explicit silent audio and authored palette; media measurement is not applicable");
+    } else if (plan.editorial.audio.mode === "silent_original" || plan.editorial.color.sourceMode === "authored_palette") throw new Error("Media plans retain real audio and shot-match evidence requirements");
     if (plan.budget.contextTokens !== plan.inference.context.packetTokens) {
       throw new Error("Autopilot context Token budget 與 inference packet receipt 不一致");
     }
@@ -396,8 +430,9 @@ export function parseAutopilotPlan(input: unknown): AutopilotPlan {
     if (plan.route.mode === "build") assertBuildNarrative(plan.editorial);
     assertVisibleEditorialExecution(plan);
     assertLowerThirdEvidenceReceiptBinding(plan);
-    assertMotionTreatmentBinding(plan.editorial.motionTreatment, plan.commands as EditorCommand[], plan.editorial.narrative.beats.map(beat => beat.id));
-    if (plan.designEvidence) assertDesignDecisionBinding(plan.designEvidence, plan.commands as EditorCommand[], plan.editorial.narrative.beats.map(beat => beat.id));
+    const visibleCommands = canonicalOriginalVisibleProjection(originalSources, referenceMotionVisibleProjection(plan.referenceMotion, plan.commands as EditorCommand[]));
+    assertMotionTreatmentBinding(plan.editorial.motionTreatment, visibleCommands, plan.editorial.narrative.beats.map(beat => beat.id));
+    if (plan.designEvidence) assertDesignDecisionBinding(plan.designEvidence, visibleCommands, plan.editorial.narrative.beats.map(beat => beat.id));
     assertRotoKeyerPlanCommandBinding(plan.rotoKeyer, plan.commands as EditorCommand[], plan.quality.state, plan.budget.contextTokens);
     assertAutoColorCommandBinding(plan.autoColor, plan.commands as EditorCommand[]);
     const materialIds = plan.materialEvidence.receipts.map((receipt) => receipt.materialId);
@@ -414,6 +449,14 @@ export function parseAutopilotPlan(input: unknown): AutopilotPlan {
   return plan;
 }
 
+export function getPlanOriginalMotionSources(plan: CurrentAutopilotPlan): CanonicalOriginalMotionSourceSet | undefined {
+  if (plan.materialEvidence.schema === "editkin.original-motion-source/v1" || plan.materialEvidence.schema === "editkin.original-motion-source/v2") {
+    if (plan.originalMotionEvidence) throw new Error("Original Motion source set cannot be supplied twice");
+    return canonicalOriginalMotionSourceSetSchema.parse({ schema: plan.materialEvidence.schema, sources: plan.materialEvidence.sources });
+  }
+  return plan.originalMotionEvidence;
+}
+
 export function autopilotPlanSha256(plan: AutopilotPlan): string {
   // The wire author's property order is not preserved by schema parsing.
   // Canonical UTF-8 key order binds content and array order, not insertion order.
@@ -421,12 +464,18 @@ export function autopilotPlanSha256(plan: AutopilotPlan): string {
 }
 
 export function autopilotCommands(plan: AutopilotPlan): EditorCommand[] {
-  return plan.commands as EditorCommand[];
+  const commands = plan.commands as EditorCommand[];
+  const rejectUnverifiedRelink = (command: EditorCommand): void => {
+    if (command.type === "relink_asset_source") throw new Error("Media source relink requires its verified neutral prepare/apply ingress before creating a fresh v4 plan");
+    if (command.type === "batch") command.commands.forEach(rejectUnverifiedRelink);
+  };
+  commands.forEach(rejectUnverifiedRelink);
+  return commands;
 }
 
 export function autopilotPlanCoverage(plan: AutopilotPlan) {
   if (isCurrentAutopilotPlan(plan)) {
-    return { level: "current_multimodal_editorial_contract", legacy: false, inference: summarizeInference(plan.inference), materialReceiptCount: plan.materialEvidence.receipts.length, selectedSkillPackCount: plan.extensions.skillSelection.selected.length, pluginApplicationCount: plan.extensions.pluginApplications.length, rotoKeyerDecisionCount: plan.rotoKeyer?.decisions.length ?? 0, editorial: summarizeEditorialPlan(plan.editorial), motionTreatment: summarizeMotionTreatment(plan.editorial.motionTreatment, plan.commands as EditorCommand[]) };
+    return { level: "current_multimodal_editorial_contract", legacy: false, inference: summarizeInference(plan.inference), materialReceiptCount: plan.materialEvidence.receipts.length, selectedSkillPackCount: plan.extensions.skillSelection.selected.length, pluginApplicationCount: plan.extensions.pluginApplications.length, rotoKeyerDecisionCount: plan.rotoKeyer?.decisions.length ?? 0, editorial: summarizeEditorialPlan(plan.editorial), motionTreatment: summarizeMotionTreatment(plan.editorial.motionTreatment, canonicalOriginalVisibleProjection(getPlanOriginalMotionSources(plan), referenceMotionVisibleProjection(plan.referenceMotion, plan.commands as EditorCommand[]))) };
   }
   if (plan.schema === AUTOPILOT_PLAN_SCHEMA_V3) {
     return { level: "legacy_model_adaptive_compatibility_only", legacy: true, inference: summarizeInference(plan.inference), editorial: summarizeEditorialPlan(plan.editorial), missing: ["material keyframe receipt", "transcript evidence", "source-bound semantic receipt"] };
@@ -439,6 +488,7 @@ export function autopilotPlanCoverage(plan: AutopilotPlan) {
 
 export function compactAutopilotContract() {
   return {
+    engineContinuity: EDITKIN_ENGINE_CONTINUITY,
     schemaVersion: AUTOPILOT_CONTRACT.schemaVersion,
     productVersion: AUTOPILOT_CONTRACT.productVersion,
     planSchema: AUTOPILOT_CONTRACT.planSchema,
@@ -454,6 +504,13 @@ export function compactAutopilotContract() {
       outcomeCheckpoints: ["human_review", "agent_review"],
       agentEvidence: "Exact project/render hashes, full decode, continuous motion observation and timestamped dimension findings; never human approval.",
     },
+    originalSourceExecution: { tool: "prepare_original_motion_source", schema: "editkin.original-motion-source/v1", authoringSchema: "editkin.original-motion-authoring/v1", sourceKinds: ["media", "original_motion_scene"], actualFileRequired: true, renderTool: "render_original_motion_project", commitAuthentication: "protected_user", legacyCommitAuthentication: "same_process", auditAuthentication: "same_process_once_ttl", renderBindingSchemas: ["editkin.original-motion-render-binding-check/v1", "editkin.original-motion-render-binding-check/v2"], nativeDisplayPaintV2: ORIGINAL_MOTION_DISPLAY_PAINT_CAPABILITY, explicitElementAnimationV2: ORIGINAL_MOTION_ELEMENT_ANIMATION_CAPABILITY, sourceRevisionV1: ORIGINAL_SOURCE_REVISION_CAPABILITY, sourceRevisionV2: ORIGINAL_PAINTED_MEDIA_SOURCE_REVISION_CAPABILITY },
+    audioExecution: {
+      modes: ["source_layers", "silent_original", "silent_media"],
+      silentMedia: { sourceSchema: "hao.editkin.material-intelligence/v1", zeroLayersAndAccents: true,
+        evidence: "Integrity-sealed hasAudio=false material plus an independent current authorized-source probe.hasAudio===false, with full source bytes checked before and after probing. Every current and predicted source clip must retain its verified asset identity and stay within an evidenced source window.",
+        execution: "Same guard at audit, apply and atomic precommit; source import/relink and audio insertion are refused. Cached silence alone is not proof. No authenticity, sound-quality or artwork certification." },
+    },
     designExecution: {
       tool: "get_autopilot_design_brief", planPath: "designEvidence", schema: "editkin.autopilot-design-evidence/v1",
       pages: "context, then beat:<id> for each narrative beat; follow nextOffset until hasMore=false",
@@ -461,6 +518,16 @@ export function compactAutopilotContract() {
     },
     motion: {
       ...EDITKIN_MOTION,
+      scene2d: { schema: "editkin.motion-scene-2d/v1", projectSchemaVersion: 9, supportedProjectSchemaVersions: [9, 10], prepareReadOnly: "prepare_original_motion_source", sourceSchema: "editkin.original-motion-source/v1", sourceKinds: ["original_motion_scene", "media_with_authored_overlay"], scope: "Foreground vectors and verified physical glyphs with one shared spring camera; no video camera transform", canonicalV4Admission: "SOURCE_BOUND_ADD_ONLY", sourceBoundOwnerRevision: ORIGINAL_SOURCE_REVISION_CAPABILITY, policy: "Actual authored JSON and physical fonts are re-read at audit/apply; no fake media receipts, proof claims, nested commands or direct-render bypass. Render requires an owned authenticated committed receipt; new protected-user seals survive restart while legacy seals require their original process. Source capability does not certify pixels, aesthetics or installation.",
+        manualSavedContentRevision: { prepareReadOnly: "prepare_original_scene_graphic_revision", schema: "editkin.original-scene-graphic-revision/v1",
+          sourceAdmissionOnly: true, canonicalV4Admission: "NOT_ADMITTED_SOURCE_BOUND_REVISION_REQUIRED", installedOrFullProductCertified: false,
+          scope: "Manual saved-graphic text/font/layout/colors/timing only; exact current owner, physical glyph/full-frame safety, same IDs/camera/cues/media. Not reconstructed original authoring or rights." } },
+      referenceInstances: { projectSchemaVersion: 10, authoringGeneration: 2, planDeclaration: "editkin.reference-motion-plan/v1", prepareReadOnly: "prepare_reference_motion_template_revision", execution: "Exact trusted physical recompile at current v4 audit and apply; metadata earns no visual credit", edits: ["text", "typography", "palette"],
+        savedTemplateReuse: { prepareReadOnly: "prepare_reference_motion_template_reuse", target: "different_existing_imported_video_clip", planMode: "create", reuseOriginRequired: true,
+          originalInstancePreserved: true, freshPurposeAndEvidenceRequired: true, additionalSourcesMustBeExplicit: true, oldObservedCropNotCopied: true,
+          execution: "Current saved origin, target and physical fonts are re-derived at audit and apply; one atomic batch creates a separate instance",
+          previousQaOrArtworkApprovalReusable: false, installedOrFullProductCertified: false },
+        sourceReplacement: false, fullArtworkAccepted: false },
       discover: "list_creative_presets",
       indexArguments: { kind: "motion" },
       inspectArgument: "motionPresetId",

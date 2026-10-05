@@ -43,6 +43,7 @@ export function buildNativeReelSceneCommands(project: EditProject, input: Native
     };
     if (style) {
       const vector = overrides.vectorV2 ?? preset.seed.vectorV2;
+      if (vector?.kind === "spring_panel") throw new Error("連續輪廓請用專用幾何編譯器，不使用一般向量 reveal 速度變換");
       if (vector?.kind === "panel") overrides.backgroundColor = style.palette.surface;
       else if (vector?.kind === "dot_grid") overrides.accentColor = `${style.palette.muted}24`;
       else if (vector) overrides.accentColor = style.palette.accent;
@@ -52,6 +53,7 @@ export function buildNativeReelSceneCommands(project: EditProject, input: Native
       if (motion) {
         for (const phase of [motion.entrance, motion.exit]) phase.durationFrames = Math.max(1, Math.round(phase.durationFrames / style.animationSpeed));
         motion.sequence.staggerFrames = Math.round(motion.sequence.staggerFrames / style.animationSpeed);
+        if (motion.sequence.exitStaggerFrames !== undefined) motion.sequence.exitStaggerFrames = Math.round(motion.sequence.exitStaggerFrames / style.animationSpeed);
         overrides.motionV2 = motion;
       }
       if (vector) overrides.vectorV2 = { ...vector, revealFrames: Math.max(1, Math.round(vector.revealFrames / style.animationSpeed)) };
@@ -73,6 +75,7 @@ export function buildNativeReelSceneCommands(project: EditProject, input: Native
     if (!input.progress || !Number.isInteger(input.progress.steps) || input.progress.steps < 1 || input.progress.steps > 12
       || !Number.isInteger(input.progress.activeStep) || input.progress.activeStep < 0 || input.progress.activeStep > input.progress.steps) throw new Error("章節場景需要有效的總步數與目前章節");
     const base = findMotionGraphicPreset("reel_step_progress").seed.vectorV2!;
+    if (base.kind !== "step_progress") throw new Error("章節進度 preset 的向量種類不符");
     const paper = { x: 0, width: portrait ? 1 : .38, outlineWidth: 0, cornerRadius: 0, backgroundColor: "#F8F3EA",
       layoutV2: { ...findMotionGraphicPreset("reel_native_panel").seed.layoutV2!, safeArea: { top: 0, right: 0, bottom: 0, left: 0 } },
       motionV2: { sequence: { unit: "all", order: "forward", exitOrder: "forward", staggerFrames: 0 },

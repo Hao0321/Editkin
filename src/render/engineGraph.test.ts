@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createDemoProject } from "../domain/demo";
 import { buildEngineRenderGraph } from "./engineGraph";
 import { createClipMask } from "../domain/masks";
-import { createMotionGraphic } from "../motion/composition";
+import { createMotionGraphic, legacyMotionGraphicSeed } from "../motion/composition";
 import { createTransformMotionBlurInstance } from "../domain/transformMotionBlur";
 import { findMotionGraphicPreset } from "../creative/motionGraphicPresets";
 import { commonVideoMotionGraphicsSupported } from "./gpuCompositorAdmission";
@@ -119,7 +119,7 @@ describe("native engine render graph", () => {
         { frame: 30, time: 2, rect: { x: .4, y: .2, width: .2, height: .2 }, confidence: .9, status: "tracked", rotationDegrees: 3, scale: 1.02 },
       ],
     });
-    project.motionGraphics.push(createMotionGraphic("tracked-tag", "tag", "重點", 0, 3, "subject"));
+    project.motionGraphics.push(createMotionGraphic("tracked-tag", "tag", "重點", 0, 3, "subject", legacyMotionGraphicSeed("tag")));
     const tracking = buildEngineRenderGraph(project).nodes.find((node) => node.id === "motion-graphic:tracked-tag")?.tracking as { trackId: string; samples: Array<{ timelineFrame: number; x: number; status: string; rotationRadians: number; scale: number }> };
     expect(tracking.trackId).toBe("subject");
     expect(tracking.samples).toHaveLength(90);
@@ -143,7 +143,7 @@ describe("native engine render graph", () => {
         { frame: 30, time: 2, rect: { x: .3, y: .24, width: .4, height: .3 }, confidence: .9, status: "tracked", rotationDegrees: 5, scale: 1.05, quad: [{ x: .32, y: .25 }, { x: .68, y: .29 }, { x: .72, y: .57 }, { x: .28, y: .54 }] },
       ],
     });
-    const graphic = createMotionGraphic("surface-tag", "tag", "平面貼合", 0, 3, "surface");
+    const graphic = createMotionGraphic("surface-tag", "tag", "平面貼合", 0, 3, "surface", legacyMotionGraphicSeed("tag"));
     graphic.trackingMode = "surface";
     graphic.animation = "fade";
     project.motionGraphics.push(graphic);

@@ -51,7 +51,7 @@ export function FirstProjectStart({ isDesktop, onImport, onDesktopImport, onOpen
         </ol>
 
         <div className="first-project-secondary" aria-label="其他開始方式">
-          {isDesktop && onOpenProject && <button type="button" onClick={onOpenProject}>開啟之前的專案</button>}
+          {onOpenProject && <button type="button" onClick={onOpenProject} data-testid="welcome-open-project">開啟之前的專案</button>}
           <button type="button" onClick={onExploreDemo} data-testid="explore-editor-button">先看看剪輯介面</button>
           <button type="button" onClick={onHelp}>看 30 秒教學</button>
         </div>

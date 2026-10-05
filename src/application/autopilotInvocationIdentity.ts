@@ -9,6 +9,8 @@ import { canonicalJson } from "../shared/canonicalJson";
 export { canonicalJson } from "../shared/canonicalJson";
 import { communityKnowledgeIdentity } from "./communityKnowledge";
 import { AUTOPILOT_CONTRACT, AUTOPILOT_PLAN_SCHEMA } from "./autopilotPlan";
+import { EDITKIN_ENGINE_CONTINUITY } from "../motion/engineContinuity";
+import { readSelectedNativeVideoRuntime, selectedNativeVideoRuntimeIdentitySchema } from "./selectedNativeVideoRuntime";
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
 const auditIssuerSecret = randomBytes(32);
@@ -40,6 +42,7 @@ export function sha256Canonical(value: unknown): string {
 
 const liveAutopilotIdentityShape = {
   schema: z.literal("editkin.video-autopilot.live-identity/v1"),
+  engine: z.strictObject({ schema: z.literal("editkin.engine-continuity-pin/v1"), sha256: sha256Schema }),
   skill: z.strictObject({
     id: z.literal("video-autopilot"),
     revision: z.number().int().nonnegative(),
@@ -69,10 +72,11 @@ const liveAutopilotIdentityShape = {
   }),
 } as const;
 
-export const liveAutopilotIdentitySchema = z.strictObject({
-  ...liveAutopilotIdentityShape,
-  bindingSha256: sha256Schema,
-});
+export const liveAutopilotIdentitySchema = z.discriminatedUnion("schema", [
+  z.strictObject({ ...liveAutopilotIdentityShape, bindingSha256: sha256Schema }),
+  z.strictObject({ ...liveAutopilotIdentityShape, schema: z.literal("editkin.video-autopilot.live-identity/v2"),
+    renderer: selectedNativeVideoRuntimeIdentitySchema, bindingSha256: sha256Schema }),
+]);
 export type LiveAutopilotIdentity = z.infer<typeof liveAutopilotIdentitySchema>;
 
 interface WorkflowContractIdentitySource {
@@ -99,10 +103,11 @@ export async function readLiveAutopilotIdentity(options: { skillPath?: string; p
   // workflow contract are sealed into the plan and checked again at apply.
   const skillPath = await resolveLiveVideoAutopilotSkillPath(options.skillPath);
   const workflowPath = await realpath(resolve(dirname(skillPath), "workflow_contract.json"));
-  const [skillText, workflowText, registry] = await Promise.all([
+  const [skillText, workflowText, registry, renderer] = await Promise.all([
     readFile(skillPath, "utf8"),
     readFile(workflowPath, "utf8"),
     discoverInstalledPlugins(options.pluginRoots),
+    readSelectedNativeVideoRuntime(),
   ]);
   if (!/^name:\s*video-autopilot\s*$/m.test(skillText)) throw new Error("目前 Skill 不是 video-autopilot");
   const ruleIds = [...new Set([...skillText.matchAll(/\bM(\d{1,4})(?:-[A-Z]+|A)?\b/g)].map((match) => match[0]))];
@@ -123,6 +128,7 @@ export async function readLiveAutopilotIdentity(options: { skillPath?: string; p
 
   const identityBase = {
     schema: "editkin.video-autopilot.live-identity/v1" as const,
+    engine: { schema: "editkin.engine-continuity-pin/v1" as const, sha256: sha256Canonical(EDITKIN_ENGINE_CONTINUITY) },
     skill: {
       id: "video-autopilot" as const,
       revision: ruleNumbers.length ? Math.max(...ruleNumbers) : Number(workflow.contract_revision),
@@ -139,7 +145,8 @@ export async function readLiveAutopilotIdentity(options: { skillPath?: string; p
     knowledge: communityKnowledgeIdentity(),
     plugins: pluginRegistryIdentity(registry),
   };
-  return liveAutopilotIdentitySchema.parse({ ...identityBase, bindingSha256: sha256Canonical(identityBase) });
+  const selectedBase = renderer ? { ...identityBase, schema: "editkin.video-autopilot.live-identity/v2" as const, renderer: renderer.identity } : identityBase;
+  return liveAutopilotIdentitySchema.parse({ ...selectedBase, bindingSha256: sha256Canonical(selectedBase) });
 }
 
 export interface AutopilotPlanLiveSource {
@@ -195,18 +202,20 @@ export function createAutopilotProjectAuditIdentity(absoluteProjectPath: string,
   };
 }
 
-export const autopilotAuditReceiptSchema = z.strictObject({
-  schema: z.literal("hao.video-autopilot.audit-receipt/v1"),
+const auditReceiptCommon = {
   status: z.literal("ACCEPTED"),
   planSchema: z.literal(AUTOPILOT_PLAN_SCHEMA),
   planSha256: sha256Schema,
   project: autopilotProjectAuditIdentitySchema,
   invocation: liveAutopilotIdentitySchema,
-  materialEvidenceSha256: sha256Schema,
   auditedAt: z.iso.datetime(),
   receiptSha256: sha256Schema,
   issuerProof: sha256Schema,
-});
+};
+export const autopilotAuditReceiptSchema = z.discriminatedUnion("schema", [
+  z.strictObject({ ...auditReceiptCommon, schema: z.literal("hao.video-autopilot.audit-receipt/v1"), materialEvidenceSha256: sha256Schema }),
+  z.strictObject({ ...auditReceiptCommon, schema: z.literal("hao.video-autopilot.audit-receipt/v2"), sourceKind: z.enum(["original_motion_scene", "media_with_authored_overlay"]), originalSourceEvidenceSha256: sha256Schema, materialEvidenceSha256: sha256Schema.optional() }),
+]);
 export type AutopilotAuditReceipt = z.infer<typeof autopilotAuditReceiptSchema>;
 
 export function createAcceptedAutopilotAuditReceipt(input: {
@@ -214,19 +223,20 @@ export function createAcceptedAutopilotAuditReceipt(input: {
   project: AutopilotProjectAuditIdentity;
   invocation: LiveAutopilotIdentity;
   materialEvidence: unknown;
+  originalSourceEvidence?: unknown;
   auditedAt?: string;
 }): AutopilotAuditReceipt {
   const auditedAt = input.auditedAt ?? new Date().toISOString();
   const auditedAtMs = Date.parse(auditedAt);
   if (!Number.isFinite(auditedAtMs)) throw new Error("Autopilot audit receipt 時間不合法");
   const base = {
-    schema: "hao.video-autopilot.audit-receipt/v1" as const,
+    schema: input.originalSourceEvidence ? "hao.video-autopilot.audit-receipt/v2" as const : "hao.video-autopilot.audit-receipt/v1" as const,
     status: "ACCEPTED" as const,
     planSchema: AUTOPILOT_PLAN_SCHEMA,
     planSha256: input.planSha256,
     project: input.project,
     invocation: input.invocation,
-    materialEvidenceSha256: sha256Canonical(input.materialEvidence),
+    ...auditSourceBinding(input),
     auditedAt,
   };
   const receiptSha256 = sha256Canonical(base);
@@ -242,6 +252,7 @@ export function verifyAcceptedAutopilotAuditReceipt(receiptInput: unknown, expec
   project: AutopilotProjectAuditIdentity;
   invocation: LiveAutopilotIdentity;
   materialEvidence: unknown;
+  originalSourceEvidence?: unknown;
 }): AutopilotAuditReceipt {
   const receipt = autopilotAuditReceiptSchema.parse(receiptInput);
   const { receiptSha256, issuerProof, ...base } = receipt;
@@ -271,8 +282,38 @@ export function verifyAcceptedAutopilotAuditReceipt(receiptInput: unknown, expec
   if (receipt.planSha256 !== expected.planSha256) throw new Error("Autopilot audit receipt 不屬於目前 plan");
   if (canonicalJson(receipt.project) !== canonicalJson(expected.project)) throw new Error("Autopilot audit receipt 的專案 revision 或內容已過期");
   if (canonicalJson(receipt.invocation) !== canonicalJson(expected.invocation)) throw new Error("Autopilot audit receipt 的 Skill／workflow／knowledge／plugin identity 已過期");
-  if (receipt.materialEvidenceSha256 !== sha256Canonical(expected.materialEvidence)) throw new Error("Autopilot audit receipt 的素材語意證據已過期");
+  const binding = auditSourceBinding(expected);
+  if (expected.originalSourceEvidence ? receipt.schema !== "hao.video-autopilot.audit-receipt/v2" : receipt.schema !== "hao.video-autopilot.audit-receipt/v1") throw new Error("Autopilot audit receipt source kind 不一致");
+  for (const [key, value] of Object.entries(binding)) if ((receipt as unknown as Record<string, unknown>)[key] !== value) throw new Error("Autopilot audit receipt 的原創／素材語意證據已過期");
   return receipt;
+}
+
+function auditSourceBinding(input: { materialEvidence: unknown; originalSourceEvidence?: unknown }) {
+  if (!input.originalSourceEvidence) return { materialEvidenceSha256: sha256Canonical(input.materialEvidence) };
+  const media = (input.materialEvidence as { schema?: unknown }).schema === "hao.editkin.material-intelligence/v1";
+  return { sourceKind: media ? "media_with_authored_overlay" as const : "original_motion_scene" as const,
+    originalSourceEvidenceSha256: sha256Canonical(input.originalSourceEvidence),
+    ...(media ? { materialEvidenceSha256: sha256Canonical(input.materialEvidence) } : {}) };
+}
+
+/** Same-process issuer proof. A reconnect must audit/apply again; unsigned
+ * historical committed JSON is not an authenticated original render. */
+export function sealAuthenticatedOriginalMotionCommit(input: Record<string, unknown>): Record<string, unknown> {
+  if (input.schema !== "hao.video-autopilot.execution-receipt/v1" || input.state !== "committed" || !input.originalMotionBinding || input.issuerSeal) throw new Error("Original Motion commit seal requires a new committed source-bound receipt");
+  const receiptSha256 = sha256Canonical(input);
+  return { ...input, issuerSeal: { schema: "editkin.original-motion-commit-seal/v1", scope: "same_process", receiptSha256,
+    issuerProof: createHmac("sha256", auditIssuerSecret).update(`original-commit:${receiptSha256}`).digest("hex") } };
+}
+
+export function verifyAuthenticatedOriginalMotionCommit(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Original Motion commit receipt missing");
+  const { issuerSeal, ...base } = input as Record<string, unknown>;
+  const seal = z.strictObject({ schema: z.literal("editkin.original-motion-commit-seal/v1"), scope: z.literal("same_process"), receiptSha256: sha256Schema, issuerProof: sha256Schema }).parse(issuerSeal);
+  if (base.schema !== "hao.video-autopilot.execution-receipt/v1" || base.state !== "committed" || !base.originalMotionBinding || sha256Canonical(base) !== seal.receiptSha256) throw new Error("Original Motion committed receipt changed or is unsigned");
+  const expectedProof = createHmac("sha256", auditIssuerSecret).update(`original-commit:${seal.receiptSha256}`).digest();
+  const provided = Buffer.from(seal.issuerProof, "hex");
+  if (provided.length !== expectedProof.length || !timingSafeEqual(provided, expectedProof)) throw new Error("Original Motion receipt was not committed by this process; audit/apply again");
+  return input as Record<string, unknown>;
 }
 
 /** Consumes the process-issued receipt exactly once at the atomic apply boundary. */

@@ -1,13 +1,17 @@
+import { assertMotionScenes2D } from "./motionScene2d";
+import { assertReferenceMotionInstances } from "./referenceMotionInstance";
 import { validateMesh3dProject } from "./mesh3dValidation";
 import type { ColorAdjustments, EditComposition, EditProject, MediaAsset, RotoMatteSequence, TimelineClip, TimelineTrack, Transform2D } from "./types";
 import { DEFAULT_CAPTION_STYLE, DEFAULT_CLIP_LAYER, DEFAULT_COLOR, DEFAULT_COLOR_MANAGEMENT, DEFAULT_TRANSFORM } from "./types";
 import { assertHaoExpression } from "./expression";
 import { isTransformMotionBlurInstance, transformMotionBlurParameters } from "./transformMotionBlur";
-import { assertFloatingVideoFrame, floatingFrameGeometry } from "../motion/floatingVideoFrame";
+import { assertFloatingFramePhase, assertFloatingVideoFrame, floatingFrameGeometry, floatingFrameLayout } from "../motion/floatingVideoFrame";
 import { EditGraphError } from "./editGraphError";
 import { validateParticleSimulationProductContract, validateScene25dProductContract } from "./sceneValidation";
 import { projectFromComposition } from "./projectComposition";
 import { assertMotionGraphicV2Contract } from "./motionCompositionV2Contract";
+import { assertMotionPaintContract } from "./motionPaint";
+import { assertContinuityVectorFrameRange, assertContinuityVectorLayout } from "./motionContinuityContract";
 import {
   PRODUCT_AUTO_ROTO_ENGINE,
   PRODUCT_AUTO_ROTO_MAX_ALPHA_BYTES,
@@ -66,22 +70,53 @@ export function validateClipForTrack(project: EditProject, track: TimelineTrack,
     throw new EditGraphError(`片段 ${clip.id} 的 2.5D transform 不合法`);
   }
   if (clip.floatingFrame) {
+    const frameAsset = findAsset(project, clip.assetId);
     try {
       assertFloatingVideoFrame(clip.floatingFrame);
-      floatingFrameGeometry(clip.floatingFrame, project.width, project.height);
+      if (clip.floatingFrame.schema === "editkin.floating-video-frame/v2") {
+        if (!Number.isSafeInteger(frameAsset.width) || !Number.isSafeInteger(frameAsset.height)
+          || frameAsset.width! <= 0 || frameAsset.height! <= 0
+          || (frameAsset.displayAspectRatio !== undefined && (!Number.isFinite(frameAsset.displayAspectRatio) || frameAsset.displayAspectRatio <= 0))) {
+          throw new Error("浮空影片框 v2 缺少有效的真實素材展示尺寸");
+        }
+        const exactFrames = clip.duration * project.fps, durationFrames = Math.round(exactFrames);
+        if (!Number.isSafeInteger(durationFrames) || durationFrames <= 0 || Math.abs(exactFrames - durationFrames) > EPSILON) {
+          throw new Error("浮空影片框 v2 片段時長必須對齊整數專案影格");
+        }
+        const exactStartFrame = clip.timelineStart * project.fps, startFrame = Math.round(exactStartFrame);
+        if (!Number.isSafeInteger(startFrame) || startFrame < 0 || Math.abs(exactStartFrame - startFrame) > EPSILON) {
+          throw new Error("浮空影片框 v2 片段起點必須對齊整數專案影格");
+        }
+        assertFloatingFramePhase(clip.floatingFrame, durationFrames);
+        const source = frameAsset.displayAspectRatio === undefined ? { width: frameAsset.width!, height: frameAsset.height! }
+          : { width: frameAsset.displayAspectRatio, height: 1 };
+        floatingFrameLayout(clip.floatingFrame, project.width, project.height, { ...source, fps: project.fps, durationFrames, localFrame: 0 });
+      } else floatingFrameGeometry(clip.floatingFrame, project.width, project.height);
     } catch (error) {
       throw new EditGraphError(`片段 ${clip.id} 的浮空影片框不合法：${error instanceof Error ? error.message : String(error)}`);
     }
-    const frameAsset = project.assets.find(asset => asset.id === clip.assetId);
     // Portrait describes the embedded plane. Landscape scenes recompose these
     // planes beside a reading lane; canvas bounds were checked above.
+    const nativeFloatingSdr = clip.floatingFrame.schema === "editkin.floating-video-frame/v2"
+      && project.colorManagement?.mode === "aces2" && project.colorManagement.outputTransform === "rec709_sdr"
+      && project.colorManagement.configId === "studio-config-v4.0.0_aces-v2.0_ocio-v2.5";
+    if (nativeFloatingSdr && (project.particleSimulation?.enabled || project.compositions.length
+      || clip.creative?.effectPresetIds?.length || clip.creative?.lookPresetId
+      || clip.creative?.transitionIn || clip.creative?.transitionOut
+      || (clip.expressions && Object.keys(clip.expressions).length)
+      || Math.abs(clip.sourceStart * project.fps - Math.round(clip.sourceStart * project.fps)) > EPSILON
+      || (frameAsset.color?.transfer !== undefined && frameAsset.color.transfer.trim().toLowerCase() !== "bt709")
+      || (frameAsset.color?.primaries !== undefined && frameAsset.color.primaries.trim().toLowerCase() !== "bt709")
+      || (frameAsset.color?.matrix !== undefined && frameAsset.color.matrix.trim().toLowerCase() !== "bt709"))) {
+      throw new EditGraphError(`片段 ${clip.id} 的原生浮空平面需要明示 SDR、整格來源時間，且不混用未支援場景／效果`);
+    }
     if (track.kind !== "video" || frameAsset?.kind !== "video" || frameAsset.compositionId
-      || project.scene25d?.enabled || project.colorManagement?.mode === "aces2" || clip.transform3d
+      || project.scene25d?.enabled || project.scene3d?.enabled || (project.colorManagement?.mode === "aces2" && !nativeFloatingSdr) || clip.transform3d
       || clip.layout || clip.masks?.some(mask => mask.enabled) || clip.chromaKey?.enabled
       || clip.layer?.trackMatte || (clip.layer?.role ?? "content") !== "content"
       || clip.creative?.nativeEffectInstances?.some(instance => instance.enabled)
       || ![undefined, "auto", "rec709"].includes(frameAsset.color?.interpretation)) {
-      throw new EditGraphError(`片段 ${clip.id} 的浮空影片框目前只支援一般 Rec.709 影片圖層，不能與 2.5D 場景、版面、遮罩或原生效果混用`);
+      throw new EditGraphError(`片段 ${clip.id} 的浮空影片框只支援 Rec.709 或明示 v2 ACES2 SDR 平面，不能與深度場景、版面、遮罩或原生效果混用`);
     }
   }
   const layer = { ...DEFAULT_CLIP_LAYER, ...clip.layer };
@@ -223,6 +258,9 @@ export function validateMediaAsset(project: Pick<EditProject, "fps">, asset: Med
     if (!asset.name.trim() || !asset.uri.trim() || asset.duration <= 0) {
       throw new EditGraphError(`素材 ${asset.id} 缺少必要資料`);
     }
+    if (asset.displayAspectRatio !== undefined && (!Number.isFinite(asset.displayAspectRatio) || asset.displayAspectRatio <= 0)) {
+      throw new EditGraphError(`素材 ${asset.id} 的展示比例不合法`);
+    }
     if (asset.derivatives && (!/^[a-f0-9]{64}$/i.test(asset.derivatives.sourceSha256)
       || !asset.derivatives.generatedAt.trim()
       || (asset.derivatives.previewRecipe !== undefined && (typeof asset.derivatives.previewRecipe !== "string"
@@ -270,12 +308,31 @@ export function validateMediaAsset(project: Pick<EditProject, "fps">, asset: Med
 }
 
 export function validateProject(project: EditProject): EditProject {
-  if (project.schemaVersion !== 8) throw new EditGraphError("不支援的 EditGraph schema");
+  if (project.schemaVersion !== 9 && project.schemaVersion !== 10) throw new EditGraphError("不支援的 EditGraph schema");
+  assertReferenceMotionInstances(project);
   if (!Number.isInteger(project.revision) || project.revision < 0) throw new EditGraphError("專案 revision 不合法");
   if (!project.id.trim() || !project.name.trim()) throw new EditGraphError("專案 id 與名稱不可空白");
   if (project.width <= 0 || project.height <= 0 || project.fps <= 0 || project.fps > 240) {
     throw new EditGraphError("專案解析度或 fps 不合法");
   }
+
+  const scenes = project.motionScenes ?? [];
+  const nativePaintGraphic = (graphic: EditProject["motionGraphics"][number]): boolean => {
+    if (graphic.visualStyle !== "native_paint" || !graphic.paintV1) return false;
+    try { assertMotionPaintContract(graphic); return true; }
+    catch { return false; }
+  };
+  const nativePaintScenes = project.colorManagement?.mode === "aces2"
+    && project.colorManagement.outputTransform === "rec709_sdr" && project.motionGraphics.length <= 4
+    && project.motionGraphics.filter(graphic => graphic.schema === "hao.motion-composition/v2")
+      .every(nativePaintGraphic)
+    && scenes.every(scene => scene.graphicIds.every(id => project.motionGraphics.some(graphic =>
+      graphic.id === id && nativePaintGraphic(graphic))));
+  if (scenes.length && (project.scene25d?.enabled || project.scene3d?.enabled
+    || project.colorManagement?.mode === "aces2" && !nativePaintScenes)) {
+    throw new EditGraphError("Motion scenes require Rec.709 2D or the bounded physical-paint ACES2 rec709_sdr consumer path");
+  }
+  assertMotionScenes2D(project);
 
   const assetIds = new Set<string>();
   for (const asset of project.assets) {
@@ -520,16 +577,22 @@ export function validateProject(project: EditProject): EditProject {
   const graphicIds = new Set<string>();
   const cssColor = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i;
   for (const graphic of project.motionGraphics) {
+    if (graphic.compositeLayer !== undefined && !["background", "foreground"].includes(graphic.compositeLayer)) throw new EditGraphError(`動態圖卡 ${graphic.id} 的合成位置不合法`);
+    if (graphic.compositeLayer === "background" && (graphic.schema !== "hao.motion-composition/v2" || !graphic.vectorV2 || graphic.text || graphic.trackId)) throw new EditGraphError(`動態圖卡 ${graphic.id} 背景合成只接受無文字／追蹤的 v2 原生向量`);
     if (!["hao.motion-composition/v1", "hao.motion-composition/v2"].includes(graphic.schema) || !graphic.id.trim() || graphicIds.has(graphic.id) || !graphic.name.trim() || (!graphic.vectorV2 && !graphic.text.trim())) throw new EditGraphError(`動態圖卡 ${graphic.id} 的識別或文字不合法`);
     if (![graphic.timelineStart, graphic.duration, graphic.x, graphic.y, graphic.width, graphic.fontSize, graphic.offsetX, graphic.offsetY, graphic.fontWeight ?? 700, graphic.letterSpacing ?? 0, graphic.outlineWidth ?? 0, graphic.shadowDepth ?? 0, graphic.cornerRadius ?? 0].every(Number.isFinite)
       || graphic.timelineStart < 0 || graphic.duration <= 0 || graphic.x < 0 || graphic.x > 1 || graphic.y < 0 || graphic.y > 1 || graphic.width <= 0 || graphic.width > 1 || graphic.fontSize <= 0
       || (graphic.fontFamily !== undefined && !graphic.fontFamily.trim()) || (graphic.fontWeight ?? 700) < 100 || (graphic.fontWeight ?? 700) > 1000 || (graphic.outlineWidth ?? 0) < 0 || (graphic.outlineWidth ?? 0) > 30 || (graphic.shadowDepth ?? 0) < 0 || (graphic.shadowDepth ?? 0) > 40
       || !cssColor.test(graphic.textColor) || !cssColor.test(graphic.backgroundColor) || !cssColor.test(graphic.accentColor)
-      || (graphic.visualStyle !== undefined && !["solid_panel", "holo_scan_cyan", "holo_grid_lime", "target_lock_red", "spectral_wire_violet", "depth_glass_blue", "telemetry_beam_amber", "neon_extrude_white", "quantum_label_magenta"].includes(graphic.visualStyle))
+      || (graphic.visualStyle !== undefined && !["native_paint", "solid_panel", "holo_scan_cyan", "holo_grid_lime", "target_lock_red", "spectral_wire_violet", "depth_glass_blue", "telemetry_beam_amber", "neon_extrude_white", "quantum_label_magenta"].includes(graphic.visualStyle))
       || (graphic.trackId !== undefined && !motionTrackIds.has(graphic.trackId))
       || (graphic.trackingMode !== undefined && !["anchor", "surface"].includes(graphic.trackingMode))
       || (graphic.trackingMode === "surface" && (!graphic.trackId || project.motionTracks.find((track) => track.id === graphic.trackId)?.points.some((point) => point.status !== "lost" && !point.quad)))) throw new EditGraphError(`動態圖卡 ${graphic.id} 的版面或追蹤參照不合法`);
-    try { assertMotionGraphicV2Contract(graphic, project.fps); } catch (error) {
+    try {
+      assertMotionGraphicV2Contract(graphic, project.fps);
+      assertContinuityVectorFrameRange(graphic, project.fps);
+      assertContinuityVectorLayout(project, graphic);
+    } catch (error) {
       throw new EditGraphError(`動態圖卡 ${graphic.id} 的 v2 合成契約不合法：${error instanceof Error ? error.message : String(error)}`);
     }
     graphicIds.add(graphic.id);

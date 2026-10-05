@@ -28,8 +28,8 @@ describe("complete-reference original motion design", () => {
     expect(packet.referenceCoverage[0]).toMatchObject({ totalFrames: 300, observedFrames: 300 });
     expect(packet.storyboards.map(option => option.scenes[0].grammar)).toEqual(["evidence_takeover", "chapter_progress", "depth_gallery"]);
     for (const option of packet.storyboards) expect(option.scenes[0]).toMatchObject({ startFrame: 0, endFrame: 120, brand: { name: input.brand.name, logo: input.brand.logo, palette: input.brand.palette, typography: input.brand.typography }, verifiedFacts: input.brand.serviceFacts });
-    expect(packet.storyboards[0].scenes[0].state).toBe("IMPLEMENTATION_REQUIRED");
-    expect(packet.referenceCoverage[0].lessons[1].grammarCapabilities[1].state).toBe("IMPLEMENTATION_REQUIRED");
+    expect(packet.storyboards[0].scenes[0]).toMatchObject({ state: "DESIGN_REQUIRED_BEFORE_COMPILATION", compiler: "prepare_reference_motion_template:evidence_takeover" });
+    expect(packet.referenceCoverage[0].lessons[1].grammarCapabilities[1]).toMatchObject({ state: "source_candidate_requires_installed_capability_check" });
   });
   it("rejects partial reference studies, missing final coverage and unknown product claims", () => {
     const { project, input } = fixture();

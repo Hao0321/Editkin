@@ -11,7 +11,7 @@ import { renderComposite } from "./ffmpegComposite";
 import { buildRenderPlan } from "./planner";
 
 const app = fileURLToPath(new URL("../../", import.meta.url));
-const ff = process.env.EDITKIN_FFMPEG_PATH ?? "ffmpeg", fp = process.env.EDITKIN_FFPROBE_PATH ?? "ffprobe";
+const ff = resolve(app, "vendor/ffmpeg/win32-x64/ffmpeg.exe"), fp = resolve(app, "vendor/ffmpeg/win32-x64/ffprobe.exe");
 
 it("decodes the authored small → full-frame → small handoff without first-frame cropping or drift", async () => {
   const base = resolve(app, ".rd/tmp"); await mkdir(base, { recursive: true });

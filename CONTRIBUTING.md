@@ -1,5 +1,10 @@
 # Contributing to Editkin
 
+## Check the integration branch first
+
+Before implementing a feature, read [Development status](docs/DEVELOPMENT_STATUS.md) and inspect [PR #77](https://github.com/Hao0321/Editkin/pull/77). Open an issue naming the existing module you will extend and the missing behavior you will verify. State whether your PR targets `main` or `feat/latest-agent-engine-20261001`; use the integration branch for work that depends on these current Motion/agent changes. An existing source implementation still needs acceptance evidence, so completing its import/edit/save/reopen/render journey is a valuable contribution.
+
+
 Thank you for improving Editkin. Open an issue first for a large feature or architecture change. A small bug fix can go directly to a pull request.
 
 ## Before opening a pull request

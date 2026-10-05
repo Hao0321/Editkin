@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { findMotionGraphicPreset } from "../creative/motionGraphicPresets";
 import { createEmptyProject } from "../domain/editGraph";
-import { createMotionGraphic } from "../motion/composition";
+import { createMotionGraphic, legacyMotionGraphicSeed } from "../motion/composition";
 import { motionGraphicV2LayoutReceipt } from "../motion/compositionV2";
 import { writeAssContent } from "../render/captionAss";
 import MotionOverlay from "./MotionOverlay";
@@ -17,7 +17,7 @@ const chrome = "C:/Program Files/Google/Chrome/Application/chrome.exe";
 describe("MotionOverlay v1 project-pixel preview geometry", () => {
   it.skipIf(!existsSync(chrome))("matches authored ASS font and spacing at two letterboxed stage sizes", () => {
     const project = createEmptyProject("v1 preview geometry", { width: 1080, height: 1920, fps: 30 });
-    const graphic = createMotionGraphic("scale-v1", "title", "旅遊標題", 0, 3);
+    const graphic = createMotionGraphic("scale-v1", "title", "旅遊標題", 0, 3, undefined, legacyMotionGraphicSeed("title"));
     graphic.fontSize = 72;
     graphic.letterSpacing = 6;
     project.motionGraphics = [graphic];
@@ -25,6 +25,8 @@ describe("MotionOverlay v1 project-pixel preview geometry", () => {
     expect(formal).toContain("\\fs72");
     expect(formal).toContain("\\fsp6");
     const markup = renderToStaticMarkup(<MotionOverlay project={project} playhead={1} trackingSelectionEnabled={false} />);
+    expect(markup).toContain('data-motion-font-status="unobserved"');
+    expect(markup).not.toContain('data-motion-font-status="ready"');
     const styles = readFileSync(join(process.cwd(), "src/styles.css"), "utf8")
       + readFileSync(join(process.cwd(), "src/ui/motionStudio.css"), "utf8");
     const sandbox = mkdtempSync(join(tmpdir(), "editkin-v1-preview-"));
@@ -59,6 +61,7 @@ describe("MotionOverlay v2", () => {
     const g=createMotionGraphic("font","title","TEXT",0,3,undefined,findMotionGraphicPreset("v2-word-cascade").seed);
     g.fontFamily="Fredoka";g.fontWeight=850;project.motionGraphics=[g];
     const html=renderToStaticMarkup(<MotionOverlay project={project} playhead={1} trackingSelectionEnabled={false}/>);
+    expect(html).toContain('data-motion-font-status="unobserved"');expect(html).not.toContain('data-motion-font-status="ready"');
     expect(html).toContain("EditkinFace fredoka 700");expect(html).toContain("font-weight:700");expect(html).toContain("font-synthesis:style");expect(html).toContain('data-font-weight-substituted="true"');
   });
   it("renders the exact shared layout receipt and sequenced segments", () => {
@@ -94,5 +97,26 @@ describe("MotionOverlay v2", () => {
     const html = renderToStaticMarkup(<MotionOverlay project={project} playhead={.5} trackingSelectionEnabled={false} />);
     expect(html).toContain('data-motion-preset="lower_third_clean_blue_unit"');
     expect(html).toContain(`width:${graphic.width * 100}%`);
+  });
+
+  it("marks SSR text unobserved and never promotes a custom font to a bundled face", () => {
+    const project = createEmptyProject("SSR custom font", { width: 1920, height: 1080, fps: 30 });
+    const graphic = createMotionGraphic("custom", "title", "DO NOT SHOW FALLBACK", 0, 3, undefined, legacyMotionGraphicSeed("title"));
+    graphic.fontFamily = "Unverified custom font"; project.motionGraphics = [graphic];
+    const html = renderToStaticMarkup(<MotionOverlay project={project} playhead={1} trackingSelectionEnabled={false} />);
+    expect(html).toContain('data-motion-font-status="unverified"');
+    expect(html).toContain('data-testid="motion-font-blocked"');
+    expect(html).not.toContain("DO NOT SHOW FALLBACK");
+    expect(html).not.toContain("EditkinFace");
+  });
+
+  it("keeps vector-only graphics independent of custom or missing browser fonts", () => {
+    const project = createEmptyProject("Vector without font", { width: 1920, height: 1080, fps: 30 });
+    const graphic = createMotionGraphic("vector", "card", "", 0, 3, undefined, findMotionGraphicPreset("reel_native_disc").seed);
+    graphic.fontFamily = "Unverified custom font"; project.motionGraphics = [graphic];
+    const html = renderToStaticMarkup(<MotionOverlay project={project} playhead={1} trackingSelectionEnabled={false} />);
+    expect(html).toContain('data-testid="motion-vector-v2"');
+    expect(html).toContain('data-motion-font-status="not-required"');
+    expect(html).not.toContain('data-testid="motion-font-blocked"');
   });
 });

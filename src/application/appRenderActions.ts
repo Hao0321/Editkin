@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { downloadEditGraph } from "./exportGraph";
+import { downloadEditGraph, type ProjectDownloadRequest } from "./exportGraph";
 import type { HaoDesktopApi } from "../desktop/types";
 import type { EditProject } from "../domain/types";
 import type { ProjectSession } from "./projectSession";
@@ -10,11 +10,14 @@ export function createAppRenderActions(input: {
   project: EditProject;
   setStatus: Dispatch<SetStateAction<string>>;
   session?: ProjectSession;
+  requestProjectDownload?: (project: EditProject) => ProjectDownloadRequest;
   onArtifactReady?: (project: EditProject, artifact: RenderArtifactIdentity) => Promise<boolean>;
 }) {
   const exportGraph = () => {
-    downloadEditGraph(input.project);
-    input.setStatus("已匯出 Editkin EditGraph。");
+    try {
+      const result = (input.requestProjectDownload ?? downloadEditGraph)(input.session?.getSnapshot().history.present ?? input.project);
+      input.setStatus(`已送出專案下載：${result.filename}；請確認瀏覽器下載完成。下載不會標記已儲存。`);
+    } catch (error) { input.setStatus(error instanceof Error ? error.message : "專案下載失敗"); }
   };
   const renderVideo = async () => {
     if (!input.api) return exportGraph();

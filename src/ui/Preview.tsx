@@ -6,16 +6,16 @@ import { isMediaPreviewCurrent } from "../application/mediaDerivativeColor";
 import { compileClipAlphaPlan, type ClipAlphaPlan } from "../domain/clipAlphaPlan";
 import { animatedClipState } from "../domain/editGraph";
 import { isTransformMotionBlurInstance } from "../domain/transformMotionBlur";
-import { FLOATING_FRAME_BACKDROP_CSS, FLOATING_FRAME_MEDIA_FIT, floatingFrameCornerRadiusPixels, floatingFrameCssMatrix, floatingFrameFeatherPixels, floatingFrameGeometry, floatingFrameMatteShadow } from "../motion/floatingVideoFrame";
+import { FLOATING_FRAME_BACKDROP_CSS, FLOATING_FRAME_MEDIA_FIT, floatingFrameCornerRadiusPixels, floatingFrameCssMatrix, floatingFrameFeatherPixels, floatingFrameGeometry, floatingFrameLayout, floatingFrameMatteShadow } from "../motion/floatingVideoFrame";
 import type { CaptionCue, CaptionStyle, ColorAdjustments, EditProject, LayerBlendMode, NormalizedRect, Transform2D } from "../domain/types";
 import { combineLookColor, previewEffectFilter, previewTransitionState } from "../creative/corePack";
-import { formatTime } from "../lib/format";
 import { previewPrimaryFilter } from "../color/previewGrade";
 import OcioGpuMedia from "./OcioGpuMedia";
 import AlphaProcessedPreviewMedia, { AlphaPreviewUnavailable, alphaPreviewFailureMessage } from "./AlphaProcessedPreviewMedia";
 import { clipLocalProjectFrame } from "./alphaPlanPreview";
 import { nextAutomaticPreviewRepair } from "./previewRepairQueue";
 import { useNativeAudioPreviewPlayback, type NativeAudioTransportState } from "../desktop/useNativeAudioPreviewPlayback";
+import { PlaybackControls } from "./PlaybackControls";
 import "./captionPreview.css";
 
 const Mesh3dPreview = lazy(() => import("./Mesh3dPreview"));
@@ -112,11 +112,18 @@ interface PreviewProps {
   project: EditProject;
   gpuPreviewUrl?: string;
   nativeGpuPreview?: boolean;
+  gpuPreviewFullComposition?: boolean;
+  onGpuPreviewImagePresented?: (url: string) => void;
+  onGpuPreviewImageRejected?: (url: string) => void;
+  bakedMotionGraphicIds?: readonly string[];
+  bakedCaptionIds?: readonly string[];
   gpuPreviewAdmission?: string;
   gpuPreviewFallbackReason?: string;
   gpuPreviewAdmissionDiagnostic?: string;
   autonomousGpuPlayback?: boolean;
   nativeGpuPlaybackPreparing?: boolean;
+  nativeGpuPresentedFrame?: number;
+  nativeGpuFrameUpdating?: boolean;
   seekRevision?: number;
   onPlaybackClock?: (time: number) => void;
   onAudioTransportChange?: (state: NativeAudioTransportState) => void;
@@ -128,11 +135,31 @@ interface PreviewProps {
   trackingSelection?: NormalizedRect;
   onTrackingSelectionChange?: (rect: NormalizedRect) => void;
   playing: boolean;
+  playbackRate?: number;
+  onPlaybackRateChange?: (rate: number) => void;
+  onTogglePlayback?: () => void;
+  onShuttle?: (direction: -1 | 1) => void;
+  onFrameStep?: (direction: -1 | 1) => void;
+  onPausePlayback?: () => void;
   onPlayingChange: (playing: boolean) => void;
   onPlayheadChange: (time: number) => void;
 }
 
-export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, projectWidth, projectHeight, playhead, projectDuration, projectFps, captions, captionStyle, project, gpuPreviewUrl, nativeGpuPreview = false, gpuPreviewAdmission, gpuPreviewFallbackReason, gpuPreviewAdmissionDiagnostic, autonomousGpuPlayback = false, nativeGpuPlaybackPreparing = false, seekRevision, onPlaybackClock, onAudioTransportChange, nativeEffectPreviewReadyClipIds = [], nativeEffectPreviewPendingClipIds = [], nativeEffectPreviewErrors = {}, onNativeSurfaceBoundsChange, trackingSelectionEnabled = false, trackingSelection, onTrackingSelectionChange, playing, onPlayingChange, onPlayheadChange }: PreviewProps) {
+export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, projectWidth, projectHeight, playhead, projectDuration, projectFps, captions, captionStyle, project, gpuPreviewUrl, nativeGpuPreview = false, gpuPreviewFullComposition = false, onGpuPreviewImagePresented, onGpuPreviewImageRejected, bakedMotionGraphicIds = [], bakedCaptionIds = [], gpuPreviewAdmission, gpuPreviewFallbackReason, gpuPreviewAdmissionDiagnostic, autonomousGpuPlayback = false, nativeGpuPlaybackPreparing = false, nativeGpuPresentedFrame, nativeGpuFrameUpdating = false, seekRevision, onPlaybackClock, onAudioTransportChange, nativeEffectPreviewReadyClipIds = [], nativeEffectPreviewPendingClipIds = [], nativeEffectPreviewErrors = {}, onNativeSurfaceBoundsChange, trackingSelectionEnabled = false, trackingSelection, onTrackingSelectionChange, playing, playbackRate = 1, onPlaybackRateChange, onTogglePlayback, onShuttle, onFrameStep, onPausePlayback, onPlayingChange, onPlayheadChange }: PreviewProps) {
+  const retainingNativeFrame = (nativeGpuPreview || gpuPreviewFullComposition) && nativeGpuFrameUpdating
+    && Number.isSafeInteger(nativeGpuPresentedFrame) && nativeGpuPresentedFrame! >= 0;
+  // A held native frame and its unbaked overlay must use the same clock. The
+  // timeline cursor remains at the user's newly requested time.
+  const overlayPlayhead = retainingNativeFrame ? nativeGpuPresentedFrame! / project.fps : playhead;
+  // The engine owns typography across its admitted timeline. While native
+  // presentation is in flight, no DOM typography may race its actual pixels.
+  const nativeCompositionPending = retainingNativeFrame && (gpuPreviewAdmission === "engine-video-native" || gpuPreviewAdmission === "engine-video-frame");
+  // Saved scenes own actual graphics. A scene shell alone is not canvas content.
+  // The formal no-video compositor starts with black; authored background
+  // vectors still draw through MotionOverlay above that same base.
+  const originalMotionCanvas = project.motionGraphics.length > 0 && !project.scene3d?.enabled
+    && !project.tracks.some(track => track.kind === "video" && !track.muted
+      && track.clips.some(clip => clip.layer?.enabled !== false));
   // CSS/Canvas fallback cannot represent linear-light gains, including nested and future keyframes.
   const hasWb = (clip: ActivePreviewLayer["clip"]) => [clip.color, ...clip.keyframes.map(k => k.color)].some(color =>
     [color.whiteBalanceRed ?? 0, color.whiteBalanceGreen ?? 0, color.whiteBalanceBlue ?? 0].some(value => value !== 0));
@@ -144,7 +171,11 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
   const [mediaFailures,setMediaFailures]=useState<Record<string,{name:string;detail:string}>>({});
   const failureKey=(id:string,source:string)=>JSON.stringify([id,source]);
   const clearMediaFailure=(id:string,source:string)=>setMediaFailures(current=>{const key=failureKey(id,source);if(!current[key])return current;const next={...current};delete next[key];return next;});
-  const failMedia=(id:string,source:string,name:string,error?:MediaError|null)=>setMediaFailures(current=>({...current,[failureKey(id,source)]:{name,detail:error?`解碼錯誤 ${error.code}：${error.message||"瀏覽器無法播放這份預覽"}`:"圖片預覽無法解碼或讀取"}}));
+  const failMedia=(id:string,source:string,name:string,error?:MediaError|null)=>{
+    // Keep the failed clip and its repair action visible instead of playing past it.
+    onPlayingChange(false);
+    setMediaFailures(current=>({...current,[failureKey(id,source)]:{name,detail:error?`解碼錯誤 ${error.code}：${error.message||"瀏覽器無法播放這份預覽"}`:"圖片預覽無法解碼或讀取"}}));
+  };
   const attemptedVideoPreparation = useRef(new Set<string>());
   const videoLoaded = (clipId: string, source: string, asset: ActivePreviewLayer["asset"], video: HTMLVideoElement) => {
     // WebView2 can report HAVE_ENOUGH_DATA after decoding only a MOV's audio.
@@ -215,8 +246,8 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
   const dragStartRef = useRef<{ x: number; y: number } | undefined>(undefined);
   const [draftSelection, setDraftSelection] = useState<NormalizedRect>();
   const onPlayheadChangeRef = useRef(onPlayheadChange);
-  const activeCaption = captions.find((caption) => playhead >= caption.start && playhead < caption.start + caption.duration);
-  const nativeTypographyComposited = gpuPreviewAdmission === "engine-video-native";
+  const activeCaption = captions.find((caption) => overlayPlayhead >= caption.start && overlayPlayhead < caption.start + caption.duration);
+  const nativeCaptionComposited = (nativeGpuPreview || gpuPreviewFullComposition) && activeCaption !== undefined && bakedCaptionIds.includes(activeCaption.id);
   const captionFace = resolveBundledFontFace(captionStyle.fontFamily, captionStyle.bold ? 800 : 400);
   const translationFace = resolveBundledFontFace(captionStyle.translationFontFamily, captionStyle.translationBold ? 800 : 400);
   const captionTextAlign = captionStyle.alignment % 3 === 1 ? "left" : captionStyle.alignment % 3 === 0 ? "right" : "center";
@@ -254,10 +285,11 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
     projectDuration,
     projectFps,
     playing,
+    playbackRate,
     onPlayingChange,
     onPlayheadChange: onPlaybackClock ?? onPlayheadChange,
     seekRevision,
-    externalVideoClock: autonomousGpuPlayback || nativeGpuPlaybackPreparing,
+    externalVideoClock: playbackRate === 1 && (autonomousGpuPlayback || nativeGpuPlaybackPreparing),
   });
   useEffect(() => {
     const bound = nativeAudio.mode === "native" ? nativeAudio.stage : undefined;
@@ -312,6 +344,7 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
   }, [onNativeSurfaceBoundsChange]);
 
   const togglePlayback = () => {
+    if (onTogglePlayback) { onTogglePlayback(); return; }
     if (playing) {
       onPlayingChange(false);
       return;
@@ -319,6 +352,7 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
     if (playhead >= projectDuration) onPlayheadChangeRef.current(0);
     onPlayingChange(projectDuration > 0);
   };
+  const pausePlayback = () => { if (onPausePlayback) onPausePlayback(); else onPlayingChange(false); };
 
   const pointerPosition = (event: React.PointerEvent<HTMLDivElement>) => {
     const bounds = stageRef.current!.getBoundingClientRect();
@@ -344,12 +378,15 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
   };
 
   return (
-    <section className={`preview-panel${stalePreviewAsset ? " has-preview-update" : ""}`} aria-label="播放器" data-native-audio-mode={nativeAudio.mode}
-      data-native-audio-owner={nativeAudio.ownerId} data-native-audio-generation={nativeAudio.generation} data-playing={playing}>
+    <section className={`preview-panel preview-with-transport${stalePreviewAsset ? " has-preview-update" : ""}`} aria-label="播放器" data-native-audio-mode={nativeAudio.mode}
+      data-native-audio-owner={nativeAudio.ownerId} data-native-audio-generation={nativeAudio.generation} data-playing={playing} data-playback-rate={playbackRate}>
       <div className="preview-toolbar">
         <span><i /> {atProjectEnd ? "播放頭在影片結尾" : `預覽畫面 · ${layers.length} 個畫面圖層`}</span>
         <div className="preview-badges"><span data-testid="canvas-orientation">{projectHeight > projectWidth ? "直式 9:16" : projectWidth > projectHeight ? "橫式 16:9" : "正方形 1:1"}</span><span>{nativeGpuPreview ? "GPU 直出" : gpuPreviewUrl ? "原生 GPU" : "相容預覽"}</span>{nativeAudio.mode === "starting" && <span data-testid="native-audio-starting">音訊準備中</span>}{nativeAudio.mode === "native" && <span data-testid="native-audio-active" title={nativeAudio.stage?.audioFingerprintSha256}>原生音訊 · Sample Clock</span>}{nativeAudio.mode === "compatible" && nativeAudio.error && <span data-testid="native-audio-fallback" title={nativeAudio.error}>音訊相容模式</span>}{readyNativeEffectCount > 0 && <span className="native-effect-preview-ready" data-testid="native-effect-preview-ready">{readyNativeEffectCount} 個原生特效 · CPU 快取預覽</span>}{pendingNativeEffectCount > 0 && <span className="native-effect-pending" data-testid="native-effect-preview-pending" title={previewError}>{pendingNativeEffectCount} 個原生特效 · {nativeEffectPreviewPendingClipIds.length ? "正在建立預覽…" : previewError ? "預覽受阻" : "正式輸出生效"}</span>}{nativeGpuPreview && projectDuration > 0 ? <button type="button" className="native-preview-play" onClick={togglePlayback} data-testid="native-preview-play">{playing ? "暫停" : "播放"}</button> : null}</div>
       </div>
+      {retainingNativeFrame && <div className="preview-update-notice" data-testid="native-preview-frame-updating" role="status">
+        <span>正在更新影格…</span>
+      </div>}
       {stalePreviewAsset && <div className={`preview-update-notice${stalePreviewRepair?.phase === "failed" ? " failed" : ""}`} data-testid="preview-update-notice" role={stalePreviewRepair?.phase === "failed" ? "alert" : "status"} aria-live={stalePreviewRepair?.phase === "failed" ? "assertive" : "polite"}>
         <span className="preview-update-copy">
           <strong>預覽色彩可更新</strong>
@@ -361,10 +398,14 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
       <div
         ref={stageRef}
         className={`preview-stage${trackingSelectionEnabled ? " tracking-selecting" : ""}`}
-        style={{ aspectRatio: `${projectWidth} / ${projectHeight}`, containerType: "size", ...(project.tracks.some(track => track.clips.some(clip => clip.floatingFrame)) ? { background: FLOATING_FRAME_BACKDROP_CSS } : {}) }}
+        style={{ aspectRatio: `${projectWidth} / ${projectHeight}`, containerType: "size", ...(originalMotionCanvas && !nativeGpuPreview && !gpuPreviewUrl
+          ? { background: "black" } : project.tracks.some(track => track.clips.some(clip => clip.floatingFrame)) ? { background: FLOATING_FRAME_BACKDROP_CSS } : {}) }}
+        data-preview-motion-canvas={originalMotionCanvas ? "original" : undefined}
         data-canvas-width={projectWidth}
         data-canvas-height={projectHeight}
         data-gpu-preview-admission={gpuPreviewAdmission}
+        data-gpu-presented-frame={nativeGpuPreview ? nativeGpuPresentedFrame : undefined}
+        data-gpu-frame-updating={retainingNativeFrame || undefined}
         data-gpu-playback-owner={autonomousGpuPlayback ? "native" : nativeGpuPlaybackPreparing ? "native-starting" : "compatible"}
         data-gpu-preview-fallback-reason={gpuPreviewFallbackReason}
         data-gpu-preview-admission-diagnostic={gpuPreviewAdmissionDiagnostic}
@@ -376,7 +417,7 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
         onPointerMove={trackingSelectionEnabled ? (event) => updateSelection(event, false) : undefined}
         onPointerUp={trackingSelectionEnabled ? (event) => updateSelection(event, true) : undefined}
       >
-        {project.scene3d?.enabled ? <Suspense fallback={<div role="status">準備 3D 場景…</div>}><Mesh3dPreview project={project} playhead={playhead} playing={playing} layers={layers}/></Suspense> : nativeGpuPreview ? <div className="native-gpu-surface-slot" aria-label="原生 GPU swap-chain 預覽" data-testid="native-gpu-surface" /> : gpuPreviewUrl ? <img className="preview-layer" src={gpuPreviewUrl} alt="原生 GPU 合成預覽" data-testid="gpu-preview-frame" /> : linearWbFallbackBlocked ? <div className="empty-preview" role="status" data-testid="linear-white-balance-preview-unavailable"><strong>線性白平衡預覽尚不可用</strong><span>目前相容預覽無法準確顯示這項調色，已停止顯示未調整原片。請使用已驗證的原生合成預覽或檢查正式輸出。</span></div> : layers.length > 0 ? layers.map((layer, index) => {
+        {project.scene3d?.enabled ? <Suspense fallback={<div role="status">準備 3D 場景…</div>}><Mesh3dPreview project={project} playhead={playhead} playing={playing} layers={layers}/></Suspense> : nativeGpuPreview ? <div className="native-gpu-surface-slot" aria-label="原生 GPU swap-chain 預覽" data-testid="native-gpu-surface" /> : gpuPreviewUrl ? <img className="preview-layer" src={gpuPreviewUrl} alt="原生 GPU 合成預覽" data-testid="gpu-preview-frame" onLoad={event => onGpuPreviewImagePresented?.(event.currentTarget.getAttribute("src") ?? "")} onError={event => onGpuPreviewImageRejected?.(event.currentTarget.getAttribute("src") ?? "")} /> : linearWbFallbackBlocked ? <div className="empty-preview" role="status" data-testid="linear-white-balance-preview-unavailable"><strong>線性白平衡預覽尚不可用</strong><span>目前相容預覽無法準確顯示這項調色，已停止顯示未調整原片。請使用已驗證的原生合成預覽或檢查正式輸出。</span></div> : layers.length > 0 ? layers.map((layer, index) => {
           const { clip, asset, source } = layer;
           const displayClip = layer.displayClip ?? clip;
           const displayProject = layer.displayProject ?? project;
@@ -455,14 +496,54 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
           if (blockedReason || !alphaPlan) return <AlphaPreviewUnavailable key={`${clip.id}:alpha-blocked`} assetName={asset.name} reason={blockedReason ?? "Alpha plan 無法建立"} className="preview-layer" style={style} testId={testId} />;
           if (displayClip.floatingFrame) {
             const frame = displayClip.floatingFrame;
-            const geometry = floatingFrameGeometry(frame, displayProject.width, displayProject.height, localTime);
+            let geometry: ReturnType<typeof floatingFrameGeometry>;
+            let frameOpacity = 1;
+            let floatingLocalFrame = localProjectFrame;
+            let mediaFit: "cover" | "contain" = FLOATING_FRAME_MEDIA_FIT;
+            let fittedMediaStyle: CSSProperties = { width: "100%", height: "100%" };
+            try {
+              if (frame.schema === "editkin.floating-video-frame/v2") {
+                // Share FFmpeg's rounded timeline tick without changing the
+                // saved start or v1's continuous scrub/orbit interpretation.
+                const startFrame = Math.round(displayClip.timelineStart * displayProject.fps);
+                floatingLocalFrame = clipLocalProjectFrame(alphaPlan, displayPlayhead - startFrame / displayProject.fps);
+                const ratio = asset.displayAspectRatio;
+                const sourceGeometry = ratio !== undefined
+                  ? Number.isFinite(ratio) && ratio > 0 ? { width: ratio, height: 1 } : undefined
+                  : Number.isFinite(asset.width) && asset.width! > 0 && Number.isFinite(asset.height) && asset.height! > 0
+                    ? { width: asset.width!, height: asset.height! } : undefined;
+                if (!sourceGeometry) throw new Error("缺少有效原片顯示比例與正向尺寸；請重新讀取素材資訊後再預覽浮窗。");
+                const layout = floatingFrameLayout(frame, displayProject.width, displayProject.height, {
+                  ...sourceGeometry, fps: displayProject.fps,
+                  durationFrames: Math.round(displayClip.duration * displayProject.fps), localFrame: floatingLocalFrame,
+                });
+                geometry = layout.geometry;
+                frameOpacity = layout.visible ? layout.opacity : 0;
+                mediaFit = layout.mediaFit;
+                // The inset rect is relative to the border's inner plane, so
+                // CSS absolute positioning must not add the outer border twice.
+                fittedMediaStyle = { position: "absolute", left: `${layout.sourceFit.left / geometry.innerWidth * 100}%`,
+                  top: `${layout.sourceFit.top / geometry.innerHeight * 100}%`, width: `${layout.sourceFit.width / geometry.innerWidth * 100}%`,
+                  height: `${layout.sourceFit.height / geometry.innerHeight * 100}%` };
+              } else {
+                // Saved v1 keeps its continuous-time orbit and cover geometry.
+                geometry = floatingFrameGeometry(frame, displayProject.width, displayProject.height, localTime);
+              }
+            } catch (error) {
+              return <div key={`${clip.id}:floating-blocked`} className="preview-layer empty-preview" role="alert"
+                data-testid="preview-floating-frame-unavailable" style={style}>
+                <strong>浮空影片框預覽受阻</strong><span>{error instanceof Error ? error.message : "浮窗來源資訊無法建立；請重新讀取素材資訊。"}</span>
+              </div>;
+            }
             const prism = frame.style === "prism";
             const matte = frame.style === "matte";
             const shadow = floatingFrameMatteShadow(displayProject.width, displayProject.height);
             const cqw = (pixels: number) => `${pixels / displayProject.width * 100}cqw`;
             const feather = `${floatingFrameFeatherPixels(displayProject.width, displayProject.height) / displayProject.width * 100}cqw`;
             const featherMask = `linear-gradient(to right, transparent 0, black ${feather}, black calc(100% - ${feather}), transparent 100%), linear-gradient(to bottom, transparent 0, black ${feather}, black calc(100% - ${feather}), transparent 100%)`;
-            return <div key={clip.id} className="preview-layer" style={style} data-testid="preview-floating-video-frame">
+            return <div key={clip.id} className="preview-layer" style={{ ...style, opacity: Number(style.opacity) * frameOpacity }} data-testid="preview-floating-video-frame"
+              data-floating-frame-schema={frame.schema} data-floating-local-frame={floatingLocalFrame} data-floating-opacity={frameOpacity}
+              data-floating-inner-width={geometry.innerWidth} data-floating-inner-height={geometry.innerHeight}>
               <div style={{ position: "absolute", inset: 0, transformOrigin: "0 0",
                 transform: floatingFrameCssMatrix(geometry.quad, stageDimensions.width, stageDimensions.height),
                 filter: matte ? `drop-shadow(${cqw(shadow.x)} ${cqw(shadow.y)} ${cqw(shadow.blur)} rgba(8,11,13,${shadow.opacity}))` : undefined }}>
@@ -473,10 +554,11 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
                   borderRadius: `${floatingFrameCornerRadiusPixels(frame, displayProject.width, displayProject.height, geometry.border) / displayProject.width * 100}cqw`,
                   border: `${geometry.border / displayProject.width * 100}cqw solid ${matte ? "#121516" : prism ? "#101D32" : "#16181D"}`,
                   borderTopColor: matte ? "#303536" : prism ? "#96CCD3" : "#D4C3A5", borderRightColor: matte ? "#23282A" : prism ? "#456C78" : "#66645E",
+                  backgroundColor: frame.schema === "editkin.floating-video-frame/v2" ? matte ? "#121516" : prism ? "#101D32" : "#16181D" : undefined,
                   boxShadow: matte ? undefined : `inset 0 0 ${geometry.border / displayProject.width * 80}cqw ${prism ? "rgba(150,204,211,.10)" : "rgba(212,195,165,.10)"}, ${geometry.border / displayProject.width * 80}cqw ${geometry.border / displayProject.width * 120}cqw ${geometry.border / displayProject.width * 220}cqw ${prism ? "rgba(23,56,73,.30)" : "rgba(71,68,62,.30)"}, 0 ${geometry.border / displayProject.width * 210}cqw ${geometry.border / displayProject.width * 360}cqw rgba(0,0,0,.32)` }}>
                   <video key={`${clip.id}:${source}`} ref={node => { if (node) mediaRefs.current.set(clip.id, node); else mediaRefs.current.delete(clip.id); }}
                     src={source} playsInline muted={nativeAudio.mode === "native" || clip.volume <= 0} preload="auto"
-                    style={{ display: "block", width: "100%", height: "100%", objectFit: FLOATING_FRAME_MEDIA_FIT }} data-testid="preview-video"
+                    style={{ display: "block", ...fittedMediaStyle, objectFit: mediaFit }} data-testid="preview-video"
                     onError={event => failMedia(clip.id, source, asset.name, event.currentTarget.error)} onLoadedData={event => videoLoaded(clip.id, source, asset, event.currentTarget)} />
                 </div>
               </div>
@@ -530,7 +612,7 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
               onLoadedData={event=>videoLoaded(clip.id,source,asset,event.currentTarget)}
             />
           );
-        }) : (
+        }) : originalMotionCanvas ? null : (
           <div className="empty-preview">
             {projectDuration > 0
               ? <button type="button" className="empty-preview-action" onClick={togglePlayback} aria-label="從頭播放">↺</button>
@@ -544,8 +626,8 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
         {audioLayers.map(({ clip, source }) => (
           <audio key={`audio:${clip.id}:${source}`} ref={(node) => { if (node) mediaRefs.current.set(clip.id, node); else mediaRefs.current.delete(clip.id); }} src={source} preload="auto" muted={nativeAudio.mode === "native"} />
         ))}
-        {projectDuration > 0 && !nativeGpuPreview && <button type="button" className="preview-play" onClick={togglePlayback} title="播放／暫停（Space）" data-testid="preview-play">{playing ? "❚❚" : "▶"}</button>}
-        {activeCaption && !nativeTypographyComposited && (
+        {projectDuration > 0 && !nativeGpuPreview && <button type="button" className="preview-play" onClick={togglePlayback} aria-label={playing ? "暫停播放" : "播放"} aria-keyshortcuts="Space" title="播放／暫停（Space）" data-testid="preview-play">{playing ? "❚❚" : "▶"}</button>}
+        {activeCaption && !nativeCaptionComposited && !nativeCompositionPending && (
           <div className="preview-caption" data-testid="preview-caption" style={{
             backgroundColor: captionStyle.backgroundColor,
             textAlign: captionTextAlign,
@@ -581,14 +663,12 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
             }}>{activeCaption.translation.text}</span>}
           </div>
         )}
-        {((project.motionGraphics.length > 0 && !nativeTypographyComposited) || trackingSelectionEnabled) && <Suspense fallback={null}><MotionOverlay project={project} playhead={playhead} trackingSelectionEnabled={trackingSelectionEnabled} trackingSelection={draftSelection ?? trackingSelection} /></Suspense>}
+        {(!nativeCompositionPending || trackingSelectionEnabled) && (project.motionGraphics.some(graphic => !(nativeGpuPreview || gpuPreviewFullComposition) || !bakedMotionGraphicIds.includes(graphic.id)) || trackingSelectionEnabled) && <Suspense fallback={null}><MotionOverlay project={project} playhead={overlayPlayhead} bakedGraphicIds={nativeGpuPreview || gpuPreviewFullComposition ? bakedMotionGraphicIds : []} suppressGraphics={nativeCompositionPending} trackingSelectionEnabled={trackingSelectionEnabled} trackingSelection={draftSelection ?? trackingSelection} /></Suspense>}
       </div>
       </div>
-      <div className="transport-readout">
-        <span>{formatTime(playhead)}</span>
-        <div className="transport-line"><i style={{ width: `${projectDuration ? (playhead / projectDuration) * 100 : 0}%` }} /></div>
-        <span>{formatTime(projectDuration)}</span>
-      </div>
+      <PlaybackControls playing={playing} playhead={playhead} duration={projectDuration} fps={projectFps}
+        playbackRate={playbackRate} onTogglePlayback={togglePlayback} onPausePlayback={pausePlayback}
+        onSeek={onPlayheadChange} onPlaybackRateChange={onPlaybackRateChange} onShuttle={onShuttle} onFrameStep={onFrameStep} />
     </section>
   );
 }

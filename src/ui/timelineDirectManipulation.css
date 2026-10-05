@@ -44,6 +44,9 @@
 .track-options-menu button:hover:not(:disabled),.track-options-menu button:focus-visible{background:var(--accent-soft);color:var(--accent);outline:2px solid var(--accent);outline-offset:-2px}
 .track-options-menu button:disabled{opacity:.42;cursor:not-allowed}
 .timeline-clip strong{font-size:12px}
+/* Drag transforms and committed positions must track the pointer without the
+   generic button return animation when a gesture finishes. */
+.timeline-clip { transition: color .16s, background-color .16s, border-color .16s; }
 .timeline-clip small{font-size:11px}
 .timeline-clip.controller{border:1px dashed var(--hot);background:color-mix(in srgb,var(--surface) 82%,var(--hot));color:var(--ink);box-shadow:none}
 .timeline-clip.controller .clip-pattern{display:none}
@@ -75,6 +78,11 @@
 .timeline-scroll[data-drop-state="overlap"]::after { content: "同軌片段不能重疊，可拖到空白處或另一軌"; position: sticky; z-index: 50; left: 196px; bottom: 12px; display: inline-flex; margin-left: 196px; padding: 9px 12px; border-radius: 8px; background: var(--danger); color: #fff; font-size: 12px; pointer-events: none; }
 .timeline-scroll[data-drop-state="asset-overlap"]::after { content: "這裡已有片段，請拖到空白處"; position: sticky; z-index: 50; left: 196px; bottom: 12px; display: inline-flex; margin-left: 196px; padding: 9px 12px; border-radius: 8px; background: var(--danger); color: #fff; font-size: 12px; pointer-events: none; }
 .timeline-scroll[data-drop-state="asset-incompatible"]::after { content: "請拖到未鎖定且類型相符的軌道"; position: sticky; z-index: 50; left: 196px; bottom: 12px; display: inline-flex; margin-left: 196px; padding: 9px 12px; border-radius: 8px; background: var(--danger); color: #fff; font-size: 12px; pointer-events: none; }
+.timeline-scroll[data-drop-state="new-layer"]::after,.timeline-scroll[data-drop-state="asset-new-layer"]::after { content: "放開會保留此時間，加入新的相容圖層"; position: sticky; z-index: 50; left: 196px; bottom: 12px; display: inline-flex; margin-left: 196px; padding: 9px 12px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-size: 12px; pointer-events: none; }
+.timeline-clip.is-new-layer-drop { outline: 2px dashed var(--hot); outline-offset: 2px; }
+.timeline-scroll[data-drop-state="rejected"]::after { content: "拖移未套用，原片段已保留"; position: sticky; z-index: 50; left: 196px; bottom: 12px; display: inline-flex; margin-left: 196px; padding: 9px 12px; border-radius: 8px; background: var(--danger); color: #fff; font-size: 12px; pointer-events: none; }
+.timeline-scroll[data-drop-state="asset-rejected"]::after { content: "素材未加入，請選擇有效的軌道與位置"; position: sticky; z-index: 50; left: 196px; bottom: 12px; display: inline-flex; margin-left: 196px; padding: 9px 12px; border-radius: 8px; background: var(--danger); color: #fff; font-size: 12px; pointer-events: none; }
+.timeline-asset-drop-preview[data-new-layer="true"] { border-style: dashed; }
 @media (max-width: 1100px) {
   .timeline-toolbar > div:first-child > small { display: none; }
   .timeline-toolbar { gap: 8px; }

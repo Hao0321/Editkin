@@ -1,7 +1,14 @@
-import type { MotionGraphic, MotionGraphicV2Easing } from "./types";
+import type { MotionGraphic, MotionGraphicV2Easing, MotionGraphicV2Motion } from "./types";
+import { assertContinuityVectorContract } from "./motionContinuityContract";
+import { assertMotionPaintContract } from "./motionPaint";
 
 export const MOTION_V2_MAX_TEXT_UNITS = 128;
 export const MOTION_V2_MAX_SEGMENT_FRAMES = 18_000;
+
+/** Independent exit cadence; historical projects retain their original timing. */
+export function motionGraphicV2ExitStaggerFrames(motion: MotionGraphicV2Motion): number {
+  return motion.sequence.exitStaggerFrames ?? motion.sequence.staggerFrames;
+}
 
 export function motionGraphicV2UnitCount(graphic: MotionGraphic): number {
   const mode = graphic.motionV2?.sequence.unit;
@@ -36,6 +43,7 @@ function assertEasing(easing: MotionGraphicV2Easing, label: string): void {
 
 /** Runtime guard shared by EditGraph validation and the deterministic evaluator. */
 export function assertMotionGraphicV2Contract(graphic: MotionGraphic, fps: number): void {
+  assertMotionPaintContract(graphic);
   if (graphic.schema !== "hao.motion-composition/v2") {
     if (graphic.motionV2 !== undefined || graphic.layoutV2 !== undefined || graphic.vectorV2 !== undefined) throw new Error("v1 不可攜帶 v2 motion/layout/vector 參數");
     return;
@@ -48,8 +56,12 @@ export function assertMotionGraphicV2Contract(graphic: MotionGraphic, fps: numbe
   const durationFrames = Math.max(1, Math.round(graphic.duration * fps));
   const vector = graphic.vectorV2;
   if (vector) {
-    if (vector.schema !== "editkin.motion-vector/v1" || !["rule", "panel", "ellipse", "step_progress", "dot_grid", "line_grid", "connection_field"].includes(vector.kind)) throw new Error("未知原生向量種類");
-    if (graphic.text !== "" || motion.sequence.unit !== "all" || motion.sequence.staggerFrames !== 0) throw new Error("原生向量必須使用空文字及整層動畫，文字請另加可編輯文字層");
+    if (vector.kind !== "spring_panel" && "geometry" in vector) throw new Error("未知原生向量幾何欄位：連續輪廓需要其版本與種類");
+    if (vector.kind === "spring_panel") assertContinuityVectorContract(graphic, fps);
+    else if (!["editkin.motion-vector/v1", "editkin.motion-vector-stage/v1", "editkin.motion-vector-annotation/v1"].includes(vector.schema) || !["rule", "panel", "ellipse", "step_progress", "dot_grid", "line_grid", "connection_field"].includes(vector.kind)) throw new Error("未知原生向量種類");
+    if (vector.schema === "editkin.motion-vector-annotation/v1" && vector.kind !== "rule") throw new Error("文字上方註記只接受 rule 向量");
+    if (graphic.compositeLayer === "background" && vector.schema !== "editkin.motion-vector-stage/v1") throw new Error("背景合成需要 stage 向量版本，避免舊程式忽略合成位置");
+    if (graphic.text !== "" || motion.sequence.unit !== "all" || motion.sequence.staggerFrames !== 0 || motionGraphicV2ExitStaggerFrames(motion) !== 0) throw new Error("原生向量必須使用空文字及整層動畫，文字請另加可編輯文字層");
     assertFiniteRange(vector.heightPixels, 1, 4096, "vector heightPixels");
     if (!Number.isInteger(vector.revealFrames) || vector.revealFrames < 1 || vector.revealFrames > 600 || vector.revealFrames > durationFrames - motion.exit.durationFrames) throw new Error("向量 revealFrames 超出有效停留段");
     if (vector.kind === "step_progress") {
@@ -88,7 +100,8 @@ export function assertMotionGraphicV2Contract(graphic: MotionGraphic, fps: numbe
   if (!["all", "word", "character"].includes(motion.sequence.unit)
     || !["forward", "reverse", "center_out"].includes(motion.sequence.order)
     || !["forward", "reverse", "center_out"].includes(motion.sequence.exitOrder)
-    || !Number.isInteger(motion.sequence.staggerFrames) || motion.sequence.staggerFrames < 0 || motion.sequence.staggerFrames > 120) {
+    || !Number.isInteger(motion.sequence.staggerFrames) || motion.sequence.staggerFrames < 0 || motion.sequence.staggerFrames > 120
+    || motion.sequence.exitStaggerFrames !== undefined && (!Number.isInteger(motion.sequence.exitStaggerFrames) || motion.sequence.exitStaggerFrames < 0 || motion.sequence.exitStaggerFrames > 120)) {
     throw new Error("v2 sequence/stagger 參數不合法");
   }
   for (const [name, phase] of [["entrance", motion.entrance], ["exit", motion.exit]] as const) {
@@ -100,7 +113,7 @@ export function assertMotionGraphicV2Contract(graphic: MotionGraphic, fps: numbe
     assertEasing(phase.easing, `v2 ${name}.easing`);
   }
   const entranceFrames = motion.entrance.durationFrames + Math.max(0, units - 1) * motion.sequence.staggerFrames;
-  const exitFrames = motion.exit.durationFrames + Math.max(0, units - 1) * motion.sequence.staggerFrames;
+  const exitFrames = motion.exit.durationFrames + Math.max(0, units - 1) * motionGraphicV2ExitStaggerFrames(motion);
   if (entranceFrames + exitFrames > durationFrames) throw new Error("v2 entrance/exit sequence 超出圖卡時長");
   if (durationFrames * Math.max(1, glyphs) > MOTION_V2_MAX_SEGMENT_FRAMES) throw new Error(`v2 segment-frame 預算超過 ${MOTION_V2_MAX_SEGMENT_FRAMES}`);
   const safe = layout.safeArea;

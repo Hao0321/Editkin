@@ -16,8 +16,13 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
+use hao_core::engine::composite::FloatFrame;
 use serde::Serialize;
 use wgpu::util::DeviceExt;
+
+#[cfg(test)]
+#[path = "floating_material_tests.rs"]
+mod floating_material_tests;
 use windows::Win32::Foundation::{
     CloseHandle, GENERIC_ALL, HANDLE, HINSTANCE, HMODULE, HWND, LPARAM, LRESULT, POINT, S_OK,
     WPARAM,
@@ -55,6 +60,8 @@ use windows::Win32::Graphics::Gdi::ClientToScreen;
 use windows::Win32::Media::MediaFoundation::{
     IMFAttributes, IMFDXGIBuffer, IMFMediaType, IMFSample, IMFSourceReader, MF_LOW_LATENCY,
     MF_MT_FRAME_RATE, MF_MT_FRAME_SIZE, MF_MT_MAJOR_TYPE, MF_MT_SUBTYPE,
+    MF_MT_VIDEO_ROTATION, MF_MT_PIXEL_ASPECT_RATIO, MF_E_ATTRIBUTENOTFOUND,
+    MF_MT_VIDEO_PRIMARIES, MF_MT_TRANSFER_FUNCTION, MF_MT_YUV_MATRIX, MF_MT_VIDEO_NOMINAL_RANGE,
     MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, MF_SOURCE_READER_ALL_STREAMS,
     MF_SOURCE_READER_D3D_MANAGER, MF_SOURCE_READER_FIRST_VIDEO_STREAM,
     MF_SOURCE_READERF_ENDOFSTREAM, MF_VERSION, MFCreateAttributes, MFCreateDXGIDeviceManager,
@@ -212,6 +219,98 @@ struct DecodeContext {
     visible_height: u32,
     frame_rate_numerator: u32,
     frame_rate_denominator: u32,
+    native_source_profile: Option<NativeVideoSourceProfile>,
+    native_source_profile_error: Option<String>,
+}
+
+/// Actual native-stream attributes, distinct from negotiated output and persisted UI geometry.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeVideoSourceProfile {
+    coded_width: u32,
+    coded_height: u32,
+    rotation_degrees: Option<u32>,
+    sample_aspect_ratio: Option<[u32; 2]>,
+    color_primaries: Option<u32>,
+    transfer_function: Option<u32>,
+    yuv_matrix: Option<u32>,
+    nominal_range: Option<u32>,
+}
+
+fn optional_native_u32(media_type: &IMFMediaType, key: &GUID) -> Result<Option<u32>> {
+    match unsafe { media_type.GetUINT32(key) } {
+        Ok(value) => Ok(Some(value)),
+        Err(error) if error.code() == MF_E_ATTRIBUTENOTFOUND => Ok(None),
+        Err(error) => Err(error).context("read actual native video attribute"),
+    }
+}
+
+fn read_native_source_profile(reader: &IMFSourceReader, stream: u32) -> Result<NativeVideoSourceProfile> {
+    let native = unsafe { reader.GetNativeMediaType(stream, 0) }
+        .context("read actual first native video media type")?;
+    let dimensions = unsafe { native.GetUINT64(&MF_MT_FRAME_SIZE) }
+        .context("read actual native coded frame dimensions")?;
+    let coded_width = (dimensions >> 32) as u32;
+    let coded_height = dimensions as u32;
+    if coded_width == 0 || coded_height == 0 { bail!("actual native video dimensions are invalid"); }
+    let sample_aspect_ratio = match unsafe { native.GetUINT64(&MF_MT_PIXEL_ASPECT_RATIO) } {
+        Ok(value) => Some([(value >> 32) as u32, value as u32]),
+        Err(error) if error.code() == MF_E_ATTRIBUTENOTFOUND => None,
+        Err(error) => return Err(error).context("read actual native video SAR"),
+    };
+    Ok(NativeVideoSourceProfile {
+        coded_width, coded_height,
+        rotation_degrees: optional_native_u32(&native, &MF_MT_VIDEO_ROTATION)?,
+        sample_aspect_ratio,
+        color_primaries: optional_native_u32(&native, &MF_MT_VIDEO_PRIMARIES)?,
+        transfer_function: optional_native_u32(&native, &MF_MT_TRANSFER_FUNCTION)?,
+        yuv_matrix: optional_native_u32(&native, &MF_MT_YUV_MATRIX)?,
+        nominal_range: optional_native_u32(&native, &MF_MT_VIDEO_NOMINAL_RANGE)?,
+    })
+}
+
+fn floating_source_profile_receipt(
+    profile: Option<&NativeVideoSourceProfile>, error: Option<&str>,
+    negotiated_width: u32, negotiated_height: u32,
+    expected_coded_width: u32, expected_coded_height: u32, expected_dar: f64,
+) -> Result<serde_json::Value> {
+    let profile = profile.with_context(|| format!("actual native floating source metadata unavailable: {}", error.unwrap_or("not observed")))?;
+    let rotation = profile.rotation_degrees.unwrap_or(0);
+    let sar = profile.sample_aspect_ratio.unwrap_or([1, 1]);
+    if rotation != 0 || sar[0] == 0 || sar[1] == 0 || sar[0] != sar[1] {
+        bail!("native floating first profile requires unrotated square pixels; actual native rotation={rotation}, SAR={sar:?}");
+    }
+    if profile.coded_width != expected_coded_width || profile.coded_height != expected_coded_height
+        || negotiated_width != expected_coded_width || negotiated_height != expected_coded_height
+        || expected_coded_width < 2 || expected_coded_height < 2 || !expected_dar.is_finite()
+        || expected_dar <= 0.0
+        || (expected_dar / (f64::from(expected_coded_width) / f64::from(expected_coded_height)) - 1.0).abs() > 1e-6
+    {
+        bail!("actual native/negotiated floating source dimensions or DAR differ from the descriptor");
+    }
+    // Unknown/absent color values are reported as such, never upgraded to measured Rec.709.
+    // Explicit incompatible metadata cannot be overridden by an authored SDR declaration.
+    if profile.color_primaries.is_some_and(|value| value != 0 && value != 2)
+        || profile.transfer_function.is_some_and(|value| value != 0 && value != 5)
+        || profile.yuv_matrix.is_some_and(|value| value != 0 && value != 1)
+        || profile.nominal_range.is_some_and(|value| value != 0 && value != 1 && value != 2)
+    {
+        bail!("actual native floating source declares incompatible SDR Rec.709 metadata");
+    }
+    Ok(serde_json::json!({
+        "schema":"editkin.native-floating-source-profile/v1",
+        "profile":"unrotated-square-pixel-rec709-first-profile",
+        "actualNativeMediaType":profile,
+        "negotiatedDimensions":[negotiated_width,negotiated_height],
+        "rotationMetadataStatus":if profile.rotation_degrees.is_some(){"declared"}else{"not_declared"},
+        "sampleAspectMetadataStatus":if profile.sample_aspect_ratio.is_some(){"declared"}else{"not_declared"},
+        "effectiveRotationDegrees":rotation,"effectiveSampleAspectRatio":sar,
+        "missingGeometryPolicy":"media_foundation_default_unrotated_square_pixels",
+        "nativeColorMetadataVerified":profile.color_primaries==Some(2) && profile.transfer_function==Some(5)
+            && profile.yuv_matrix==Some(1) && matches!(profile.nominal_range,Some(1|2)),
+        "decodedOrientationPixelsVerified":false,
+        "declaredFirstProfileAccepted":true
+    }))
 }
 
 struct InteropFrame {
@@ -355,6 +454,13 @@ pub(super) struct VideoVisualStyle {
     pub motion_pad_z: f32,
     pub motion_samples: [[f32; 4]; 8],
     pub motion_sample_frames: [[f32; 4]; 2],
+    /// Flat floating-video material. Coordinates remain in the unprojected canvas;
+    /// mask.w=2 selects the single composition backdrop beneath the first layer.
+    pub floating_panel: [f32; 4],
+    pub floating_content: [f32; 4],
+    pub floating_mask: [f32; 4],
+    pub floating_shadow: [f32; 4],
+    pub floating_color: [f32; 4],
 }
 
 impl Default for VideoVisualStyle {
@@ -419,6 +525,11 @@ impl Default for VideoVisualStyle {
             motion_pad_z: 0.0,
             motion_samples: [[0.0; 4]; 8],
             motion_sample_frames: [[0.0; 4]; 2],
+            floating_panel: [0.0; 4],
+            floating_content: [0.0; 4],
+            floating_mask: [0.0; 4],
+            floating_shadow: [0.0; 4],
+            floating_color: [0.0; 4],
         }
     }
 }
@@ -460,6 +571,8 @@ pub(super) struct VideoSurfaceLayer<'a> {
     pub source_height: u32,
     pub style: VideoVisualStyle,
     pub matte: Option<VideoSurfaceMatte<'a>>,
+    /// Only explicit native display-paint textures may cross the ACES boundary.
+    pub display_referred: bool,
 }
 
 fn scene_linear_input_transform(layers: &[VideoSurfaceLayer<'_>]) -> &'static str {
@@ -469,6 +582,37 @@ fn scene_linear_input_transform(layers: &[VideoSurfaceLayer<'_>]) -> &'static st
     } else {
         "editkin-srgb-to-linear-rec709-primary/v1"
     }
+}
+
+/// Display artwork is a top suffix in the authored layer order. Its physical
+/// transform/opacity already lives in the rasterized native track, so the
+/// compositor must not transform, grade, matte or attenuate those pixels again.
+fn display_paint_suffix_start(
+    layers: &[VideoSurfaceLayer<'_>],
+    display_transform: crate::engine_graph::EngineDisplayTransform,
+    depth_of_field: Option<&crate::engine_graph::EngineVideoDepthOfFieldPlan>,
+    width: u32,
+    height: u32,
+) -> Result<usize> {
+    let start = layers.iter().position(|layer| layer.display_referred).unwrap_or(layers.len());
+    if start == layers.len() { return Ok(start); }
+    if start == 0 || display_transform != crate::engine_graph::EngineDisplayTransform::Aces2Rec709Sdr
+        || depth_of_field.is_some() || layers.iter().any(|layer| layer.style.scene_depth_enabled != 0)
+    {
+        bail!("display native paint requires an opaque-backed ACES2 Rec.709 SDR flat graph without depth or depth-of-field");
+    }
+    for layer in &layers[start..] {
+        let expected = ResidentOverlayEncoding::DisplayLinearPremultiplied.style(width, height);
+        if !layer.display_referred || layer.temporal_sources.is_some() || layer.matte.is_some()
+            || layer.source_width != width || layer.source_height != height
+            || layer.source.width() != width || layer.source.height() != height
+            || layer.source.format() != wgpu::TextureFormat::Rgba16Float
+            || bytemuck::bytes_of(&layer.style) != bytemuck::bytes_of(&expected)
+        {
+            bail!("display native paint must be the unchanged contiguous top suffix with normal full-frame premultiplied source-over and no grade, blend, matte, effects, temporal or projective transform");
+        }
+    }
+    Ok(start)
 }
 
 /// Returns a conservative screen-space dirty rectangle for an affine layer whose source and
@@ -540,10 +684,103 @@ fn visual_dirty_rect(
     (dirty_pixels * 10 < destination_pixels * 9).then_some((x0 as u32, y0 as u32, width, height))
 }
 
+const SCENE_LINEAR_OVERLAY_MAX_PIXELS: usize = 8_294_400;
+const SCENE_LINEAR_OVERLAY_MAX_DIMENSION: u32 = 8192;
+
+/// A FloatFrame carries no primaries metadata. The caller must produce pixels
+/// in this basis before upload; source_color_contract=0 only skips transfer.
+/// ACEScg is deliberately unsupported: the resident ACES2 display path works
+/// in linear Rec.709 and does not apply an input-primaries matrix to overlays.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SceneLinearOverlayBasis {
+    LinearRec709,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ResidentOverlayEncoding {
+    SrgbStraight,
+    SceneLinearPremultiplied(SceneLinearOverlayBasis),
+    DisplayLinearPremultiplied,
+}
+
+impl ResidentOverlayEncoding {
+    fn style(self, width: u32, height: u32) -> VideoVisualStyle {
+        let mut style = VideoVisualStyle::default().with_source_dimensions(width, height);
+        // The existing RGBA8 texture decodes sRGB in hardware. Float pixels
+        // already have the declared basis and must be unpremultiplied once by
+        // the scene-linear shader, with no additional transfer function.
+        style.source_alpha_mode = match self {
+            Self::SrgbStraight => 0,
+            Self::SceneLinearPremultiplied(SceneLinearOverlayBasis::LinearRec709)
+                | Self::DisplayLinearPremultiplied => 2,
+        };
+        style.source_color_contract = 0.0;
+        style
+    }
+}
+
+fn scene_linear_overlay_byte_length(frame: &FloatFrame) -> Result<usize> {
+    let pixel_count = (frame.width as usize)
+        .checked_mul(frame.height as usize)
+        .context("scene-linear overlay dimensions overflow")?;
+    if frame.width == 0 || frame.height == 0
+        || frame.width > SCENE_LINEAR_OVERLAY_MAX_DIMENSION
+        || frame.height > SCENE_LINEAR_OVERLAY_MAX_DIMENSION
+        || pixel_count > SCENE_LINEAR_OVERLAY_MAX_PIXELS
+        || frame.pixels.len() != pixel_count
+    {
+        bail!("scene-linear overlay dimensions, pixel count or work budget invalid");
+    }
+    pixel_count.checked_mul(8).context("scene-linear overlay byte length overflow")
+}
+
+fn round_shift_even(value: u32, shift: u32) -> u32 {
+    let truncated = value >> shift;
+    let remainder = value & ((1_u32 << shift) - 1);
+    let half = 1_u32 << (shift - 1);
+    truncated + u32::from(remainder > half || (remainder == half && truncated & 1 != 0))
+}
+
+/// Round a validated nonnegative unit f32 to IEEE binary16. This retains
+/// scene-linear values; there is no SDR transfer or RGBA8 intermediate.
+fn linear_unit_f16(value: f32) -> u16 {
+    let bits = value.to_bits();
+    let exponent = ((bits >> 23) & 0xff) as i32 - 127 + 15;
+    let mantissa = bits & 0x7f_ffff;
+    if exponent < -10 { return 0; }
+    if exponent <= 0 {
+        return round_shift_even(mantissa | 0x80_0000, (14 - exponent) as u32) as u16;
+    }
+    ((exponent as u16) << 10) + round_shift_even(mantissa, 13) as u16
+}
+
+fn pack_scene_linear_overlay(frame: &FloatFrame) -> Result<Vec<u8>> {
+    let byte_length = scene_linear_overlay_byte_length(frame)?;
+    // Validate the entire frame before allocating staging memory or touching
+    // a GPU texture. No tolerance/clamping may hide invalid premultiplication.
+    if frame.pixels.iter().any(|pixel| {
+        [pixel.r, pixel.g, pixel.b, pixel.a].iter().any(|value| !value.is_finite())
+            || !(0.0..=1.0).contains(&pixel.a)
+            || [pixel.r, pixel.g, pixel.b].iter().any(|value| *value < 0.0 || *value > pixel.a)
+    }) {
+        bail!("scene-linear overlay requires finite unit premultiplied RGBA pixels");
+    }
+    let mut bytes = Vec::new();
+    bytes.try_reserve_exact(byte_length).context("scene-linear overlay staging allocation failed")?;
+    for pixel in &frame.pixels {
+        for channel in [pixel.r, pixel.g, pixel.b, pixel.a] {
+            bytes.extend_from_slice(&linear_unit_f16(channel).to_le_bytes());
+        }
+    }
+    if bytes.len() != byte_length { bail!("scene-linear overlay packed byte length differs"); }
+    Ok(bytes)
+}
+
 pub(super) struct ResidentOverlayTexture {
     texture: wgpu::Texture,
     width: u32,
     height: u32,
+    encoding: ResidentOverlayEncoding,
 }
 
 impl ResidentOverlayTexture {
@@ -594,7 +831,99 @@ impl ResidentOverlayTexture {
             texture,
             width,
             height,
+            encoding: ResidentOverlayEncoding::SrgbStraight,
         })
+    }
+
+    /// Upload a caller-converted linear Rec.709 paint frame. Consumers must
+    /// use the resident scene-linear compositor, not its encoded-SDR path.
+    pub(super) fn upload_scene_linear_premultiplied(
+        compositor: &GpuCompositor,
+        frame: &FloatFrame,
+        working_basis: SceneLinearOverlayBasis,
+    ) -> Result<Self> {
+        scene_linear_overlay_byte_length(frame)?;
+        if frame.width > compositor.device.limits().max_texture_dimension_2d
+            || frame.height > compositor.device.limits().max_texture_dimension_2d
+        {
+            bail!("scene-linear overlay exceeds device texture dimensions");
+        }
+        let format = wgpu::TextureFormat::Rgba16Float;
+        let usage = wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST;
+        let capabilities = compositor.adapter.get_texture_format_features(format);
+        if !capabilities.allowed_usages.contains(usage)
+            || !capabilities.flags.contains(wgpu::TextureFormatFeatureFlags::FILTERABLE)
+        {
+            bail!("resident device cannot sample a filterable scene-linear overlay texture");
+        }
+        let bytes = pack_scene_linear_overlay(frame)?;
+        let texture = compositor.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Editkin resident linear Rec709 premultiplied overlay"),
+            size: wgpu::Extent3d { width: frame.width, height: frame.height, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage,
+            view_formats: &[],
+        });
+        compositor.queue.write_texture(texture.as_image_copy(), &bytes,
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(frame.width * 8), rows_per_image: Some(frame.height) },
+            texture.size());
+        Ok(Self { texture, width: frame.width, height: frame.height,
+            encoding: ResidentOverlayEncoding::SceneLinearPremultiplied(working_basis) })
+    }
+
+    /// Reuse the admitted texture when paint poses change. All source pixels
+    /// are checked before the write; dimensions and basis cannot change here.
+    pub(super) fn update_scene_linear_premultiplied(
+        &self,
+        compositor: &GpuCompositor,
+        frame: &FloatFrame,
+        working_basis: SceneLinearOverlayBasis,
+    ) -> Result<()> {
+        if self.encoding != ResidentOverlayEncoding::SceneLinearPremultiplied(working_basis)
+            || frame.width != self.width || frame.height != self.height
+        {
+            bail!("scene-linear overlay update differs from its admitted basis or dimensions");
+        }
+        let bytes = pack_scene_linear_overlay(frame)?;
+        compositor.queue.write_texture(self.texture.as_image_copy(), &bytes,
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(self.width * 8), rows_per_image: Some(self.height) },
+            self.texture.size());
+        Ok(())
+    }
+
+    pub(super) fn scene_linear_basis(&self) -> Option<SceneLinearOverlayBasis> {
+        match self.encoding {
+            ResidentOverlayEncoding::SrgbStraight | ResidentOverlayEncoding::DisplayLinearPremultiplied => None,
+            ResidentOverlayEncoding::SceneLinearPremultiplied(basis) => Some(basis),
+        }
+    }
+
+    /// Same checked physical float pixels, explicitly interpreted in display-linear
+    /// Rec.709. The texture cannot be consumed by the legacy encoded compositor.
+    pub(super) fn upload_display_linear_premultiplied(
+        compositor: &GpuCompositor, frame: &FloatFrame,
+    ) -> Result<Self> {
+        let mut value = Self::upload_scene_linear_premultiplied(compositor, frame,
+            SceneLinearOverlayBasis::LinearRec709)?;
+        value.encoding = ResidentOverlayEncoding::DisplayLinearPremultiplied;
+        Ok(value)
+    }
+
+    pub(super) fn update_display_linear_premultiplied(
+        &self, compositor: &GpuCompositor, frame: &FloatFrame,
+    ) -> Result<()> {
+        if self.encoding != ResidentOverlayEncoding::DisplayLinearPremultiplied
+            || frame.width != self.width || frame.height != self.height {
+            bail!("display-linear paint update differs from its admitted intent or dimensions");
+        }
+        let bytes = pack_scene_linear_overlay(frame)?;
+        compositor.queue.write_texture(self.texture.as_image_copy(), &bytes,
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(self.width * 8),
+                rows_per_image: Some(self.height) }, self.texture.size());
+        Ok(())
     }
 
     pub(super) fn surface_layer(&self) -> VideoSurfaceLayer<'_> {
@@ -615,7 +944,7 @@ impl ResidentOverlayTexture {
         pivot_x: f32,
         pivot_y: f32,
     ) -> VideoSurfaceLayer<'_> {
-        let mut style = VideoVisualStyle::default().with_source_dimensions(self.width, self.height);
+        let mut style = self.encoding.style(self.width, self.height);
         style.opacity = opacity.clamp(0.0, 1.0);
         style.translate_x = translate_x;
         style.translate_y = translate_y;
@@ -624,6 +953,7 @@ impl ResidentOverlayTexture {
         style.transform_pivot_x = pivot_x;
         style.transform_pivot_y = pivot_y;
         VideoSurfaceLayer {
+            display_referred: self.encoding == ResidentOverlayEncoding::DisplayLinearPremultiplied,
             source: &self.texture,
             temporal_sources: None,
             source_width: self.width,
@@ -638,7 +968,7 @@ impl ResidentOverlayTexture {
         opacity: f32,
         homography: [f32; 8],
     ) -> VideoSurfaceLayer<'_> {
-        let mut style = VideoVisualStyle::default().with_source_dimensions(self.width, self.height);
+        let mut style = self.encoding.style(self.width, self.height);
         style.opacity = opacity.clamp(0.0, 1.0);
         style.projective_h0 = homography[0];
         style.projective_h1 = homography[1];
@@ -650,6 +980,7 @@ impl ResidentOverlayTexture {
         style.projective_h7 = homography[7];
         style.projective_enabled = 1.0;
         VideoSurfaceLayer {
+            display_referred: self.encoding == ResidentOverlayEncoding::DisplayLinearPremultiplied,
             source: &self.texture,
             temporal_sources: None,
             source_width: self.width,
@@ -658,6 +989,15 @@ impl ResidentOverlayTexture {
             matte: None,
         }
     }
+}
+
+fn reject_scene_linear_overlays_in_legacy(layers: &[VideoSurfaceLayer<'_>]) -> Result<()> {
+    if layers.iter().any(|layer| layer.source.format() == wgpu::TextureFormat::Rgba16Float
+        && layer.style.source_alpha_mode == 2 && layer.style.source_color_contract == 0.0)
+    {
+        bail!("premultiplied linear Rec709 overlays require the scene-linear compositor, not encoded SDR");
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1024,6 +1364,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             .with_source_dimensions(self.width, self.height)
             .with_composite(0, 1.0, 0);
         VideoSurfaceLayer {
+            display_referred: false,
             source: self
                 .active_snapshot_index
                 .map(|index| &self.snapshots[index].texture)
@@ -1094,7 +1435,10 @@ impl NativePreviewColorSpace {
 }
 
 pub(super) struct NativePreviewSurface {
-    surface: wgpu::Surface<'static>,
+    surface: Option<wgpu::Surface<'static>>,
+    video_backend: String,
+    video_adapter: String,
+    video_device_type: String,
     configuration: wgpu::SurfaceConfiguration,
     color_space_contract: NativePreviewColorSpace,
     display_hdr_info: wgpu::DisplayHdrInfo,
@@ -1109,6 +1453,8 @@ pub(super) struct NativePreviewSurface {
     scene_linear_display_layout: wgpu::BindGroupLayout,
     scene_linear_display_pipeline: wgpu::RenderPipeline,
     scene_linear_hdr_display_pipeline: wgpu::RenderPipeline,
+    scene_to_display_linear_pipeline: wgpu::RenderPipeline,
+    display_linear_output_pipeline: wgpu::RenderPipeline,
     sampler: wgpu::Sampler,
     style_buffer: wgpu::Buffer,
     black_texture: wgpu::Texture,
@@ -1125,7 +1471,7 @@ pub(super) struct NativePreviewSurface {
     adjustment_style_buffers: Vec<wgpu::Buffer>,
     fused_count_buffers: Vec<wgpu::Buffer>,
     composite_present_buffer: wgpu::Buffer,
-    window: OwnedPreviewWindow,
+    window: Option<OwnedPreviewWindow>,
     owner: Option<HWND>,
     x: i32,
     y: i32,
@@ -1252,6 +1598,8 @@ fn create_scene_linear_video_pipelines(
     wgpu::BindGroupLayout,
     wgpu::RenderPipeline,
     wgpu::RenderPipeline,
+    wgpu::RenderPipeline,
+    wgpu::RenderPipeline,
 ) {
     let composite_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Editkin resident scene-linear video compositor shader"),
@@ -1354,6 +1702,27 @@ fn create_scene_linear_video_pipelines(
         multiview_mask: None,
         cache: None,
     });
+    let make_display_linear_pipeline = |label: &'static str, entry_point: &'static str, format: wgpu::TextureFormat| {
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(label),
+            layout: Some(&display_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &display_shader, entry_point: Some("vertex_main"), buffers: &[], compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &display_shader, entry_point: Some(entry_point),
+                targets: &[Some(wgpu::ColorTargetState { format, blend: None, write_mask: wgpu::ColorWrites::ALL })],
+                compilation_options: Default::default(),
+            }),
+            primitive: Default::default(), depth_stencil: None, multisample: Default::default(), multiview_mask: None, cache: None,
+        })
+    };
+    // The ACES shader returns display-linear values. A float target retains
+    // them for native paint source-over; only the final sRGB surface encodes.
+    let scene_to_display_linear_pipeline = make_display_linear_pipeline(
+        "Editkin ACES2 Rec.709 SDR to display-linear float", "fragment_main", wgpu::TextureFormat::Rgba16Float);
+    let display_linear_output_pipeline = make_display_linear_pipeline(
+        "Editkin display-linear Rec.709 final output encoding", "fragment_display_copy", surface_format);
     let hdr_display_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Editkin resident scene-linear ACES2 Rec.2100 HDR display shader"),
         source: wgpu::ShaderSource::Wgsl(
@@ -1392,6 +1761,8 @@ fn create_scene_linear_video_pipelines(
         display_layout,
         display_pipeline,
         hdr_display_pipeline,
+        scene_to_display_linear_pipeline,
+        display_linear_output_pipeline,
     )
 }
 
@@ -1474,6 +1845,11 @@ struct VideoVisualStyle {
     motion_sample_count: u32, motion_contract_code: u32, motion_shutter_angle: f32, motion_pad_z: f32,
     motion_samples: array<vec4<f32>, 8>,
     motion_sample_frames: array<vec4<f32>, 2>,
+    floating_panel: vec4<f32>,
+    floating_content: vec4<f32>,
+    floating_mask: vec4<f32>,
+    floating_shadow: vec4<f32>,
+    floating_color: vec4<f32>,
 };
 struct FusedLayerCount { layer_count: u32, padding_0: u32, padding_1: u32, padding_2: u32 };
 @group(0) @binding(0) var backdrop_texture: texture_2d<f32>;
@@ -1730,6 +2106,45 @@ fn pump_preview_window_messages() {
 }
 
 impl NativePreviewSurface {
+    /// A shared resident renderer with textures only: no window, surface or swap chain.
+    pub(super) fn offscreen(
+        compositor: &GpuCompositor,
+        width: u32,
+        height: u32,
+        color_space_contract: NativePreviewColorSpace,
+    ) -> Result<Self> {
+        if width == 0 || height == 0 || width > 8192 || height > 8192
+            || u64::from(width) * u64::from(height) > 8_294_400 {
+            bail!("offscreen resident dimensions must be within 1..=8192");
+        }
+        let format = match color_space_contract {
+            NativePreviewColorSpace::SdrAuto => wgpu::TextureFormat::Bgra8UnormSrgb,
+            NativePreviewColorSpace::SdrRec709V2 => wgpu::TextureFormat::Bgra8Unorm,
+            _ => bail!("offscreen resident output currently requires explicit SDR transport"),
+        };
+        // This value describes shared attachment resources only. It is never configured
+        // on a wgpu Surface and does not cause creation of a native presentation target.
+        let configuration = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format,
+            color_space: wgpu::SurfaceColorSpace::Auto,
+            width,
+            height,
+            present_mode: wgpu::PresentMode::AutoVsync,
+            desired_maximum_frame_latency: 2,
+            alpha_mode: wgpu::CompositeAlphaMode::Opaque,
+            view_formats: Vec::new(),
+        };
+        Self::from_parts(compositor, None, None, configuration, color_space_contract,
+                         None, 0, 0, width, height)
+    }
+
+    pub(super) fn is_offscreen(&self) -> bool { self.surface.is_none() && self.window.is_none() }
+
+    fn presentation_surface(&self) -> Result<&wgpu::Surface<'static>> {
+        self.surface.as_ref().context("offscreen resident renderer cannot present or reposition a native surface")
+    }
+
     /// Select an explicitly versioned transport once per loaded graph/profile change.
     /// The legacy zero-gain graph keeps its historical sRGB attachment bytes.
     pub(super) fn select_rec709_output_contract(&mut self, compositor: &GpuCompositor, version_two: bool) -> Result<()> {
@@ -1740,7 +2155,11 @@ impl NativePreviewSurface {
         let desired = if version_two { NativePreviewColorSpace::SdrRec709V2 } else { NativePreviewColorSpace::SdrAuto };
         if self.color_space_contract != desired {
             let count = self.present_count;
-            let replacement = Self::bind(compositor, self.owner.map_or(0, |owner| owner.0 as usize), self.x, self.y, self.width, self.height, desired)?;
+            let replacement = if self.is_offscreen() {
+                Self::offscreen(compositor, self.width, self.height, desired)?
+            } else {
+                Self::bind(compositor, self.owner.map_or(0, |owner| owner.0 as usize), self.x, self.y, self.width, self.height, desired)?
+            };
             *self = replacement;
             self.present_count = count;
         }
@@ -1788,6 +2207,7 @@ impl NativePreviewSurface {
             )
         }
         .context("create native preview surface window")?;
+        let window = OwnedPreviewWindow(hwnd);
         let raw_window = wgpu::rwh::Win32WindowHandle::new(
             NonZeroIsize::new(hwnd.0 as isize).context("native preview HWND is null")?,
         );
@@ -1854,6 +2274,28 @@ impl NativePreviewSurface {
         };
         configuration.desired_maximum_frame_latency = 2;
         surface.configure(&compositor.device, &configuration);
+        Self::from_parts(compositor, Some(surface), Some(window), configuration, color_space_contract,
+                         owner, x, y, width, height)
+    }
+
+    /// The single initializer for all resident shader, uniform and intermediate resources.
+    /// Presentation ownership is optional; the offscreen factory never acquires it.
+    #[allow(clippy::too_many_arguments)]
+    fn from_parts(
+        compositor: &GpuCompositor,
+        surface: Option<wgpu::Surface<'static>>,
+        window: Option<OwnedPreviewWindow>,
+        configuration: wgpu::SurfaceConfiguration,
+        color_space_contract: NativePreviewColorSpace,
+        owner: Option<HWND>,
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
+    ) -> Result<Self> {
+        if surface.is_some() != window.is_some() || (surface.is_none() && owner.is_some()) {
+            bail!("resident renderer presentation ownership is inconsistent");
+        }
         let bind_group_layout =
             compositor
                 .device
@@ -2072,6 +2514,11 @@ struct VideoVisualStyle {
     motion_pad_z: f32,
     motion_samples: array<vec4<f32>, 8>,
     motion_sample_frames: array<vec4<f32>, 2>,
+    floating_panel: vec4<f32>,
+    floating_content: vec4<f32>,
+    floating_mask: vec4<f32>,
+    floating_shadow: vec4<f32>,
+    floating_color: vec4<f32>,
 };
 
 @group(0) @binding(2) var<uniform> style: VideoVisualStyle;
@@ -2402,6 +2849,8 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
             scene_linear_display_layout,
             scene_linear_display_pipeline,
             scene_linear_hdr_display_pipeline,
+            scene_to_display_linear_pipeline,
+            display_linear_output_pipeline,
         ) = create_scene_linear_video_pipelines(
             &compositor.device,
             &bind_group_layout,
@@ -2484,8 +2933,11 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
             "Editkin common-video composite present uniform",
         );
         Ok(Self {
-            display_hdr_info: surface.display_hdr_info(&compositor.adapter),
+            display_hdr_info: surface.as_ref().map(|surface| surface.display_hdr_info(&compositor.adapter)).unwrap_or_default(),
             surface,
+            video_backend: compositor.backend.clone(),
+            video_adapter: compositor.adapter_name.clone(),
+            video_device_type: compositor.device_type.clone(),
             configuration,
             color_space_contract,
             bind_group_layout,
@@ -2499,6 +2951,8 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
             scene_linear_display_layout,
             scene_linear_display_pipeline,
             scene_linear_hdr_display_pipeline,
+            scene_to_display_linear_pipeline,
+            display_linear_output_pipeline,
             sampler,
             style_buffer,
             black_texture,
@@ -2515,7 +2969,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
             adjustment_style_buffers: Vec::new(),
             fused_count_buffers: Vec::new(),
             composite_present_buffer,
-            window: OwnedPreviewWindow(hwnd),
+            window,
             owner,
             x,
             y,
@@ -2536,6 +2990,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         height: u32,
         color_space_contract: NativePreviewColorSpace,
     ) -> Result<serde_json::Value> {
+        self.presentation_surface()?;
         if width == 0 || height == 0 || width > 8192 || height > 8192 {
             bail!("native preview surface dimensions must be within 1..=8192");
         }
@@ -2550,7 +3005,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         let (screen_x, screen_y) = screen_position(owner, x, y)?;
         unsafe {
             SetWindowPos(
-                self.window.0,
+                self.window.as_ref().context("offscreen renderer cannot reposition a window")?.0,
                 Some(HWND_TOP),
                 screen_x,
                 screen_y,
@@ -2563,7 +3018,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         if self.width != width || self.height != height {
             self.configuration.width = width;
             self.configuration.height = height;
-            self.surface
+            self.presentation_surface()?
                 .configure(&compositor.device, &self.configuration);
             self.composite_intermediate = create_composite_intermediate(
                 &compositor.device,
@@ -2600,7 +3055,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         self.y = y;
         self.width = width;
         self.height = height;
-        self.display_hdr_info = self.surface.display_hdr_info(&compositor.adapter);
+        self.display_hdr_info = self.presentation_surface()?.display_hdr_info(&compositor.adapter);
         pump_preview_window_messages();
         Ok(self.description())
     }
@@ -2615,8 +3070,11 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     pub(super) fn hide(&mut self) -> serde_json::Value {
+        let Some(window) = self.window.as_ref() else {
+            return serde_json::json!({"hidden":false,"offscreen":true,"error":"offscreen renderer has no window to hide","presentCount":self.present_count});
+        };
         unsafe {
-            let _ = ShowWindow(self.window.0, SW_HIDE);
+            let _ = ShowWindow(window.0, SW_HIDE);
         }
         self.visible = false;
         pump_preview_window_messages();
@@ -2624,14 +3082,15 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     pub(super) fn clear_black(&mut self, compositor: &GpuCompositor) -> Result<serde_json::Value> {
+        self.presentation_surface()?;
         pump_preview_window_messages();
-        let frame = match self.surface.get_current_texture() {
+        let frame = match self.presentation_surface()?.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
             | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
             wgpu::CurrentSurfaceTexture::Outdated => {
-                self.surface
+                self.presentation_surface()?
                     .configure(&compositor.device, &self.configuration);
-                match self.surface.get_current_texture() {
+                match self.presentation_surface()?.get_current_texture() {
                     wgpu::CurrentSurfaceTexture::Success(frame)
                     | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
                     status => {
@@ -2731,15 +3190,16 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         temporal_sources: Option<&[&wgpu::Texture]>,
         encoder: &mut wgpu::CommandEncoder,
     ) -> Result<wgpu::SurfaceTexture> {
+        self.presentation_surface()?;
         self.ensure_legacy_video_surface()?;
         pump_preview_window_messages();
-        let frame = match self.surface.get_current_texture() {
+        let frame = match self.presentation_surface()?.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
             | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
             wgpu::CurrentSurfaceTexture::Outdated => {
-                self.surface
+                self.presentation_surface()?
                     .configure(&compositor.device, &self.configuration);
-                match self.surface.get_current_texture() {
+                match self.presentation_surface()?.get_current_texture() {
                     wgpu::CurrentSurfaceTexture::Success(frame)
                     | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
                     status => {
@@ -2951,6 +3411,23 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 "scene-linear ACES2 display pass requires an ACES2 display transform"
             ),
         };
+        self.encode_aces2_display_pipeline(compositor, pipeline, lut_buffer, source,
+            destination, width, height, encoder);
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn encode_aces2_display_pipeline(
+        &self,
+        compositor: &GpuCompositor,
+        pipeline: &wgpu::RenderPipeline,
+        lut_buffer: &wgpu::Buffer,
+        source: &wgpu::Texture,
+        destination: &wgpu::TextureView,
+        width: u32,
+        height: u32,
+        encoder: &mut wgpu::CommandEncoder,
+    ) {
         let source_view = source.create_view(&wgpu::TextureViewDescriptor::default());
         let bind_group = compositor
             .device
@@ -2992,7 +3469,6 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         pass.set_bind_group(0, &bind_group, &[]);
         pass.set_viewport(0.0, 0.0, width as f32, height as f32, 0.0, 1.0);
         pass.draw(0..3, 0..1);
-        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -3015,6 +3491,8 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         if layers.is_empty() {
             bail!("resident scene-linear ACES2 graph requires at least one layer");
         }
+        let scene_layer_count = display_paint_suffix_start(layers, display_transform, depth_of_field, width, height)?;
+        let has_display_paint = scene_layer_count < layers.len();
         if layers.iter().any(|layer| {
             let decoded_temporal = layer.temporal_sources.is_some();
             decoded_temporal != (layer.style.motion_contract_code == 2)
@@ -3024,8 +3502,8 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 "resident scene-linear ACES2 decoded-temporal bindings do not match the motion contract"
             );
         }
-        let base_layer_count = adjustment_base_layer_count.unwrap_or(layers.len());
-        if base_layer_count == 0 || base_layer_count > layers.len() {
+        let base_layer_count = adjustment_base_layer_count.unwrap_or(scene_layer_count);
+        if base_layer_count == 0 || base_layer_count > scene_layer_count {
             bail!("resident scene-linear ACES2 graph has an invalid adjustment split");
         }
         let layer_buffers = layers
@@ -3178,14 +3656,19 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         } else {
             &adjustment_intermediate[(adjustments.len() - 1) % 2]
         };
-        let final_linear = if base_layer_count < layers.len() {
-            for (post_index, layer_index) in (base_layer_count..layers.len()).enumerate() {
+        let final_linear = if base_layer_count < scene_layer_count {
+            // New display graphs may have a scene-paint prefix without an
+            // adjustment pass. Start opposite its last composite slot so the
+            // sampled backdrop never aliases the render attachment. Preserve
+            // the historical scene-only branch's exact pass sequence.
+            let post_slot = if has_display_paint && adjustments.is_empty() { base_layer_count % 2 } else { 0 };
+            for (post_index, layer_index) in (base_layer_count..scene_layer_count).enumerate() {
                 let backdrop = if post_index == 0 {
                     adjusted
                 } else {
-                    &composite_intermediate[(post_index - 1) % 2]
+                    &composite_intermediate[(post_slot + post_index - 1) % 2]
                 };
-                let destination_view = composite_intermediate[post_index % 2]
+                let destination_view = composite_intermediate[(post_slot + post_index) % 2]
                     .create_view(&wgpu::TextureViewDescriptor::default());
                 self.encode_scene_linear_layer(
                     compositor,
@@ -3201,19 +3684,33 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
                     encoder,
                 );
             }
-            &composite_intermediate[(layers.len() - base_layer_count - 1) % 2]
+            &composite_intermediate[(post_slot + scene_layer_count - base_layer_count - 1) % 2]
         } else {
             adjusted
         };
-        self.encode_scene_linear_aces2_display(
-            compositor,
-            display_transform,
-            final_linear,
-            destination,
-            width,
-            height,
-            encoder,
-        )?;
+        if !has_display_paint {
+            self.encode_scene_linear_aces2_display(
+                compositor, display_transform, final_linear, destination, width, height, encoder,
+            )?;
+        } else {
+            // Reuse the same admitted float pair. If the scene's final grade
+            // lives in slot zero, begin in slot one; never sample/write alias.
+            let initial_slot = usize::from(std::ptr::eq(final_linear, &adjustment_intermediate[0]));
+            let display_view = adjustment_intermediate[initial_slot].create_view(&wgpu::TextureViewDescriptor::default());
+            self.encode_aces2_display_pipeline(compositor, &self.scene_to_display_linear_pipeline,
+                &compositor.aces2_rec709_sdr_lut_buffer, final_linear, &display_view, width, height, encoder);
+            for (index, layer_index) in (scene_layer_count..layers.len()).enumerate() {
+                let backdrop = &adjustment_intermediate[(initial_slot + index) % 2];
+                let destination_view = adjustment_intermediate[(initial_slot + index + 1) % 2]
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+                self.encode_scene_linear_layer(compositor, layers[layer_index].source, None,
+                    &layer_buffers[layer_index], None, &matte_buffers[layer_index], backdrop,
+                    &destination_view, width, height, encoder);
+            }
+            let final_display = &adjustment_intermediate[(initial_slot + layers.len() - scene_layer_count) % 2];
+            self.encode_aces2_display_pipeline(compositor, &self.display_linear_output_pipeline,
+                &compositor.aces2_rec709_sdr_lut_buffer, final_display, destination, width, height, encoder);
+        }
         Ok((false, false))
     }
 
@@ -3226,15 +3723,16 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         adjustment_base_layer_count: Option<usize>,
         depth_of_field: Option<&crate::engine_graph::EngineVideoDepthOfFieldPlan>,
     ) -> Result<serde_json::Value> {
+        self.presentation_surface()?;
         self.ensure_scene_linear_aces2_surface(display_transform)?;
         pump_preview_window_messages();
-        let frame = match self.surface.get_current_texture() {
+        let frame = match self.presentation_surface()?.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
             | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
             wgpu::CurrentSurfaceTexture::Outdated => {
-                self.surface
+                self.presentation_surface()?
                     .configure(&compositor.device, &self.configuration);
-                match self.surface.get_current_texture() {
+                match self.presentation_surface()?.get_current_texture() {
                     wgpu::CurrentSurfaceTexture::Success(frame)
                     | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
                     status => {
@@ -3297,6 +3795,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
             .filter(|layer| layer.temporal_sources.is_some())
             .map(|layer| layer.style.motion_sample_count as usize)
             .sum::<usize>();
+        let display_paint_layer_count = layers.iter().filter(|layer| layer.display_referred).count();
         Ok(serde_json::json!({
             "sceneLinearExecution": true,
             "workingColorSpace": "linear_rec709",
@@ -3312,7 +3811,11 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
             "productPathCpuPixelCopies": 0,
             "compositeExecutionMode": if depth_of_field_executed { scene_depth_of_field::EXECUTION_MODE } else if depth_executed { scene_depth::EXECUTION_MODE } else { "scene-linear-rgba16f-ping-pong/v1" },
             "compositeLayerCount": layers.len(),
-            "compositeFullFramePassCount": if depth_executed { 2 + usize::from(depth_of_field_executed) } else { layers.len() + adjustments.len() + 1 },
+            "compositeFullFramePassCount": if depth_executed { 2 + usize::from(depth_of_field_executed) } else { layers.len() + adjustments.len() + 1 + usize::from(display_paint_layer_count != 0) },
+            "displayPaintLayerCount": display_paint_layer_count,
+            "displayPaintExecutionMode": if display_paint_layer_count == 0 { "none" } else { "display-linear-rec709-source-over/v1" },
+            "displayPaintCompositionBoundary": if display_paint_layer_count == 0 { "none" } else { "after_aces2_before_output_encoding" },
+            "displayPaintOutputEncodingCount": usize::from(display_paint_layer_count != 0),
             "compositeMaximumLayersPerPass": if depth_executed { layers.len() } else { 1 },
             "depthExecutionMode": if depth_executed { scene_depth::EXECUTION_MODE } else { "none" },
             "depthFormat": if depth_executed { "depth32_float" } else { "none" },
@@ -3331,7 +3834,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
             "matteExecutionMode": if matte_count == 0 { "none" } else { "sampled-track-matte-scene-linear/v1" },
             "mattePassCount": matte_count,
             "adjustmentExecutionMode": if adjustments.is_empty() { "none" } else if adjustment_base_layer_count.is_some() { "pre-typography-scene-linear/v1" } else { "trailing-scene-linear/v1" },
-            "adjustmentBaseLayerCount": adjustment_base_layer_count.unwrap_or(layers.len()),
+            "adjustmentBaseLayerCount": adjustment_base_layer_count.unwrap_or(layers.len() - display_paint_layer_count),
             "adjustmentPassCount": adjustments.len(),
             "surface": self.description(),
         }))
@@ -3349,8 +3852,49 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         height: u32,
         output_path: &Path,
     ) -> Result<serde_json::Value> {
+        self.verify_scene_linear_aces2_layers_with_resources(
+            compositor, display_transform, layers, adjustments, adjustment_base_layer_count,
+            depth_of_field, width, height, output_path, self.is_offscreen(),
+        )
+    }
+
+    // The isolated branch also remains the native-window verification path and
+    // the independent fresh-attachment control for resident resource reuse.
+    #[allow(clippy::too_many_arguments)]
+    fn verify_scene_linear_aces2_layers_with_resources(
+        &self,
+        compositor: &GpuCompositor,
+        display_transform: crate::engine_graph::EngineDisplayTransform,
+        layers: &[VideoSurfaceLayer<'_>],
+        adjustments: &[VideoVisualStyle],
+        adjustment_base_layer_count: Option<usize>,
+        depth_of_field: Option<&crate::engine_graph::EngineVideoDepthOfFieldPlan>,
+        width: u32,
+        height: u32,
+        output_path: &Path,
+        reuse_resident: bool,
+    ) -> Result<serde_json::Value> {
+        if self.is_offscreen() && (width != self.width || height != self.height) {
+            bail!("offscreen scene-linear output dimensions must match its admitted resident target");
+        }
         self.ensure_scene_linear_aces2_surface(display_transform)?;
-        let target = compositor.device.create_texture(&wgpu::TextureDescriptor {
+        let isolated_target;
+        let isolated_composite;
+        let isolated_adjustment;
+        let isolated_depth;
+        let (target, composite_intermediate, adjustment_intermediate, depth_texture) = if reuse_resident {
+            let target = &self.composite_intermediate[0];
+            if !self.is_offscreen() || target.width() != width || target.height() != height
+                || target.format() != self.configuration.format {
+                bail!("resident verification resources differ from their admitted offscreen target");
+            }
+            // This legacy output-format pair is not sampled by the ACES2 graph.
+            // All scene work uses the distinct RGBA16F pairs below; the final
+            // encoding pass clears/writes this target before synchronous readback.
+            (target, &self.scene_linear_composite_intermediate,
+                &self.scene_linear_adjustment_intermediate, &self.scene_depth_texture)
+        } else {
+        isolated_target = compositor.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Editkin isolated scene-linear ACES2 verification target"),
             size: wgpu::Extent3d {
                 width,
@@ -3364,25 +3908,27 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
-        let destination = target.create_view(&wgpu::TextureViewDescriptor::default());
-        let composite_intermediate = create_composite_intermediate(
+        isolated_composite = create_composite_intermediate(
             &compositor.device,
             width,
             height,
             wgpu::TextureFormat::Rgba16Float,
         );
-        let adjustment_intermediate = create_composite_intermediate(
+        isolated_adjustment = create_composite_intermediate(
             &compositor.device,
             width,
             height,
             wgpu::TextureFormat::Rgba16Float,
         );
-        let depth_texture = scene_depth::create_texture(
+        isolated_depth = scene_depth::create_texture(
             &compositor.device,
             width,
             height,
             "Editkin isolated 2.5D verification Depth32Float",
         );
+        (&isolated_target, &isolated_composite, &isolated_adjustment, &isolated_depth)
+        };
+        let destination = target.create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder =
             compositor
                 .device
@@ -3396,9 +3942,9 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
             adjustments,
             adjustment_base_layer_count,
             depth_of_field,
-            &composite_intermediate,
-            &adjustment_intermediate,
-            &depth_texture,
+            composite_intermediate,
+            adjustment_intermediate,
+            depth_texture,
             &destination,
             width,
             height,
@@ -3407,7 +3953,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         compositor.queue.submit([encoder.finish()]);
         let (output_hash, rgba) = consume_surface_with_wgpu(
             compositor,
-            &target,
+            target,
             self.configuration.format,
             width,
             height,
@@ -3439,8 +3985,16 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
             .filter(|layer| layer.temporal_sources.is_some())
             .map(|layer| layer.style.motion_sample_count as usize)
             .sum::<usize>();
+        let display_paint_layer_count = layers.iter().filter(|layer| layer.display_referred).count();
         Ok(serde_json::json!({
             "verificationReadback": true,
+            "verificationResourceMode": if reuse_resident { "resident-offscreen-attachments/v1" } else { "isolated-attachments/v1" },
+            "verificationFullFrameTextureCreations": if reuse_resident { 0 } else { 6 },
+            "verificationAdditionalResidentBytes": 0,
+            "outputReadbackCopies": 1,
+            "offscreen": self.is_offscreen(),
+            "nativeSurfacePresented": false,
+            "renderTarget": self.description(),
             "productPathCpuPixelCopies": 0,
             "outputWritten": true,
             "outputHash": output_hash,
@@ -3457,7 +4011,11 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
             "inputTransform": scene_linear_input_transform(layers),
             "compositeExecutionMode": if depth_of_field_executed { scene_depth_of_field::EXECUTION_MODE } else if depth_executed { scene_depth::EXECUTION_MODE } else { "scene-linear-rgba16f-ping-pong/v1" },
             "compositeLayerCount": layers.len(),
-            "compositeFullFramePassCount": if depth_executed { 2 + usize::from(depth_of_field_executed) } else { layers.len() + adjustments.len() + 1 },
+            "compositeFullFramePassCount": if depth_executed { 2 + usize::from(depth_of_field_executed) } else { layers.len() + adjustments.len() + 1 + usize::from(display_paint_layer_count != 0) },
+            "displayPaintLayerCount": display_paint_layer_count,
+            "displayPaintExecutionMode": if display_paint_layer_count == 0 { "none" } else { "display-linear-rec709-source-over/v1" },
+            "displayPaintCompositionBoundary": if display_paint_layer_count == 0 { "none" } else { "after_aces2_before_output_encoding" },
+            "displayPaintOutputEncodingCount": usize::from(display_paint_layer_count != 0),
             "compositeMaximumLayersPerPass": if depth_executed { layers.len() } else { 1 },
             "depthExecutionMode": if depth_executed { scene_depth::EXECUTION_MODE } else { "none" },
             "depthFormat": if depth_executed { "depth32_float" } else { "none" },
@@ -3468,7 +4026,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
             "depthOfFieldPassCount": usize::from(depth_of_field_executed),
             "depthOfField": if depth_of_field_executed { serde_json::to_value(depth_of_field)? } else { serde_json::Value::Null },
             "adjustmentExecutionMode": if adjustments.is_empty() { "none" } else if adjustment_base_layer_count.is_some() { "pre-typography-scene-linear/v1" } else { "trailing-scene-linear/v1" },
-            "adjustmentBaseLayerCount": adjustment_base_layer_count.unwrap_or(layers.len()),
+            "adjustmentBaseLayerCount": adjustment_base_layer_count.unwrap_or(layers.len() - display_paint_layer_count),
             "adjustmentPassCount": adjustments.len(),
             "effectExecutionMode": if shader_operation_count + built_in_effect_count == 0 { "none" } else { "scene-linear-bounded-effect-stack/v1" },
             "shaderOperationCount": shader_operation_count,
@@ -3489,6 +4047,8 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         adjustments: &[VideoVisualStyle],
         adjustment_base_layer_count: Option<usize>,
     ) -> Result<serde_json::Value> {
+        self.presentation_surface()?;
+        reject_scene_linear_overlays_in_legacy(layers)?;
         self.ensure_legacy_video_surface()?;
         if layers.is_empty() {
             bail!("native common-video composite requires at least one staged video/overlay layer");
@@ -3582,13 +4142,13 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
             bytemuck::bytes_of(&present_style),
         );
         pump_preview_window_messages();
-        let frame = match self.surface.get_current_texture() {
+        let frame = match self.presentation_surface()?.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
             | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
             wgpu::CurrentSurfaceTexture::Outdated => {
-                self.surface
+                self.presentation_surface()?
                     .configure(&compositor.device, &self.configuration);
-                match self.surface.get_current_texture() {
+                match self.presentation_surface()?.get_current_texture() {
                     wgpu::CurrentSurfaceTexture::Success(frame)
                     | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
                     status => bail!(
@@ -3640,6 +4200,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
                     &mut encoder,
                 );
                 let adjusted_base = VideoSurfaceLayer {
+            display_referred: false,
                     source: &self.adjustment_intermediate[adjusted_texture_index],
                     temporal_sources: None,
                     source_width: self.width,
@@ -4521,6 +5082,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         height: u32,
         output_path: &Path,
     ) -> Result<serde_json::Value> {
+        reject_scene_linear_overlays_in_legacy(layers)?;
         self.ensure_legacy_video_surface()?;
         if layers.is_empty() {
             bail!("common-video composite verification requires at least one video/overlay layer");
@@ -4604,6 +5166,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
                     &mut encoder,
                 );
                 let adjusted_base = VideoSurfaceLayer {
+            display_referred: false,
                     source: &adjustment_intermediate[adjusted_texture_index],
                     temporal_sources: None,
                     source_width: width,
@@ -4709,6 +5272,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     fn presented(&mut self) {
+        let Some(window) = self.window.as_ref() else { return; };
         self.present_count += 1;
         if self.visible {
             return;
@@ -4717,7 +5281,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
             screen_position(self.owner, self.x, self.y).unwrap_or((self.x, self.y));
         unsafe {
             let _ = SetWindowPos(
-                self.window.0,
+                window.0,
                 Some(HWND_TOP),
                 screen_x,
                 screen_y,
@@ -4725,7 +5289,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 self.height as i32,
                 SWP_NOACTIVATE | SWP_SHOWWINDOW,
             );
-            let _ = ShowWindow(self.window.0, SW_SHOWNA);
+            let _ = ShowWindow(window.0, SW_SHOWNA);
         }
         self.visible = true;
         pump_preview_window_messages();
@@ -4733,26 +5297,33 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
     pub(super) fn description(&self) -> serde_json::Value {
         let live_headroom = self.display_hdr_info.tone_map_headroom();
+        let offscreen = self.is_offscreen();
         serde_json::json!({
-            "bound": true,
-            "backend": "Dx12",
+            "bound": !offscreen,
+            "offscreen": offscreen,
+            "residentRenderTarget": true,
+            "renderTargetContract": if offscreen { "editkin.resident-offscreen-render-target/v1" } else { "editkin.native-preview-surface/v1" },
+            "nativeWindow": self.window.is_some(),
+            "backend": self.video_backend,
+            "videoAdapter": self.video_adapter,
+            "videoDeviceType": self.video_device_type,
             "surfaceFormat": format!("{:?}", self.configuration.format),
-            "surfaceColorSpace": format!("{:?}", self.configuration.color_space),
+            "surfaceColorSpace": if offscreen { serde_json::Value::Null } else { serde_json::json!(format!("{:?}", self.configuration.color_space)) },
             "requestedColorSpace": self.color_space_contract.requested_name(),
             "pixelContract": self.color_space_contract.pixel_contract(),
-            "legacyVideoPresentationAllowed": self.color_space_contract.legacy_video_allowed(),
+            "legacyVideoPresentationAllowed": !offscreen && self.color_space_contract.legacy_video_allowed(),
             "hdrTransportConfigured": !self.color_space_contract.legacy_video_allowed(),
-            "dxgiColorSpaceConfiguration": "wgpu-dx12-IDXGISwapChain3-SetColorSpace1/v1",
+            "dxgiColorSpaceConfiguration": if offscreen { "none" } else { "wgpu-dx12-IDXGISwapChain3-SetColorSpace1/v1" },
             "displayHdrInfo": display_hdr_info_json(&self.display_hdr_info),
             "liveDisplayHeadroomMeasured": live_headroom.is_some(),
-            "physicalDisplayHdrVisibility": "advisory-unverified",
-            "presentMode": format!("{:?}", self.configuration.present_mode),
+            "physicalDisplayHdrVisibility": if offscreen { "not_applicable" } else { "advisory-unverified" },
+            "presentMode": if offscreen { serde_json::Value::Null } else { serde_json::json!(format!("{:?}", self.configuration.present_mode)) },
             "width": self.width,
             "height": self.height,
             "presentCount": self.present_count,
             "visible": self.visible,
             "cpuPixelReadbacks": 0,
-            "nativeSwapChain": true,
+            "nativeSwapChain": self.surface.is_some(),
         })
     }
 }
@@ -4836,6 +5407,8 @@ impl VideoInteropSession {
             "adapterLuid": self.decode.adapter_luid,
             "width": self.decode.visible_width,
             "height": self.decode.visible_height,
+            "actualNativeSourceProfile": self.decode.native_source_profile,
+            "actualNativeSourceProfileError": self.decode.native_source_profile_error,
             "decodePathCpuPixelCopies": 0,
             "gpuProcessingPassesPerFrame": 2,
             "verificationReadback": true,
@@ -4855,6 +5428,12 @@ impl VideoInteropSession {
         (self.decode.visible_width, self.decode.visible_height)
     }
 
+    pub(super) fn assert_floating_source_profile(&self, expected_coded_width: u32, expected_coded_height: u32, expected_dar: f64) -> Result<serde_json::Value> {
+        floating_source_profile_receipt(self.decode.native_source_profile.as_ref(),
+            self.decode.native_source_profile_error.as_deref(), self.decode.visible_width, self.decode.visible_height,
+            expected_coded_width, expected_coded_height, expected_dar)
+    }
+
     pub(super) fn frame_rate(&self) -> (u32, u32) {
         (
             self.decode.frame_rate_numerator,
@@ -4872,6 +5451,7 @@ impl VideoInteropSession {
             .get(slot_index)
             .context("staged common-video frame ring slot is out of bounds")?;
         Ok(VideoSurfaceLayer {
+            display_referred: false,
             source: &slot.staged_texture,
             temporal_sources: None,
             source_width: self.decode.visible_width,
@@ -5351,6 +5931,7 @@ impl VideoInteropSession {
                 .staged_texture;
         }
         Ok(VideoSurfaceLayer {
+            display_referred: false,
             source: sources[0],
             temporal_sources: Some(sources),
             source_width: self.decode.visible_width,
@@ -5848,6 +6429,8 @@ struct VideoWorkerInitialization {
     height: u32,
     wrapped_textures: Vec<wgpu::Texture>,
     staged_textures: Vec<wgpu::Texture>,
+    native_source_profile: Option<NativeVideoSourceProfile>,
+    native_source_profile_error: Option<String>,
 }
 
 struct VideoWorkerPreparedStage {
@@ -5890,6 +6473,8 @@ pub(super) struct VideoInteropWorker {
     wrapped_textures: Vec<wgpu::Texture>,
     staged_textures: Vec<wgpu::Texture>,
     instance_id: u64,
+    native_source_profile: Option<NativeVideoSourceProfile>,
+    native_source_profile_error: Option<String>,
 }
 
 static NEXT_VIDEO_WORKER_INSTANCE_ID: AtomicU64 = AtomicU64::new(1);
@@ -5920,6 +6505,8 @@ impl VideoInteropWorker {
                     description: session.description(),
                     width,
                     height,
+                    native_source_profile: session.decode.native_source_profile.clone(),
+                    native_source_profile_error: session.decode.native_source_profile_error.clone(),
                     wrapped_textures: session
                         .frame_ring
                         .iter()
@@ -6024,6 +6611,8 @@ impl VideoInteropWorker {
             wrapped_textures: initialization.wrapped_textures,
             staged_textures: initialization.staged_textures,
             instance_id: NEXT_VIDEO_WORKER_INSTANCE_ID.fetch_add(1, Ordering::Relaxed),
+            native_source_profile: initialization.native_source_profile,
+            native_source_profile_error: initialization.native_source_profile_error,
         })
     }
 
@@ -6048,6 +6637,11 @@ impl VideoInteropWorker {
 
     pub(super) fn dimensions(&self) -> (u32, u32) {
         (self.width, self.height)
+    }
+
+    pub(super) fn assert_floating_source_profile(&self, expected_coded_width: u32, expected_coded_height: u32, expected_dar: f64) -> Result<serde_json::Value> {
+        floating_source_profile_receipt(self.native_source_profile.as_ref(), self.native_source_profile_error.as_deref(),
+            self.width, self.height, expected_coded_width, expected_coded_height, expected_dar)
     }
 
     pub(super) fn frame_rate(&self) -> (u32, u32) {
@@ -6148,6 +6742,7 @@ impl VideoInteropWorker {
             .get(slot_index)
             .context("worker staged surface slot is out of bounds")?;
         Ok(VideoSurfaceLayer {
+            display_referred: false,
             source,
             temporal_sources: None,
             source_width: self.width,
@@ -6791,6 +7386,13 @@ unsafe fn create_decode_context(compositor: &GpuCompositor, input: &Path) -> Res
         reader.SetStreamSelection(video_stream, true)?;
     }
 
+    // Optional observational metadata never changes the legacy decoder. Floating admission
+    // uses this exact native type, and refuses a read failure rather than inventing defaults.
+    let (native_source_profile, native_source_profile_error) = match read_native_source_profile(&reader, video_stream) {
+        Ok(profile) => (Some(profile), None),
+        Err(error) => (None, Some(format!("{error:#}"))),
+    };
+
     let media_type: IMFMediaType =
         unsafe { MFCreateMediaType() }.context("create NV12 media type")?;
     unsafe {
@@ -6820,6 +7422,8 @@ unsafe fn create_decode_context(compositor: &GpuCompositor, input: &Path) -> Res
         visible_height,
         frame_rate_numerator,
         frame_rate_denominator,
+        native_source_profile,
+        native_source_profile_error,
     })
 }
 
@@ -7364,3 +7968,11 @@ fn consume_bgra_with_wgpu(
 #[cfg(test)]
 #[path = "windows_video_white_balance_tests.rs"]
 mod white_balance_tests;
+
+#[cfg(test)]
+#[path = "windows_video_overlay_tests.rs"]
+mod overlay_tests;
+
+#[cfg(test)]
+#[path = "offscreen_resource_reuse_tests.rs"]
+mod offscreen_resource_reuse_tests;

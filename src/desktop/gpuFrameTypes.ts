@@ -2,10 +2,20 @@ import type {
   GpuEngineDepthOfFieldCoverage, GpuEngineGraphCoverage, GpuEngineScene25dCoverage,
   GpuEngineVfxSimulationCoverage, GpuEngineVideoAdjustmentReceipt, GpuEngineVideoCaptionReceipt,
   GpuEngineVideoControllerReceipt, GpuEngineVideoDecodeSchedule, GpuEngineVideoMotionBlurReceipt,
-  GpuEngineVideoMotionGraphicReceipt, GpuEngineVideoParticleReceipt, GpuEngineVideoResourcePlan,
+  GpuEngineVideoMotionGraphicReceipt, GpuEngineVideoNativeMotionPaintReceipt, GpuEngineVideoParticleReceipt, GpuEngineVideoResourcePlan,
   GpuEngineVideoTemporalSamplingReceipt, GpuEngineVideoVisualGraph,
 } from "./gpuTypes";
 import type { GpuEngineDisplayTransform, GpuNativePreviewSurface } from "./nativePreviewTypes";
+import type { NativeFloatingMaterialReceipt } from "../render/nativeFloatingVideoFrameReceipt";
+
+/** Full offscreen graph result, never a HWND presented frame. Receipt admission
+ * narrows each field before this untrusted IPC payload can become visible. */
+export interface GpuEngineVideoPngPreviewFrame {
+  schema: "editkin.engine-video-png-preview/v1";
+  pngBytes: readonly number[];
+  pngSha256: string;
+  receipt: Record<string, unknown>;
+}
 
 export interface GpuVideoPreviewFrame {
   endOfStream: boolean;
@@ -107,7 +117,13 @@ export interface GpuEngineVideoPresentedFrame {
     endOfStream?: boolean;
     frame?: GpuVideoStagedFrame["receipt"]["frame"];
     surface: GpuNativePreviewSurface;
-    productPathCpuPixelCopies: 0;
+    productPathCpuPixelCopies: number;
+    decodedVideoCpuPixelCopies?: 0;
+    nativePaintCpuUploadBytes?: number;
+    nativeMotionPaintResidentTextureCount?: number;
+    nativeMotionPaintTextureUploads?: number;
+    activeNativeMotionPaints?: GpuEngineVideoNativeMotionPaintReceipt[];
+    activeFloatingVideoFrames?: NativeFloatingMaterialReceipt[];
     sceneLinearExecution?: true;
     workingColorSpace?: "linear_rec709";
     workingFormat?: "rgba16_float";

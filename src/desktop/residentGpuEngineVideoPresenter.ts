@@ -5,6 +5,7 @@ import {
   expectedEngineVideoControllers,
   expectedEngineVideoLayers,
   expectedEngineVideoMotionGraphics,
+  expectedEngineVideoNativeMotionPaints,
   expectedEngineVideoParticles,
 } from "./residentGpuPreviewExpectations";
 import {
@@ -43,8 +44,18 @@ import { engineVideoDecodeCadence, engineVideoDecodeScheduleMatches, engineVideo
 import type { NativePreviewBounds } from "./residentGpuPreviewTypes";
 import type { GpuPreviewApi } from "./gpuPreviewApiTypes";
 import type { GpuEngineVideoPresentedFrame } from "./gpuFrameTypes";
+import { prepareNativeMotionPaintReceiptExpectations, assertNativeMotionPaintLoadReceipt, assertNativeMotionPaintFrameReceipt,
+  type PreparedNativeMotionPaintReceiptExpectations } from "../motion/nativeMotionPaintReceipt";
+import { assertNativeFloatingLoadReceipt, assertNativeFloatingFrameReceipt, nativeFloatRuntimeMatches } from "../render/nativeFloatingVideoFrameReceipt";
+import type { EngineRenderGraph } from "../render/engineGraph";
 
 interface MutableRef<T> { current: T }
+const nativePaintReceipts = new WeakMap<MutableRef<string>, PreparedNativeMotionPaintReceiptExpectations>();
+const nativeFloatingReceiptGraphs = new WeakMap<MutableRef<string>, EngineRenderGraph>();
+export interface ResidentEngineVideoBakedIds {
+  readonly motionGraphicIds: readonly string[];
+  readonly captionIds: readonly string[];
+}
 export interface EngineVideoPendingFrame {
   kind: "engine-video";
   preview: GpuEngineVideoPreviewGraph;
@@ -71,7 +82,7 @@ export interface EngineVideoPreviewContext {
   setFallbackReason: (value: string | undefined) => void;
 }
 
-export async function presentResidentEngineVideo(context: EngineVideoPreviewContext): Promise<void> {
+export async function presentResidentEngineVideo(context: EngineVideoPreviewContext): Promise<ResidentEngineVideoBakedIds | undefined> {
   const {
     next, desktop, imageSessionRef, videoSessionRef, engineVideoSessionRef,
     loadedImageStructureRef, loadedVideoStructureRef, loadedEngineVideoStructureRef,
@@ -91,6 +102,18 @@ if (loadedEngineVideoStructureRef.current !== structureKey) {
   if (loadedEngineVideoStructureRef.current) {
     await desktop!.releaseGpuEngineVideoPreviewSession!(engineVideoSessionRef.current).catch(() => undefined);
   }
+  nativePaintReceipts.delete(engineVideoSessionRef);
+  nativeFloatingReceiptGraphs.delete(engineVideoSessionRef);
+  const hasFloating = next.preview.graph.nodes.some(node => node.kind === "floating_video_frame_2d");
+  if (hasFloating) {
+    if (!desktop.gpuEngineStatus) throw new Error("浮空影片預覽缺少 current native runtime 能力讀回，不能使用舊 renderer");
+    const status = await desktop.gpuEngineStatus();
+    if (next.token !== tokenRef.current) return undefined;
+    if (!status.available || !nativeFloatRuntimeMatches(status.ready)) {
+      throw new Error("浮空影片預覽需要 editkin.native-floating-frame-material/v1 的 matching native runtime");
+    }
+  }
+  const paintExpected = await prepareNativeMotionPaintReceiptExpectations(next.preview.graph);
   const loaded = await desktop!.loadGpuEngineVideoPreviewSession!(
     engineVideoSessionRef.current,
     next.preview.graph,
@@ -100,11 +123,16 @@ if (loadedEngineVideoStructureRef.current !== structureKey) {
   // Once native creation succeeds, every later validation failure must be able
   // to release this exact session. Do not leave it invisible to invalidation.
   loadedEngineVideoStructureRef.current = structureKey;
+  assertNativeFloatingLoadReceipt(next.preview.graph, loaded);
+  if (hasFloating) nativeFloatingReceiptGraphs.set(engineVideoSessionRef, next.preview.graph);
+  assertNativeMotionPaintLoadReceipt(paintExpected, next.preview.timelineFrame, loaded);
+  nativePaintReceipts.set(engineVideoSessionRef, paintExpected);
   const required = next.preview.graph.nodes.map((node) => node.id);
   const expectedLayers = expectedEngineVideoLayers(next.preview.graph);
   const expectedControllers = expectedEngineVideoControllers(next.preview.graph);
   const expectedCaptions = expectedEngineVideoCaptions(next.preview.graph);
   const expectedMotionGraphics = expectedEngineVideoMotionGraphics(next.preview.graph);
+  const expectedNativePaints = expectedEngineVideoNativeMotionPaints(next.preview.graph);
   const expectedParticles = expectedEngineVideoParticles(next.preview.graph);
   const expectedAdjustments = expectedEngineVideoAdjustments(next.preview.graph);
   const expectedMatteCount = expectedLayers.filter((layer) => layer.matteLayerIndex !== undefined).length;
@@ -112,11 +140,13 @@ if (loadedEngineVideoStructureRef.current !== structureKey) {
   const expectedParentCount = expectedLayers.filter((layer) => layer.parentLayerIndex !== undefined || layer.parentControllerIndex !== undefined).length
     + expectedControllers.filter((controller) => controller.parentLayerIndex !== undefined || controller.parentControllerIndex !== undefined).length;
   const expectedTypedBlend = expectedLayers.slice(1).some((layer) => layer.blendMode !== "normal" || Math.abs(layer.compositeOpacity - 1) > .000001);
-  const expectedCompositeMode = expectedAdjustments.length ? "video-trailing-adjustment/v1"
+  const expectedCompositeMode = expectedAdjustments.length && expectedCaptions.length + expectedMotionGraphics.length + expectedNativePaints.length > 0 ? "video-pre-typography-adjustment/v1"
+    : expectedAdjustments.length ? "video-trailing-adjustment/v1"
     : expectedMatteCount ? "typed-track-matte/v1"
     : expectedPrecompositionCount ? "resolved-precomposition/v1"
     : expectedControllers.length ? "typed-controller-parent/v1"
     : expectedParentCount ? "typed-parent-transform/v1"
+    : expectedNativePaints.length ? "video-native-motion-paint-source-over/v1"
     : expectedMotionGraphics.length ? "video-motion-graphic-source-over/v1"
     : expectedCaptions.length ? "video-caption-source-over/v1"
     : expectedParticles.length ? "video-particle-source-over/v1"
@@ -229,7 +259,7 @@ if (loadedEngineVideoStructureRef.current !== structureKey) {
     loaded.resourcePlan,
     next.preview.graph,
     expectedLayers.length,
-    expectedParticles.length + expectedCaptions.length + expectedMotionGraphics.length,
+    expectedParticles.length + expectedCaptions.length + expectedMotionGraphics.length + expectedNativePaints.length,
     expectedAdjustments.length,
     expectedMatteCount,
     expectedParticles.length,
@@ -261,6 +291,9 @@ if (loadedEngineVideoStructureRef.current !== structureKey) {
   }
 }
 const sceneLinearAces2OutputTransform = sceneLinearAces2Output(next.preview.graph);
+// Superseding a queue item is distinct from retiring its whole owner. Skip it
+// without dropping the latest pending item or recovering a healthy device.
+if (next.token !== tokenRef.current) return undefined;
 const surfaceRequest = {
   ...next.nativeBounds,
   surfaceColorSpace: sceneLinearAces2OutputTransform === "rec2100_pq_1000" ? "rec2100_pq_1000" as const : "srgb" as const,
@@ -269,6 +302,7 @@ const nextBoundsKey = boundsKey(surfaceRequest);
 if (surfaceBoundRef.current && surfaceColorSpaceRef.current !== surfaceRequest.surfaceColorSpace) {
   await releaseSurface();
 }
+let rebound = false;
 if (!surfaceBoundRef.current || surfaceBoundsKeyRef.current !== nextBoundsKey) {
   const surface = await desktop!.bindGpuPreviewSurface!(surfaceRequest);
   const surfaceValid = sceneLinearAces2OutputTransform
@@ -278,6 +312,13 @@ if (!surfaceBoundRef.current || surfaceBoundsKeyRef.current !== nextBoundsKey) {
   surfaceBoundRef.current = true;
   surfaceBoundsKeyRef.current = nextBoundsKey;
   surfaceColorSpaceRef.current = surfaceRequest.surfaceColorSpace;
+  rebound = true;
+}
+if (next.token !== tokenRef.current) {
+  // Repositioning an existing native surface does not hide its actual window.
+  // Retire that exact surface before the latest queue item binds again.
+  if (rebound) await releaseSurface();
+  return undefined;
 }
 const tolerance = Math.min(.25, .5 / Math.max(1, next.fps));
 const presented = await desktop!.presentGpuEngineVideoPreviewFrame!(
@@ -285,30 +326,41 @@ const presented = await desktop!.presentGpuEngineVideoPreviewFrame!(
   next.preview.timelineFrame,
   tolerance,
 );
-validateResidentEngineVideoFrame(next.preview, presented);
+const bakedIds = validateResidentEngineVideoFrame(next.preview, presented, nativePaintReceipts.get(engineVideoSessionRef),
+  nativeFloatingReceiptGraphs.get(engineVideoSessionRef));
 if (next.token === tokenRef.current) {
   setFrameUrl(undefined);
   setNativeSurfaceActive(true);
   setFallbackReason(undefined);
 }
+return bakedIds;
 }
 
 /** The same detailed receipt checks serve manual presentation and bounded
  * diagnostic sampling of native-autonomous playback. Never issue a new frame
  * request merely to inspect the frame the native producer already presented. */
-export function validateResidentEngineVideoFrame(preview: GpuEngineVideoPreviewGraph, presented: GpuEngineVideoPresentedFrame): void {
+export function validateResidentEngineVideoFrame(preview: GpuEngineVideoPreviewGraph, presented: GpuEngineVideoPresentedFrame,
+  paintExpected?: PreparedNativeMotionPaintReceiptExpectations, floatingReceiptGraph?: EngineRenderGraph): ResidentEngineVideoBakedIds {
 const next = { preview };
 const sceneLinearAces2OutputTransform = sceneLinearAces2Output(preview.graph);
 const receipt = presented.receipt;
 if (receipt.timelineFrame !== preview.timelineFrame) throw new Error("原生預覽回執不是指定影格");
+if (preview.graph.nodes.some(node => node.kind === "floating_video_frame_2d") && floatingReceiptGraph !== preview.graph) {
+  throw new Error("原生浮空影片影格缺少此 session 的同 graph 載入收據 owner");
+}
+assertNativeFloatingFrameReceipt(preview.graph, preview.timelineFrame, receipt);
 const frame = receipt.frame;
 const coverageComplete = receipt.engineGraph.directExecution === true
-  && !receipt.engineGraph.blockedNodeIds.length && !receipt.engineGraph.ignoredNodeIds.length;
+  && !receipt.engineGraph.blockedNodeIds.length && !receipt.engineGraph.ignoredNodeIds.length
+  && preview.graph.nodes.every(node => receipt.engineGraph.executedNodeIds.includes(node.id));
 const expectedLayers = expectedEngineVideoLayers(next.preview.graph);
 const expectedControllers = expectedEngineVideoControllers(next.preview.graph);
 const expectedCaptions = expectedEngineVideoCaptions(next.preview.graph);
 const expectedActiveCaptions = expectedCaptions.filter((caption) => captionActiveAt(caption, next.preview.timelineFrame));
 const expectedMotionGraphics = expectedEngineVideoMotionGraphics(next.preview.graph);
+const expectedNativePaints = expectedEngineVideoNativeMotionPaints(next.preview.graph);
+if (expectedNativePaints.length && !paintExpected) throw new Error("原生 paint 影格缺少此 session 的載入收據 owner");
+const nativePaintWork = paintExpected ? assertNativeMotionPaintFrameReceipt(paintExpected, preview.timelineFrame, receipt) : undefined;
 const expectedParticles = expectedEngineVideoParticles(next.preview.graph);
 const expectedActiveMotionGraphics = expectedMotionGraphics
   .filter((graphic) => motionGraphicExpectedSample(graphic, next.preview.graph, next.preview.timelineFrame) !== undefined);
@@ -394,7 +446,8 @@ const activeLayersValid = Boolean(receipt.visualLayersApplied)
       && engineVisualMatches(layer.visualGraph, expected!, expectedLayers, expectedControllers, next.preview.graph, next.preview.timelineFrame, true)
       && engineVisualMatches(receipt.visualLayers![index], expected!, expectedLayers, expectedControllers, next.preview.graph, next.preview.timelineFrame, true);
   });
-const activeSurfaceLayerCount = (receipt.layers?.length ?? 0) + activeParticleReceipts.length + (receipt.activeCaptions?.length ?? 0) + (receipt.activeMotionGraphics?.length ?? 0);
+const activeSurfaceLayerCount = (receipt.layers?.length ?? 0) + activeParticleReceipts.length + (receipt.activeCaptions?.length ?? 0)
+  + (receipt.activeMotionGraphics?.length ?? 0) + (nativePaintWork?.activeGraphicIds.length ?? 0);
 const fusedCompositeValid = receipt.surface.compositeExecutionMode === "fused-four-layer/v1"
   && receipt.surface.compositeLayerCount === activeSurfaceLayerCount
   && receipt.surface.compositeDirtyRectLayerCount === 0
@@ -415,7 +468,7 @@ const compositeExecutionValid = sceneLinearAces2
 const matteExecutionValid = matteExecutionReceiptMatches(receipt, sceneLinearAces2);
 const effectExecutionValid = !sceneLinearAces2 || sceneLinearEffectReceiptMatches(receipt);
 const sceneLinearAdjustmentMode = expectedActiveAdjustments.length === 0 ? "none"
-  : expectedActiveCaptions.length + expectedActiveMotionGraphics.length > 0
+  : expectedActiveCaptions.length + expectedActiveMotionGraphics.length + (nativePaintWork?.activeGraphicIds.length ?? 0) > 0
   ? "pre-typography-scene-linear/v1" : "trailing-scene-linear/v1";
 const adjustmentExecutionValid = sceneLinearAces2
   ? receipt.adjustmentExecutionMode === sceneLinearAdjustmentMode
@@ -427,7 +480,7 @@ const adjustmentExecutionValid = sceneLinearAces2
   : (receipt.surface.adjustmentExecutionMode == null || receipt.surface.adjustmentExecutionMode === "none")
     && (receipt.surface.adjustmentPassCount ?? 0) === 0;
 const sceneLinearContractValid = !sceneLinearAces2
-  || sceneLinearAces2PresentContractValid(receipt, sceneLinearAces2OutputTransform, activeSceneLinearInputTransform(expectedLayers, next.preview.timelineFrame));
+  || sceneLinearAces2PresentContractValid(receipt, sceneLinearAces2OutputTransform, activeSceneLinearInputTransform(expectedLayers, next.preview.timelineFrame), nativePaintWork?.cpuPixelCopies ?? 0);
 const activeFrameValid = receipt.active && !presented.endOfStream
   && frame?.decodePathCpuPixelCopies === 0 && frame.stagingCpuPixelReadbacks === 0
   && frame.nativeSurfacePresented === true && frame.nativeSurfaceCpuPixelReadbacks === 0
@@ -442,7 +495,7 @@ const resourcePlanValid = engineVideoResourcePlanMatches(
   receipt.resourcePlan,
   next.preview.graph,
   expectedLayers.length,
-  expectedParticles.length + expectedCaptions.length + expectedMotionGraphics.length,
+  expectedParticles.length + expectedCaptions.length + expectedMotionGraphics.length + expectedNativePaints.length,
   expectedAdjustments.length,
   expectedMatteCount,
   expectedParticles.length,
@@ -462,4 +515,13 @@ const failedPresentChecks = Object.entries(presentChecks).filter(([, valid]) => 
 if (failedPresentChecks.length) {
   throw new Error(`共同影片 Engine Graph 沒有完成可驗證的 swap-chain 呈現：${failedPresentChecks.join(", ")}`);
 }
+// Legacy resources are verified at load for the entire resident timeline. Their
+// IDs prevent DOM duplicates during autonomous playback between diagnostics.
+// Native paint IDs describe only the exact frame just validated above.
+const compositedMotionIds = new Set([...expectedMotionGraphics.map(node => String(node.graphicId)), ...(nativePaintWork?.activeGraphicIds ?? [])]);
+return {
+  motionGraphicIds: preview.graph.nodes.filter(node => (node.kind === "motion_graphic" || node.kind === "native_motion_paint") && compositedMotionIds.has(String(node.graphicId)))
+    .map(node => String(node.graphicId)),
+  captionIds: expectedCaptions.map(node => String(node.cueId)),
+};
 }

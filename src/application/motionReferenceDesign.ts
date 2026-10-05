@@ -57,7 +57,9 @@ export const motionReferenceDesignInputSchema = z.strictObject({
 });
 export type MotionReferenceDesignInput = z.infer<typeof motionReferenceDesignInputSchema>;
 
-const nativeCapabilities = { chapter_progress: "prepare_native_reel_scene:editorial_steps", depth_gallery: "prepare_native_reel_scene:spatial_gallery" } as const;
+const nativeCapabilities = { chapter_progress: "prepare_native_reel_scene:editorial_steps", depth_gallery: "prepare_native_reel_scene:spatial_gallery",
+  comparison: "prepare_reference_motion_template:comparison_pair", context_assembly: "prepare_reference_motion_template:context_stack",
+  evidence_takeover: "prepare_reference_motion_template:evidence_takeover", focus_wall: "prepare_reference_motion_template:focus_wall" } as const;
 const longformCapabilities = { chapter_progress: "prepare_native_motion_sequence:context_label", focus_reveal: "prepare_native_motion_sequence:focus_hint" } as const;
 type Grammar = z.infer<typeof grammar>;
 const optionModes = [

@@ -12,6 +12,7 @@ import type { CaptionCue, ClipLayout, EditProject, MotionGraphicKind, MotionGrap
 import type { EditorTheme } from "./theme";
 import type { ProjectSession } from "../application/projectSession";
 import type { LowerThirdPresetId } from "../application/lowerThirds";
+import type { TimelineImportPlacement } from "./internalAssetPointerDrag";
 
 export type TrackingMode = { kind: "new" | "correct"; trackId?: string } | { kind: "podcast"; role: "host" | "guest"; hostTrack?: MotionTrack };
 
@@ -30,6 +31,12 @@ export interface EditorShellProps {
   onPlaybackClock: (time: number, seekRevision: number) => void;
   playing: boolean;
   setPlaying: Dispatch<SetStateAction<boolean>>;
+  playbackRate: number;
+  setPlaybackRate: (rate: number) => void;
+  togglePlayback: () => void;
+  pausePlayback: () => void;
+  shuttlePlayback: (direction: -1 | 1, fastForward?: boolean) => void;
+  frameStepPlayback: (direction: -1 | 1) => void;
   selectedClipId?: string;
   setSelectedClipId: Dispatch<SetStateAction<string | undefined>>;
   selectedCaptionId?: string;
@@ -42,7 +49,11 @@ export interface EditorShellProps {
   activeLayers: ActivePreviewLayer[];
   activeAudioLayers: ActivePreviewLayer[];
   runtimeUrls: Record<string, string>;
+  missingMedia: EditProject["assets"];
+  relinkBrowserMedia: (assetId: string) => Promise<void>;
   status: string;
+  projectDownload?: import("../application/projectDownloadLease").ProjectDownloadLease;
+  cancelProjectDownload: (requestId: string) => void;
   setStatus: Dispatch<SetStateAction<string>>;
   trackingMode?: TrackingMode;
   setTrackingMode: Dispatch<SetStateAction<TrackingMode | undefined>>;
@@ -63,16 +74,16 @@ export interface EditorShellProps {
   renderVideo: () => Promise<void>;
   renderOpenExrSequence: () => Promise<void>;
   renderAlphaMaster: () => Promise<void>;
-  importFiles: (files: File[]) => Promise<void>;
+  importFiles: (files: File[], placement?: TimelineImportPlacement) => Promise<void>;
   acceptTrackingSelection: (rect: NormalizedRect) => Promise<void>;
   startPodcastDirector: () => void;
   submitAgentInstruction: (instruction: string) => void;
-  runCommand: (command: EditorCommand, successMessage?: string) => void;
+  runCommand: (command: EditorCommand, successMessage?: string) => boolean | void;
   updateAnimatedClipProperty: (property: "transform" | "color", patch: Record<string, number>) => void;
   addMotionGraphic: (kind: MotionGraphicKind, trackId?: string, seed?: MotionGraphicPresetSeed) => void;
   addCaption: () => void;
   addTrack: (kind: "video" | "audio") => void;
-  addAssetToTimeline: (assetId: string, mode?: "timeline" | "pip", placement?: { trackId: string; timelineStart: number }) => void;
+  addAssetToTimeline: (assetId: string, mode?: "timeline" | "pip", placement?: { trackId: string; timelineStart: number }) => boolean | void;
   makeSelectedPictureInPicture: (layout?: ClipLayout, name?: string) => void;
   precomposeSelected: () => void;
   applyShortFormTemplate: (templateId: string, content?: import("../application/shortFormTemplates").ShortFormTemplateContent) => Promise<void>;

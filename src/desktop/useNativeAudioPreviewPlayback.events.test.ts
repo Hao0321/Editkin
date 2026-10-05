@@ -33,7 +33,22 @@ function fixture(push=true){
     playback:{schema:event==="ended"?"editkin.native-audio-preview-receipt/v1":"editkin.native-audio-preview-event/v1",event:event as "progress",timelineStartSeconds:starts[index].origin,timelineSeconds:time}});
   return{options,starts,started,send,stop,status,render};
 }
-beforeEach(()=>{vi.useFakeTimers();react.values=[];react.effects=[];react.pending=[];react.cursor=0;react.effectCursor=0;vi.stubGlobal("window",{setTimeout,clearTimeout,queueMicrotask:(work:()=>void)=>{void Promise.resolve().then(work);}});vi.stubGlobal("requestAnimationFrame",vi.fn(()=>1));vi.stubGlobal("cancelAnimationFrame",vi.fn());});
+beforeEach(()=>{
+  vi.useFakeTimers();react.values=[];react.effects=[];react.pending=[];react.cursor=0;react.effectCursor=0;
+  const browserWindow={setTimeout,clearTimeout,queueMicrotask:(work:()=>void)=>{void Promise.resolve().then(work);},
+    requestAnimationFrame:vi.fn(function(this:unknown,_work:FrameRequestCallback):number{
+      if(this!==browserWindow)throw new TypeError("Illegal invocation: requestAnimationFrame receiver");
+      return 1;
+    }),
+    cancelAnimationFrame:vi.fn(function(this:unknown,_handle:number):void{
+      if(this!==browserWindow)throw new TypeError("Illegal invocation: cancelAnimationFrame receiver");
+    }),
+  };
+  vi.stubGlobal("window",browserWindow);
+  // The existing global count assertion observes the same Window-owned function.
+  vi.stubGlobal("requestAnimationFrame",browserWindow.requestAnimationFrame);
+  vi.stubGlobal("cancelAnimationFrame",browserWindow.cancelAnimationFrame);
+});
 afterEach(()=>{for(const effect of react.effects)effect.cleanup?.();vi.unstubAllGlobals();vi.useRealTimers();});
 describe("native audio pushed lifecycle",()=>{
   it("activates retained audio only with a versioned native GPU clock; pause keeps the owner",async()=>{

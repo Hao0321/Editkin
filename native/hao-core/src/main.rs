@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{env, fs, io::Write, process};
+use std::{env, fs, io::{Read, Write}, process};
 
 use hao_core::engine;
 
@@ -998,6 +998,31 @@ fn build_smart_cut(request: SmartCutRequest) -> Result<SmartCutPlan, String> {
 fn run() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
     match args.get(1).map(String::as_str) {
+        Some("engine-motion-paint-frame") => {
+            use sha2::{Digest, Sha256};
+            use engine::motion_paint::{PaintScene, LayerPose, PreparedPaintScene, PaintScratch, Rgba8Encoder};
+            #[derive(Deserialize)]
+            #[serde(rename_all="camelCase", deny_unknown_fields)]
+            struct Request { schema:String, scene:PaintScene, poses:Vec<LayerPose>, output_path:String }
+            let path=args.get(2).ok_or("usage: hao-core engine-motion-paint-frame <request.json>")?;
+            let file=fs::File::open(path).map_err(|error|error.to_string())?;
+            if !file.metadata().map_err(|error|error.to_string())?.is_file() { return Err("paint request must be a regular file".into()); }
+            let mut input=Vec::new(); file.take(4_194_305).read_to_end(&mut input).map_err(|error|error.to_string())?;
+            if input.len()>4_194_304 { return Err("paint request exceeds 4 MiB".into()); }
+            let request:Request=serde_json::from_slice(&input).map_err(|error|error.to_string())?;
+            if request.schema!="editkin.native-motion-paint-frame/v1" { return Err("paint frame schema unsupported".into()); }
+            if request.scene.background[3]!=0.0 { return Err("paint frame requires a transparent overlay".into()); }
+            let prepared=PreparedPaintScene::prepare(&request.scene)?;
+            let mut frame=engine::composite::FloatFrame::transparent(request.scene.width,request.scene.height)?;
+            prepared.render_into(&mut frame,&request.poses,&mut PaintScratch::default())?;
+            let mut rgba=Vec::new(); Rgba8Encoder::new()?.encode_into(&frame,&mut rgba)?;
+            let mut output=fs::OpenOptions::new().write(true).create_new(true).open(&request.output_path).map_err(|error|error.to_string())?;
+            output.write_all(&rgba).map_err(|error|error.to_string())?; output.sync_all().map_err(|error|error.to_string())?;
+            println!("{}",serde_json::json!({"schema":"editkin.native-motion-paint-frame/v1","width":frame.width,"height":frame.height,
+                "bytes":rgba.len(),"rgbaSha256":format!("{:x}",Sha256::digest(&rgba)),"encoding":"straight-srgb-rgba8",
+                "interpolation":"scene-linear-premultiplied","layers":prepared.layer_count()}));
+            Ok(())
+        }
         Some("plan") => {
             let path = args.get(2).ok_or("usage: hao-core plan <project.json>")?;
             let project: Project =

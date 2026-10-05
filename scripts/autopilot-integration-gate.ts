@@ -27,7 +27,7 @@ const EXPECTED_RULE_FAMILIES = [
   "dynamic-plugin-capabilities", "declarative-skill-pack-selection", "plugin-command-provenance", "roto-keyer-evidence-routing",
 ];
 const EXPECTED_SKILL_DEPENDENCIES = [
-  "yt-script-style", "video-craft-playbook", "yt-algorithm-mastery", "interview-show",
+  "hao-voice", "yt-script-style", "video-craft-playbook", "yt-algorithm-mastery", "interview-show",
   "ai-media-generator", "ai-short-drama", "social-post",
 ];
 const REQUIRED_STARTER_PROMPT_MARKERS = [

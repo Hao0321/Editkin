@@ -3,6 +3,8 @@ import { DEFAULT_COLOR, particleSimulationEmitters } from "../domain/types";
 import type { ColorAdjustments, EditProject, LayerBlendMode, MediaAsset, TimelineClip, Transform2D } from "../domain/types";
 import { buildEngineRenderGraph, motionGraphicTracking, type EngineNode, type EngineRenderGraph } from "./engineGraph";
 import { isTransformMotionBlurInstance, transformMotionBlurParameters } from "../domain/transformMotionBlur";
+import type { PreparedNativeMotionPaint } from "../motion/nativeMotionPaint";
+import { nativeFloatingVideoFrameSpec, type PreparedNativeFloatingVideoFrames } from "./nativeFloatingVideoFrame";
 export * from "./gpuCompositorAdmission";
 import type { GpuEnginePreviewGraph, GpuEngineVideoPreviewGraph, GpuVideoPreviewSource } from "./gpuCompositorAdmission";
 import {
@@ -128,12 +130,20 @@ export function buildGpuEnginePreviewGraph(project: EditProject, playhead: numbe
  * Multiple sources preserve all twelve typed blend modes and independent static visual branches. Only the
  * independent audio graph is omitted because this hook owns visual preview only.
  */
-export function buildGpuEngineVideoPreviewGraph(project: EditProject, playhead: number): GpuEngineVideoPreviewGraph | undefined {
-  if (project.scene3d?.enabled || [project.tracks, ...project.compositions.map(composition => composition.tracks)].some(tracks => tracks.some(track => track.clips.some(clip => clip.floatingFrame)))) return undefined;
+export function buildGpuEngineVideoPreviewGraph(project: EditProject, playhead: number, nativeMotionPaint?: PreparedNativeMotionPaint,
+  nativeFloatingVideoFrames?: PreparedNativeFloatingVideoFrames): GpuEngineVideoPreviewGraph | undefined {
+  const floatingClips = project.tracks.flatMap(track => track.clips).filter(clip => clip.floatingFrame);
+  if (project.scene3d?.enabled || project.compositions.some(composition => composition.tracks.some(track => track.clips.some(clip => clip.floatingFrame)))
+    || (floatingClips.length > 0 && !nativeFloatingVideoFrames)
+    || (nativeFloatingVideoFrames && !floatingClips.length)) return undefined;
+  if (nativeFloatingVideoFrames) {
+    try { for (const clip of floatingClips) nativeFloatingVideoFrameSpec(project, nativeFloatingVideoFrames, clip.id); }
+    catch { return undefined; }
+  }
   const sceneLinearAces2 = project.colorManagement?.mode === "aces2";
   if ((sceneLinearAces2 && (!(["rec709_sdr", "rec2100_pq_1000"] as const).includes(project.colorManagement?.outputTransform as "rec709_sdr" | "rec2100_pq_1000")
       || project.colorManagement?.configId !== "studio-config-v4.0.0_aces-v2.0_ocio-v2.5"))
-    || !commonVideoCaptionsSupported(project) || !commonVideoMotionGraphicsSupported(project)) return undefined;
+    || !commonVideoCaptionsSupported(project) || !commonVideoMotionGraphicsSupported(project, nativeMotionPaint)) return undefined;
   const resolved = resolveNativeVideoPrecompositions(project);
   if (!resolved || (sceneLinearAces2 && resolved.markers.length > 0)) return undefined;
   const executionProject = resolved.project;
@@ -218,7 +228,9 @@ export function buildGpuEngineVideoPreviewGraph(project: EditProject, playhead: 
       && overlayProxyWidth! <= (asset.width ?? project.width) && overlayProxyHeight! <= (asset.height ?? project.height);
     const useOverlayProxy = contentClips.length >= 6 && contentClips.indexOf(clip) > 0 && maximumScale <= .25
       && Math.abs(executionProject.fps - 30) <= .05 && overlayProxyValid;
-    const inputPath = useOverlayProxy ? overlayProxyPath : proxyPath && proxyAspectValid ? proxyPath : originalPath;
+    // A floating source owns its measured original DAR. Canvas/proportional proxy
+    // admission is a different contract and cannot substitute its media here.
+    const inputPath = clip.floatingFrame ? originalPath : useOverlayProxy ? overlayProxyPath : proxyPath && proxyAspectValid ? proxyPath : originalPath;
     const gpuEffects = enabledGpuEffectGraphs(clip);
     const safeVisual = commonVideoTransformSupported(transform)
       && commonVideoEffectStackSupported(effects, gpuEffects.length)
@@ -230,10 +242,12 @@ export function buildGpuEngineVideoPreviewGraph(project: EditProject, playhead: 
       && !hasEnabledCpuNativeEffect(clip)
       && !creative?.lookPresetId
       && !creative?.transitionIn && !creative?.transitionOut;
-    if (!asset || !inputPath || asset.width !== project.width || asset.height !== project.height || !safeVisual) return undefined;
+    if (!asset || !asset.width || !asset.height || !inputPath || (!clip.floatingFrame && (asset.width !== project.width || asset.height !== project.height)) || !safeVisual) return undefined;
     if (assetBindings[asset.id] && assetBindings[asset.id] !== inputPath) return undefined;
     assetBindings[asset.id] = inputPath;
-    decoderDimensions[asset.id] = useOverlayProxy
+    decoderDimensions[asset.id] = clip.floatingFrame
+      ? { width: asset.width!, height: asset.height!, source: "original" }
+      : useOverlayProxy
       ? { width: overlayProxyWidth!, height: overlayProxyHeight!, source: "overlay-proxy" }
       : proxyPath && proxyAspectValid
       ? { width: proxyWidth!, height: proxyHeight!, source: "proxy" }
@@ -247,13 +261,23 @@ export function buildGpuEngineVideoPreviewGraph(project: EditProject, playhead: 
   }
   if (!commonVideoParentingSupported([...contentClips, ...controllerClips])) return undefined;
   const completeGraph = applyResolvedPrecompositionMarkers(buildEngineRenderGraph(executionProject,
-    !sceneLinearAces2 && !scene25d ? { rec709PrimaryVersion: 2 } : undefined), resolved.markers);
-  const graph: EngineRenderGraph = { ...completeGraph, audio: undefined };
+    { ...(!sceneLinearAces2 && !scene25d ? { rec709PrimaryVersion: 2 as const } : {}),
+      ...(nativeMotionPaint ? { nativeMotionPaint } : {}),
+      ...(nativeFloatingVideoFrames ? { nativeFloatingVideoFrames } : {}) }), resolved.markers);
+  // The resident native paint consumer and its actual float textures operate in
+  // RGBA16F. The generic ACES graph may request RGBA32F for other renderers;
+  // declare this resident execution contract explicitly without changing the
+  // saved project or silently treating float paint as encoded SDR.
+  const nativePaintExecution = completeGraph.nodes.some(node => node.kind === "native_motion_paint");
+  const graph: EngineRenderGraph = { ...completeGraph, audio: undefined,
+    ...(nativePaintExecution ? { workingFormat: "rgba16_float" as const,
+      nodes: completeGraph.nodes.map(node => node.kind === "output" ? { ...node, format: "rgba16_float" } : node) } : {}) };
   const particleNodes = graph.nodes.filter((node) => node.kind === "particle_emitter");
   const particleCount = particleNodes.length;
   const particleCeiling = particleNodes.reduce((sum, node) => sum + Number(node.maxParticles ?? 0), 0);
   if (particleCount > 4 || particleCeiling > 192) return undefined;
-  const overlayCount = graph.nodes.filter((node) => node.kind === "particle_emitter" || node.kind === "caption" || node.kind === "motion_graphic").length;
+  const nativePaintCount = graph.nodes.filter(node => node.kind === "native_motion_paint").length;
+  const overlayCount = graph.nodes.filter((node) => node.kind === "particle_emitter" || node.kind === "caption" || node.kind === "motion_graphic" || node.kind === "native_motion_paint").length;
   const matteCount = contentClips.filter((clip) => clip.layer?.trackMatte).length;
   const decodedTemporalNodes = graph.nodes.filter((node) => node.kind === "motion_blur" && node.sourceSampling === "decoded_temporal");
   if (decodedTemporalNodes.length > 1) return undefined;
@@ -317,11 +341,11 @@ export function buildGpuEngineVideoPreviewGraph(project: EditProject, playhead: 
       || (matteCount > 0 && !resourceGovernedTemporalMatte && !legacyPackedTemporalMatteSource)) return undefined;
   }
   const temporalSampleCount = decodedTemporalNodes.length ? Number(decodedTemporalNodes[0].samples) : 0;
-  const resources = estimateGpuEngineVideoResources(graph.width, graph.height, graph.cacheBudgetMb, contentClips.length, overlayCount, adjustmentClips.length, matteCount, particleCount, temporalSampleCount, sceneLinearAces2 ? 8 : 4);
+  const resources = estimateGpuEngineVideoResources(graph.width, graph.height, graph.cacheBudgetMb, contentClips.length, overlayCount, adjustmentClips.length, matteCount, particleCount, temporalSampleCount, sceneLinearAces2 ? 8 : 4, 0, 0, nativePaintCount);
   if (!resources || resources.requiredBytes > resources.budgetBytes || contentClips.length > resources.maxVideoLayers) return undefined;
   const timelineFrame = Math.max(0, Math.round(playhead * graph.timebase.denominator / graph.timebase.numerator));
   return {
-    structureKey: `${graph.graphId}:${JSON.stringify(assetBindings)}`,
+    structureKey: `${graph.graphId}:${JSON.stringify(assetBindings)}${nativeFloatingVideoFrames ? `:${JSON.stringify(graph.nodes.filter(node => node.kind === "floating_video_frame_2d"))}` : ""}`,
     graph,
     assetBindings,
     decoderDimensions,

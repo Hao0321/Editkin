@@ -18,6 +18,10 @@ use wgpu::util::DeviceExt;
 
 mod caption;
 mod engine_graph;
+#[cfg(test)]
+mod floating_geometry_tests;
+#[cfg(windows)]
+mod resident_motion_paint;
 #[cfg(windows)]
 mod software_video;
 #[cfg(windows)]
@@ -3153,6 +3157,8 @@ struct ResidentEngineVideoSession {
     particles: Vec<ResidentEngineParticle>,
     captions: Vec<ResidentEngineCaption>,
     motion_graphics: Vec<ResidentEngineMotionGraphic>,
+    native_motion_paints: Vec<resident_motion_paint::ResidentNativeMotionPaint>,
+    motion_overlay_order: Vec<engine_graph::EngineVideoMotionOverlayOrder>,
     width: u32,
     height: u32,
     coverage: serde_json::Value,
@@ -3249,6 +3255,42 @@ struct ResidentEngineMotionGraphic {
     plan: engine_graph::EngineVideoMotionGraphicPlan,
     texture: windows_video::ResidentOverlayTexture,
     receipt: serde_json::Value,
+}
+
+#[cfg(windows)]
+fn resident_native_motion_paint_update(session: &mut ResidentEngineVideoSession,
+    engine: &GpuCompositor, timeline_frame: u64) -> Result<Vec<serde_json::Value>> {
+    session.native_motion_paints.iter_mut().filter_map(|paint| {
+        match paint.update(engine, timeline_frame) {
+            Ok(Some(receipt)) => Some(Ok(receipt)), Ok(None) => None, Err(error) => Some(Err(error)),
+        }
+    }).collect()
+}
+
+#[cfg(windows)]
+fn append_resident_motion_layers<'a>(session: &'a ResidentEngineVideoSession, timeline_frame: u64,
+    surface_layers: &mut Vec<windows_video::VideoSurfaceLayer<'a>>) -> Result<()> {
+    // Preserve authored composite order when legacy and native-paint nodes mix.
+    for item in &session.motion_overlay_order {
+        match *item {
+            engine_graph::EngineVideoMotionOverlayOrder::Legacy(index) => {
+                let graphic = &session.motion_graphics[index];
+                let Some(sample) = graphic.plan.sample(timeline_frame) else { continue; };
+                if let Some(homography) = graphic.plan.projective_transform(&sample)? {
+                    surface_layers.push(graphic.texture.surface_layer_with_projective(sample.opacity, homography));
+                } else {
+                    let (pivot_x, pivot_y) = graphic.plan.pivot_pixels();
+                    surface_layers.push(graphic.texture.surface_layer_with_motion(sample.opacity,
+                        sample.translate_x, sample.translate_y, sample.scale, sample.rotation_radians, pivot_x, pivot_y));
+                }
+            }
+            engine_graph::EngineVideoMotionOverlayOrder::NativePaint(index) => {
+                let paint = &session.native_motion_paints[index];
+                if paint.active(timeline_frame) { surface_layers.push(paint.texture.surface_layer()); }
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(windows)]
@@ -3374,6 +3416,13 @@ impl ResidentEngineVideoDecoder {
         match self {
             Self::Direct(video) => video.frame_rate(),
             Self::Parallel(video) => video.frame_rate(),
+        }
+    }
+
+    fn assert_floating_source_profile(&self, width: u32, height: u32, dar: f64) -> Result<serde_json::Value> {
+        match self {
+            Self::Direct(video) => video.assert_floating_source_profile(width, height, dar),
+            Self::Parallel(video) => video.assert_floating_source_profile(width, height, dar),
         }
     }
 
@@ -3505,6 +3554,7 @@ fn prepared_engine_video_visual_plan_at(
             .with_context(|| format!("sampled 2.5D projection disappeared for {transform_id}"))?;
         visual.apply_scene_projection(projection, scene.width, scene.height)?;
     }
+    visual.finalize_floating(local_frame as i64)?;
     Ok(visual)
 }
 
@@ -3630,6 +3680,13 @@ fn resident_engine_video_layer_visual_plan_at(
             format!("sampled resident 2.5D projection disappeared for {transform_id}")
         })?;
         visual.apply_scene_projection(projection, scene.width, scene.height)?;
+    }
+    if visual.floating_frame.is_some() {
+        let local_frame = layer.timeline.local_frame_continuous(timeline_frame).unwrap_or(0.0);
+        if !local_frame.is_finite() || local_frame.fract() != 0.0 {
+            bail!("floating video requires its integer project-frame clock");
+        }
+        visual.finalize_floating(local_frame as i64)?;
     }
     Ok(visual)
 }
@@ -3811,6 +3868,14 @@ fn video_visual_style(
         motion_pad_z: 0.0,
         motion_samples,
         motion_sample_frames,
+        floating_panel: plan.floating_sample.as_ref().map_or([0.0; 4], |sample| sample.outer_rect),
+        floating_content: plan.floating_sample.as_ref().map_or([0.0; 4], |sample| sample.content_rect),
+        floating_mask: plan.floating_sample.as_ref().map_or([0.0; 4], |sample| [sample.radius, sample.feather, sample.border, 1.0]),
+        floating_shadow: plan.floating_sample.as_ref().map_or([0.0; 4], |sample| sample.shadow),
+        floating_color: plan.floating_sample.as_ref().zip(plan.floating_frame.as_ref()).map_or([0.0; 4], |(sample, spec)| {
+            let linear = sample.panel_color.map(|value| if value <= 0.04045 { value / 12.92 } else { ((value + 0.055) / 1.055).powf(2.4) });
+            [linear[0], linear[1], linear[2], spec.frame.style.style_code() as f32]
+        }),
     }
 }
 
@@ -3840,16 +3905,20 @@ fn engine_video_surface_layers<'a>(
         .iter()
         .enumerate()
         .map(|(position, index)| {
+            let mut style = visual_layers[position];
+            if position == 0 && style.floating_mask[3] > 0.5 {
+                style.floating_mask[3] = 2.0;
+            }
             if temporal_layer.is_some_and(|(temporal_index, _)| temporal_index == *index) {
                 let (_, temporal_slots) = temporal_layer
                     .context("decoded temporal surface layer lost its resident slots")?;
                 layers[*index]
                     .video
-                    .staged_temporal_surface_layer(temporal_slots, visual_layers[position])
+                    .staged_temporal_surface_layer(temporal_slots, style)
             } else {
                 layers[*index]
                     .video
-                    .staged_surface_layer(slot_indices[position], visual_layers[position])
+                    .staged_surface_layer(slot_indices[position], style)
             }
         })
         .collect::<Result<Vec<_>>>()?;
@@ -3901,6 +3970,45 @@ fn compact_engine_video_frame_receipt(frame: &serde_json::Value) -> serde_json::
     })
 }
 
+#[cfg(windows)]
+fn resident_floating_video_frame_receipts(
+    session: &ResidentEngineVideoSession,
+    timeline_frame: u64,
+    active_indices: &[usize],
+    surfaces: &[windows_video::VideoSurfaceLayer<'_>],
+) -> Result<Vec<serde_json::Value>> {
+    if active_indices.len() != surfaces.len() {
+        bail!("floating material receipt requires the actual staged video surfaces");
+    }
+    active_indices.iter().copied().enumerate().filter_map(|(position, index)| {
+        let layer = &session.layers[index];
+        let spec = layer.visual_plan.floating_frame.as_ref()?;
+        Some((|| {
+            let local_frame = timeline_frame.checked_sub(spec.timeline.timeline_start_frame)
+                .context("active floating material precedes its source timeline")?;
+            let sample = spec.sample(i64::try_from(local_frame).context("floating local frame overflow")?)
+                .map_err(anyhow::Error::msg)?;
+            let style = &surfaces[position].style;
+            if style.floating_mask[3] < 0.5 {
+                bail!("active floating material lost its actual staged shader uniform");
+            }
+            Ok(serde_json::json!({
+                "materialContract": "editkin.native-floating-frame-material/v1",
+                "sourceNodeId": layer.source_node_id,
+                "assetId": layer.asset_id,
+                "floatingNodeId": layer.visual_plan.floating_node_id,
+                "timelineFrame": timeline_frame,
+                "localFrame": local_frame,
+                "descriptor": spec,
+                "sample": sample,
+                "actualStagedVisualUniform": style,
+                "radialBackdropSelected": style.floating_mask[3] > 1.5,
+                "colorBoundary": "source_grade_then_srgb_material_then_single_aces2_then_display_paint"
+            }))
+        })())
+    }).collect()
+}
+
 fn server_response(id: &str, ok: bool, result: serde_json::Value) -> serde_json::Value {
     if ok {
         serde_json::json!({ "id": id, "ok": true, "result": result })
@@ -3909,7 +4017,58 @@ fn server_response(id: &str, ok: bool, result: serde_json::Value) -> serde_json:
     }
 }
 
+fn video_target_admission() -> serde_json::Value {
+    serde_json::json!({
+        "schema": "editkin.shared-video-target-admission/v1",
+        "requiredBackend": "Dx12", "factory": "new_dx12_video",
+        "selection": "deferred-until-target-bind",
+        "offscreenProtocol": "editkin.resident-offscreen-video-target/v1"
+    })
+}
+
+fn native_video_runtime_metadata() -> Result<serde_json::Value> {
+    // This branch reads its own binary only: no adapter, COM, window or swapchain.
+    let executable = std::env::current_exe().context("selected runtime executable unavailable")?;
+    let bytes = fs::read(&executable).context("read selected runtime executable identity")?;
+    let metadata = serde_json::json!({
+        "schema": "editkin.native-video-runtime-metadata/v1",
+        "platform": if cfg!(windows) { "win32" } else { "unsupported" },
+        "videoInteropProtocol": if cfg!(windows) { "media-foundation-d3d11-d3d12-wgpu/v1" } else { "unavailable" },
+        "nativeFloatingVideoFrameContract": if cfg!(windows) { "editkin.native-floating-frame-material/v1" } else { "unavailable" },
+        "offscreenVideoProtocol": if cfg!(windows) { "editkin.resident-offscreen-video-target/v1" } else { "unavailable" },
+        "displayPaintSchema": "editkin.native-motion-paint-track/v2",
+        "videoTargetAdmission": video_target_admission(),
+        "actualTargetMeasured": false, "noNativeWindowCreated": true,
+        "executableSha256": output_hash(&bytes), "executableBytes": bytes.len()
+    });
+    Ok(metadata)
+}
+
+fn video_runtime_identity_command() -> Result<()> {
+    println!("{}", native_video_runtime_metadata()?);
+    Ok(())
+}
+
+#[cfg(windows)]
+fn resident_video_target_identity(engine: &GpuCompositor, surface: Option<&windows_video::NativePreviewSurface>, generation: u64, runtime: &serde_json::Value) -> serde_json::Value {
+    let target = surface.map(|value| {
+        let description = value.description();
+        serde_json::json!({
+            "renderTargetContract": description["renderTargetContract"],
+            "offscreen": description["offscreen"],
+            "width": description["width"], "height": description["height"],
+            "nativeWindow": description["nativeWindow"], "nativeSwapChain": description["nativeSwapChain"]
+        })
+    });
+    serde_json::json!({
+        "schema": "editkin.actual-video-target-identity/v1", "generation": generation,
+        "backend": engine.backend, "adapter": engine.adapter_name, "deviceType": engine.device_type,
+        "target": target, "executableSha256": runtime["executableSha256"], "executableBytes": runtime["executableBytes"]
+    })
+}
+
 fn serve_command() -> Result<()> {
+    let native_runtime_metadata = native_video_runtime_metadata()?;
     let stdin = std::io::stdin();
     let mut stdout = std::io::BufWriter::new(std::io::stdout());
     let mut compositor = GpuCompositor::new()?;
@@ -3930,7 +4089,11 @@ fn serve_command() -> Result<()> {
         serde_json::json!({
             "event": "ready", "engine": "editkin-wgpu-resident-engine/v1", "generation": generation,
             "adapter": compositor.adapter_name, "backend": compositor.backend, "deviceType": compositor.device_type,
-            "videoInteropProtocol": if cfg!(windows) { "media-foundation-d3d11-d3d12-wgpu/v1" } else { "unavailable" }
+            "videoInteropProtocol": if cfg!(windows) { "media-foundation-d3d11-d3d12-wgpu/v1" } else { "unavailable" },
+            "offscreenVideoProtocol": if cfg!(windows) { "editkin.resident-offscreen-video-target/v1" } else { "unavailable" },
+            "nativeFloatingVideoFrameContract": if cfg!(windows) { "editkin.native-floating-frame-material/v1" } else { "unavailable" },
+            "videoTargetAdmission": if cfg!(windows) { video_target_admission() } else { serde_json::Value::Null },
+            "nativeRuntimeMetadata": native_runtime_metadata
         })
     )?;
     stdout.flush()?;
@@ -3975,6 +4138,7 @@ fn serve_command() -> Result<()> {
                         | "video_stage_batch_at"
                         | "video_present_at"
                         | "surface_bind"
+                        | "offscreen_bind"
                         | "surface_probe"
                         | "video_seek"
                 )
@@ -4441,6 +4605,10 @@ fn serve_command() -> Result<()> {
                             )?
                         };
                         let (decoded_width, decoded_height) = video.dimensions();
+                        let floating_source_profile = layer.visual.floating_frame.as_ref()
+                            .map(|spec| video.assert_floating_source_profile(spec.source.width, spec.source.height,
+                                spec.source.display_aspect_ratio.unwrap_or(f64::from(spec.source.width) / f64::from(spec.source.height))))
+                            .transpose()?;
                         let (decoded_rate_numerator, decoded_rate_denominator) = video.frame_rate();
                         let aspect_denominator =
                             f64::from(prepared.width) * f64::from(decoded_height);
@@ -4453,10 +4621,12 @@ fn serve_command() -> Result<()> {
                             || decoded_height < 2
                             || decoded_width > 16_384
                             || decoded_height > 16_384
-                            || aspect_error > 0.002
+                            || if let Some(spec) = layer.visual.floating_frame.as_ref() {
+                                decoded_width != spec.source.width || decoded_height != spec.source.height
+                            } else { aspect_error > 0.002 }
                         {
                             bail!(
-                                "common video decoded source must preserve the graph aspect ratio within 0.2%: graph={}x{}, source={}x{} ({})",
+                                "common video decoded source must match its explicit floating source dimensions or preserve ordinary graph aspect within 0.2%: graph={}x{}, source={}x{} ({})",
                                 prepared.width,
                                 prepared.height,
                                 decoded_width,
@@ -4479,6 +4649,7 @@ fn serve_command() -> Result<()> {
                             && prepared_layer_count >= 6
                             && layer_index > 0
                             && maximum_scale <= 0.25
+                            && layer.visual.floating_frame.is_none()
                             && decoded_rate_numerator > 0
                             && decoded_rate_denominator > 0
                             && (decoded_rate * 2.0 - project_rate).abs() <= 0.05;
@@ -4510,6 +4681,9 @@ fn serve_command() -> Result<()> {
                             "projectCoordinateHeight": prepared.height,
                             "proxyScale": f64::from(decoded_width) / f64::from(prepared.width),
                             "visualGraph": visual,
+                            "floatingVideoFrame": layer.visual.floating_frame,
+                            "floatingVideoFrameNodeId": layer.visual.floating_node_id,
+                            "floatingSourceProfile": floating_source_profile,
                             "motionBlur": layer.visual.motion_blur,
                             "transformNodeId": layer.transform_node_id.clone(),
                             "parentTransformNodeId": layer.parent_transform_node_id.clone(),
@@ -4705,6 +4879,17 @@ fn serve_command() -> Result<()> {
                             receipt,
                         });
                     }
+                    let mut native_motion_paints = Vec::with_capacity(prepared.native_motion_paints.len());
+                    for plan in prepared.native_motion_paints {
+                        native_motion_paints.push(resident_motion_paint::ResidentNativeMotionPaint::prepare(
+                            engine, plan, prepared.width, prepared.height, timeline_frame)?);
+                    }
+                    let native_paint_count = native_motion_paints.len();
+                    let native_paint_color_bindings = native_motion_paints.iter()
+                        .map(|paint| paint.color_binding()).collect::<Vec<_>>();
+                    let active_native_paints = native_motion_paints.iter()
+                        .filter(|paint| paint.active(timeline_frame))
+                        .map(|paint| paint.receipt(timeline_frame, false)).collect::<Result<Vec<_>>>()?;
                     let first = layer_receipts
                         .first()
                         .context("common video graph produced no resident layers")?;
@@ -4758,6 +4943,8 @@ fn serve_command() -> Result<()> {
                             particles,
                             captions,
                             motion_graphics,
+                            native_motion_paints,
+                            motion_overlay_order: prepared.motion_overlay_order,
                             width: prepared.width,
                             height: prepared.height,
                             coverage: coverage.clone(),
@@ -4775,6 +4962,7 @@ fn serve_command() -> Result<()> {
                         "generation": generation,
                         "resident": true,
                         "executor": "media-foundation-d3d11-d3d12-wgpu/v1",
+                        "videoTargetIdentity": resident_video_target_identity(engine, native_preview_surface.as_ref(), generation, &native_runtime_metadata),
                         "decoder": decoder,
                         "engineGraph": coverage,
                         "resourcePlan": resource_plan,
@@ -4814,7 +5002,14 @@ fn serve_command() -> Result<()> {
                         "motionGraphicTextureUploads": motion_graphic_count,
                         "motionGraphics": motion_graphic_receipts,
                         "activeMotionGraphics": active_motion_graphics,
-                        "compositeMode": if adjustment_count > 0 && adjustment_before_typography { "video-pre-typography-adjustment/v1" } else if adjustment_count > 0 { "video-trailing-adjustment/v1" } else if matte_count > 0 { "typed-track-matte/v1" } else if precomposition_count > 0 { "resolved-precomposition/v1" } else if controller_count > 0 { "typed-controller-parent/v1" } else if parent_count > 0 { "typed-parent-transform/v1" } else if motion_graphic_count > 0 { "video-motion-graphic-source-over/v1" } else if caption_count > 0 { "video-caption-source-over/v1" } else if particle_count > 0 { "video-particle-source-over/v1" } else if typed_blend_composite { "typed-blend-source-over/v1" } else if layer_count > 1 { "normal-source-over/v1" } else { "single/v1" },
+                        "nativeMotionPaintCount": native_paint_count,
+                        "nativeMotionPaintColorBindings": native_paint_color_bindings,
+                        "nativeMotionPaintTextureUploads": native_paint_count,
+                        "nativeMotionPaintResidentTextureCount": native_paint_count,
+                        "nativeMotionPaintInitialRasterCount": native_paint_count,
+                        "nativeMotionPaintInitialCpuUploadBytes": native_paint_count as u64 * u64::from(prepared.width) * u64::from(prepared.height) * 8,
+                        "activeNativeMotionPaints": active_native_paints,
+                        "compositeMode": if adjustment_count > 0 && adjustment_before_typography { "video-pre-typography-adjustment/v1" } else if adjustment_count > 0 { "video-trailing-adjustment/v1" } else if matte_count > 0 { "typed-track-matte/v1" } else if precomposition_count > 0 { "resolved-precomposition/v1" } else if controller_count > 0 { "typed-controller-parent/v1" } else if parent_count > 0 { "typed-parent-transform/v1" } else if native_paint_count > 0 { "video-native-motion-paint-source-over/v1" } else if motion_graphic_count > 0 { "video-motion-graphic-source-over/v1" } else if caption_count > 0 { "video-caption-source-over/v1" } else if particle_count > 0 { "video-particle-source-over/v1" } else if typed_blend_composite { "typed-blend-source-over/v1" } else if layer_count > 1 { "normal-source-over/v1" } else { "single/v1" },
                         "layers": layer_receipts,
                         "visualLayers": layer_receipts.iter().map(|layer| layer["visualGraph"].clone()).collect::<Vec<_>>()
                     }))
@@ -5045,6 +5240,10 @@ fn serve_command() -> Result<()> {
                             "compositeExecutionMode": surface_description.get("compositeExecutionMode").cloned(),
                             "compositeLayerCount": surface_description.get("compositeLayerCount").cloned(),
                             "compositeFullFramePassCount": surface_description.get("compositeFullFramePassCount").cloned(),
+                            "displayPaintLayerCount": surface_description.get("displayPaintLayerCount").cloned(),
+                            "displayPaintExecutionMode": surface_description.get("displayPaintExecutionMode").cloned(),
+                            "displayPaintCompositionBoundary": surface_description.get("displayPaintCompositionBoundary").cloned(),
+                            "displayPaintOutputEncodingCount": surface_description.get("displayPaintOutputEncodingCount").cloned(),
                             "compositeMaximumLayersPerPass": surface_description.get("compositeMaximumLayersPerPass").cloned(),
                             "depthExecutionMode": surface_description.get("depthExecutionMode").cloned(),
                             "depthFormat": surface_description.get("depthFormat").cloned(),
@@ -5496,6 +5695,7 @@ fn serve_command() -> Result<()> {
                         .iter_mut()
                         .filter_map(|particle| particle.update(engine, timeline_frame))
                         .collect::<Vec<_>>();
+                    let active_native_motion_paints = resident_native_motion_paint_update(session, engine, timeline_frame)?;
                     let mut surface_layers = engine_video_surface_layers(
                         &session.layers,
                         &active_indices,
@@ -5505,39 +5705,14 @@ fn serve_command() -> Result<()> {
                             .as_ref()
                             .map(|(index, _, slots)| (*index, slots.as_slice())),
                     )?;
+                    let active_floating_video_frames = resident_floating_video_frame_receipts(session, timeline_frame, &active_indices, &surface_layers)?;
                     for index in &active_particle_indices {
                         surface_layers.push(session.particles[*index].texture.surface_layer());
                     }
                     for index in &active_caption_indices {
                         surface_layers.push(session.captions[*index].texture.surface_layer());
                     }
-                    for index in &active_motion_graphic_indices {
-                        let motion_graphic = &session.motion_graphics[*index];
-                        let sample = motion_graphic
-                            .plan
-                            .sample(timeline_frame)
-                            .context("active motion graphic lost its sampled style")?;
-                        if let Some(homography) =
-                            motion_graphic.plan.projective_transform(&sample)?
-                        {
-                            surface_layers.push(
-                                motion_graphic
-                                    .texture
-                                    .surface_layer_with_projective(sample.opacity, homography),
-                            );
-                        } else {
-                            let (pivot_x, pivot_y) = motion_graphic.plan.pivot_pixels();
-                            surface_layers.push(motion_graphic.texture.surface_layer_with_motion(
-                                sample.opacity,
-                                sample.translate_x,
-                                sample.translate_y,
-                                sample.scale,
-                                sample.rotation_radians,
-                                pivot_x,
-                                pivot_y,
-                            ));
-                        }
-                    }
+                    append_resident_motion_layers(session, timeline_frame, &mut surface_layers)?;
                     let adjustment_styles = active_adjustment_indices
                         .iter()
                         .map(|index| {
@@ -5649,6 +5824,7 @@ fn serve_command() -> Result<()> {
                             "sourceFrame": frame_plans[active_indices[0]].source_frame,
                             "sourceTimeSeconds": frame_plans[active_indices[0]].source_time_seconds,
                             "nativeSurfaceCleared": false,
+                            "videoTargetIdentity": resident_video_target_identity(engine, native_preview_surface.as_ref(), generation, &native_runtime_metadata),
                             "endOfStream": false,
                             "frame": frames[0],
                             "layerFrames": frames,
@@ -5659,6 +5835,10 @@ fn serve_command() -> Result<()> {
                             "captionTextureUploads": session.captions.len(),
                             "activeMotionGraphics": active_motion_graphics,
                             "motionGraphicTextureUploads": session.motion_graphics.len(),
+                            "activeFloatingVideoFrames": active_floating_video_frames,
+                        "activeNativeMotionPaints": active_native_motion_paints,
+                            "nativeMotionPaintTextureUploads": session.native_motion_paints.iter().map(|paint| paint.texture_upload_count()).sum::<u64>(),
+                            "nativeMotionPaintResidentTextureCount": session.native_motion_paints.len(),
                             "activeParticles": active_particle_receipts.first().cloned(),
                             "activeParticleEmitters": active_particle_receipts,
                             "activeAdjustments": active_adjustments,
@@ -5678,6 +5858,10 @@ fn serve_command() -> Result<()> {
                             "compositeExecutionMode": surface_description.get("compositeExecutionMode").cloned(),
                             "compositeLayerCount": surface_description.get("compositeLayerCount").cloned(),
                             "compositeFullFramePassCount": surface_description.get("compositeFullFramePassCount").cloned(),
+                            "displayPaintLayerCount": surface_description.get("displayPaintLayerCount").cloned(),
+                            "displayPaintExecutionMode": surface_description.get("displayPaintExecutionMode").cloned(),
+                            "displayPaintCompositionBoundary": surface_description.get("displayPaintCompositionBoundary").cloned(),
+                            "displayPaintOutputEncodingCount": surface_description.get("displayPaintOutputEncodingCount").cloned(),
                             "compositeMaximumLayersPerPass": surface_description.get("compositeMaximumLayersPerPass").cloned(),
                             "depthExecutionMode": surface_description.get("depthExecutionMode").cloned(),
                             "depthFormat": surface_description.get("depthFormat").cloned(),
@@ -5704,7 +5888,9 @@ fn serve_command() -> Result<()> {
                             "vfxSimulation": session.vfx_simulation,
                             "adaptiveDecodeStageMilliseconds": adaptive_decode_stage_milliseconds,
                             "compositePresentMilliseconds": composite_present_milliseconds,
-                            "productPathCpuPixelCopies": 0,
+                            "productPathCpuPixelCopies": active_native_motion_paints.iter().map(|paint| paint["frameTextureUploadCount"].as_u64().unwrap_or(0)).sum::<u64>(),
+                            "decodedVideoCpuPixelCopies": 0,
+                            "nativePaintCpuUploadBytes": active_native_motion_paints.iter().map(|paint| paint["frameCpuUploadBytes"].as_u64().unwrap_or(0)).sum::<u64>(),
                             "visualGraphApplied": true,
                             "visualGraph": visual_layers[0],
                             "visualLayersApplied": true,
@@ -6072,6 +6258,7 @@ fn serve_command() -> Result<()> {
                         .iter_mut()
                         .filter_map(|particle| particle.update(engine, timeline_frame))
                         .collect::<Vec<_>>();
+                    let active_native_motion_paints = resident_native_motion_paint_update(session, engine, timeline_frame)?;
                     let mut surface_layers = engine_video_surface_layers(
                         &session.layers,
                         &verification_indices,
@@ -6081,39 +6268,14 @@ fn serve_command() -> Result<()> {
                             .as_ref()
                             .map(|(index, slots)| (*index, slots.as_slice())),
                     )?;
+                    let active_floating_video_frames = resident_floating_video_frame_receipts(session, timeline_frame, &active_indices, &surface_layers)?;
                     for index in &active_particle_indices {
                         surface_layers.push(session.particles[*index].texture.surface_layer());
                     }
                     for index in &active_caption_indices {
                         surface_layers.push(session.captions[*index].texture.surface_layer());
                     }
-                    for index in &active_motion_graphic_indices {
-                        let motion_graphic = &session.motion_graphics[*index];
-                        let sample = motion_graphic
-                            .plan
-                            .sample(timeline_frame)
-                            .context("active motion graphic lost its sampled style")?;
-                        if let Some(homography) =
-                            motion_graphic.plan.projective_transform(&sample)?
-                        {
-                            surface_layers.push(
-                                motion_graphic
-                                    .texture
-                                    .surface_layer_with_projective(sample.opacity, homography),
-                            );
-                        } else {
-                            let (pivot_x, pivot_y) = motion_graphic.plan.pivot_pixels();
-                            surface_layers.push(motion_graphic.texture.surface_layer_with_motion(
-                                sample.opacity,
-                                sample.translate_x,
-                                sample.translate_y,
-                                sample.scale,
-                                sample.rotation_radians,
-                                pivot_x,
-                                pivot_y,
-                            ));
-                        }
-                    }
+                    append_resident_motion_layers(session, timeline_frame, &mut surface_layers)?;
                     let adjustment_styles = active_adjustment_indices
                         .iter()
                         .map(|index| {
@@ -6227,17 +6389,33 @@ fn serve_command() -> Result<()> {
                         "captionTextureUploads": session.captions.len(),
                         "activeMotionGraphics": active_motion_graphics,
                         "motionGraphicTextureUploads": session.motion_graphics.len(),
+                        "activeFloatingVideoFrames": active_floating_video_frames,
+                        "activeNativeMotionPaints": active_native_motion_paints,
+                        "nativeMotionPaintTextureUploads": session.native_motion_paints.iter().map(|paint| paint.texture_upload_count()).sum::<u64>(),
+                        "nativeMotionPaintResidentTextureCount": session.native_motion_paints.len(),
                         "activeParticles": active_particle_receipts.first().cloned(),
                         "activeParticleEmitters": active_particle_receipts,
                         "activeAdjustments": active_adjustments,
                         "adjustmentPassCount": adjustment_styles.len(),
                         "verificationReadback": verification["verificationReadback"],
-                        "productPathCpuPixelCopies": verification["productPathCpuPixelCopies"],
+                        "videoTargetIdentity": resident_video_target_identity(engine, native_preview_surface.as_ref(), generation, &native_runtime_metadata),
+                        "offscreen": verification["offscreen"],
+                        "nativeSurfacePresented": verification["nativeSurfacePresented"],
+                        "outputReadbackCopies": verification["outputReadbackCopies"],
+                        "renderTarget": verification["renderTarget"],
+                        "productPathCpuPixelCopies": verification["productPathCpuPixelCopies"].as_u64().context("missing video CPU copy receipt")?
+                            + active_native_motion_paints.iter().map(|paint| paint["frameTextureUploadCount"].as_u64().unwrap_or(0)).sum::<u64>(),
+                        "decodedVideoCpuPixelCopies": verification["productPathCpuPixelCopies"],
+                        "nativePaintCpuUploadBytes": active_native_motion_paints.iter().map(|paint| paint["frameCpuUploadBytes"].as_u64().unwrap_or(0)).sum::<u64>(),
                         "outputWritten": verification["outputWritten"],
                         "outputHash": verification["outputHash"],
                         "compositeExecutionMode": verification["compositeExecutionMode"],
                         "compositeLayerCount": verification["compositeLayerCount"],
                         "compositeFullFramePassCount": verification["compositeFullFramePassCount"],
+                        "displayPaintLayerCount": verification["displayPaintLayerCount"],
+                        "displayPaintExecutionMode": verification["displayPaintExecutionMode"],
+                        "displayPaintCompositionBoundary": verification["displayPaintCompositionBoundary"],
+                        "displayPaintOutputEncodingCount": verification["displayPaintOutputEncodingCount"],
                         "compositeMaximumLayersPerPass": verification["compositeMaximumLayersPerPass"],
                         "depthExecutionMode": verification["depthExecutionMode"],
                         "depthFormat": verification["depthFormat"],
@@ -6531,6 +6709,25 @@ fn serve_command() -> Result<()> {
                     bail!("resident hardware video staging is currently available on Windows only")
                 }
                 #[cfg(windows)]
+                "offscreen_bind" => {
+                    let width = request.width.context("offscreen_bind requires width")?;
+                    let height = request.height.context("offscreen_bind requires height")?;
+                    if native_preview_surface.is_some() || !engine_video_sessions.is_empty() {
+                        bail!("offscreen output target requires an unbound worker without loaded video sessions");
+                    }
+                    if video_compositor.is_none() {
+                        video_compositor = Some(GpuCompositor::new_dx12_video()?);
+                    }
+                    let engine = video_compositor.as_ref().context("DX12 video compositor unavailable")?;
+                    let target = windows_video::NativePreviewSurface::offscreen(engine, width, height, windows_video::NativePreviewColorSpace::SdrAuto)?;
+                    let mut description = target.description();
+                    description["videoTargetIdentity"] = resident_video_target_identity(engine, Some(&target), generation, &native_runtime_metadata);
+                    native_preview_surface = Some(target);
+                    Ok(description)
+                }
+                #[cfg(not(windows))]
+                "offscreen_bind" => bail!("resident offscreen hardware video requires Windows"),
+                #[cfg(windows)]
                 "surface_bind" => {
                     let parent_hwnd = request
                         .parent_hwnd
@@ -6756,6 +6953,7 @@ fn write_software_receipt<T: Serialize>(receipt: &T, report_path: &Path) -> Resu
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
+        Some("video-runtime-identity") if args.len() == 2 => video_runtime_identity_command(),
         Some("probe") if args.len() == 2 => probe_command(),
         Some("serve") if args.len() == 2 => serve_command(),
         Some("selftest") if args.len() == 4 => selftest(Path::new(&args[2]), Path::new(&args[3])),

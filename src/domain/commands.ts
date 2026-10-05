@@ -19,10 +19,20 @@ import { applyTimelineCommand } from "./timelineCommands";
 import { reconcileAestheticReview } from "./aestheticReview";
 import type { AestheticArtifactBinding } from "./types";
 import { clearTemplateApplicationInPlace } from "./templateApplication";
+import { referenceMotionInstanceSchema, type ReferenceMotionTemplateInstance } from "./referenceMotionInstance";
+import { assertMotionPaintContract, assertMotionPaintEditOwner } from "./motionPaint";
+import { verifyNativePaintOwnerRevisionProof } from "./nativePaintOwnerRevision";
+import { assertClipSourceReplacement } from "./clipSourceReplacement";
+import { assertOriginalSceneGraphicRevision, assertPreparedOriginalSceneGraphicRevision } from "./originalSceneGraphicRevision";
+import { assertOriginalSourceOwnerRevisionCommand, verifyOriginalSourceOwnerRevisionProof } from "./originalSourceOwnerRevision";
 
 /** Application-owned context, never an editable command payload or review field. */
 export interface EditorCommandContext {
   currentAestheticArtifact?: (project: EditProject) => AestheticArtifactBinding | undefined;
+  /** Opaque process-owned proof from a real template recompile, never MCP input. */
+  nativePaintOwnerRevisionProof?: object;
+  /** Opaque authority from independent before/after original source compilation. */
+  originalSourceOwnerRevisionProof?: object;
 }
 
 function touch(project: EditProject): void {
@@ -71,9 +81,34 @@ function normalizeLayerState(project: EditProject): void {
   }
 }
 
-function commandInternal(project: EditProject, command: EditorCommand, context?: EditorCommandContext): EditProject {
+function assertInstanceRoleTargets(project: EditProject, instance: ReferenceMotionTemplateInstance): void {
+  if (instance.frameFormat.width !== project.width || instance.frameFormat.height !== project.height || instance.frameFormat.fps !== project.fps) {
+    throw new EditGraphError("Reference Motion instance frame format must match the current project");
+  }
+  for (const role of instance.roles) {
+    const parent = role.parentId === undefined ? undefined : project.tracks.flatMap(track => track.clips).find(clip => clip.id === role.parentId);
+    const exists = role.kind === "graphic" ? project.motionGraphics.some(graphic => graphic.id === role.id)
+      : role.kind === "track" ? project.tracks.some(track => track.id === role.id)
+      : role.kind === "clip" ? project.tracks.some(track => track.id === role.parentId && track.clips.some(clip => clip.id === role.id && clip.trackId === track.id))
+      : role.kind === "mask" ? parent?.masks?.some(mask => mask.id === role.id)
+      : parent?.keyframes.some(keyframe => keyframe.id === role.id);
+    if (!exists) throw new EditGraphError(`Reference Motion role target is missing or replaced: ${role.key}`);
+  }
+}
+
+function commandInternal(project: EditProject, command: EditorCommand, context?: EditorCommandContext, nativePaintReferenceIds?: ReadonlySet<string>, originalSourceSceneId?: string): EditProject {
   if (applyTimelineCommand(project, command)) return project;
   switch (command.type) {
+    case "replace_clip_source": {
+      assertClipSourceReplacement(project, command);
+      const clip = findClip(project, command.clipId);
+      // Replace only this clip's source selection. Shared assets, source probe
+      // metadata, colour interpretation and all authored visual/timing fields
+      // remain separate and unchanged; the ordinary history owns one Undo.
+      clip.assetId = command.assetId;
+      clip.sourceStart = command.sourceStart;
+      break;
+    }
     case "smart_cut_clip": {
       applySmartCutToClip(project, command.clipId, command.keepRanges, command.segmentIds);
       break;
@@ -370,7 +405,26 @@ function commandInternal(project: EditProject, command: EditorCommand, context?:
       track.lostRatio = track.points.filter((item) => item.status === "lost").length / Math.max(1, track.points.length);
       break;
     }
+    case "add_motion_scene": {
+      project.motionScenes ??= [];
+      if (project.motionScenes.some(scene => scene.id === command.scene.id)) throw new EditGraphError(`Motion scene id exists: ${command.scene.id}`);
+      project.motionScenes.push(structuredClone(command.scene));
+      break;
+    }
+    case "update_motion_scene": {
+      const index = project.motionScenes?.findIndex(scene => scene.id === command.sceneId) ?? -1;
+      if (index < 0 || command.scene.id !== command.sceneId) throw new EditGraphError("Motion scene update must preserve an existing identity");
+      project.motionScenes![index] = structuredClone(command.scene);
+      break;
+    }
+    case "delete_motion_scene": {
+      if (!project.motionScenes?.some(scene => scene.id === command.sceneId)) throw new EditGraphError(`Motion scene not found: ${command.sceneId}`);
+      project.motionScenes = project.motionScenes.filter(scene => scene.id !== command.sceneId);
+      break;
+    }
     case "add_motion_graphic": {
+      assertMotionPaintContract(command.graphic);
+      if (command.graphic.paintV1) assertMotionPaintEditOwner(project, command.graphic);
       if (project.motionGraphics.some((graphic) => graphic.id === command.graphic.id)) throw new EditGraphError(`動態圖卡 id 已存在：${command.graphic.id}`);
       project.motionGraphics.push(structuredClone(command.graphic));
       break;
@@ -378,10 +432,17 @@ function commandInternal(project: EditProject, command: EditorCommand, context?:
     case "update_motion_graphic": {
       const graphic = project.motionGraphics.find((item) => item.id === command.graphicId);
       if (!graphic) throw new EditGraphError(`找不到動態圖卡：${command.graphicId}`);
+      const revised = { ...graphic, ...command.patch };
+      if (graphic.paintV1 || revised.paintV1) {
+        assertMotionPaintEditOwner(project, graphic, nativePaintReferenceIds);
+        assertMotionPaintEditOwner(project, revised, nativePaintReferenceIds);
+      }
+      assertMotionPaintContract(revised);
       Object.assign(graphic, structuredClone(command.patch));
       break;
     }
     case "delete_motion_graphic": {
+      if (project.motionScenes?.some(scene => scene.graphicIds.includes(command.graphicId))) throw new EditGraphError("Delete the owning Motion scene before removing its graphic");
       if (!project.motionGraphics.some((graphic) => graphic.id === command.graphicId)) throw new EditGraphError(`找不到動態圖卡：${command.graphicId}`);
       project.motionGraphics = project.motionGraphics.filter((graphic) => graphic.id !== command.graphicId);
       break;
@@ -472,6 +533,7 @@ function commandInternal(project: EditProject, command: EditorCommand, context?:
       break;
     }
     case "set_project_resolution": {
+      if (project.motionScenes?.length && (command.width !== project.width || command.height !== project.height)) throw new EditGraphError("Recompose Motion scenes for the new canvas before changing resolution");
       if (!Number.isInteger(command.width) || !Number.isInteger(command.height) || command.width <= 0 || command.height <= 0) {
         throw new EditGraphError("畫布寬高必須是正整數");
       }
@@ -502,6 +564,74 @@ function commandInternal(project: EditProject, command: EditorCommand, context?:
       clearTemplateApplicationInPlace(project);
       break;
     }
+    case "revise_motion_scene_graphics": {
+      assertOriginalSceneGraphicRevision(project, command);
+      const replacements = new Map(command.graphics.map(graphic => [graphic.id, graphic]));
+      project.motionGraphics = project.motionGraphics.map(graphic => replacements.has(graphic.id)
+        ? structuredClone(replacements.get(graphic.id)!) : graphic);
+      break;
+    }
+    case "revise_original_motion_scene_graphic": {
+      assertOriginalSourceOwnerRevisionCommand(project, command, originalSourceSceneId);
+      const index = project.motionGraphics.findIndex(graphic => graphic.id === command.graphic.id);
+      project.motionGraphics[index] = structuredClone(command.graphic);
+      break;
+    }
+    case "relink_asset_source": {
+      const asset = findAsset(project, command.assetId);
+      if ((asset.kind !== "video" && asset.kind !== "audio") || asset.compositionId || asset.imageSequence
+        || /^(?:creative|editkin-composition|blob|data|https?):/i.test(asset.uri)) throw new EditGraphError("Only identified single-file local video/audio can be relinked");
+      if (!/^[a-f0-9]{64}$/.test(command.expectedSourceSha256)
+        || asset.derivatives?.sourceSha256 !== command.expectedSourceSha256) throw new EditGraphError("Relink requires the existing pinned source SHA-256");
+      if (command.sourceUri !== command.sourceUri.trim() || command.sourceUri.includes("\0")
+        || !( /^[a-z]:[\\/]/i.test(command.sourceUri) || /^\/[^/]/.test(command.sourceUri))) throw new EditGraphError("Relink requires a local absolute path");
+      // Host/application ingress must actually verify these bytes before this
+      // graph operation. The command is not a filesystem grant or media proof.
+      asset.uri = command.sourceUri;
+      asset.derivatives = { sourceSha256: command.expectedSourceSha256, generatedAt: asset.derivatives.generatedAt };
+      break;
+    }
+    case "reorder_motion_graphics": {
+      if (!Array.isArray(command.graphicIds) || command.graphicIds.length < 1 || command.graphicIds.length > 128
+        || command.graphicIds.some(id => typeof id !== "string" || !id.length || id.length > 160)
+        || new Set(command.graphicIds).size !== command.graphicIds.length) {
+        throw new EditGraphError("Motion graphic reorder requires 1..128 unique bounded identities");
+      }
+      const graphics = new Map(project.motionGraphics.map(graphic => [graphic.id, graphic]));
+      if (command.graphicIds.some(id => !graphics.has(id))) throw new EditGraphError("Motion graphic reorder target is missing");
+      const selected = new Set(command.graphicIds);
+      const ordered = command.graphicIds.map(id => graphics.get(id)!);
+      let index = 0;
+      project.motionGraphics = project.motionGraphics.map(graphic => selected.has(graphic.id) ? ordered[index++] : graphic);
+      break;
+    }
+    case "upsert_reference_motion_instance": {
+      const instance = referenceMotionInstanceSchema.parse(command.instance);
+      const previous = project.referenceMotionInstances?.find(candidate => candidate.id === instance.id);
+      const expected = command.expectedInstanceRevision;
+      if (expected !== undefined && (!Number.isSafeInteger(expected) || expected < 0)) throw new EditGraphError("Reference Motion expected revision is invalid");
+      if (previous) {
+        if (expected === undefined || expected !== previous.instanceRevision || !Number.isSafeInteger(expected + 1)
+          || instance.instanceRevision !== expected + 1) throw new EditGraphError("Reference Motion instance revision is stale or nonsequential");
+      } else if ((expected !== undefined && expected !== 0) || instance.instanceRevision !== 1) {
+        throw new EditGraphError("A new Reference Motion instance starts at revision 1");
+      }
+      assertInstanceRoleTargets(project, instance);
+      project.schemaVersion = 10;
+      project.referenceMotionInstances ??= [];
+      const index = project.referenceMotionInstances.findIndex(candidate => candidate.id === instance.id);
+      if (index < 0) project.referenceMotionInstances.push(structuredClone(instance));
+      else project.referenceMotionInstances[index] = structuredClone(instance);
+      break;
+    }
+    case "remove_reference_motion_instance": {
+      const instance = project.referenceMotionInstances?.find(candidate => candidate.id === command.id);
+      if (!instance || !Number.isSafeInteger(command.expectedInstanceRevision) || command.expectedInstanceRevision !== instance.instanceRevision) {
+        throw new EditGraphError("Reference Motion detach requires an existing current instance revision");
+      }
+      project.referenceMotionInstances = project.referenceMotionInstances!.filter(candidate => candidate.id !== command.id);
+      break;
+    }
     case "rename_project": {
       const name = command.name.trim();
       if (!name) throw new EditGraphError("專案名稱不可空白");
@@ -509,7 +639,7 @@ function commandInternal(project: EditProject, command: EditorCommand, context?:
       break;
     }
     case "batch": {
-      for (const child of command.commands) commandInternal(project, child, context);
+      for (const child of command.commands) commandInternal(project, child, context, nativePaintReferenceIds, originalSourceSceneId);
       break;
     }
     default: {
@@ -528,13 +658,42 @@ function revalidateAestheticAcceptance(project: EditProject, context?: EditorCom
 }
 
 export function applyCommand(input: EditProject, command: EditorCommand, context?: EditorCommandContext): EditProject {
+  const containsSceneRevision = (candidate: EditorCommand): boolean => candidate.type === "revise_motion_scene_graphics"
+    || candidate.type === "batch" && candidate.commands.some(containsSceneRevision);
+  if (containsSceneRevision(command) && command.type !== "revise_motion_scene_graphics"
+    && !(command.type === "batch" && command.commands.length === 1 && command.commands[0].type === "revise_motion_scene_graphics")) {
+    throw new EditGraphError("ORIGINAL_SCENE_MANUAL_SINGLE_COMMIT_REQUIRED: keep the exact physically prepared scene content commit alone");
+  }
+  const assertScenePreparation = (candidate: EditorCommand): void => {
+    if (candidate.type === "batch") candidate.commands.forEach(assertScenePreparation);
+    if (candidate.type === "revise_motion_scene_graphics") assertPreparedOriginalSceneGraphicRevision(input, candidate);
+  };
+  assertScenePreparation(command);
+  const containsSourceRevision = (candidate: EditorCommand): boolean => candidate.type === "revise_original_motion_scene_graphic"
+    || candidate.type === "batch" && candidate.commands.some(containsSourceRevision);
+  const originalSourceSceneId = containsSourceRevision(command)
+    ? verifyOriginalSourceOwnerRevisionProof(input, command, context?.originalSourceOwnerRevisionProof) : undefined;
+  const nativePaintReferenceIds = context?.nativePaintOwnerRevisionProof
+    ? verifyNativePaintOwnerRevisionProof(input, command, context.nativePaintOwnerRevisionProof) : undefined;
+  const assertCanvasChange = (candidate: EditorCommand): void => {
+    if (candidate.type === "batch") candidate.commands.forEach(assertCanvasChange);
+    if (candidate.type === "set_project_resolution" && input.motionScenes?.length
+      && (candidate.width !== input.width || candidate.height !== input.height)) throw new EditGraphError("Recompose Motion scenes for the new canvas before changing resolution");
+  };
+  assertCanvasChange(command);
   const fast = applyFastCommand(input, command);
   if (fast) return revalidateAestheticAcceptance(fast, context);
   const project = cloneProject(input);
-  commandInternal(project, command, context);
-  normalizeCreativeTransitions(project);
-  normalizeMotionReferences(project);
-  normalizeLayerState(project);
+  commandInternal(project, command, context, nativePaintReferenceIds, originalSourceSceneId);
+  // Source replacement and an isolated prepared scene-content edit change no
+  // clip timing/layer/tracking state. Preserve unrelated authored field shape.
+  const sceneContentOnly = command.type === "revise_motion_scene_graphics" || command.type === "batch"
+    && command.commands.length > 0 && command.commands.every(child => child.type === "revise_motion_scene_graphics");
+  if (command.type !== "replace_clip_source" && !sceneContentOnly && !originalSourceSceneId) {
+    normalizeCreativeTransitions(project);
+    normalizeMotionReferences(project);
+    normalizeLayerState(project);
+  }
   touch(project);
   return validateProject(revalidateAestheticAcceptance(project, context));
 }

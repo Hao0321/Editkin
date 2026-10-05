@@ -21,7 +21,19 @@ describe("ordinary preview decode errors (actual handlers, explicit hook-state h
   video.props.onLoadedData({currentTarget:{readyState:4,videoWidth:1080,videoHeight:1920}});
   expect(render().some(n=>n.props["data-testid"]==="preview-media-error")).toBe(false);
  });
- it("shows a recoverable named error after failed video decode and clears on decoded data",()=>{hooks.values=[];const project=createDemoProject(),clip=project.tracks[0]!.clips[0]!,asset=project.assets[0]!;const props={layers:[{clip,asset,source:"fixture.mp4"}],audioLayers:[],projectWidth:project.width,projectHeight:project.height,playhead:0,projectDuration:12,projectFps:project.fps,captions:[],captionStyle:project.captionStyle,project,playing:false,onPlayingChange:()=>{},onPlayheadChange:()=>{}};const render=()=>{hooks.index=0;return nodes(Preview(props));};const video=render().find(n=>n.type==="video")!;expect(video).toBeTruthy();video.props.onError({currentTarget:{error:{code:3,message:"decode fixture"}}});const failed=render(),panel=failed.find(n=>n.props["data-testid"]==="preview-media-error");expect(panel).toBeTruthy();expect(JSON.stringify(panel)).toContain(asset.name);expect(JSON.stringify(panel)).toContain("decode fixture");expect(failed.some(n=>n.type==="button"&&n.props.children==="重新載入預覽")).toBe(true);video.props.onLoadedData({currentTarget:{videoWidth:1920,videoHeight:1080}});expect(render().some(n=>n.props["data-testid"]==="preview-media-error")).toBe(false);});
+ it("pauses at the failed video without seeking away, retains its repair action and clears on decoded data",()=>{
+  hooks.values=[];const project=createDemoProject(),clip=project.tracks[0]!.clips[0]!,asset=project.assets[0]!,pause=vi.fn(),seek=vi.fn();
+  const props={layers:[{clip,asset,source:"fixture.mp4"}],audioLayers:[],projectWidth:project.width,projectHeight:project.height,playhead:4.2,projectDuration:12,projectFps:project.fps,captions:[],captionStyle:project.captionStyle,project,playing:true,onPlayingChange:pause,onPlayheadChange:seek};
+  const render=()=>{hooks.index=0;return nodes(Preview(props));};const video=render().find(n=>n.type==="video")!;
+  expect(video).toBeTruthy();video.props.onError({currentTarget:{error:{code:3,message:"decode fixture"}}});
+  expect(pause).toHaveBeenCalledExactlyOnceWith(false);expect(seek).not.toHaveBeenCalled();
+  const failed=render(),panel=failed.find(n=>n.props["data-testid"]==="preview-media-error");
+  expect(panel).toBeTruthy();expect(JSON.stringify(panel)).toContain(asset.name);expect(JSON.stringify(panel)).toContain("decode fixture");
+  expect(failed.some(n=>n.type==="button"&&n.props.children==="重新載入預覽")).toBe(true);
+  video.props.onLoadedData({currentTarget:{videoWidth:1920,videoHeight:1080}});
+  expect(render().some(n=>n.props["data-testid"]==="preview-media-error")).toBe(false);
+  expect(pause).toHaveBeenCalledTimes(1);expect(seek).not.toHaveBeenCalled();
+ });
  it("updates one stale visible proxy only on click, disables parallel work and disappears when current",()=>{
   hooks.values=[];const project=createDemoProject(),clip=project.tracks[0]!.clips[0]!,asset=project.assets[0]!,rebuild=vi.fn(async()=>{});
   asset.derivatives={sourceSha256:"a".repeat(64),proxyUri:"D:/old/proxy.mp4",thumbnailUri:"D:/old/thumbnail.jpg",generatedAt:"2026-08-31T00:00:00Z",proxyColorContract:"editkin.browser-display-proxy/v1",proxyColor:{interpretation:"rec709",primaries:"bt709",transfer:"bt709",matrix:"bt709",range:"tv"}};

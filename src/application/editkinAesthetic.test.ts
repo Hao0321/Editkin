@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { EDITKIN_AESTHETIC_STANDARD, resolveAestheticSystem, resolveAestheticSystemForDomain, scoreAestheticReview } from "./editkinAesthetic";
 
 describe("anonymous Editkin aesthetic standard", () => {
-  it("ships the complete ten-dimension, thirteen-family current contract", () => {
+  it("ships the complete ten-dimension, fourteen-family current contract", () => {
     expect(Object.keys(EDITKIN_AESTHETIC_STANDARD.dimensions)).toHaveLength(10);
-    expect(Object.keys(EDITKIN_AESTHETIC_STANDARD.style_families)).toHaveLength(13);
+    expect(Object.keys(EDITKIN_AESTHETIC_STANDARD.style_families)).toHaveLength(14);
     expect(Object.values(EDITKIN_AESTHETIC_STANDARD.dimensions).reduce((sum, row) => sum + row.weight, 0)).toBe(100);
   });
 
@@ -20,6 +20,13 @@ describe("anonymous Editkin aesthetic standard", () => {
     const system = resolveAestheticSystemForDomain("technology", "longform");
     expect(system.domain).toBe("technology");
     expect(system.primaryFamily).toBe(EDITKIN_AESTHETIC_STANDARD.domain_routes.technology.primary);
+  });
+
+  it("routes illustrated music MV to character led motion rather than an event template", () => {
+    const system = resolveAestheticSystem("music_mv", "longform");
+    expect(system.domain).toBe("illustrated_music_mv");
+    expect(system.primaryFamily).toBe("illustrated_mv");
+    expect(system.avoid).toContain("static lyric cards over unrelated footage");
   });
 
   it("never lets machine checks impersonate the required human review", () => {

@@ -59,17 +59,29 @@ export interface TimelineClip {
   expressions?: ClipExpressionBindings;
 }
 
-export interface FloatingVideoFrame {
-  schema: "editkin.floating-video-frame/v1";
+interface FloatingVideoFrameBase {
   style: "prism" | "graphite" | "matte";
   size: number;
   yawDegrees: number;
   pitchDegrees: number;
-  aspect?: "canvas" | "portrait";
   centerX?: number;
   centerY?: number;
   orbit?: { amplitudeDegrees: number; periodSeconds: number };
 }
+
+export interface FloatingVideoFrameV1 extends FloatingVideoFrameBase {
+  schema: "editkin.floating-video-frame/v1";
+  aspect?: "canvas" | "portrait";
+}
+
+export interface FloatingVideoFrameV2 extends FloatingVideoFrameBase {
+  schema: "editkin.floating-video-frame/v2";
+  aspect: "source" | "canvas" | "portrait";
+  mediaFit: "contain";
+  motion?: { entranceFrames: number; exitFrames: number; travelY: number };
+}
+
+export type FloatingVideoFrame = FloatingVideoFrameV1 | FloatingVideoFrameV2;
 
 export interface TimelineTrack {
   id: string;
@@ -173,6 +185,8 @@ export interface MediaAsset {
   duration: number;
   width?: number;
   height?: number;
+  /** Upright display aspect from real media geometry; not encoded width / height. */
+  displayAspectRatio?: number;
   role?: string;
   bpm?: number;
   license?: string;

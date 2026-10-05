@@ -25,6 +25,7 @@ interface ToolbarProps {
   onExportAlphaMaster?: () => void;
   onOpenAgentConnect: () => void;
   onAutoEdit?: () => void;
+  autoEditLabel?: string;
   autoEditBusy?: boolean;
   autoEditUnavailableReason?: string;
   onMobileRemote?: () => void;
@@ -58,6 +59,7 @@ export function Toolbar({
   onExportAlphaMaster,
   onOpenAgentConnect,
   onAutoEdit,
+  autoEditLabel,
   autoEditBusy = false,
   autoEditUnavailableReason,
   onMobileRemote,
@@ -68,7 +70,7 @@ export function Toolbar({
   onHelp,
   workspaceControls,
 }: ToolbarProps) {
-  const saveLabel = dirty
+  const saveLabel = !isDesktop ? "下載專案" : dirty
     ? recoveryState === "saving" ? "正在保護變更" : "儲存專案"
     : "已安全儲存";
 
@@ -86,7 +88,7 @@ export function Toolbar({
         <div className="project-heading">
           <span className={`status-dot ${dirty ? "dirty" : ""}`} aria-hidden="true" />
           <strong>{projectName}</strong>
-          <small>{dirty ? "尚未儲存" : "已儲存"} · {formatTime(playhead)}</small>
+          <small>{dirty ? "尚未儲存" : isDesktop ? "已儲存" : "專案未變更 · 無 Autosave"} · {formatTime(playhead)}</small>
         </div>
         <ol className="quick-flow" aria-label="四步完成影片">
           <li className={hasUserMedia ? "done" : "current"} data-flow-step="1"><b>1</b><span>加入素材</span></li>
@@ -107,11 +109,11 @@ export function Toolbar({
           type="button"
           className="secondary-action auto-edit-action"
           onClick={onAutoEdit}
-          disabled={autoEditBusy || !hasUserMedia || Boolean(autoEditUnavailableReason)}
-          title={autoEditUnavailableReason ?? (hasUserMedia ? "分析畫面與語音，自動完成第一版剪輯" : "請先加入自己的影片")}
+          disabled={autoEditBusy || (!hasUserMedia && !autoEditLabel) || Boolean(autoEditUnavailableReason)}
+          title={autoEditUnavailableReason ?? (autoEditLabel ? "連接 Video Autopilot，規劃歌曲與原創插畫並建立可編輯動畫 MV" : hasUserMedia ? "分析畫面與語音，自動完成第一版剪輯" : "請先加入自己的影片")}
           data-testid="semantic-edit-button"
-          data-beginner-action="一鍵自動完成"
-        ><span>✦</span> {autoEditBusy ? "自動剪輯中…" : "自動剪輯"}</button>}
+          data-beginner-action={autoEditLabel ?? "一鍵自動完成"}
+        ><span>✦</span> {autoEditBusy ? "自動剪輯中…" : autoEditLabel ?? "自動剪輯"}</button>}
         {workspaceMode === "editor" && <details className="project-menu">
           <summary>更多</summary>
           <div className="project-menu-popover">
@@ -135,13 +137,13 @@ export function Toolbar({
                   </select>
                 </div>
                 <button type="button" onClick={(event) => { const menu = event.currentTarget.closest<HTMLDetailsElement>("details.project-menu"); if (menu) menu.open = false; onDirectorConsole(); }} data-testid="director-console-button"><span>◉</span><div>導演台<small>標記重點並集中審片</small></div></button>
-                {isDesktop && <>
+                <>
                   <strong>專案與連線</strong>
                   <button type="button" onClick={onNew} data-testid="new-project-button"><span>＋</span><div>新增空白專案<small>從零開始剪一支影片</small></div></button>
                   <button type="button" onClick={onOpen} data-testid="open-project-button"><span>⌂</span><div>開啟專案<small>繼續之前的工作</small></div></button>
-                  <button type="button" onClick={onSave} data-testid="save-project-button" title="儲存（Ctrl/Cmd+S；另存新檔 Ctrl/Cmd+Shift+S）"><span>✓</span><div>{saveLabel}<small>保留目前所有修改</small></div></button>
-                  <button type="button" onClick={onCheckUpdates}><span>↥</span><div>檢查更新<small>下載後由你決定是否安裝</small></div></button>
-                </>}
+                  <button type="button" onClick={onSave} data-testid="save-project-button" title={isDesktop ? "儲存（Ctrl/Cmd+S；另存新檔 Ctrl/Cmd+Shift+S）" : "送出 JSON 下載（Ctrl/Cmd+S）；請確認下載完成，沒有 Autosave"}><span>✓</span><div>{saveLabel}<small>{isDesktop ? "保留目前所有修改" : "送出下載；不會標記已儲存"}</small></div></button>
+                  {isDesktop && <button type="button" onClick={onCheckUpdates}><span>↥</span><div>檢查更新<small>下載後由你決定是否安裝</small></div></button>}
+                </>
                 {isDesktop && onExportOpenExrSequence && <>
                   <strong>專業輸出</strong>
                   <button type="button" onClick={onExportOpenExrSequence} disabled={!hasUserMedia} data-testid="render-openexr-sequence-button"><span>▧</span><div>OpenEXR 影格序列<small>場景線性 RGBA32F · 無音訊</small></div></button>
@@ -152,7 +154,7 @@ export function Toolbar({
           </div>
         </details>}
 
-        {workspaceMode === "editor" && <button type="button" className="primary-button export-action" onClick={onExport} disabled={!hasUserMedia} title={hasUserMedia ? (isDesktop ? "輸出完成影片" : "下載專案檔（.editkin.json）；網頁版無法輸出影片，請用桌面版") : "請先加入自己的影片"} data-testid="render-button" data-beginner-action="輸出影片">
+        {workspaceMode === "editor" && <button type="button" className="primary-button export-action" onClick={onExport} disabled={isDesktop && !hasUserMedia} title={!isDesktop ? "下載專案檔（.editkin.json）；請確認下載完成。網頁版無法輸出影片，請用桌面版" : hasUserMedia ? "輸出完成影片" : "請先加入自己的影片"} data-testid="render-button" data-beginner-action="輸出影片">
           <span className="button-step">4</span>{isDesktop ? "輸出影片" : "匯出專案"}
         </button>}
       </nav>

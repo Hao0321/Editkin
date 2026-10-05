@@ -10,7 +10,7 @@ import { parseAutopilotPlan } from "./autopilotPlan";
 import { motionGraphicV2LayoutReceipt, motionGraphicV2FrameReceipt } from "../motion/compositionV2";
 import { motionVectorPaths } from "../motion/vectorGeometry";
 import { writeAssContent } from "../render/captionAss";
-import { floatingFrameCssMatrix, floatingFrameGeometry } from "../motion/floatingVideoFrame";
+import { floatingFrameCssMatrix, floatingFrameLayout } from "../motion/floatingVideoFrame";
 
 function fixture() {
   const project = createEmptyProject("Original scene", { width: 1080, height: 1920, fps: 30 });
@@ -61,7 +61,9 @@ describe("native original reel scene compilation", () => {
     expect(() => prepareNativeReelScene(fixture(), { ...input, progress: { steps: 2, activeStep: 3 } }, p => p)).toThrow(/章節/);
     const project = applyCommand(fixture(), { type: "batch", commands: compile().commands });
     const dots = project.motionGraphics.find(g => g.vectorV2?.kind === "dot_grid")!;
-    expect(() => motionGraphicV2LayoutReceipt(project, { ...dots, vectorV2: { ...dots.vectorV2!, kind: "dot_grid", spacingPixels: 8, dotRadiusPixels: 1 } })).toThrow(/512/);
+    const vector = dots.vectorV2;
+    if (vector?.kind !== "dot_grid") throw new Error("Fixture lost dot-grid vector");
+    expect(() => motionGraphicV2LayoutReceipt(project, { ...dots, vectorV2: { ...vector, spacingPixels: 8, dotRadiusPixels: 1 } })).toThrow(/512/);
     expect(() => applyCommand(project, { type: "update_motion_graphic", graphicId: dots.id, patch: { text: "假文字" } })).toThrow(/空文字/);
     expect(() => projectSchema.parse({ ...project, motionGraphics: [{ ...dots, schema: "hao.motion-composition/v1", motionV2: undefined, layoutV2: undefined }] })).toThrow();
   });
@@ -85,7 +87,11 @@ describe("native original reel scene compilation", () => {
     const title = motionGraphicV2LayoutReceipt(applied, applied.motionGraphics[0]);
     const keepoutBottom = title.box.y + title.box.height + 16 + 24;
     for (let f = 0; f < 90; f++) for (const clip of applied.tracks.flatMap(t => t.clips)) {
-      const g = floatingFrameGeometry(clip.floatingFrame!, 1080, 1920, f / 30);
+      const asset = applied.assets.find(value => value.id === clip.assetId)!;
+      const source = asset.displayAspectRatio === undefined ? { width: asset.width!, height: asset.height! }
+        : { width: asset.displayAspectRatio, height: 1 };
+      const g = floatingFrameLayout(clip.floatingFrame!, 1080, 1920, { ...source, fps: applied.fps,
+        durationFrames: Math.round(clip.duration * applied.fps), localFrame: f }).geometry;
       const m = floatingFrameCssMatrix(g.quad, 1080, 1920).slice(9, -1).split(",").map(Number);
       const corners = [[g.left, g.top], [g.left + g.outerWidth, g.top], [g.left, g.top + g.outerHeight], [g.left + g.outerWidth, g.top + g.outerHeight]];
       const top = Math.min(...corners.map(([x, y]) => (m[1] * x + m[5] * y + m[13]) / (m[3] * x + m[7] * y + m[15])));

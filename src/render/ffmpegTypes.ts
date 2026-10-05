@@ -1,4 +1,5 @@
 import type { NativeEffectRenderReceipt } from "../plugins/nativeEffectTypes";
+import type { SelectedNativeVideoRuntimeIdentity } from "../application/selectedNativeVideoRuntime";
 import type { ResidentSceneLinearVideoSequenceReceipt } from "./residentSceneLinearVideoSequence";
 import type {
   HighBitDepthAlphaDeliveryReceipt,
@@ -15,8 +16,10 @@ export interface RenderOptions {
   autoRotoCacheRoot?: string;
   nativeCorePath?: string;
   gpuCompositorPath?: string;
+  selectedNativeVideoRuntime?: SelectedNativeVideoRuntimeIdentity;
   preferGpu?: boolean;
   timeoutMs?: number;
+  signal?: AbortSignal;
   fontRoot?: string;
   colorRoot?: string;
   pluginRoots?: string[];

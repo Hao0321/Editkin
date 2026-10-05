@@ -1,13 +1,17 @@
 import type { MotionGraphic } from "../domain/types";
+import { assertMotionPaintContract } from "../domain/motionPaint";
 import type { MotionGraphicV2FrameReceipt, MotionGraphicV2LayoutReceipt } from "./compositionV2";
-import { motionPanelPaths } from "./panelGeometry";
+import { motionPanelPaths, motionPanelContourCommands } from "./panelGeometry";
+import type { NativeVectorPath } from "./nativeGlyphPaint";
+import type { PreparedGlyphPathCommand } from "../typography/preparedGlyphRun";
 import { connectionFieldGeometry } from "./connectionField";
+import { springGeometryPaths } from "./springGeometryPaths";
 
 export interface MotionVectorPath { color: string; ass: string; svg: string }
 const r = (value: number) => Math.round(value * 100) / 100;
 
 /** Cubic ellipse contours are authored here once for SVG and libass. */
-function ellipse(cx: number, cy: number, rx: number, ry: number) {
+function ellipseCommands(cx: number, cy: number, rx: number, ry: number) {
   const k = .5522847498;
   const commands = [
     { op: "m", p: [cx + rx, cy] },
@@ -16,16 +20,39 @@ function ellipse(cx: number, cy: number, rx: number, ry: number) {
     { op: "b", p: [cx - rx, cy - ry * k, cx - rx * k, cy - ry, cx, cy - ry] },
     { op: "b", p: [cx + rx * k, cy - ry, cx + rx, cy - ry * k, cx + rx, cy] },
   ];
+  return commands;
+}
+function ellipse(cx: number, cy: number, rx: number, ry: number) {
+  const commands = ellipseCommands(cx, cy, rx, ry);
   return {
     ass: commands.map(c => `${c.op} ${c.p.map(r).join(" ")}`).join(" "),
     svg: commands.map(c => `${c.op === "b" ? "C" : "M"} ${c.p.map(r).join(" ")}`).join(" ") + " Z",
   };
 }
 
+/** Static typed geometry only. Animated reveal/deformation needs its own retained track,
+ * so those kinds cannot silently reuse an unchanging native path. */
+export function motionStaticVectorPath(graphic: MotionGraphic, layout: MotionGraphicV2LayoutReceipt): NativeVectorPath {
+  assertMotionPaintContract(graphic);
+  const vector = graphic.vectorV2;
+  if (!vector || !["editkin.motion-vector/v1", "editkin.motion-vector-stage/v1"].includes(vector.schema) || vector.revealFrames !== 1
+    || !["panel", "ellipse", "rule"].includes(vector.kind)) throw new Error("Native paint requires a supported static typed vector");
+  const { width, height } = layout.box;
+  const commands: readonly PreparedGlyphPathCommand[] = vector.kind === "ellipse"
+    ? [...ellipseCommands(width / 2, height / 2, width / 2, height / 2).map((command): PreparedGlyphPathCommand => {
+      const p = command.p.map(r);
+      return command.op === "b" ? { type: "C", x1: p[0], y1: p[1], x2: p[2], y2: p[3], x: p[4], y: p[5] }
+        : { type: "M", x: p[0], y: p[1] };
+    }), { type: "Z" }]
+    : motionPanelContourCommands(width, height, graphic.cornerRadius ?? 8);
+  return { commands, fill_rule: "non_zero" };
+}
+
 /** Integer-frame geometry, independent of seek order and browser clocks. */
 export function motionVectorPaths(graphic: MotionGraphic, layout: MotionGraphicV2LayoutReceipt, frame: MotionGraphicV2FrameReceipt): MotionVectorPath[] {
   const vector = graphic.vectorV2;
   if (!vector || !frame.visible || !frame.vectorState || frame.vectorState.opacity <= .001) return [];
+  if (vector.kind === "spring_panel") return springGeometryPaths(graphic, layout, frame);
   const { width, height } = layout.box;
   const progress = vector.revealFrames === 1 ? 1 : Math.max(0, Math.min(1, frame.localFrame / (vector.revealFrames - 1)));
   const reveal = 1 - (1 - progress) ** 3;

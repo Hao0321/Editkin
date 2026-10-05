@@ -1,7 +1,22 @@
+import { registerCaptionDeliveryTools } from "./captionDeliveryTools";
+import { registerClipAudioGainTools } from "./clipAudioGainTools";
+import { registerMediaDiscoveryTools } from "./mediaDiscoveryTools";
+import { registerMediaConversionTools } from "./mediaConversionTools";
+import { registerProjectMediaSearchTools } from "./projectMediaSearchTools";
+import { motionGraphicCreationInputSchema } from "../application/motionGraphicCreation";
+import { registerAgentPaletteTools } from "./agentPaletteTools";
+import { prepareMotionGraphicCreationFile } from "./motionGraphicCreationFile";
+import { originalMotionScene2dInputSchema, prepareOriginalMotionScene2d } from "../application/originalMotionScene2d";
+import { originalSceneGraphicRevisionInputSchema, prepareOriginalSceneGraphicRevision } from "../application/originalSceneGraphicRevision";
+import { prepareOriginalMotionSourceFile } from "./originalMotionSourceFile";
+import { prepareOriginalMotionSourceRevisionFile } from "./originalMotionSourceRevisionFile";
+import { readBundledFontFace } from "../render/bundledFontSource";
+import { prepareGlyphRun } from "../typography/preparedGlyphRun";
 import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
 import { resolveAestheticSystem } from "../application/editkinAesthetic";
+import { readCreatorReviewPolicy, assertCreatorReviewPolicyCurrent } from "./creatorReviewPolicy";
 import { findAsset, findClip, findTrack, projectDuration, summarizeProject } from "../domain/editGraph";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -20,8 +35,8 @@ import { DEFAULT_COLOR, DEFAULT_TRANSFORM } from "../domain/types";
 import { editorCommandSchema } from "./schemas";
 import { analyzeMotionTrack } from "../application/motionTracking";
 import type { EditorCommand } from "../domain/commands";
-import { createMotionGraphic } from "../motion/composition";
-import { FLOATING_VIDEO_FRAME_PRESETS, floatingVideoFramePreset } from "../motion/floatingVideoFrame";
+import { createMotionGraphic, legacyMotionGraphicSeed } from "../motion/composition";
+import { FLOATING_VIDEO_FRAME_PRESETS, floatingVideoFramePresetV2 } from "../motion/floatingVideoFrame";
 import { FLOATING_FRAME_SCENE_PRESETS, floatingFrameSceneCommands } from "../motion/floatingFrameScenes";
 import { MOTION_CLIP_PRESETS, motionClipPresetCommands } from "../motion/motionClipPresets";
 import { compactMotionGraphicPresets, findMotionGraphicPreset, motionGraphicPresets } from "../creative/motionGraphicPresets";
@@ -30,9 +45,12 @@ import { prepareNativeReelScene } from "../application/nativeReelScenes";
 import { nativeMotionSectionSchema, prepareNativeMotionSequence } from "../application/nativeMotionSequence";
 import { motionReferenceDesignInputSchema, prepareMotionReferenceDesign } from "../application/motionReferenceDesign";
 import { nativeMotionRevisionSchema, prepareNativeMotionRevision } from "../application/nativeMotionRevision";
+import { nativeGeometryMotionSchema, prepareNativeGeometryMotion } from "../application/nativeGeometryMotion";
 import { motionSceneStyleSchema } from "../domain/motionSceneStyle";
 import { registerMesh3dTools } from "./mesh3dTools";
 import { registerReferenceMotionTemplateTools } from "./referenceMotionTemplateTools";
+import { registerMediaBootstrapTools } from "./mediaBootstrapTools";
+import { registerMediaSourceRelinkTools } from "./mediaSourceRelinkTools";
 import { REFERENCE_MOTION_TEMPLATES } from "../motion/referenceMotionTemplates";
 import { compactCinematicLanguageIndex, resolveCinematicRecipe } from "../creative/cinematicLanguage";
 import { rankStyleShotCandidates, type ShotSelectionStyleId } from "../creative/shotSelectionStyles";
@@ -48,6 +66,7 @@ import { registerRenderTools } from "./renderTools";
 import { registerPluginTools } from "./pluginTools";
 import { registerRotoKeyerAutopilotTools } from "./rotoKeyerAutopilotTools";
 import { registerMontageTools } from "./montageTools";
+import { registerMusicVideoTools } from "./musicVideoTools";
 import { registerAutoColorTools } from "./autoColorTools";
 import { registerRemoteOnboardingTools } from "./remoteOnboardingTools";
 import { creativePackRoot, errorResult, personalMusicRoot, personalVisualRoot, textResult } from "./toolRuntime";
@@ -98,10 +117,19 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
   registerPluginTools(server);
   registerRotoKeyerAutopilotTools(server);
   registerMontageTools(server);
+  registerCaptionDeliveryTools(server);
+  registerClipAudioGainTools(server);
+  registerMediaDiscoveryTools(server);
+  registerMediaConversionTools(server);
+  registerProjectMediaSearchTools(server);
+  registerMusicVideoTools(server);
   registerAutoColorTools(server);
   registerRemoteOnboardingTools(server);
-  registerReferenceMotionTemplateTools(server);
+  registerReferenceMotionTemplateTools(server, environment);
+  registerMediaBootstrapTools(server);
+  registerMediaSourceRelinkTools(server);
   registerMesh3dTools(server);
+  registerAgentPaletteTools(server);
 
   server.registerTool("list_creative_presets", {
     description: "列出 Editkin 可輸出的調色、特效、轉場、字幕、動態圖文、2D 片段動態、2.5D 浮空影片框與鏡頭語言 presets。動態圖文回低 Token 索引；motionPresetId 只展開單一 seed。",
@@ -122,14 +150,19 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       transitions: kind === "all" || kind === "transition" ? compact(TRANSITION_PRESETS) : undefined,
       textStyles: kind === "all" || kind === "text" ? compact(TEXT_STYLE_PRESETS) : undefined,
       motionGraphics: !motionPresetId && (kind === "all" || kind === "motion") ? compactMotionGraphicPresets() : undefined,
+      motionGraphicCreation: kind === "all" || kind === "motion" ? { prepareTool: "prepare_motion_graphic_creation", schema: "editkin.motion-graphic-creation/v1", readOnly: true,
+        boundary: "registered_text_v2_exact_project_frames_verified_glyph; no_timeline_extension; not_art_or_v4_apply", scopes: ["existing_timeline", "empty_canvas"] } : undefined,
       referenceMotionTemplates: !motionPresetId && (kind === "all" || kind === "motion") ? REFERENCE_MOTION_TEMPLATES.map(({ id, name, grammar, sourceSlots, maxSources, minSeconds }) => ({ id, name, grammar, sourceSlots, maxSources, minSeconds, prepareTool: "prepare_reference_motion_template", capabilityBoundary: "editable_2d_not_sphere_or_studio" })) : undefined,
         floatingVideoFrames: !motionPresetId && (kind === "all" || kind === "motion") ? FLOATING_VIDEO_FRAME_PRESETS.map(preset => ({
-          id: preset.id, name: preset.name, capability: "editable_2.5d_perspective_video_frame", frame: floatingVideoFramePreset(preset.id),
-          commandType: "set_clip_floating_frame", requires: ["rec709_video_clip", "no_scene25d", "no_mask_or_layout", ...(preset.id === "portrait_orbit" ? ["portrait_project"] : [])],
+          id: preset.id, name: preset.name, capability: "editable_2.5d_perspective_video_frame", frame: floatingVideoFramePresetV2(preset.id),
+          declaredSchema: "editkin.floating-video-frame/v2", mediaFit: "contain", sourceGeometry: "upright_display_aspect_ratio_or_legacy_stored_upright_dimensions",
+          capabilityBoundary: "perspective_plane_not_true_3d; saved_v1_unchanged; no_native_parity_claim",
+          commandType: "set_clip_floating_frame", requires: ["rec709_video_clip", "known_source_display_geometry", "at_least_13_clip_frames", "no_scene25d", "no_mask_or_layout", ...(preset.id === "portrait_orbit" ? ["portrait_project"] : [])],
         })) : undefined,
         floatingFrameScenes: !motionPresetId && (kind === "all" || kind === "motion") ? FLOATING_FRAME_SCENE_PRESETS.map(preset => ({
           ...preset, capability: "editable_portrait_three_layer_video_scene", prepareTool: "prepare_floating_frame_scene",
-          requires: ["portrait_project", "rec709_video_clip", "clean_clip_transform", "no_existing_keyframes"],
+          declaredSchema: "editkin.floating-video-frame/v2", aspect: "source", mediaFit: "contain", capabilityBoundary: "editable_2.5d_planes_not_true_3d",
+          requires: ["portrait_project", "rec709_video_clip", "known_source_display_geometry", "at_least_13_clip_frames", "clean_clip_transform", "no_existing_keyframes"],
         })) : undefined,
       motionClipPresets: !motionPresetId && (kind === "all" || kind === "motion") ? MOTION_CLIP_PRESETS.map(preset => ({
         ...preset, prepareTool: "prepare_clip_motion_preset", commandType: "add_keyframe", requires: ["clip_without_existing_keyframes", "at_least_12_frames"],
@@ -157,7 +190,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
   });
 
   server.registerTool("prepare_floating_frame_scene", {
-    description: "只讀：將三份獨立使用者影片編譯成双直式後景或錯層浮窗的五個 EditGraph commands。必須綁 rearRight/front 素材與來源入點，僅原片保留音訊。結果可編輯、可 Undo；綁素材 receipts 放入 v4 plan 後 audit/apply。",
+    description: "只讀：將三份獨立使用者影片按真原片顯示比例編譯成 v2 完整嵌入、逐格進退場的五個 EditGraph commands；這是 2.5D 平面，不是真 3D。必須綁 rearRight/front 素材與來源入點，至少 13 格且僅原片保留音訊。結果可編輯、可 Undo；綁素材 receipts 放入 v4 plan 後 audit/apply。",
     inputSchema: z.object({ projectPath: z.string().min(1), clipId: z.string().min(1), presetId: z.enum(["portrait_duo", "portrait_stack"]),
       sources: z.object({ rearRight: z.object({ assetId: z.string().min(1), sourceStart: z.number().finite().nonnegative() }), front: z.object({ assetId: z.string().min(1), sourceStart: z.number().finite().nonnegative() }) }) }),
   }, async ({ projectPath, clipId, presetId, sources }) => {
@@ -200,11 +233,95 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
     try { return textResult(prepareMotionReferenceDesign(await readProject(projectPath), input)); }
     catch (error) { return errorResult(error); }
   });
+  server.registerTool("prepare_motion_graphic_creation", {
+    description: "唯讀新增圖文準備：依當前專案影格率、明示整格與真可用窗口，核對登記text v2配方、實體字型輪廓／逐格安全區及既有0.8秒最短閱讀停留。片尾不足清楚拒絕，不延長影片／音訊時鐘，不默退v1；空時間軸須明示empty_canvas。回傳普通新增命令仍須唯一v4 audit→atomic apply→render、完整QA／動態美術及效能；PREPARED不是已套用或完成。",
+    inputSchema: motionGraphicCreationInputSchema.extend({ projectPath: z.string().min(1) }),
+  }, async ({ projectPath, ...input }, context) => {
+    try {
+      return textResult(await prepareMotionGraphicCreationFile(projectPath, input, environment, context.mcpReq.signal));
+    } catch (error) { return errorResult(error); }
+  });
+
   server.registerTool("prepare_native_motion_revision", {
-    description: "只讀局部導演修訂：精確指定 Motion v2 元素、專案版本、完整元素影格範圍與入場／退場。0.7 倍動畫速度、明確影格時長、動畫起始縮放分開；不改影片播放速度、音訊、文字及終點位置。回傳 before/after 和普通更新命令，過期版本、错误對象或閱讀停留不足會阻擋；經 v4 audit/apply 重驗。",
+    description: "只讀局部導演修訂：精確指定 Motion v2 元素、專案版本、完整元素影格範圍與入場／退場。動畫速度、影格時長、起始縮放及有界彈簧參數分開設定；彈簧沿既有入退場正規化進度求值。不改影片播放速度、音訊、文字及終點位置。回傳 before/after 和普通更新命令；含逐字錯開的閱讀停留不足、過期版本或錯誤對象會阻擋。實際修改需綁定 v4 designEvidence 與 motion treatment，經 audit/apply 重驗；不是連續形狀變形或美術認證。",
     inputSchema: nativeMotionRevisionSchema.extend({ projectPath: z.string().min(1) }),
   }, async ({ projectPath, ...input }) => {
     try { return textResult(prepareNativeMotionRevision(await readProject(projectPath), input)); }
+    catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_original_motion_source", {
+    description: "Read-only canonical authored-source preparation. Reads owned .editkin/original-sources/<id>.json, verifies authored rights/style/cues and actual pinned physical fonts, compiles current editable scene commands. Explicit commandIndexOffset binds the eventual v4 plan. No clip receipts, reference media import, reality claims or automatic art approval.",
+    inputSchema: z.strictObject({ projectPath: z.string().min(1), sourcePath: z.string().min(1).max(1024), commandIndexOffset: z.number().int().min(0).max(99) }),
+  }, async ({ projectPath, sourcePath, commandIndexOffset }) => {
+    try {
+      const project = await readProject(projectPath);
+      const result = await prepareOriginalMotionSourceFile(project, sourcePath, commandIndexOffset, { workspace: process.env.EDITKIN_WORKSPACE ?? process.env.HAO_EDITOR_WORKSPACE ?? process.cwd(), fontRoot: environment.EDITKIN_FONT_ROOT ?? resolve(import.meta.dirname, "../../public/fonts") });
+      return textResult({ status: "PREPARED_NOT_APPLIED", readOnly: true, ...result });
+    } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_original_motion_source_revision", {
+    description: "Read-only versioned existing-owner preparation. Reads distinct immutable before/after authored files, recompiles both with actual physical fonts and every scene frame, verifies literal live owner, preserves IDs/camera/cues/geometry/time/rights. Canonical v4 independently rechecks at audit/apply/precommit; no manual-command promotion, automatic art or installed-product certification.",
+    inputSchema: z.strictObject({ projectPath: z.string().min(1), beforeSourcePath: z.string().min(1).max(1024), afterSourcePath: z.string().min(1).max(1024), commandIndexOffset: z.number().int().min(0).max(99), revisionScope: z.literal("painted_authored_overlay_preserve_media").optional() }),
+  }, async ({ projectPath, beforeSourcePath, afterSourcePath, commandIndexOffset, revisionScope }, context) => {
+    try {
+      const result = await prepareOriginalMotionSourceRevisionFile(await readProject(projectPath), beforeSourcePath, afterSourcePath, commandIndexOffset, {
+        workspace: process.env.EDITKIN_WORKSPACE ?? process.env.HAO_EDITOR_WORKSPACE ?? process.cwd(),
+        fontRoot: environment.EDITKIN_FONT_ROOT ?? resolve(import.meta.dirname, "../../public/fonts"), signal: context.mcpReq.signal, revisionScope,
+      });
+      return textResult({ status: "PREPARED_NOT_APPLIED", readOnly: true, ...result });
+    } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_original_motion_scene_2d", {
+    description: "唯讀原創場景編譯：固定可編輯圖文身分、逐影格語意 cue、共用保留速度的2D鏡頭與實體字形。需明示 standalone_showcase、自有品牌／文字及目的來源；不匯入第三方UI或參考媒體。文字由核對字型bytes準備，欠缺或逐格超框即阻擋。回傳普通命令、完整scope及hash；PREPARED_NOT_APPLIED／NOT_V4_ADMITTED，現行canonical原創source契約尚待接線，不可以假clip receipt或直接render繞過v4。",
+    inputSchema: originalMotionScene2dInputSchema.extend({ projectPath: z.string().min(1) }),
+  }, async ({ projectPath, ...input }) => {
+    try {
+      const project = await readProject(projectPath);
+      const bytes = new Map<string, Uint8Array>();
+      const fontRoot = environment.EDITKIN_FONT_ROOT ?? resolve(import.meta.dirname, "../../public/fonts");
+      return textResult(await prepareOriginalMotionScene2d(project, input, () => randomUUID(), {
+        prepareText: async (faceId, text) => {
+          let selected = bytes.get(faceId);
+          if (!selected) {
+            selected = await readBundledFontFace(fontRoot, faceId);
+            if (bytes.size >= 2) bytes.delete(bytes.keys().next().value!);
+            bytes.set(faceId, selected);
+          }
+          return prepareGlyphRun(faceId, text, selected);
+        },
+      }));
+    } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_original_scene_graphic_revision", {
+    description: "Read-only manual saved-scene content preparation: exact owner/revision, text/font/layout/colors and per-element timing. Uses actual glyphs and every camera frame; preserves scene/cues/IDs/ranges/media. Not reconstructed authoring/rights or native/art proof. NOT_V4_ADMITTED: canonical original source is add-only; no unbound automation or direct rendering.",
+    inputSchema: originalSceneGraphicRevisionInputSchema.extend({ projectPath: z.string().min(1) }),
+  }, async ({ projectPath, ...input }, context) => {
+    try {
+      const project = await readProject(projectPath), bytes = new Map<string, Uint8Array>();
+      const fontRoot = environment.EDITKIN_FONT_ROOT ?? resolve(import.meta.dirname, "../../public/fonts");
+      return textResult(await prepareOriginalSceneGraphicRevision(project, input, { signal: context.mcpReq.signal,
+        prepareText: async (faceId, text) => {
+          let selected = bytes.get(faceId);
+          if (!selected) {
+            selected = await readBundledFontFace(fontRoot, faceId);
+            if (bytes.size >= 2) bytes.delete(bytes.keys().next().value!);
+            bytes.set(faceId, selected);
+          }
+          return prepareGlyphRun(faceId, text, selected);
+        },
+      }));
+    } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_native_geometry_motion", {
+    description: "只讀：建立或修訂同一個可編輯連續輪廓，獨立設定四邊與圓角的影格目標及彈簧；變更目標時延續位置和速度。固定像素畫布、foreground、project fps 和 graphic ID；逐格拒絕反轉、超框、非法圓角及隱性裁切。修訂只回 vectorV2 更新，不改素材、位置、音訊或範圍。需要實際 purpose/evidenceRefs；仍須 v4 當代 designEvidence、motionTreatment、audit/atomic apply/render 及連續美術驗收。",
+    inputSchema: nativeGeometryMotionSchema.extend({ projectPath: z.string().min(1) }),
+  }, async ({ projectPath, ...input }) => {
+    try { return textResult(await prepareNativeGeometryMotion(await readProject(projectPath), input)); }
     catch (error) { return errorResult(error); }
   });
 
@@ -449,7 +566,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
   }, async ({ projectPath, clipId, initialTime, rect, label }) => {
     try {
       const prepared = await prepareMotionTrack(projectPath, clipId, initialTime, rect, label);
-      const graphic = createMotionGraphic(`motion-${randomUUID()}`, "tag", label, prepared.clip.timelineStart + initialTime, Math.max(0.5, prepared.clip.duration - initialTime), prepared.trackId);
+      const graphic = createMotionGraphic(`motion-${randomUUID()}`, "tag", label, prepared.clip.timelineStart + initialTime, Math.max(0.5, prepared.clip.duration - initialTime), prepared.trackId, legacyMotionGraphicSeed("tag"));
       const updated = await applyProjectCommands(projectPath, [prepared.command, { type: "add_motion_graphic", graphic }]);
       return textResult({ status: "GREEN", trackId: prepared.trackId, graphicId: graphic.id, validPercent: Math.round((1 - prepared.result.lostRatio) * 100), cacheHit: prepared.result.cacheHit, summary: summarizeProject(updated) });
     } catch (error) { return errorResult(error); }
@@ -467,11 +584,13 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
     }),
   }, async ({ projectPath, name, width, height, fps, editorialProfile: profile }) => {
     try {
-      const project = await createProjectFile(projectPath, name, width, height, fps);
-      const updated = await applyProjectCommands(projectPath, [{ type: "batch", commands: [
+      const reviewPolicy = await readCreatorReviewPolicy();
+      const commands: EditorCommand[] = [
         { type: "set_editorial_profile", profile },
-        { type: "set_aesthetic_system", aestheticSystem: resolveAestheticSystem(profile, width > height ? "longform" : "shorts") },
-      ] }]);
+        { type: "set_aesthetic_system", aestheticSystem: resolveAestheticSystem(profile, width > height ? "longform" : "shorts", reviewPolicy.policy) },
+      ];
+      await assertCreatorReviewPolicyCurrent(reviewPolicy);
+      const updated = await createProjectFile(projectPath, name, width, height, fps, commands, () => assertCreatorReviewPolicyCurrent(reviewPolicy));
       return textResult({ status: "GREEN", projectPath, editorialProfile: updated.editorialProfile, summary: summarizeProject(updated) });
     } catch (error) { return errorResult(error); }
   });

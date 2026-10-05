@@ -1,6 +1,8 @@
 import * as z from "zod/v4";
 import type { EditorCommand } from "../domain/commands";
 import { EDITKIN_MOTION } from "../motion/identity";
+import { isScopedMotionRevision } from "./scopedMotionRevision";
+import { isScopedPaletteRevision } from "./scopedPaletteRevision";
 
 export const MOTION_TREATMENT_FAMILIES = ["title", "subtitles", "cards", "hud", "motion", "tracking_masks", "vfx", "transitions_camera", "color", "sound"] as const;
 export type MotionTreatmentFamily = typeof MOTION_TREATMENT_FAMILIES[number];
@@ -34,6 +36,11 @@ export type MotionTreatment = z.infer<typeof motionTreatmentSchema>;
 export function motionCommandFamilies(command: EditorCommand): MotionTreatmentFamily[] {
   if (command.type === "batch") return [...new Set(command.commands.flatMap(motionCommandFamilies))];
   const families = new Set<MotionTreatmentFamily>();
+  if (["add_motion_scene", "update_motion_scene", "delete_motion_scene"].includes(command.type)) {
+    families.add("motion"); families.add("transitions_camera");
+  }
+  if (isScopedMotionRevision(command)) families.add("motion");
+  if (isScopedPaletteRevision(command)) families.add("color");
   if (command.type === "set_mesh_3d_scene" && command.scene?.enabled) {
     families.add("vfx");
     if (command.scene.segments.some(s => s.cameraKeyframes.length || s.objects.some(o => o.keyframes.length))) families.add("transitions_camera");

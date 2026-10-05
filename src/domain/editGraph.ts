@@ -36,7 +36,7 @@ export function createEmptyProject(
 ): EditProject {
   const now = new Date().toISOString();
   return {
-    schemaVersion: 8,
+    schemaVersion: 9,
     revision: 0,
     id: options.id ?? "project-untitled",
     name,
@@ -64,8 +64,18 @@ export function createEmptyProject(
 export function migrateProject(input: unknown): EditProject {
   if (!input || typeof input !== "object") throw new EditGraphError("專案內容不是有效物件");
   const raw = input as Record<string, unknown>;
-  if (raw.schemaVersion !== 1 && raw.schemaVersion !== 2 && raw.schemaVersion !== 3 && raw.schemaVersion !== 4 && raw.schemaVersion !== 5 && raw.schemaVersion !== 6 && raw.schemaVersion !== 7 && raw.schemaVersion !== 8) {
+  if (raw.schemaVersion !== 1 && raw.schemaVersion !== 2 && raw.schemaVersion !== 3 && raw.schemaVersion !== 4 && raw.schemaVersion !== 5 && raw.schemaVersion !== 6 && raw.schemaVersion !== 7 && raw.schemaVersion !== 8 && raw.schemaVersion !== 9 && raw.schemaVersion !== 10) {
     throw new EditGraphError(`不支援的 EditGraph schema：${String(raw.schemaVersion)}`);
+  }
+  const sceneOwners = [raw, ...(Array.isArray(raw.compositions) ? raw.compositions : [])];
+  if (raw.schemaVersion !== 9 && raw.schemaVersion !== 10 && sceneOwners.some(owner => owner && typeof owner === "object" && Object.prototype.hasOwnProperty.call(owner, "motionScenes"))) {
+    throw new EditGraphError("Motion scenes require schema 9; an older version must not silently discard scene data");
+  }
+  if (raw.schemaVersion !== 10 && Object.prototype.hasOwnProperty.call(raw, "referenceMotionInstances")) {
+    throw new EditGraphError("Reference Motion instances require schema 10; older versions must not discard metadata");
+  }
+  if (sceneOwners.slice(1).some(owner => owner && typeof owner === "object" && Object.prototype.hasOwnProperty.call(owner, "referenceMotionInstances"))) {
+    throw new EditGraphError("Reference Motion instances are root project metadata only");
   }
   const source = structuredClone(input) as Record<string, unknown>;
   source.revision ??= 0;
@@ -148,8 +158,11 @@ export function migrateProject(input: unknown): EditProject {
       clip.transform ??= { ...DEFAULT_TRANSFORM };
       clip.color = { ...DEFAULT_COLOR, ...(clip.color as object | undefined) };
       clip.keyframes ??= [];
-      clip.layer = { ...DEFAULT_CLIP_LAYER, ...(clip.layer as object | undefined) };
-      clip.expressions ??= {};
+      // Current optional layer/role fields are authored shape, not migration
+      // omissions. Runtime validation resolves defaults without persisting them.
+      if (raw.schemaVersion !== 9 && raw.schemaVersion !== 10) clip.layer = { ...DEFAULT_CLIP_LAYER, ...(clip.layer as object | undefined) };
+      // Current projects may omit expressions; preserve that authored shape on save/reopen.
+      if (raw.schemaVersion !== 9 && raw.schemaVersion !== 10) clip.expressions ??= {};
       for (const keyframe of clip.keyframes as Array<Record<string, unknown>>) {
         keyframe.color = { ...(clip.color as ColorAdjustments), ...(keyframe.color as object | undefined) };
       }
@@ -186,7 +199,7 @@ export function migrateProject(input: unknown): EditProject {
       }
     }
   }
-  source.schemaVersion = 8;
+  source.schemaVersion = raw.schemaVersion === 10 ? 10 : 9;
   return source as unknown as EditProject;
 }
 
@@ -204,7 +217,8 @@ export function projectDuration(project: EditProject): number {
     0,
   );
   const captionDuration = project.captions.reduce((max, caption) => Math.max(max, caption.start + caption.duration), Math.max(mediaDuration, meshDuration));
-  return project.motionGraphics.reduce((max, graphic) => Math.max(max, graphic.timelineStart + graphic.duration), captionDuration);
+  const graphicsDuration = project.motionGraphics.reduce((max, graphic) => Math.max(max, graphic.timelineStart + graphic.duration), captionDuration);
+  return (project.motionScenes ?? []).reduce((max, scene) => Math.max(max, (scene.startFrame + scene.durationFrames) / project.fps), graphicsDuration);
 }
 
 export function findAsset(project: EditProject, assetId: string): MediaAsset {
