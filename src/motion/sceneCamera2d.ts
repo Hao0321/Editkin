@@ -6,6 +6,7 @@ import { canonicalJson } from "../shared/canonicalJson";
 import { sampleSpringTargetTrack } from "./springTargetTrack";
 import { motionGraphicV2FrameReceipt, prepareMotionGraphicV2FrameLayout, type MotionGraphicV2LayoutReceipt, type MotionGraphicV2FrameReceipt } from "./compositionV2";
 import { motionVectorPaths } from "./vectorGeometry";
+import { posedSegmentInkBounds } from "./motionPoseInk";
 import { motionPanelPaths } from "./panelGeometry";
 
 export interface MotionScenePoint { x: number; y: number }
@@ -294,10 +295,12 @@ function assertGraphicFrameInk(project: EditProject & MotionScene2DProject, scen
       assertNativePaintInk(project, scene, graphic, ink, origin, state.scale, projection, timelineFrame);
       continue;
     }
-    if (colorVisible(graphic.textColor)) assertSafe(scene, project, transformedInk(ink, origin, state.scale), projection, id, timelineFrame);
+    const posed = (at: MotionScenePoint) => state.rotationDegrees || state.blurPixels
+      ? posedSegmentInkBounds(transformedInk(ink, { x: 0, y: 0 }, 1), at, state, segment) : transformedInk(ink, at, state.scale);
+    if (colorVisible(graphic.textColor)) assertSafe(scene, project, posed(origin), projection, id, timelineFrame);
     if (graphic.shadowDepth && colorVisible(graphic.accentColor)) {
       const offset = graphic.shadowDepth * state.scale;
-      assertSafe(scene, project, transformedInk(ink, { x: origin.x + offset, y: origin.y + offset }, state.scale), projection, id, timelineFrame);
+      assertSafe(scene, project, posed({ x: origin.x + offset, y: origin.y + offset }), projection, id, timelineFrame);
     }
   }
 }

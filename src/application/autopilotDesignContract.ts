@@ -8,7 +8,7 @@ import { canonicalJson } from "../shared/canonicalJson";
 import { referenceMotionRequestedIndexes, type ReferenceMotionPlan } from "./referenceMotionPlan";
 
 export const nativeTemplateDirectionSchema = z.strictObject({
-  templateId: z.enum(referenceMotionTemplateIds), graphicCadence: z.enum(["legacy", "brisk"]),
+  templateId: z.enum(referenceMotionTemplateIds), graphicCadence: z.enum(["legacy", "brisk", "kinetic"]),
   style: motionSceneStyleSchema,
 });
 

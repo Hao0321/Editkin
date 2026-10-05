@@ -11,7 +11,7 @@ export default function ReferenceMotionTemplateControls({ clip, assets, portrait
   busy?: boolean; onCancel?: () => void;
 }) {
   const [templateId, setTemplateId] = useState<ReferenceMotionTemplateId>("level_bridge");
-  const [graphicCadence, setGraphicCadence] = useState<NonNullable<ReferenceMotionTemplateInput["graphicCadence"]>>("brisk");
+  const [graphicCadence, setGraphicCadence] = useState<NonNullable<ReferenceMotionTemplateInput["graphicCadence"]>>("kinetic");
   const [title, setTitle] = useState(""), [kicker, setKicker] = useState(""), [subtitle, setSubtitle] = useState(""), [previousText, setPreviousText] = useState("");
   const [primaryLabel, setPrimaryLabel] = useState(""), [sourceCount, setSourceCount] = useState(2);
   const [mediaPresentation, setMediaPresentation] = useState<ReferenceMotionMediaPresentation>("source_soft_v2");
@@ -63,7 +63,7 @@ export default function ReferenceMotionTemplateControls({ clip, assets, portrait
       <label>圖卡節奏<select aria-label="模板圖卡節奏" value={graphicCadence} onChange={event => {
         if (!busy) setGraphicCadence(event.target.value as NonNullable<ReferenceMotionTemplateInput["graphicCadence"]>);
       }}>
-        <option value="brisk">俐落動態</option><option value="legacy">保留舊版節奏</option>
+        <option value="kinetic">流暢動態（Motion Language）</option><option value="brisk">俐落動態</option><option value="legacy">保留舊版節奏</option>
       </select><small>加快圖卡入場、退場與交接；閱讀停留、原片速度與音訊保持原設定。</small></label>
       {templateId === "comparison_pair" && <label>素材呈現<select aria-label="比較素材呈現" value={mediaPresentation} onChange={event => {
         if (!busy) setMediaPresentation(event.target.value as ReferenceMotionMediaPresentation);

@@ -8,6 +8,8 @@ export default function MotionVectorControls({ graphic, onUpdate }: { graphic: M
   const vector = graphic.vectorV2;
   if (!vector) return null;
   if (vector.kind === "spring_panel") return <MotionGeometryControls graphic={graphic} onUpdate={onUpdate} />;
+  // Authored element shapes are recompiled from their element, not hand-edited point by point.
+  if (vector.kind === "shape") return <div className="motion-vector-controls"><label>原創元素形狀（由元素重新編譯）</label></div>;
   const number = (label: string, value: number, min: number, max: number, step: number, change: (value: number) => MotionVectorV2) =>
     <label key={label}>{label}<input aria-label={`${graphic.name}${label}`} type="number" min={min} max={max} step={step} value={value}
       onChange={event => { if (event.target.value && event.target.validity.valid) onUpdate({ vectorV2: change(Number(event.target.value)) }); }} /></label>;

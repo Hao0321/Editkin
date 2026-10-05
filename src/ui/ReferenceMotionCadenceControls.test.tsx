@@ -37,14 +37,14 @@ function fixture() {
 beforeEach(() => { slots.values = []; slots.cursor = 0; });
 
 describe("new reference template graphic cadence controls", () => {
-  it("submits explicit brisk by default alongside the unchanged animation fine setting", () => {
+  it("submits explicit kinetic (Motion Language) by default alongside the unchanged animation fine setting", () => {
     const ui = fixture(), cadence = ui.find("aria-label", "模板圖卡節奏");
-    expect(cadence.props.value).toBe("brisk");
+    expect(cadence.props.value).toBe("kinetic");
     expect(elements(cadence.props.children as ReactNode).filter(node => node.type === "option").map(node => [node.props.value, node.props.children]))
-      .toEqual([["brisk", "俐落動態"], ["legacy", "保留舊版節奏"]]);
+      .toEqual([["kinetic", "流暢動態（Motion Language）"], ["brisk", "俐落動態"], ["legacy", "保留舊版節奏"]]);
     expect(ui.find("data-testid", "apply-reference-motion-template").props.disabled).toBe(false);
     ui.click(); expect(ui.apply).toHaveBeenCalledTimes(1);
-    expect(ui.apply.mock.calls[0][0]).toMatchObject({ templateId: "level_bridge", graphicCadence: "brisk", style: { animationSpeed: 1 } });
+    expect(ui.apply.mock.calls[0][0]).toMatchObject({ templateId: "level_bridge", graphicCadence: "kinetic", style: { animationSpeed: 1 } });
   });
   it("honors explicit legacy without discarding the separate authored speed adjustment", () => {
     const ui = fixture(); ui.change("模板圖卡節奏", "legacy"); ui.change("模板動畫速度", "1.5"); ui.click();
@@ -61,9 +61,9 @@ describe("new reference template graphic cadence controls", () => {
   it("blocks cadence changes and late submission while busy and retains an actual cancel callback", () => {
     const ui = fixture(); ui.setBusy(true);
     expect(ui.render().find(node => node.type === "fieldset")?.props.disabled).toBe(true);
-    ui.change("模板圖卡節奏", "legacy"); expect(ui.find("aria-label", "模板圖卡節奏").props.value).toBe("brisk");
+    ui.change("模板圖卡節奏", "legacy"); expect(ui.find("aria-label", "模板圖卡節奏").props.value).toBe("kinetic");
     ui.click(); expect(ui.apply).not.toHaveBeenCalled();
     (ui.find("data-testid", "cancel-reference-motion-template").props.onClick as () => void)(); expect(ui.cancel).toHaveBeenCalledTimes(1);
-    ui.setBusy(false); ui.click(); expect(ui.apply.mock.calls[0][0].graphicCadence).toBe("brisk");
+    ui.setBusy(false); ui.click(); expect(ui.apply.mock.calls[0][0].graphicCadence).toBe("kinetic");
   });
 });

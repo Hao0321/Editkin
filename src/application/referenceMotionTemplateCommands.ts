@@ -1,5 +1,5 @@
 import type { EditorCommand } from "../domain/commandTypes";
-import { motionGraphicV2ExitStaggerFrames } from "../domain/motionCompositionV2Contract";
+import { motionGraphicV2ExitStaggerFrames, motionGraphicV2UnitCount } from "../domain/motionCompositionV2Contract";
 import type { ClipLayout, EditProject, FloatingVideoFrame, MediaAsset, MotionGraphic, NormalizedRect, TimelineClip, Transform2D } from "../domain/types";
 import { DEFAULT_TRANSFORM } from "../domain/types";
 import { createClipMask } from "../domain/masks";
@@ -12,7 +12,8 @@ import { createMotionGraphic } from "../motion/composition";
 import { motionGraphicV2LayoutReceipt, prepareMotionGraphicV2FrameLayout, type MotionGraphicV2LayoutReceipt } from "../motion/compositionV2";
 import { CONNECTION_FIELD_GROUP_CENTERS } from "../motion/connectionField";
 import { floatingFrameLayout, type FloatingFrameLayout } from "../motion/floatingVideoFrame";
-import { compileGraphicCadence } from "../motion/graphicCadence";
+import { compileGraphicCadence, GRAPHIC_CADENCE_KINETIC_CONTRACT } from "../motion/graphicCadence";
+import { MOTION_CURVES } from "../motion/motionLanguage";
 import { DEFAULT_REFERENCE_MOTION_STYLE, DEFAULT_REFERENCE_NETWORK_COLORS, REFERENCE_MOTION_COLOR_POLICY, REFERENCE_MOTION_SOURCE_OVERLAY_CONTRACT, REFERENCE_MOTION_NATIVE_PAINT_PRESENTATION_CONTRACT, REFERENCE_MOTION_DISPLAY_PAINT_PRESENTATION_CONTRACT, isNativeReferenceMotionPresentation, referenceMotionTemplate, referenceMotionTemplateInputSchema, type ReferenceMotionTemplateInput } from "../motion/referenceMotionTemplates";
 
 type Overrides = MotionPresetVariant["overrides"];
@@ -84,6 +85,9 @@ export function buildReferenceMotionTemplateCommands(project: EditProject, raw: 
   if (input.graphicCadence === "brisk" && options?.generation !== 2) {
     throw new Error("Brisk graphic cadence requires generation 2 and a physical layout provider");
   }
+  if (input.graphicCadence === "kinetic" && options?.generation !== 2) {
+    throw new Error("Kinetic graphic cadence requires generation 2 and a physical layout provider");
+  }
   if (input.strikePresentation === "semantic_replace_v1" && options?.generation !== 2) {
     throw new Error("semantic_replace_v1 requires generation 2 and a physical layout provider");
   }
@@ -144,7 +148,9 @@ export function buildReferenceMotionTemplateCommands(project: EditProject, raw: 
   const style = validateMotionSceneStyle(input.style ?? (input.templateId === "kinetic_network" ? { ...DEFAULT_REFERENCE_MOTION_STYLE,
     typography: { ...DEFAULT_REFERENCE_MOTION_STYLE.typography, headingFamily: "Noto Sans TC" } } : DEFAULT_REFERENCE_MOTION_STYLE)), unit = Math.min(project.width, project.height) / 1080;
   if (contrast(style.palette.surface, style.palette.text) < 4.5 || contrast(style.palette.surface, style.palette.muted) < 3) throw new Error("品牌文字與底色對比不足，請調整 palette 的 text／muted／surface");
-  const cadence = compileGraphicCadence(fps, style.animationSpeed, input.graphicCadence), brisk = cadence.profile === "brisk";
+  // "brisk" is the generation-2 phase family; kinetic adds the Motion Language shape.
+  const cadence = compileGraphicCadence(fps, style.animationSpeed, input.graphicCadence), brisk = cadence.profile !== "legacy";
+  const kinetic = cadence.profile === "kinetic", travel = kinetic ? GRAPHIC_CADENCE_KINETIC_CONTRACT.shape.travelMultiplier : 1;
   const readingFrames = (text: string) => Math.ceil((.65 + [...text].length / 8) * fps);
   const entrance = cadence.entranceFrames, exit = cadence.exitFrames, move = cadence.moveFrames;
   const commands: EditorCommand[] = [], bindings: ReferenceMotionGraphicBinding[] = [];
@@ -163,6 +169,11 @@ export function buildReferenceMotionTemplateCommands(project: EditProject, raw: 
   const floatingMediaBindings: ReferenceMotionFloatingMediaBinding[] = [];
   const safeArea = { top: 0, right: 0, bottom: 0, left: 0 };
   function motion(inFrames = entrance, outFrames = exit, dy = 12 * unit, dx = 0) {
+    // Monotone expo-out / snap-in keep the source-overlay envelope exact; no
+    // blur or rotation because vector rules and panels share this helper.
+    if (kinetic) return { sequence: { unit: "all" as const, order: "forward" as const, exitOrder: "forward" as const, staggerFrames: 0, scaleOrigin: "center" as const },
+      entrance: { durationFrames: inFrames, offsetXPixels: dx * travel, offsetYPixels: dy * travel, scale: GRAPHIC_CADENCE_KINETIC_CONTRACT.shape.entranceScale, opacity: 0, easing: MOTION_CURVES.expoOut },
+      exit: { durationFrames: outFrames, offsetXPixels: 0, offsetYPixels: 0, scale: 1, opacity: 0, easing: MOTION_CURVES.snapIn } };
     return { sequence: { unit: "all" as const, order: "forward" as const, exitOrder: "forward" as const, staggerFrames: 0 },
       entrance: { durationFrames: inFrames, offsetXPixels: dx, offsetYPixels: dy, scale: 1, opacity: 0, easing: { type: "ease_out" as const } },
       exit: { durationFrames: outFrames, offsetXPixels: 0, offsetYPixels: 0, scale: 1, opacity: 0, easing: { type: "ease_in" as const } } };
@@ -173,6 +184,17 @@ export function buildReferenceMotionTemplateCommands(project: EditProject, raw: 
     const complete: Overrides = { name: `${recipe.name} · ${text ? text.slice(0, 14) : preset.name}`, backgroundColor: transparent, accentColor: transparent, outlineWidth: 0, shadowDepth: 0,
       fontFamily: style.typography.headingFamily, textColor: style.palette.text, letterSpacing: 0, fontWeight: 700,
       motionV2: motion(), layoutV2: { safeArea, maxLines: 2, minFontSize: Math.max(8, 36 * unit), lineGap: 8 * unit, align: "left" }, ...overrides };
+    // Motion Language: kinetic headlines cascade per character and exit together;
+    // labels, counters, vectors and native paint stay whole. A scene without room
+    // for the cascade tail plus its reading hold keeps the whole-line entrance.
+    const headline = complete.motionV2;
+    if (kinetic && !nativePaint && text && !complete.vectorV2 && headline && headline.sequence.unit === "all"
+      && headline.entrance.durationFrames > 1 && (complete.fontSize ?? 0) >= 64 * unit) {
+      const units = Math.min(128, motionGraphicV2UnitCount({ text, motionV2: { sequence: { unit: "character" } } }));
+      const stagger = cadence.staggerFrames(units);
+      const room = end - start - headline.entrance.durationFrames - (units - 1) * stagger - headline.exit.durationFrames;
+      if (stagger > 0 && room >= readingFrames(text)) complete.motionV2 = { ...headline, sequence: { ...headline.sequence, unit: "character", staggerFrames: stagger, exitStaggerFrames: 0 } };
+    }
     if (nativePaint) {
       const contract = nativePaintContract;
       if (project.motionGraphics.length + bindings.length + 1 > contract.maxProjectGraphics) throw new Error("Native paint template exceeds the current four-graphic project budget");
@@ -346,8 +368,8 @@ export function buildReferenceMotionTemplateCommands(project: EditProject, raw: 
         fontFamily: style.typography.headingFamily, textColor: index === 2 ? style.palette.accent : index === 1 ? style.palette.muted : style.palette.text,
         layoutV2: { safeArea, maxLines: 1, minFontSize: 64 * unit, lineGap: 0, align: "left" },
         motionV2: { ...motion(entrance, exit, 0, 28 * unit),
-          entrance: { ...motion().entrance, offsetXPixels: 28 * unit, offsetYPixels: 0, scale: .94 },
-          exit: { ...motion().exit, offsetXPixels: -20 * unit, offsetYPixels: 0 } } }, start, end);
+          entrance: { ...motion().entrance, offsetXPixels: 28 * unit * travel, offsetYPixels: 0, scale: .94 },
+          exit: { ...motion().exit, offsetXPixels: -20 * unit * travel, offsetYPixels: 0 } } }, start, end);
       const headlineBox = layouts.find(layout => layout.graphicId === headline.id)!.box;
       if (item.detail) {
         const detailY = Math.max(portrait ? .235 : .30, (headlineBox.y + headlineBox.height + 12 * unit) / project.height);
@@ -374,7 +396,7 @@ export function buildReferenceMotionTemplateCommands(project: EditProject, raw: 
     const previousEnd = strikeComplete + struckRead + exit;
     const newStart = previousEnd;
     const previousMotion = { ...motion(entrance, exit, 18 * unit),
-      exit: { ...motion(entrance, exit, 0).exit, offsetXPixels: -18 * unit } };
+      exit: { ...motion(entrance, exit, 0).exit, offsetXPixels: -18 * unit * travel } };
     const previous = add("previous", "reel_spatial_headline", input.previousText!, {
       ...focus, fontSize: Math.max(8, 84 * unit), fontFamily: style.typography.headingFamily, fontWeight: 700,
       textColor: style.palette.muted, motionV2: previousMotion,
@@ -387,7 +409,7 @@ export function buildReferenceMotionTemplateCommands(project: EditProject, raw: 
     const strike = add("strike", "reel_ink_annotation", "", {
       x: left / project.width, y: (top + (bottom - top) * .52) / project.height, width: (right - left) / project.width,
       fontSize: 8, accentColor: style.palette.accent, cornerRadius: 0,
-      motionV2: { ...motion(1, exit, 0), exit: { ...motion(1, exit, 0).exit, offsetXPixels: -18 * unit } },
+      motionV2: { ...motion(1, exit, 0), exit: { ...motion(1, exit, 0).exit, offsetXPixels: -18 * unit * travel } },
       layoutV2: { safeArea, maxLines: 1, minFontSize: 8, lineGap: 0, align: "left" },
       vectorV2: { schema: "editkin.motion-vector-annotation/v1", kind: "rule", heightPixels: Math.max(1, 4 * unit), revealFrames: cadence.ruleRevealFrames } }, startStrike, previousEnd);
     const mainMotion = { ...motion(entrance, 1, 22 * unit),
@@ -518,7 +540,7 @@ export function buildReferenceMotionTemplateCommands(project: EditProject, raw: 
     const previousEnd = strikeComplete + struckRead + exit;
     const newStart = previousEnd;
     const previousMotion = { ...motion(entrance, exit, 18 * unit),
-      exit: { ...motion(entrance, exit, 0).exit, offsetXPixels: -18 * unit } };
+      exit: { ...motion(entrance, exit, 0).exit, offsetXPixels: -18 * unit * travel } };
     const previous = add("previous", "reel_spatial_headline", input.previousText!, {
       ...focus, fontSize: 84 * unit, fontFamily: style.typography.headingFamily, fontWeight: 700,
       textColor: style.palette.muted, motionV2: previousMotion,
@@ -531,7 +553,7 @@ export function buildReferenceMotionTemplateCommands(project: EditProject, raw: 
     add("strike", "reel_ink_annotation", "", {
       x: left / project.width, y: (top + (bottom - top) * .52) / project.height, width: (right - left) / project.width,
       fontSize: 8, accentColor: style.palette.accent, cornerRadius: 0,
-      motionV2: { ...motion(1, exit, 0), exit: { ...motion(1, exit, 0).exit, offsetXPixels: -18 * unit } },
+      motionV2: { ...motion(1, exit, 0), exit: { ...motion(1, exit, 0).exit, offsetXPixels: -18 * unit * travel } },
       layoutV2: { safeArea, maxLines: 1, minFontSize: 8, lineGap: 0, align: "left" },
       vectorV2: { schema: "editkin.motion-vector-annotation/v1", kind: "rule", heightPixels: Math.max(1, 4 * unit), revealFrames: cadence.ruleRevealFrames } }, startStrike, previousEnd);
     const mainMotion = { ...motion(entrance, 1, 22 * unit),
@@ -630,7 +652,7 @@ export function buildReferenceMotionTemplateCommands(project: EditProject, raw: 
       const headingMotion = motion(entrance, exit, 22 * unit);
       add(`item:${index}:label`, "reel_spatial_headline", item.label, { x: .063, y: portrait ? .028 : .018, width: .85,
         fontFamily: style.typography.headingFamily, fontSize: 160 * unit, fontWeight: 800, textColor: style.palette.text, letterSpacing: 2 * unit,
-        motionV2: { ...headingMotion, exit: { ...headingMotion.exit, offsetYPixels: -14 * unit }, sequence: { ...headingMotion.sequence, unit: "character", staggerFrames: stagger } },
+        motionV2: { ...headingMotion, exit: { ...headingMotion.exit, offsetYPixels: -14 * unit * travel }, sequence: { ...headingMotion.sequence, unit: "character", staggerFrames: stagger } },
         layoutV2: { safeArea, maxLines: 1, minFontSize: 70 * unit, lineGap: 0, align: "left" } }, start, end);
       if (item.detail) text(`item:${index}:detail`, item.detail, .07, portrait ? .176 : .17, .86, 36, start + detailDelay, end, style.palette.muted, 1);
       text(`item:${index}:counter`, `${String(index + 1).padStart(2, "0")}  /  ${String(items.length).padStart(2, "0")}`, .075, .915, .35, 34, start, end, style.palette.accent, 1);
@@ -735,7 +757,7 @@ export function buildReferenceMotionTemplateCommands(project: EditProject, raw: 
     status: "REVIEW_REQUIRED" as const, readOnly: true as const,
     templateId: input.templateId, projectId: project.id, projectRevision: project.revision, commands, bindings, layouts, mediaBindings, phases,
     ...(softComparison ? { floatingMediaBindings } : {}),
-    ...(brisk ? { graphicCadence: "brisk" as const } : {}),
+    ...(brisk ? { graphicCadence: cadence.profile } : {}),
     purpose: input.purpose, evidenceRefs: input.evidenceRefs,
     renderer: options ? "editable EditGraph clips, exact physical glyph contours and Motion v2 vectors / Rec.709 formal output"
       : "editable EditGraph clips and Motion v2 vectors / Rec.709 formal output",

@@ -43,7 +43,7 @@ function fixture() {
       typography: { headingFamily: "Bebas Neue", bodyFamily: "Bebas Neue" }, animationSpeed: 1 } };
   return { project, input };
 }
-async function saved(cadence?: "legacy" | "brisk") {
+async function saved(cadence?: "legacy" | "brisk" | "kinetic") {
   const f = fixture(); if (cadence !== undefined) f.input.graphicCadence = cadence;
   const packet = await prepareReferenceMotionTemplateInstance(f.project, f.input, ids(), { prepareText });
   return { ...f, packet, current: applyCommand(f.project, { type: "batch", commands: packet.commands }) };
@@ -58,6 +58,14 @@ const createDeclaration = (packet: Awaited<ReturnType<typeof prepareReferenceMot
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
 describe("saved native graphic cadence with real physical glyph preparation", () => {
+  it("binds kinetic to its own versioned recipe identity and reopens it unchanged", async () => {
+    const kinetic = await saved("kinetic"), brisk = await saved("brisk");
+    expect(kinetic.packet.instance.dependencies.recipeVersion).toMatch(/^editkin\.reference-motion-recipes\/kinetic-v1:[a-f0-9]{64}$/);
+    expect(kinetic.packet.instance.dependencies.recipeVersion).not.toBe(brisk.packet.instance.dependencies.recipeVersion);
+    const reopened = decodeProjectBytes(encodeProjectBytes(kinetic.current));
+    const same = await prepareReferenceMotionTemplateRevision(reopened, kinetic.packet.instance.id, { title: "FOCUS" }, { expectedInstanceRevision: 1, prepareText });
+    expect(same.status).toBe("UNCHANGED"); expect(same.instance.input.graphicCadence).toBe("kinetic");
+  });
   it("keeps historical omitted and explicit legacy graph timings and exact recipe hash", async () => {
     const omitted = await saved(), legacy = await saved("legacy");
     expect(normalizeReferenceMotionTemplateInput(omitted.input).graphicCadence).toBeUndefined();
@@ -163,10 +171,10 @@ describe("saved native graphic cadence with real physical glyph preparation", ()
       };
       const catalog = await call("list_reference_motion_templates", {});
       expect(catalog.templates).toEqual(REFERENCE_MOTION_TEMPLATES);
-      expect(catalog.graphicCadenceCapabilities).toMatchObject({ newAuthoringDefault: "brisk", historicalOmittedDefault: "legacy",
+      expect(catalog.graphicCadenceCapabilities).toMatchObject({ newAuthoringDefault: "kinetic", historicalOmittedDefault: "legacy",
         savedInstanceAutomaticUpgrade: false, revisionCanChangeCadence: true });
       const requested = await call("prepare_reference_motion_template", { projectPath: path, ...f.input });
-      expect(requested.instance.input.graphicCadence).toBe("brisk"); expect(requested.status).toBe("REVIEW_REQUIRED");
+      expect(requested.instance.input.graphicCadence).toBe("kinetic"); expect(requested.status).toBe("REVIEW_REQUIRED");
       const legacy = await call("prepare_reference_motion_template", { projectPath: path, ...f.input, graphicCadence: "legacy" });
       expect(legacy.instance.input.graphicCadence).toBe("legacy");
       expect(legacy.instance.dependencies.recipeVersion).toBe("editkin.reference-motion-recipes/semantic-roles-v1:94e0e436895b0bb0dfd1d9f6f44d82bc8de924dd7901e5ebbb1012010aa06e1e");

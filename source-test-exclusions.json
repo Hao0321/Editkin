@@ -159,6 +159,10 @@
       "prerequisite": "External FFmpeg, generated color products, or native media runtime"
     },
     {
+      "file": "src/application/selectedNativeVideoRuntime.windowsPin.test.ts",
+      "prerequisite": "Maintainer-local Windows native metadata pin evidence under the ignored .rd/benchmarks tree"
+    },
+    {
       "file": "src/service/autoRotoServiceArtifact.test.ts",
       "prerequisite": "Official BUILD-MANIFEST identity"
     },

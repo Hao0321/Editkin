@@ -70,6 +70,20 @@ export default function MotionPhysicalGlyphGraphic({ project, graphic, playhead,
         {layout.segments.map(segment => {
           const state = states.get(segment.id);
           if (!state) throw new Error("實體 glyph segment 缺少同 frame evaluator 狀態");
+          if (state.rotationDegrees || state.blurPixels) {
+            // Same pose as the ASS export: each layer rotates about its own scaled
+            // segment center, and the shadow offset stays in screen space.
+            const tx = segment.x - layout.box.x + state.translateXPixels, ty = segment.y - layout.box.y + state.translateYPixels;
+            const rotate = state.rotationDegrees ? ` rotate(${state.rotationDegrees} ${segment.width / 2} ${segment.height / 2})` : "";
+            const blur = state.blurPixels ? { filter: `blur(${state.blurPixels / state.scale}px)` } : undefined;
+            const offset = (graphic.shadowDepth ?? 0) * state.scale;
+            return <g key={segment.id} data-motion-segment={segment.id} opacity={state.opacity}>
+              {graphic.shadowDepth ? <path d={segment.outline!.svg} fill={graphic.accentColor} fillRule="nonzero" style={blur}
+                transform={`translate(${tx + offset} ${ty + offset}) scale(${state.scale})${rotate}`} aria-hidden="true" /> : null}
+              <path d={segment.outline!.svg} fill={graphic.textColor} fillRule="nonzero" style={blur}
+                transform={`translate(${tx} ${ty}) scale(${state.scale})${rotate}`} />
+            </g>;
+          }
           return <g key={segment.id} data-motion-segment={segment.id} opacity={state.opacity}
             transform={`translate(${segment.x - layout.box.x + state.translateXPixels} ${segment.y - layout.box.y + state.translateYPixels}) scale(${state.scale})`}>
             {graphic.shadowDepth ? <path d={segment.outline!.svg} fill={graphic.accentColor} fillRule="nonzero"

@@ -6,6 +6,8 @@ import { createEmptyProject } from "../domain/editGraph";
 import { DEFAULT_COLOR, DEFAULT_TRANSFORM, type EditProject, type MotionGraphic } from "../domain/types";
 import { canonicalJson } from "../shared/canonicalJson";
 import { motionGraphicV2FrameReceipt, motionGraphicV2PhysicalLayoutReceipt } from "../motion/compositionV2";
+import { evaluateMotionGraphicV2Easing } from "../motion/motionEasing";
+import { MOTION_CURVES } from "../motion/motionLanguage";
 import { GRAPHIC_CADENCE_CONTRACT, compileGraphicCadence, type GraphicCadenceProfile } from "../motion/graphicCadence";
 import { referenceMotionTemplateInputSchema, type ReferenceMotionTemplateId, type ReferenceMotionTemplateInput } from "../motion/referenceMotionTemplates";
 import { bundledFontFaceSpec } from "../typography/bundledFontCatalog";
@@ -218,5 +220,55 @@ describe("physical reference Motion brisk cadence compiler", () => {
       { generation: 2, layoutForGraphic: provider })).toThrow();
     expect(provider).not.toHaveBeenCalled(); expect(allocate).not.toHaveBeenCalled();
     expect(canonicalJson(project)).toBe(before);
+  });
+});
+
+const KINETIC_TEMPLATES: ReferenceMotionTemplateId[] = ["strike_reframe", "level_bridge", "comparison_pair", "context_stack",
+  "evidence_takeover", "focus_wall", "brand_recap", "kinetic_network"];
+
+describe("physical reference Motion kinetic (Motion Language) cadence", () => {
+  it.each(KINETIC_TEMPLATES)("compiles %s with a monotone expo-out glide, centered scale and unchanged source clocks", (templateId) => {
+    const project = fixture(), before = canonicalJson(project), value = input(project, templateId, "kinetic");
+    const kinetic = compile(project, value), brisk = compile(project, { ...value, graphicCadence: "brisk" });
+    expect(canonicalJson(project)).toBe(before);
+    expect(kinetic).toMatchObject({ schema: "editkin.reference-motion-template/v2", graphicCadence: "kinetic", status: "REVIEW_REQUIRED" });
+    expect(kinetic.roles).toEqual(brisk.roles);
+    const applied = applyCommand(project, { type: "batch", commands: kinetic.commands });
+    expect(clocks(applied)).toEqual(clocks(applyCommand(project, { type: "batch", commands: brisk.commands })));
+    const moving = applied.motionGraphics.filter(graphic => !graphic.vectorV2 && graphic.motionV2!.entrance.durationFrames > 1);
+    expect(moving.length).toBeGreaterThan(0);
+    for (const graphic of applied.motionGraphics) expect(graphic.motionV2!.sequence.scaleOrigin).toBe("center");
+    for (const graphic of moving) {
+      const motion = graphic.motionV2!, layout = kinetic.layouts.find(row => row.graphicId === graphic.id)!;
+      expect(motion.entrance.easing).toEqual(MOTION_CURVES.expoOut);
+      expect(motion.entrance).not.toHaveProperty("blurPixels");
+      const start = Math.round(graphic.timelineStart * project.fps);
+      const tail = Math.max(0, layout.unitCount - 1) * motion.sequence.staggerFrames;
+      const settled = motionGraphicV2FrameReceipt(applied, graphic, start + motion.entrance.durationFrames - 1 + tail, layout);
+      expect(settled.segments.every(state => state.opacity === 1 && Math.abs(state.translateXPixels) < 1e-6 && Math.abs(state.translateYPixels) < 1e-6)).toBe(true);
+      const hold = Math.round(graphic.duration * project.fps) - motion.entrance.durationFrames - motion.exit.durationFrames - 2 * tail;
+      expect(hold).toBeGreaterThanOrEqual(Math.ceil((.65 + [...graphic.text].length / 8) * project.fps));
+    }
+  });
+
+  it("glides longer than brisk while the perceived attack stays early, and staggers instead of zeroing", () => {
+    const kinetic = compileGraphicCadence(30, 1, "kinetic"), brisk = compileGraphicCadence(30, 1, "brisk");
+    expect(kinetic.profile).toBe("kinetic");
+    expect(kinetic.entranceFrames).toBeGreaterThan(brisk.entranceFrames);
+    expect(kinetic.staggerFrames(6)).toBe(2);
+    expect(brisk.staggerFrames(6)).toBe(0);
+    expect(kinetic.staggerFrames(16)).toBe(1);
+    const attack = Array.from({ length: kinetic.entranceFrames }, (_, frame) => frame).find(frame =>
+      evaluateMotionGraphicV2Easing(frame / (kinetic.entranceFrames - 1), MOTION_CURVES.expoOut) >= .88)!;
+    expect(attack).toBeLessThanOrEqual(5);
+  });
+
+  it("amplifies authored travel without changing brisk or legacy geometry", () => {
+    const project = fixture(), value = input(project, "strike_reframe");
+    const brisk = compile(project, value), kinetic = compile(project, { ...value, graphicCadence: "kinetic" });
+    const offsets = (packet: ReturnType<typeof compile>) => packet.commands.flatMap(command => command.type === "add_motion_graphic" ? [command.graphic] : [])
+      .filter(graphic => !graphic.vectorV2).map(graphic => Math.abs(graphic.motionV2!.entrance.offsetYPixels) + Math.abs(graphic.motionV2!.exit.offsetXPixels));
+    expect(Math.max(...offsets(kinetic))).toBeGreaterThan(Math.max(...offsets(brisk)) * 2.5);
+    expect(brisk.commands.every(command => command.type !== "add_motion_graphic" || command.graphic.motionV2?.sequence.scaleOrigin === undefined)).toBe(true);
   });
 });

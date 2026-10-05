@@ -73,7 +73,10 @@ export default function MotionOverlay({ project, playhead, bakedGraphicIds = [],
                 width: `${layout.box.width * camera.scale / project.width * 100}%`, height: `${layout.box.height * camera.scale / project.height * 100}%`,
               }}><svg className="motion-v2-background" viewBox={`0 0 ${layout.box.width} ${layout.box.height}`} preserveAspectRatio="none" aria-hidden="true">
                 <g opacity={state.opacity} transform={`translate(${state.translateXPixels} ${state.translateYPixels}) scale(${state.scale})`}>
-                  {motionVectorPaths(graphic, layout, frame).map((path, index) => <path key={index} d={path.svg} fill={path.color} fillRule="nonzero" />)}
+                  {motionVectorPaths(graphic, layout, frame).map((path, index) => path.clip
+                    ? <g key={index}><clipPath id={`${graphic.id}-wipe-${index}`}><rect x={path.clip.x0} y={path.clip.y0} width={path.clip.x1 - path.clip.x0} height={path.clip.y1 - path.clip.y0} /></clipPath>
+                      <path d={path.svg} fill={path.color} fillRule="nonzero" clipPath={`url(#${graphic.id}-wipe-${index})`} /></g>
+                    : <path key={index} d={path.svg} fill={path.color} fillRule="nonzero" />)}
                 </g>
               </svg></div>;
           }

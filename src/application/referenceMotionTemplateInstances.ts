@@ -5,7 +5,7 @@ import { issueNativePaintOwnerRevisionProof } from "../domain/nativePaintOwnerRe
 import { referenceMotionInstanceSchema, referenceMotionTemplateRevisionPatchSchema,
   type ReferenceMotionTemplateInstance, type ReferenceMotionInstanceRole, type ReferenceMotionTemplateRevisionPatch } from "../domain/referenceMotionInstance";
 import { referenceMotionTemplate, REFERENCE_MOTION_SEMANTIC_REPLACE_CONTRACT, REFERENCE_MOTION_SOURCE_OVERLAY_CONTRACT, REFERENCE_MOTION_NATIVE_PAINT_PRESENTATION_CONTRACT, REFERENCE_MOTION_DISPLAY_PAINT_PRESENTATION_CONTRACT, isNativeReferenceMotionPresentation, type ReferenceMotionTemplateInput } from "../motion/referenceMotionTemplates";
-import { GRAPHIC_CADENCE_CONTRACT, compileGraphicCadence } from "../motion/graphicCadence";
+import { GRAPHIC_CADENCE_CONTRACT, GRAPHIC_CADENCE_KINETIC_CONTRACT, compileGraphicCadence, graphicCadenceContract } from "../motion/graphicCadence";
 import { bundledFontFaceSpec } from "../typography/bundledFontCatalog";
 import { findMotionGraphicPreset } from "../creative/motionGraphicPresets";
 import { canonicalJson } from "../shared/canonicalJson";
@@ -123,22 +123,26 @@ async function recipeVersion(input: ReferenceMotionTemplateInput) {
   if (input.graphicPresentation === "native_paint_display_v2") {
     return `editkin.reference-motion-recipes/display-paint-v2:${await digest({ recipe: referenceMotionTemplate(input.templateId),
       paint: REFERENCE_MOTION_DISPLAY_PAINT_PRESENTATION_CONTRACT,
-      graphicCadence: input.graphicCadence === "brisk" ? GRAPHIC_CADENCE_CONTRACT : "legacy" })}`;
+      graphicCadence: graphicCadenceContract(input.graphicCadence) })}`;
   }
   if (input.graphicPresentation === "native_paint_v1") {
     return `editkin.reference-motion-recipes/native-paint-v1:${await digest({ recipe: referenceMotionTemplate(input.templateId),
       paint: REFERENCE_MOTION_NATIVE_PAINT_PRESENTATION_CONTRACT,
-      graphicCadence: input.graphicCadence === "brisk" ? GRAPHIC_CADENCE_CONTRACT : "legacy" })}`;
+      graphicCadence: graphicCadenceContract(input.graphicCadence) })}`;
   }
   if (input.templateId === "strike_reframe" && input.strikePresentation === "semantic_replace_v1") {
     const { staggerFrames, ...profileFrames } = compileGraphicCadence(30, 1, input.graphicCadence);
     const contract = { recipe: referenceMotionTemplate(input.templateId),
       strikePresentation: "semantic_replace_v1", semanticReplace: REFERENCE_MOTION_SEMANTIC_REPLACE_CONTRACT,
-      graphicCadence: input.graphicCadence === "brisk" ? GRAPHIC_CADENCE_CONTRACT : "legacy",
+      graphicCadence: graphicCadenceContract(input.graphicCadence),
       profileFrames: { ...profileFrames, staggerFrames: [1, 2, 16, 128].map(count => ({ count, frames: staggerFrames(count) })) } };
     if (input.strikeSurface === "source_overlay") return `editkin.reference-motion-recipes/source-overlay-v1:${await digest({
       ...contract, sourceOverlay: REFERENCE_MOTION_SOURCE_OVERLAY_CONTRACT })}`;
     return `editkin.reference-motion-recipes/semantic-replace-v1:${await digest(contract)}`;
+  }
+  if (input.graphicCadence === "kinetic") {
+    return `editkin.reference-motion-recipes/kinetic-v1:${await digest({ recipe: referenceMotionTemplate(input.templateId),
+      mediaPresentation: ownsSoftComparisonFrame(input) ? "source_soft_v2" : "legacy_layout", graphicCadence: GRAPHIC_CADENCE_KINETIC_CONTRACT })}`;
   }
   if (input.graphicCadence === "brisk") {
     return `editkin.reference-motion-recipes/brisk-v1:${await digest({ recipe: referenceMotionTemplate(input.templateId),

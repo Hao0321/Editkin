@@ -44,6 +44,7 @@ export function buildNativeReelSceneCommands(project: EditProject, input: Native
     if (style) {
       const vector = overrides.vectorV2 ?? preset.seed.vectorV2;
       if (vector?.kind === "spring_panel") throw new Error("連續輪廓請用專用幾何編譯器，不使用一般向量 reveal 速度變換");
+      if (vector?.kind === "shape") throw new Error("原創元素形狀請用元素編譯器，不使用一般向量 reveal 速度變換");
       if (vector?.kind === "panel") overrides.backgroundColor = style.palette.surface;
       else if (vector?.kind === "dot_grid") overrides.accentColor = `${style.palette.muted}24`;
       else if (vector) overrides.accentColor = style.palette.accent;

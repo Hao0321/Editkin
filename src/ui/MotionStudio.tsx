@@ -145,10 +145,10 @@ export default function MotionStudio({ asset, clip, onSetFloatingFrame, onApplyF
         {graphic.schema === "hao.motion-composition/v2" && !graphic.vectorV2 && !graphic.trackId && !managedMotionGraphicIds.includes(graphic.id) &&
           <MotionTextLayoutControls graphic={graphic} onUpdate={patch => onUpdateMotionGraphic(graphic.id, patch)} />}
         {graphic.vectorV2 && !managedMotionGraphicIds.includes(graphic.id) && <MotionVectorControls graphic={graphic} onUpdate={patch => onUpdateMotionGraphic(graphic.id, patch)} />}
-        {graphic.schema === "hao.motion-composition/v2" && graphic.vectorV2 && graphic.vectorV2.kind !== "spring_panel" && !graphic.text && !graphic.trackId && !managedMotionGraphicIds.includes(graphic.id) && <label className="motion-width-mode">合成位置
+        {graphic.schema === "hao.motion-composition/v2" && graphic.vectorV2 && graphic.vectorV2.kind !== "spring_panel" && graphic.vectorV2.kind !== "shape" && !graphic.text && !graphic.trackId && !managedMotionGraphicIds.includes(graphic.id) && <label className="motion-width-mode">合成位置
           <select aria-label={`${graphic.name}合成位置`} value={graphic.vectorV2.schema === "editkin.motion-vector-annotation/v1" ? "annotation" : graphic.compositeLayer ?? "foreground"} onChange={event => {
             const vector = graphic.vectorV2;
-            if (!vector || vector.kind === "spring_panel") return;
+            if (!vector || vector.kind === "spring_panel" || vector.kind === "shape") return;
             if (event.target.value === "annotation") {
               if (vector.kind !== "rule") return;
               onUpdateMotionGraphic(graphic.id, { compositeLayer: "foreground", vectorV2: { ...vector, schema: "editkin.motion-vector-annotation/v1", kind: "rule" } });

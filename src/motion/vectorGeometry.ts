@@ -1,4 +1,4 @@
-import type { MotionGraphic } from "../domain/types";
+import type { MotionGraphic, MotionVectorShapeCommand } from "../domain/types";
 import { assertMotionPaintContract } from "../domain/motionPaint";
 import type { MotionGraphicV2FrameReceipt, MotionGraphicV2LayoutReceipt } from "./compositionV2";
 import { motionPanelPaths, motionPanelContourCommands } from "./panelGeometry";
@@ -7,8 +7,32 @@ import type { PreparedGlyphPathCommand } from "../typography/preparedGlyphRun";
 import { connectionFieldGeometry } from "./connectionField";
 import { springGeometryPaths } from "./springGeometryPaths";
 
-export interface MotionVectorPath { color: string; ass: string; svg: string }
+export interface MotionVectorPath { color: string; ass: string; svg: string;
+  /** Box-local visible rectangle while a shape wipes in; absent when fully shown. */
+  clip?: { x0: number; y0: number; x1: number; y1: number } }
 const r = (value: number) => Math.round(value * 100) / 100;
+
+export function shapeBounds(commands: readonly MotionVectorShapeCommand[]) {
+  const xs: number[] = [], ys: number[] = [];
+  for (const command of commands) {
+    if (command.type === "Z") continue;
+    if (command.type === "C") { xs.push(command.x1, command.x2, command.x); ys.push(command.y1, command.y2, command.y); }
+    else { xs.push(command.x); ys.push(command.y); }
+  }
+  return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+}
+
+/** Authored shape contours as one non-zero fill for both libass and SVG. */
+export function shapePaths(commands: readonly MotionVectorShapeCommand[]): { ass: string; svg: string } {
+  const ass: string[] = [], svg: string[] = [];
+  for (const command of commands) {
+    if (command.type === "Z") { svg.push("Z"); continue; }
+    const p = command.type === "C" ? [command.x1, command.y1, command.x2, command.y2, command.x, command.y].map(r) : [command.x, command.y].map(r);
+    ass.push(`${command.type === "M" ? "m" : command.type === "L" ? "l" : "b"} ${p.join(" ")}`);
+    svg.push(`${command.type} ${p.join(" ")}`);
+  }
+  return { ass: ass.join(" "), svg: svg.join(" ") };
+}
 
 /** Cubic ellipse contours are authored here once for SVG and libass. */
 function ellipseCommands(cx: number, cy: number, rx: number, ry: number) {
@@ -125,6 +149,16 @@ export function motionVectorPaths(graphic: MotionGraphic, layout: MotionGraphicV
     return dots.length ? [{ color: graphic.accentColor, ass: dots.map(d => d.ass).join(" "), svg: dots.map(d => d.svg).join(" ") }] : [];
   }
   if (vector.kind === "ellipse") return [{ color: graphic.backgroundColor, ...ellipse(width / 2, height / 2, width / 2, height / 2) }];
+  if (vector.kind === "shape") {
+    const paths = { color: graphic.backgroundColor, ...shapePaths(vector.commands) };
+    if (vector.revealFrames <= 1 || progress >= 1) return [paths];
+    // Wipe reveal: one growing rectangle uncovers the shape from the chosen edge.
+    const bounds = shapeBounds(vector.commands), wipe = 1 - (1 - progress) ** 4;
+    const from = vector.revealFrom ?? "left", w = bounds.x1 - bounds.x0, h = bounds.y1 - bounds.y0;
+    const clip = from === "left" ? { ...bounds, x1: bounds.x0 + w * wipe } : from === "right" ? { ...bounds, x0: bounds.x1 - w * wipe }
+      : from === "top" ? { ...bounds, y1: bounds.y0 + h * wipe } : { ...bounds, y0: bounds.y1 - h * wipe };
+    return clip.x1 - clip.x0 > .01 && clip.y1 - clip.y0 > .01 ? [{ ...paths, clip }] : [];
+  }
   const drawnWidth = vector.kind === "rule" ? width * reveal : width;
   if (drawnWidth <= .01) return [];
   const paths = motionPanelPaths(drawnWidth, height, radius, vector.kind === "panel" ? graphic.outlineWidth ?? 0 : 0);

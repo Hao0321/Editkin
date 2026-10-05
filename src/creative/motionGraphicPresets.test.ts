@@ -12,7 +12,13 @@ const TRAVEL_EDITORIAL_IDS = [
   "travel_editorial_hero", "travel_editorial_eyebrow",
   "travel_editorial_hero_dark", "travel_editorial_eyebrow_dark",
 ] as const;
+// Motion Language v1 kinetic styles are append-only: a retune ships a new id.
+const KINETIC_IDS = [
+  "kinetic_slam", "kinetic_slam_hype", "kinetic_pop_punchy", "kinetic_pop_hype", "kinetic_rise",
+  "kinetic_drop_punchy", "kinetic_swipe", "kinetic_zoom", "kinetic_focus",
+] as const;
 const EXPECTED_PRESET_IDS = [
+  ...KINETIC_IDS,
   "generic-title-v2", "generic-card-v2", "generic-tag-v2", "generic-counter-v2",
   "surface-track", "v2-word-cascade", ...TRAVEL_EDITORIAL_IDS,
   "mv_illustrated_word", "mv_illustrated_word_fast", "mv_illustrated_word_impact", "mv_illustrated_word_ripple",
@@ -52,10 +58,10 @@ function surfaceTrackingProject() {
 }
 
 describe("shared motion graphic preset registry", () => {
-  it("exposes exactly the 86 known presets including original native vectors", () => {
+  it("exposes exactly the 95 known presets including original native vectors and kinetic styles", () => {
     const presets = motionGraphicPresets();
-    expect(EXPECTED_PRESET_IDS).toHaveLength(86);
-    expect(presets).toHaveLength(86);
+    expect(EXPECTED_PRESET_IDS).toHaveLength(95);
+    expect(presets).toHaveLength(95);
     expect(presets.map((item) => item.id).sort()).toEqual([...EXPECTED_PRESET_IDS].sort());
     expect(new Set(presets.map((item) => item.id)).size).toBe(presets.length);
     expect(presets.every((item) => item.seed.presetId === item.id && item.license && item.provenance)).toBe(true);
@@ -63,8 +69,8 @@ describe("shared motion graphic preset registry", () => {
 
   it("returns a compact low-token index and expands one exact editable seed on demand", () => {
     const compact = compactMotionGraphicPresets();
-    expect(compact).toHaveLength(86);
-    expect(new Set(compact.map((item) => item.id)).size).toBe(86);
+    expect(compact).toHaveLength(95);
+    expect(new Set(compact.map((item) => item.id)).size).toBe(95);
     expect(compact.every((item) => !Object.hasOwn(item, "seed"))).toBe(true);
     expect(compact).toEqual(motionGraphicPresets().map((preset) => ({
       id: preset.id, name: preset.name, family: preset.family, license: preset.license,

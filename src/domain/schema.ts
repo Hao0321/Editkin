@@ -306,9 +306,11 @@ const motionV2EasingSchema = z.discriminatedUnion("type", [
 const motionV2PhaseSchema = z.object({
   durationFrames: z.number().int().min(1).max(600), offsetXPixels: z.number().finite().min(-4_096).max(4_096), offsetYPixels: z.number().finite().min(-4_096).max(4_096),
   scale: z.number().finite().min(.01).max(4), opacity: z.number().finite().min(0).max(1), easing: motionV2EasingSchema,
+  blurPixels: z.number().finite().min(0).max(64).optional(), rotationDegrees: z.number().finite().min(-180).max(180).optional(),
+  spreadPixels: z.number().finite().min(-1_024).max(1_024).optional(),
 });
 const motionV2Schema = z.object({
-  sequence: z.object({ unit: z.enum(["all", "word", "character"]), order: z.enum(["forward", "reverse", "center_out"]), exitOrder: z.enum(["forward", "reverse", "center_out"]), staggerFrames: z.number().int().min(0).max(120), exitStaggerFrames: z.number().int().min(0).max(120).optional() }),
+  sequence: z.object({ unit: z.enum(["all", "word", "character"]), order: z.enum(["forward", "reverse", "center_out"]), exitOrder: z.enum(["forward", "reverse", "center_out"]), staggerFrames: z.number().int().min(0).max(120), exitStaggerFrames: z.number().int().min(0).max(120).optional(), scaleOrigin: z.enum(["top_left", "center"]).optional(), holdScale: z.number().finite().min(.8).max(1.25).optional() }),
   entrance: motionV2PhaseSchema, exit: motionV2PhaseSchema,
 });
 const layoutV2Schema = z.object({
@@ -321,8 +323,17 @@ const vectorBase = {
   heightPixels: z.number().finite().min(1).max(4096),
   revealFrames: z.number().int().min(1).max(600),
 };
+const shapeCoordinate = z.number().finite().min(-16_384).max(16_384);
+const motionVectorShapeCommandSchema = z.discriminatedUnion("type", [
+  z.strictObject({ type: z.enum(["M", "L"]), x: shapeCoordinate, y: shapeCoordinate }),
+  z.strictObject({ type: z.literal("C"), x1: shapeCoordinate, y1: shapeCoordinate, x2: shapeCoordinate, y2: shapeCoordinate, x: shapeCoordinate, y: shapeCoordinate }),
+  z.strictObject({ type: z.literal("Z") }),
+]);
 export const motionVectorV2Schema = z.discriminatedUnion("kind", [
   continuityVectorSchema,
+  z.strictObject({ schema: z.literal("editkin.motion-vector-shape/v1"), kind: z.literal("shape"), heightPixels: z.number().finite().min(1).max(4096),
+    revealFrames: z.number().int().min(1).max(600), revealFrom: z.enum(["left", "right", "top", "bottom"]).optional(),
+    commands: z.array(motionVectorShapeCommandSchema).min(2).max(4096) }),
   z.strictObject({ ...vectorBase, schema: z.enum(["editkin.motion-vector/v1", "editkin.motion-vector-stage/v1", "editkin.motion-vector-annotation/v1"]), kind: z.literal("rule") }),
   z.strictObject({ ...vectorBase, kind: z.enum(["panel", "ellipse"]) }),
   z.strictObject({ ...vectorBase, kind: z.literal("step_progress"), steps: z.number().int().min(1).max(12),

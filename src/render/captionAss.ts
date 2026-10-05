@@ -220,7 +220,15 @@ function motionGraphicV2Events(project: EditProject, graphic: MotionGraphic, bun
       const x = camera.active ? glyphAssNumber(origin.x) : roundAss(origin.x), y = camera.active ? glyphAssNumber(origin.y) : roundAss(origin.y);
       const scale = camera.active ? glyphAssNumber(state.scale * camera.scale * 100) : roundAss(state.scale * 100);
       for (const path of motionVectorPaths(graphic, layout, frame)) {
-        const drawing = `{\\an7\\pos(${x},${y})\\p1\\fscx${scale}\\fscy${scale}\\bord0\\shad0${assOverrideColor(path.color, 1, state.opacity)}}${path.ass}{\\p0}`;
+        // A wiping shape clips to its uncovered rectangle in screen space.
+        let clip = "";
+        if (path.clip) {
+          const s = state.scale, base = { x: layout.box.x + state.translateXPixels, y: layout.box.y + state.translateYPixels };
+          const a = projectMotionScenePoint({ x: base.x + path.clip.x0 * s, y: base.y + path.clip.y0 * s }, camera);
+          const b = projectMotionScenePoint({ x: base.x + path.clip.x1 * s, y: base.y + path.clip.y1 * s }, camera);
+          clip = `\\clip(${roundAss(a.x)},${roundAss(a.y)},${roundAss(b.x)},${roundAss(b.y)})`;
+        }
+        const drawing = `{\\an7\\pos(${x},${y})\\p1\\fscx${scale}\\fscy${scale}${clip}\\bord0\\shad0${assOverrideColor(path.color, 1, state.opacity)}}${path.ass}{\\p0}`;
         // Explicit ink annotations paint over glyphs, including lower thirds.
         // Historical vectors keep their original layer and appearance.
         const layer = graphic.vectorV2.schema === "editkin.motion-vector-annotation/v1" ? 3 : 1;
@@ -251,6 +259,17 @@ function motionGraphicV2Events(project: EditProject, graphic: MotionGraphic, bun
         const origin = projectMotionScenePoint({ x: segment.x + state.translateXPixels, y: segment.y + state.translateYPixels }, camera);
         const x = glyphAssNumber(origin.x), y = glyphAssNumber(origin.y);
         const scale = glyphAssNumber(state.scale * camera.scale * 100);
+        // Motion Language pose: rotate about the scaled segment box center and
+        // blur in screen pixels, the same pivot the SVG preview uses.
+        const poseTags = (layoutX: number, layoutY: number): string => {
+          let tags = "";
+          if (state.rotationDegrees) {
+            const pivot = projectMotionScenePoint({ x: layoutX + segment.width * state.scale / 2, y: layoutY + segment.height * state.scale / 2 }, camera);
+            tags += `\\org(${glyphAssNumber(pivot.x)},${glyphAssNumber(pivot.y)})\\frz${glyphAssNumber(-state.rotationDegrees)}`;
+          }
+          if (state.blurPixels) tags += `\\blur${glyphAssNumber(state.blurPixels * camera.scale)}`;
+          return tags;
+        };
         // Contours already carry the true local bearing and baseline. The
         // frame transform uses their local origin; libass must not re-shape
         // text or add the legacy font-size/top-offset approximation.
@@ -258,10 +277,10 @@ function motionGraphicV2Events(project: EditProject, graphic: MotionGraphic, bun
           const offset = graphic.shadowDepth * state.scale;
           const shadowOrigin = projectMotionScenePoint({ x: segment.x + state.translateXPixels + offset, y: segment.y + state.translateYPixels + offset }, camera);
           const shadowX = glyphAssNumber(shadowOrigin.x), shadowY = glyphAssNumber(shadowOrigin.y);
-          const shadowDrawing = `{\\an7\\q2\\p1\\pos(${shadowX},${shadowY})\\fscx${scale}\\fscy${scale}\\bord0\\shad0${assOverrideColor(graphic.accentColor, 1, state.opacity)}}${segment.outline.ass}{\\p0}`;
+          const shadowDrawing = `{\\an7\\q2\\p1\\pos(${shadowX},${shadowY})\\fscx${scale}\\fscy${scale}${poseTags(segment.x + state.translateXPixels + offset, segment.y + state.translateYPixels + offset)}\\bord0\\shad0${assOverrideColor(graphic.accentColor, 1, state.opacity)}}${segment.outline.ass}{\\p0}`;
           budget.addLine(`Dialogue: 2,${start},${end},Motion,,0,0,0,,${shadowDrawing}`);
         }
-        const drawing = `{\\an7\\q2\\p1\\pos(${x},${y})\\fscx${scale}\\fscy${scale}\\bord0\\shad0${assOverrideColor(graphic.textColor, 1, state.opacity)}}${segment.outline.ass}{\\p0}`;
+        const drawing = `{\\an7\\q2\\p1\\pos(${x},${y})\\fscx${scale}\\fscy${scale}${poseTags(segment.x + state.translateXPixels, segment.y + state.translateYPixels)}\\bord0\\shad0${assOverrideColor(graphic.textColor, 1, state.opacity)}}${segment.outline.ass}{\\p0}`;
         budget.addLine(`Dialogue: 2,${start},${end},Motion,,0,0,0,,${drawing}`);
         continue;
       }
@@ -269,7 +288,9 @@ function motionGraphicV2Events(project: EditProject, graphic: MotionGraphic, bun
       const x = segment.x + state.translateXPixels;
       const y = segment.y + state.translateYPixels + metrics.topOffset * state.scale;
       const scale = Math.max(1, Math.round(state.scale * 100));
-      const overrides = `{\\an7\\q2${font}${weight}${spacing}\\fs${roundAss(metrics.fontSize)}\\fscx${scale}\\fscy${scale}${assOverrideColor(graphic.textColor, 1, state.opacity)}${assOverrideColor(graphic.accentColor, 3, state.opacity)}${assOverrideColor(graphic.accentColor, 4, state.opacity)}\\bord0\\shad${shadow}\\pos(${roundAss(x)},${roundAss(y)})}`;
+      const legacyPose = (state.rotationDegrees ? `\\org(${roundAss(x + segment.width * state.scale / 2)},${roundAss(segment.y + state.translateYPixels + segment.height * state.scale / 2)})\\frz${roundAss(-state.rotationDegrees)}` : "")
+        + (state.blurPixels ? `\\blur${roundAss(state.blurPixels)}` : "");
+      const overrides = `{\\an7\\q2${font}${weight}${spacing}\\fs${roundAss(metrics.fontSize)}\\fscx${scale}\\fscy${scale}${legacyPose}${assOverrideColor(graphic.textColor, 1, state.opacity)}${assOverrideColor(graphic.accentColor, 3, state.opacity)}${assOverrideColor(graphic.accentColor, 4, state.opacity)}\\bord0\\shad${shadow}\\pos(${roundAss(x)},${roundAss(y)})}`;
       budget.addLine(`Dialogue: 2,${start},${end},Motion,,0,0,0,,${overrides}${assText(segment.text)}`);
     }
   }

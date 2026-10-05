@@ -119,7 +119,7 @@ export function SavedReferenceMotionInstanceForm({ instance, assets, inspection,
     <fieldset disabled={busy || !current} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
       <label>圖卡節奏<select aria-label="已儲存模板圖卡節奏" value={draft.graphicCadence} onChange={event => {
         if (!busy && current) onDraftChange({ ...draft, graphicCadence: event.target.value as ReferenceMotionInstanceDraft["graphicCadence"] });
-      }}><option value="brisk">俐落動態</option><option value="legacy">保留舊版節奏</option></select></label>
+      }}><option value="kinetic">流暢動態（Motion Language）</option><option value="brisk">俐落動態</option><option value="legacy">保留舊版節奏</option></select></label>
       <label>主標題<input aria-label="已儲存模板主標題" maxLength={32} value={draft.title} onChange={event => copy("title", event.target.value)} /></label>
       <label>眉題<input aria-label="已儲存模板眉題" maxLength={24} value={draft.kicker} onChange={event => copy("kicker", event.target.value)} /></label>
       <label>補充短句<input aria-label="已儲存模板補充短句" maxLength={40} value={draft.subtitle} onChange={event => copy("subtitle", event.target.value)} /></label>

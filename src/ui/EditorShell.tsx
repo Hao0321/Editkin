@@ -496,7 +496,7 @@ export function EditorShell(props: EditorShellProps) {
           onApplyClipMotionPreset={(preset) => {
             if (!selectedClip) return;
             try {
-              runCommand({ type: "batch", commands: motionClipPresetCommands(selectedClip, project.fps, preset) }, "已套用逐格 Motion 動畫，可復原。");
+              runCommand({ type: "batch", commands: motionClipPresetCommands(selectedClip, project.fps, preset, { projectWidth: project.width, projectHeight: project.height }) }, "已套用逐格 Motion 動畫，可復原。");
             } catch (error) { setStatus(error instanceof Error ? error.message : "Motion 動畫套用失敗"); }
           }}
           onApplyReferenceMotionTemplate={referenceTemplateBusy ? undefined : (input) => {

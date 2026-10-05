@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { motionSceneStyleSchema } from "../domain/motionSceneStyle";
 import type { MotionSceneStyle } from "../domain/motionSceneStyle";
-import { GRAPHIC_CADENCE_PROFILES, GRAPHIC_CADENCE_BRISK_CONTRACT } from "./graphicCadence";
+import { GRAPHIC_CADENCE_PROFILES, GRAPHIC_CADENCE_BRISK_CONTRACT, GRAPHIC_CADENCE_KINETIC_CONTRACT } from "./graphicCadence";
 
 /** Editkin sky brand: verified against ui/theme.css, not reference-video colors. */
 export const DEFAULT_REFERENCE_MOTION_STYLE: MotionSceneStyle = {
@@ -76,7 +76,7 @@ export const REFERENCE_MOTION_MEDIA_PRESENTATION_CAPABILITIES = {
     scope: "two upright-DAR contain matte windows; existing clip entrance keys; no scene camera or source replacement" },
 } as const;
 export const REFERENCE_MOTION_GRAPHIC_CADENCE_CAPABILITIES = {
-  supported: GRAPHIC_CADENCE_PROFILES, historicalOmittedDefault: "legacy", brisk: GRAPHIC_CADENCE_BRISK_CONTRACT,
+  supported: GRAPHIC_CADENCE_PROFILES, historicalOmittedDefault: "legacy", brisk: GRAPHIC_CADENCE_BRISK_CONTRACT, kinetic: GRAPHIC_CADENCE_KINETIC_CONTRACT,
   scope: "generation2 graphic and recipe transition timing; source playback and reading minima unchanged; no native longform upgrade",
 } as const;
 /** Text wordmarks are caller-authored copy, not imported image Logos or verified brand ownership. */

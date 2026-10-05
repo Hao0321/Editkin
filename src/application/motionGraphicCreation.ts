@@ -20,6 +20,8 @@ import {
 } from "../motion/compositionV2";
 import { motionPanelPaths } from "../motion/panelGeometry";
 import { motionSceneContourInk, type MotionSceneInk } from "../motion/sceneCamera2d";
+import { posedSegmentInkBounds } from "../motion/motionPoseInk";
+import type { MotionGraphicV2SegmentFrame } from "../motion/compositionV2";
 import { assertPreparedGlyphRun, type PreparedGlyphRun } from "../typography/preparedGlyphRun";
 import { bundledFontFaceSpec } from "../typography/bundledFontCatalog";
 import { resolveBundledFontFace } from "../typography/fontFaces";
@@ -65,13 +67,17 @@ function assertSafeInk(
   scale: number,
   layout: MotionGraphicV2LayoutReceipt,
   frame: number,
+  pose?: { state: MotionGraphicV2SegmentFrame; pivot: { width: number; height: number } },
 ): void {
-  const bounds = {
-    xMin: originX + ink.xMin * scale,
-    yMin: originY + ink.yMin * scale,
-    xMax: originX + ink.xMax * scale,
-    yMax: originY + ink.yMax * scale,
-  };
+  // Rotation/blur (Motion Language) grow the visible ink; plain poses keep the historical box.
+  const bounds = pose && (pose.state.rotationDegrees || pose.state.blurPixels)
+    ? posedSegmentInkBounds(ink, { x: originX, y: originY }, pose.state, pose.pivot)
+    : {
+      xMin: originX + ink.xMin * scale,
+      yMin: originY + ink.yMin * scale,
+      xMax: originX + ink.xMax * scale,
+      yMax: originY + ink.yMax * scale,
+    };
   if (![originX, originY, scale, ...Object.values(bounds)].every(Number.isFinite)
     || scale <= 0 || bounds.xMax <= bounds.xMin || bounds.yMax <= bounds.yMin) {
     fail("INK", "第 " + frame + " 格的實體字形變換範圍不合法");
@@ -129,10 +135,10 @@ function assertAllFrameInk(
       if (!ink || state.opacity === 0) continue;
       const originX = segment.x + state.translateXPixels;
       const originY = segment.y + state.translateYPixels;
-      assertSafeInk(ink, originX, originY, state.scale, layout, frameNumber);
+      assertSafeInk(ink, originX, originY, state.scale, layout, frameNumber, { state, pivot: segment });
       if (graphic.shadowDepth && colorVisible(graphic.accentColor)) {
         const offset = graphic.shadowDepth * state.scale;
-        assertSafeInk(ink, originX + offset, originY + offset, state.scale, layout, frameNumber);
+        assertSafeInk(ink, originX + offset, originY + offset, state.scale, layout, frameNumber, { state, pivot: segment });
       }
     }
     // Panels are fixed contours at the layout origin, not glyph translations.

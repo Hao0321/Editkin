@@ -1,10 +1,13 @@
-import { assertMotionGraphicV2Contract, MOTION_V2_MAX_SEGMENT_FRAMES, motionGraphicV2UnitCount, motionGraphicV2ExitStaggerFrames } from "../domain/motionCompositionV2Contract";
+import { assertMotionGraphicV2Contract, MOTION_V2_MAX_SEGMENT_FRAMES, motionGraphicV2HasPoseEffects, motionGraphicV2UnitCount, motionGraphicV2ExitStaggerFrames } from "../domain/motionCompositionV2Contract";
 import { assertContinuityVectorLayout } from "../domain/motionContinuityContract";
 import { canonicalJson } from "../shared/canonicalJson";
 import { assertPreparedGlyphRun, type PreparedGlyphRun } from "../typography/preparedGlyphRun";
 import { bundledFontFaceSpec } from "../typography/bundledFontCatalog";
 import { resolveBundledFontFace } from "../typography/fontFaces";
 import { motionGlyphPath, type MotionGlyphPath, type MotionGlyphPathCommand } from "./motionGlyphPaths";
+import { evaluateMotionGraphicV2Easing } from "./motionEasing";
+
+export { evaluateMotionGraphicV2Easing };
 import type { EditProject, MotionGraphic, MotionGraphicV2Easing, MotionGraphicV2SequenceOrder } from "../domain/types";
 
 interface Glyph {
@@ -68,6 +71,10 @@ export interface MotionGraphicV2SegmentFrame {
   scale: number;
   translateXPixels: number;
   translateYPixels: number;
+  /** Present only when the motion declares rotation/blur (Motion Language);
+   * historical receipts keep exactly the four pose fields above. */
+  rotationDegrees?: number;
+  blurPixels?: number;
 }
 
 export interface MotionGraphicV2FrameReceipt {
@@ -484,53 +491,6 @@ export function prepareMotionGraphicV2FrameLayout(project: EditProject, graphic:
   return owned;
 }
 
-function cubicBezier(progress: number, easing: Extract<MotionGraphicV2Easing, { type: "cubic_bezier" }>): number {
-  const sample = (time: number, p1: number, p2: number) => {
-    const inverse = 1 - time;
-    return 3 * inverse * inverse * time * p1 + 3 * inverse * time * time * p2 + time ** 3;
-  };
-  let low = 0;
-  let high = 1;
-  for (let iteration = 0; iteration < 16; iteration += 1) {
-    const midpoint = (low + high) / 2;
-    if (sample(midpoint, easing.x1, easing.x2) < progress) low = midpoint; else high = midpoint;
-  }
-  return sample((low + high) / 2, easing.y1, easing.y2);
-}
-
-function spring(progress: number, easing: Extract<MotionGraphicV2Easing, { type: "spring" }>): number {
-  if (progress <= 0) return 0;
-  if (progress >= 1) return 1;
-  const omega0 = Math.sqrt(easing.stiffness / easing.mass);
-  const zeta = easing.damping / (2 * Math.sqrt(easing.stiffness * easing.mass));
-  const initialDisplacement = -1;
-  if (zeta < 1 - 1e-6) {
-    const omegaD = omega0 * Math.sqrt(1 - zeta * zeta);
-    const coefficient = (easing.initialVelocity + zeta * omega0 * initialDisplacement) / omegaD;
-    const displacement = Math.exp(-zeta * omega0 * progress) * (initialDisplacement * Math.cos(omegaD * progress) + coefficient * Math.sin(omegaD * progress));
-    return 1 + displacement;
-  }
-  if (Math.abs(zeta - 1) <= 1e-6) {
-    const coefficient = easing.initialVelocity + omega0 * initialDisplacement;
-    return 1 + (initialDisplacement + coefficient * progress) * Math.exp(-omega0 * progress);
-  }
-  const root = Math.sqrt(zeta * zeta - 1);
-  const first = -omega0 * (zeta - root);
-  const second = -omega0 * (zeta + root);
-  const a = (easing.initialVelocity - second * initialDisplacement) / (first - second);
-  const b = initialDisplacement - a;
-  return 1 + a * Math.exp(first * progress) + b * Math.exp(second * progress);
-}
-
-export function evaluateMotionGraphicV2Easing(progress: number, easing: MotionGraphicV2Easing): number {
-  const value = clamp(progress, 0, 1);
-  if (easing.type === "linear") return value;
-  if (easing.type === "ease_in") return value ** 3;
-  if (easing.type === "ease_out") return 1 - (1 - value) ** 3;
-  if (easing.type === "ease_in_out") return value < .5 ? 4 * value ** 3 : 1 - ((-2 * value + 2) ** 3) / 2;
-  if (easing.type === "cubic_bezier") return cubicBezier(value, easing);
-  return spring(value, easing);
-}
 
 function orderedRanks(count: number, order: MotionGraphicV2SequenceOrder): number[] {
   const indices = Array.from({ length: count }, (_, index) => index);
@@ -563,21 +523,44 @@ export function motionGraphicV2FrameReceipt(project: EditProject, graphic: Motio
   const exitStaggerFrames = motionGraphicV2ExitStaggerFrames(motion);
   const exitTotalFrames = motion.exit.durationFrames + Math.max(0, layout.unitCount - 1) * exitStaggerFrames;
   const exitSequenceStart = durationFrames - exitTotalFrames;
-  const stateAt = (unitIndex: number, segmentId: string): MotionGraphicV2SegmentFrame => {
+  // Every consumer scales about the segment origin (SVG scale(), ASS \an7,
+  // native pose). A centered pivot is therefore pure translation, computed once.
+  const centered = motion.sequence.scaleOrigin === "center";
+  const poseEffects = motionGraphicV2HasPoseEffects(motion);
+  const spreadCenter = (layout.unitCount - 1) / 2, spreadExtent = Math.max(1, spreadCenter);
+  const holdScale = motion.sequence.holdScale ?? 1;
+  const stateAt = (unitIndex: number, segmentId: string, pivot: { width: number; height: number }): MotionGraphicV2SegmentFrame => {
     const entranceDelay = entranceRanks[unitIndex] * motion.sequence.staggerFrames;
     const exitDelay = exitRanks[unitIndex] * exitStaggerFrames;
     const entrance = evaluateMotionGraphicV2Easing(phaseProgress(localFrame, entranceDelay, motion.entrance.durationFrames), motion.entrance.easing);
     const exit = evaluateMotionGraphicV2Easing(phaseProgress(localFrame - exitSequenceStart, exitDelay, motion.exit.durationFrames), motion.exit.easing);
-    return {
+    let scale = (motion.entrance.scale + (1 - motion.entrance.scale) * entrance) * (1 + (motion.exit.scale - 1) * exit);
+    if (holdScale !== 1) {
+      // Linear slow push across this unit's readable hold, continuous into the exit.
+      const holdStart = entranceDelay + motion.entrance.durationFrames - 1, holdEnd = exitSequenceStart + exitDelay;
+      scale *= 1 + (holdScale - 1) * (holdEnd > holdStart ? clamp((localFrame - holdStart) / (holdEnd - holdStart), 0, 1) : 0);
+    }
+    let translateX = motion.entrance.offsetXPixels * (1 - entrance) + motion.exit.offsetXPixels * exit;
+    const translateY = motion.entrance.offsetYPixels * (1 - entrance) + motion.exit.offsetYPixels * exit;
+    const spread = (motion.entrance.spreadPixels ?? 0) * (1 - entrance) + (motion.exit.spreadPixels ?? 0) * exit;
+    // Bisected curves end at 1 - 1e-10, not 1; never let that noise mint a -0.
+    const spreadShift = spread * (unitIndex - spreadCenter) / spreadExtent;
+    if (Math.abs(spreadShift) >= 5e-7) translateX += spreadShift;
+    const state: MotionGraphicV2SegmentFrame = {
       segmentId,
       opacity: round(clamp((motion.entrance.opacity + (1 - motion.entrance.opacity) * entrance) * (1 + (motion.exit.opacity - 1) * exit), 0, 1)),
-      scale: round((motion.entrance.scale + (1 - motion.entrance.scale) * entrance) * (1 + (motion.exit.scale - 1) * exit)),
-      translateXPixels: round(motion.entrance.offsetXPixels * (1 - entrance) + motion.exit.offsetXPixels * exit),
-      translateYPixels: round(motion.entrance.offsetYPixels * (1 - entrance) + motion.exit.offsetYPixels * exit),
+      scale: round(scale),
+      translateXPixels: round(centered ? translateX + (1 - scale) * pivot.width / 2 : translateX),
+      translateYPixels: round(centered ? translateY + (1 - scale) * pivot.height / 2 : translateY),
     };
+    if (poseEffects) {
+      state.rotationDegrees = round((motion.entrance.rotationDegrees ?? 0) * (1 - entrance) + (motion.exit.rotationDegrees ?? 0) * exit) || 0;
+      state.blurPixels = round(Math.max(0, (motion.entrance.blurPixels ?? 0) * (1 - entrance) + (motion.exit.blurPixels ?? 0) * exit)) || 0;
+    }
+    return state;
   };
-  const segments = layout.segments.map(segment => stateAt(segment.unitIndex, segment.id));
-  const vectorState = graphic.vectorV2 ? stateAt(0, `${graphic.id}:vector`) : undefined;
+  const segments = layout.segments.map(segment => stateAt(segment.unitIndex, segment.id, segment));
+  const vectorState = graphic.vectorV2 ? stateAt(0, `${graphic.id}:vector`, layout.box) : undefined;
   if (segments.length * durationFrames > MOTION_V2_MAX_SEGMENT_FRAMES) throw new Error(`v2 formal event 預算超過 ${MOTION_V2_MAX_SEGMENT_FRAMES}`);
   return {
     schema: "hao.motion-frame-receipt/v2", graphicId: graphic.id, layoutReceiptId: layout.receiptId, timelineFrame, localFrame, visible: true,

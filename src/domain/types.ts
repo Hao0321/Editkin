@@ -79,6 +79,7 @@ export type MotionGraphicVisualStyle =
 export type MotionCompositionSchema = "hao.motion-composition/v1" | "hao.motion-composition/v2";
 export type MotionGraphicV2SequenceUnit = "all" | "word" | "character";
 export type MotionGraphicV2SequenceOrder = "forward" | "reverse" | "center_out";
+export type MotionGraphicV2ScaleOrigin = "top_left" | "center";
 
 export type MotionGraphicV2Easing =
   | { type: "linear" }
@@ -95,6 +96,15 @@ export interface MotionGraphicV2Phase {
   scale: number;
   opacity: number;
   easing: MotionGraphicV2Easing;
+  /** Optional Motion Language pose. Omitted means zero, and the frame receipt
+   * stays byte-identical to the four-field historical pose. */
+  /** Gaussian blur radius in project pixels: a focus-pull entrance / exit. */
+  blurPixels?: number;
+  /** Rotation about each segment's own center, clockwise degrees. */
+  rotationDegrees?: number;
+  /** Extra horizontal offset of the outermost unit, scaled by its distance
+   * from the text center: letters converge (entrance) or fan out (exit). */
+  spreadPixels?: number;
 }
 
 export interface MotionGraphicV2Motion {
@@ -105,6 +115,12 @@ export interface MotionGraphicV2Motion {
     staggerFrames: number;
     /** Omitted follows entrance spacing; zero exits the complete sentence together. */
     exitStaggerFrames?: number;
+    /** Omitted keeps the historical top-left pivot; "center" scales each segment
+     * about its own box center by compensating translation in the evaluator. */
+    scaleOrigin?: MotionGraphicV2ScaleOrigin;
+    /** Scale reached at the end of the readable hold (linear slow push from 1).
+     * Requires a centered scale origin. Omitted keeps a static hold. */
+    holdScale?: number;
   };
   entrance: MotionGraphicV2Phase;
   exit: MotionGraphicV2Phase;
@@ -137,7 +153,17 @@ export type MotionVectorV2 = ({
   /** Explicit topmost ink, not a panel or a background. Old parsers reject
    * this version instead of silently putting a crossout under its glyphs. */
   schema: "editkin.motion-vector-annotation/v1"; kind: "rule"; heightPixels: number; revealFrames: number;
-} | { schema: "editkin.motion-vector-continuity/v1"; kind: "spring_panel"; heightPixels: number; revealFrames: 1; geometry: SpringGeometryTrack };
+} | { schema: "editkin.motion-vector-continuity/v1"; kind: "spring_panel"; heightPixels: number; revealFrames: 1; geometry: SpringGeometryTrack }
+  /** Authored flat shape (Original Elements): non-zero filled contours in box
+   * pixels, filled with backgroundColor. Strokes arrive pre-expanded to fills. */
+  | { schema: "editkin.motion-vector-shape/v1"; kind: "shape"; heightPixels: number; revealFrames: number;
+      /** Wipe reveal side when revealFrames > 1: the shape is uncovered from this edge. */
+      revealFrom?: "left" | "right" | "top" | "bottom"; commands: MotionVectorShapeCommand[] };
+
+export type MotionVectorShapeCommand =
+  | { type: "M" | "L"; x: number; y: number }
+  | { type: "C"; x1: number; y1: number; x2: number; y2: number; x: number; y: number }
+  | { type: "Z" };
 
 export interface MotionGraphic {
   schema: MotionCompositionSchema;

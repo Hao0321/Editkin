@@ -128,13 +128,13 @@ describe("strict opt-in semantic strike authoring", () => {
 });
 
 describe("actual new strike UI handlers", () => {
-  it("submits explicit semantic replacement and brisk by default with the wordmark off", () => {
+  it("submits explicit semantic replacement and kinetic by default with the wordmark off", () => {
     const ui = uiFixture(); expect(ui.find("aria-label", "刪線呈現").props.value).toBe("semantic_replace_v1");
     expect(ui.find("aria-label", "加入文字字標").props.checked).toBe(false);
     expect(ui.render().some(node => node.props["aria-label"] === "模板文字字標")).toBe(false);
     ui.click(); expect(ui.apply).toHaveBeenCalledTimes(1);
     expect(ui.apply.mock.calls[0][0]).toMatchObject({ templateId: "strike_reframe", strikePresentation: "semantic_replace_v1",
-      graphicCadence: "brisk", title: "看清真正重點", previousText: "只靠堆疊效果" });
+      graphicCadence: "kinetic", title: "看清真正重點", previousText: "只靠堆疊效果" });
     expect(Object.hasOwn(ui.apply.mock.calls[0][0], "brandMark")).toBe(false);
   });
   it("only forwards an explicitly enabled, trimmed wordmark and blocks blank or excessive enabled text", () => {
@@ -163,7 +163,7 @@ describe("actual new strike UI handlers", () => {
     ui.change("參考 Motion 模板", "level_bridge"); ui.click();
     const other = ui.apply.mock.calls[1][0];
     expect(Object.hasOwn(other, "strikePresentation")).toBe(false); expect(Object.hasOwn(other, "brandMark")).toBe(false);
-    expect(other.templateId).toBe("level_bridge"); expect(other.graphicCadence).toBe("brisk");
+    expect(other.templateId).toBe("level_bridge"); expect(other.graphicCadence).toBe("kinetic");
   });
   it("refuses busy presentation/wordmark changes and submission, while keeping actual cancellation", () => {
     const ui = uiFixture(); ui.toggle("加入文字字標", true); ui.change("模板文字字標", "我的字標"); ui.setBusy(true);
@@ -203,7 +203,7 @@ describe("actual registered MCP strike authoring adapter", () => {
     const result = await f.call("prepare_reference_motion_template", { ...inputFixture(), projectPath: "owned-project.json" });
     expect(result.result.isError).toBeUndefined();
     expect(result.body).toMatchObject({ instance: { authoringGeneration: 2, input: {
-      templateId: "strike_reframe", strikePresentation: "semantic_replace_v1", graphicCadence: "brisk" } },
+      templateId: "strike_reframe", strikePresentation: "semantic_replace_v1", graphicCadence: "kinetic" } },
       preparation: { schema: "editkin.reference-motion-template-preparation/v2", applied: false } });
     const bindings = result.body.physicalLayoutBindings as { physicalFont: { faceId: string; fontSha256: string } }[];
     expect(bindings.length).toBeGreaterThan(0);

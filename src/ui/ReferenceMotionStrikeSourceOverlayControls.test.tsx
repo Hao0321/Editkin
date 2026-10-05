@@ -80,7 +80,7 @@ describe("explicit semantic source-surface create and saved UI contract", () => 
     const html = renderToStaticMarkup(ui.render());
     expect(html).toContain("畫面用途"); expect(html).toContain("保留目前完整畫面與原片時鐘");
     ui.submit(); expect(ui.apply).toHaveBeenCalledTimes(1);
-    expect(ui.apply.mock.calls[0][0]).toMatchObject({ templateId: "strike_reframe", strikePresentation: "semantic_replace_v1", strikeSurface: "standalone", graphicCadence: "brisk" });
+    expect(ui.apply.mock.calls[0][0]).toMatchObject({ templateId: "strike_reframe", strikePresentation: "semantic_replace_v1", strikeSurface: "standalone", graphicCadence: "kinetic" });
     expect(ui.project).toEqual(ui.before);
   });
   it("dispatches explicit overlay together with the authored copy, cadence and text wordmark without source clocks", () => {
@@ -114,7 +114,7 @@ describe("explicit semantic source-surface create and saved UI contract", () => 
     expect(ui.control("刪線畫面用途").props.value).toBe("standalone"); expect(ui.control("刪線呈現").props.value).toBe("semantic_replace_v1");
     expect(ui.control("模板主標題").props.value).toBe("先看清真正重點"); expect(ui.apply).not.toHaveBeenCalled();
     click(find(ui.render(), "data-testid", "cancel-reference-motion-template")); expect(ui.cancel).toHaveBeenCalledTimes(1);
-    ui.setBusy(false); ui.submit(); expect(ui.apply.mock.calls[0][0]).toMatchObject({ strikeSurface: "standalone", graphicCadence: "brisk", style: { animationSpeed: 1 } });
+    ui.setBusy(false); ui.submit(); expect(ui.apply.mock.calls[0][0]).toMatchObject({ strikeSurface: "standalone", graphicCadence: "kinetic", style: { animationSpeed: 1 } });
   });
   it("preserves both historical omission and stored explicit standalone without manufacturing surface patches", () => {
     for (const surface of [undefined, "standalone"] as const) {

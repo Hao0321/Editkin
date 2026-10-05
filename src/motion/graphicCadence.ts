@@ -1,4 +1,4 @@
-export const GRAPHIC_CADENCE_PROFILES = Object.freeze(["legacy", "brisk"] as const);
+export const GRAPHIC_CADENCE_PROFILES = Object.freeze(["legacy", "brisk", "kinetic"] as const);
 export type GraphicCadenceProfile = typeof GRAPHIC_CADENCE_PROFILES[number];
 
 /** Saved brisk dependencies bind the actual coefficients, not just a profile name.
@@ -13,6 +13,26 @@ export const GRAPHIC_CADENCE_CONTRACT = Object.freeze({
   readingPolicy: "unscaled_authored_reading_minimum",
 } as const);
 export const GRAPHIC_CADENCE_BRISK_CONTRACT = GRAPHIC_CADENCE_CONTRACT;
+
+/** Hao Motion Language cadence (2026-10-05). Brisk-family phase logic with
+ * longer entrances, so expo-out has room to glide: perceived attack stays
+ * ~0.15s while the settle reads as fluid. The template shape is part of the
+ * bound contract: a retune ships kinetic/v2, saved instances never drift. */
+export const GRAPHIC_CADENCE_KINETIC_CONTRACT = Object.freeze({
+  schema: "editkin.graphic-cadence/v1", profile: "kinetic", motionLanguage: "hao.motion-language/v1",
+  entranceSeconds: .45, exitSeconds: .22, moveSeconds: .5,
+  shortDelaySeconds: .08, followDelaySeconds: .16, itemStepSeconds: .22,
+  strikeDelaySeconds: .3, ruleRevealSeconds: .4, subtitleDelaySeconds: .12,
+  returnHoldSeconds: .65, characterStaggerSeconds: .067, maximumStaggerTailSeconds: .5,
+  rounding: "nearest_integer_minimum_one; stagger_may_be_zero",
+  readingPolicy: "unscaled_authored_reading_minimum",
+  shape: { entranceCurve: "expoOut", exitCurve: "snapIn", travelMultiplier: 3, entranceScale: .94, scaleOrigin: "center", monotone: true },
+} as const);
+
+/** The coefficients a saved dependency binds for each profile. */
+export function graphicCadenceContract(profile?: GraphicCadenceProfile) {
+  return profile === "brisk" ? GRAPHIC_CADENCE_CONTRACT : profile === "kinetic" ? GRAPHIC_CADENCE_KINETIC_CONTRACT : "legacy" as const;
+}
 
 export interface GraphicCadenceFrames {
   readonly profile: GraphicCadenceProfile;
@@ -38,7 +58,9 @@ export function compileGraphicCadence(fps: number, animationSpeed = 1,
   if (!Number.isFinite(fps) || fps <= 0 || fps > 240) throw new Error("Graphic cadence fps must be finite and in (0,240]");
   if (!Number.isFinite(animationSpeed) || animationSpeed < .5 || animationSpeed > 2) throw new Error("Graphic cadence animation speed must be in [.5,2]");
   if (profile !== undefined && !GRAPHIC_CADENCE_PROFILES.includes(profile)) throw new Error("Unknown graphic cadence profile");
-  const selected = profile ?? "legacy", brisk = selected === "brisk", c = GRAPHIC_CADENCE_BRISK_CONTRACT;
+  // "brisk" here means the generation-2 family; kinetic only swaps coefficients.
+  const selected = profile ?? "legacy", brisk = selected !== "legacy",
+    c = selected === "kinetic" ? GRAPHIC_CADENCE_KINETIC_CONTRACT : GRAPHIC_CADENCE_BRISK_CONTRACT;
   const frames = (seconds: number) => Math.max(1, Math.round(seconds * fps / animationSpeed));
   return Object.freeze({ profile: selected,
     entranceFrames: frames(brisk ? c.entranceSeconds : .32), exitFrames: frames(brisk ? c.exitSeconds : .18),

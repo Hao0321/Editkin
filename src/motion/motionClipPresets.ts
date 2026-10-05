@@ -1,16 +1,33 @@
 import type { EditorCommand } from "../domain/commandTypes";
 import type { TimelineClip } from "../domain/types";
+import { CLIP_MOTION_RECIPES, CLIP_MOTION_RECIPE_SPECS, clipMotionRecipeCommands, type ClipMotionRecipe, type ClipMotionRecipeOptions } from "./motionLanguage";
 
-export const MOTION_CLIP_PRESETS = [
+const LEGACY_MOTION_CLIP_PRESETS = [
   { id: "float_in", name: "浮空入場", description: "18 格內淡入、前推並柔和回彈" },
   { id: "slow_push", name: "緩推鏡頭", description: "沿整段影片逐格放大 6%" },
   { id: "gallery_drift", name: "空間側移", description: "前後景錯位感：緩慢橫移、微縮放與小角度傾斜" },
   { id: "chapter_snap", name: "章節切入", description: "章節開始的 12 格內短距離淡入後停穩" },
 ] as const;
-export type MotionClipPresetId = typeof MOTION_CLIP_PRESETS[number]["id"];
+export type MotionClipPresetId = typeof LEGACY_MOTION_CLIP_PRESETS[number]["id"] | ClipMotionRecipe;
+
+/** Legacy ids keep their exact keyframes; Motion Language recipes are appended. */
+export const MOTION_CLIP_PRESETS: ReadonlyArray<{ id: MotionClipPresetId; name: string; description: string }> = [
+  ...LEGACY_MOTION_CLIP_PRESETS,
+  ...CLIP_MOTION_RECIPES.map((id) => ({ id, name: CLIP_MOTION_RECIPE_SPECS[id].label, description: CLIP_MOTION_RECIPE_SPECS[id].use })),
+];
+export const MOTION_CLIP_PRESET_IDS = MOTION_CLIP_PRESETS.map((preset) => preset.id) as [MotionClipPresetId, ...MotionClipPresetId[]];
+
+/** Frame size and art direction for Motion Language recipes; legacy presets ignore it. */
+export type MotionClipPresetContext = Omit<ClipMotionRecipeOptions, "fps">;
+
+const isRecipe = (preset: MotionClipPresetId): preset is ClipMotionRecipe => (CLIP_MOTION_RECIPES as readonly string[]).includes(preset);
 
 /** Reuses EditGraph keyframes, so UI and v4 Autopilot can author the exact same motion. */
-export function motionClipPresetCommands(clip: TimelineClip, fps: number, preset: MotionClipPresetId): EditorCommand[] {
+export function motionClipPresetCommands(clip: TimelineClip, fps: number, preset: MotionClipPresetId, context?: MotionClipPresetContext): EditorCommand[] {
+  if (isRecipe(preset)) {
+    if (!context) throw new Error("Motion 運鏡需要專案畫面尺寸");
+    return clipMotionRecipeCommands(clip, preset, { ...context, fps });
+  }
   if (clip.keyframes.length) throw new Error("片段已有關鍵幀；請先確認現有動畫再套用 Motion 預設");
   if (!Number.isFinite(fps) || fps <= 0 || clip.duration * fps < 12) throw new Error("Motion 預設需要至少 12 格有效片段");
   const base = clip.transform;

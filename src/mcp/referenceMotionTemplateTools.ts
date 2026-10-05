@@ -21,9 +21,23 @@ function executedGraphics(prepared: { commands: import("../domain/commands").Edi
   return prepared.editorialGraphics.filter(graphic => ids.has(graphic.id));
 }
 
+/** Shared by prepare_reference_motion_template and the module layer (read-only; verifies the project did not change). */
+export async function prepareReferenceMotionTemplateFile(projectPath: string, input: z.infer<typeof referenceMotionTemplateInputSchema>,
+  environment: NodeJS.ProcessEnv = process.env) {
+  const project = await readProject(projectPath), signature = canonicalJson(project);
+  const prepared = await withReferenceMotionPhysicalFonts(dependencies =>
+    prepareReferenceMotionTemplateInstance(project, { ...input, graphicCadence: input.graphicCadence ?? "kinetic",
+      ...(input.templateId === "strike_reframe" ? { strikePresentation: input.strikePresentation ?? "semantic_replace_v1" } : {}) },
+    prefix => `${prefix}-${randomUUID()}`, dependencies), environment);
+  if (canonicalJson(await readProject(projectPath)) !== signature) throw new Error("Motion template project changed on disk during preparation; re-read before planning");
+  return { ...prepared, editorialGraphics: executedGraphics(prepared), planDeclaration: { schema: "editkin.reference-motion-plan/v1", instances: [{
+    instanceId: prepared.instance.id, mode: "create", commandIndexes: prepared.commands.map((_, index) => index),
+  }] }, declarationIndexes: "Relative to these flat commands; shift all indexes by their final offset in the v4 plan. Metadata earns no design credit." };
+}
+
 export function registerReferenceMotionTemplateTools(server: McpServer, environment: NodeJS.ProcessEnv = process.env) {
   server.registerTool("list_reference_motion_templates", {
-    description: "新建 strike_reframe 明確預設 semantic_replace_v1：同一焦點讀原句、刪去、替換新句；可選保留舊版。semantic 模式可明選 strikeSurface: source_overlay，以實際字型墨跡界線製作局部圓角襯底，保留原素材畫幅；省略或 standalone 維持原創圖形場景，不自動升級舊工程。可選最多16字的用戶文字字標，不是圖片Logo。新建圖卡預設 brisk，可明確選 legacy；已保存模板可獨立修改圖卡節奏，閱讀停留與媒體時鐘不變。只讀低 Token 索引：自研 Motion 場景的敘事用途、素材槽數、閱讀時間與能力邊界。新建雙素材比較預設 floating-v2 完整原比例柔邊窗，可明確選舊版取景；已儲存模板不自動升級，來源替換未支援。研究作者影片不作模板素材。", inputSchema: z.strictObject({}),
+    description: "新建 strike_reframe 明確預設 semantic_replace_v1：同一焦點讀原句、刪去、替換新句；可選保留舊版。semantic 模式可明選 strikeSurface: source_overlay，以實際字型墨跡界線製作局部圓角襯底，保留原素材畫幅；省略或 standalone 維持原創圖形場景，不自動升級舊工程。可選最多16字的用戶文字字標，不是圖片Logo。新建圖卡預設 kinetic（Motion Language 流暢節奏），可明確選 brisk 或 legacy；已保存模板可獨立修改圖卡節奏，閱讀停留與媒體時鐘不變。只讀低 Token 索引：自研 Motion 場景的敘事用途、素材槽數、閱讀時間與能力邊界。新建雙素材比較預設 floating-v2 完整原比例柔邊窗，可明確選舊版取景；已儲存模板不自動升級，來源替換未支援。研究作者影片不作模板素材。", inputSchema: z.strictObject({}),
   }, async () => textResult({ schema: "editkin.reference-motion-template-catalog/v2", generation: 2, templates: REFERENCE_MOTION_TEMPLATES,
     prepareTool: "prepare_reference_motion_template", reviseTool: "prepare_reference_motion_template_revision",
     inspectTool: "inspect_reference_motion_instances", persistentProjectSchema: 10,
@@ -46,7 +60,7 @@ export function registerReferenceMotionTemplateTools(server: McpServer, environm
         yawDegrees: 0, pitchDegrees: 0 },
       legacy_layout: { presentation: "historical clip layout and masks" },
       savedInstanceAutomaticUpgrade: false, revisionCanChangePresentation: false,
-    } }, graphicCadenceCapabilities: { ...REFERENCE_MOTION_GRAPHIC_CADENCE_CAPABILITIES, newAuthoringDefault: "brisk",
+    } }, graphicCadenceCapabilities: { ...REFERENCE_MOTION_GRAPHIC_CADENCE_CAPABILITIES, newAuthoringDefault: "kinetic",
       savedInstanceAutomaticUpgrade: false, revisionCanChangeCadence: true },
     sameSourcePortability: { prepareTool: "prepare_media_source_relink", applyTool: "apply_media_source_relink",
       existingSourceSha256Required: true, newPathMustBeInsideWorkspace: true, differentMediaReplacement: false,
@@ -58,20 +72,10 @@ export function registerReferenceMotionTemplateTools(server: McpServer, environm
       nativePixelsOrArtworkCertified: false }, sourceReplacement: false,
     colorPolicy: REFERENCE_MOTION_COLOR_POLICY, execution: "v4 audit/apply/render required", capabilityBoundary: "Rec.709 editable 2D compound scenes; planar focus wall, no spherical wall or 3D studio" }));
   server.registerTool("prepare_reference_motion_template", {
-    description: "新建 strike_reframe 的 strikePresentation 省略時明確選 semantic_replace_v1（同焦點先刪去再替換），可明選 legacy_layout；brandMark 是最多16 Unicode字的可編輯用戶文字，只接受明確 semantic_replace_v1，不支援圖片Logo或代驗品牌權利。strikeSurface 只接受明確 semantic_replace_v1，source_overlay 用實際字型與動作界線做局部襯底、保留原畫幅和時鐘；省略或 standalone 是原創圖形場景。其他family拒絕刪線專用欄位。新建 graphicCadence 預設 brisk（俐落圖卡），明確 legacy 保留舊版節奏；animationSpeed 是獨立微調，閱讀停留、原片速度及音訊不縮短。只讀：以目前 v2 recipe 和真實核對字型 bytes／glyph 排版，將八種自研場景編譯成可編輯 Motion／影片圖層命令；與桌面共用非同步 compiler，缺字型、逾時、取消或來源改變不退回估算。新建 comparison_pair 預設 source_soft_v2：兩個實際 floating-v2 matte 窗，按 upright DAR 完整容納來源、零 yaw/pitch；明確 legacy_layout 保留舊取景，其他 family 不接受此欄。已儲存模板及歷史省略欄位不自動升級，來源替換未支援。連線是抽象概念圖，點數不是平台人數。需影片、精確片段範圍、核對短文案、用途與證據。拒絕同檔別名、短素材、無閱讀停留、重疊 Motion 及長片預設套整幕。原片音訊與媒體速度不變，副來源靜音。回傳 physical layout metadata 與 v4 graphics／variants；REVIEW_REQUIRED 及素材宣告不是驗收，仍須 audit/apply/reopen/render。",
+    description: "新建 strike_reframe 的 strikePresentation 省略時明確選 semantic_replace_v1（同焦點先刪去再替換），可明選 legacy_layout；brandMark 是最多16 Unicode字的可編輯用戶文字，只接受明確 semantic_replace_v1，不支援圖片Logo或代驗品牌權利。strikeSurface 只接受明確 semantic_replace_v1，source_overlay 用實際字型與動作界線做局部襯底、保留原畫幅和時鐘；省略或 standalone 是原創圖形場景。其他family拒絕刪線專用欄位。新建 graphicCadence 預設 kinetic（Motion Language 流暢節奏），可明確選 brisk（俐落圖卡）或 legacy 保留舊版節奏；animationSpeed 是獨立微調，閱讀停留、原片速度及音訊不縮短。只讀：以目前 v2 recipe 和真實核對字型 bytes／glyph 排版，將八種自研場景編譯成可編輯 Motion／影片圖層命令；與桌面共用非同步 compiler，缺字型、逾時、取消或來源改變不退回估算。新建 comparison_pair 預設 source_soft_v2：兩個實際 floating-v2 matte 窗，按 upright DAR 完整容納來源、零 yaw/pitch；明確 legacy_layout 保留舊取景，其他 family 不接受此欄。已儲存模板及歷史省略欄位不自動升級，來源替換未支援。連線是抽象概念圖，點數不是平台人數。需影片、精確片段範圍、核對短文案、用途與證據。拒絕同檔別名、短素材、無閱讀停留、重疊 Motion 及長片預設套整幕。原片音訊與媒體速度不變，副來源靜音。回傳 physical layout metadata 與 v4 graphics／variants；REVIEW_REQUIRED 及素材宣告不是驗收，仍須 audit/apply/reopen/render。",
     inputSchema: referenceMotionTemplateInputSchema.safeExtend({ projectPath: z.string().min(1) }),
   }, async ({ projectPath, ...input }) => {
-    try {
-      const project = await readProject(projectPath), signature = canonicalJson(project);
-      const prepared = await withReferenceMotionPhysicalFonts(dependencies =>
-        prepareReferenceMotionTemplateInstance(project, { ...input, graphicCadence: input.graphicCadence ?? "brisk",
-          ...(input.templateId === "strike_reframe" ? { strikePresentation: input.strikePresentation ?? "semantic_replace_v1" } : {}) },
-        prefix => `${prefix}-${randomUUID()}`, dependencies), environment);
-      if (canonicalJson(await readProject(projectPath)) !== signature) throw new Error("Motion template project changed on disk during preparation; re-read before planning");
-      return textResult({ ...prepared, editorialGraphics: executedGraphics(prepared), planDeclaration: { schema: "editkin.reference-motion-plan/v1", instances: [{
-        instanceId: prepared.instance.id, mode: "create", commandIndexes: prepared.commands.map((_, index) => index),
-      }] }, declarationIndexes: "Relative to these flat commands; shift all indexes by their final offset in the v4 plan. Metadata earns no design credit." });
-    }
+    try { return textResult(await prepareReferenceMotionTemplateFile(projectPath, input, environment)); }
     catch (error) { return errorResult(error); }
   });
   server.registerTool("prepare_reference_motion_template_reuse", {
