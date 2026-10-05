@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { fileIdentity } from "./lib/regular-file.mjs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { inspectDistributionArtifacts } from "./lib/artifact-lifecycle.mjs";
@@ -16,12 +16,6 @@ const outputPath = resolve(root, `../../.rd/benchmarks/editkin-delivered-journey
 const toolReceipt = JSON.parse(await readFile(resolve(root, "scripts/artifact-toolchain.json"), "utf8"));
 const sevenZipPath = resolve(root, toolReceipt.sevenZip.path);
 const deliveredJourneyTimeoutMs = 900_000;
-
-async function identity(path) {
-  const info = await stat(path);
-  const hash = createHash("sha256").update(await readFile(path)).digest("hex");
-  return { bytes: info.size, sha256: hash };
-}
 
 const lifecycle = await inspectDistributionArtifacts({
   root,
@@ -66,14 +60,14 @@ try {
     product: packageJson.productName,
     productVersion: version,
     generatedAt: new Date().toISOString(),
-    deliveryEnvelope: { path: `apps/hao-editor/src-tauri/target/release/bundle/nsis/Editkin_${version}_x64-setup.exe`, ...await identity(installerPath) },
+    deliveryEnvelope: { path: `apps/hao-editor/src-tauri/target/release/bundle/nsis/Editkin_${version}_x64-setup.exe`, ...await fileIdentity(installerPath) },
     deliveredExecutable: {
       path: `Editkin_${version}_x64-setup.exe!/editkin.exe`,
-      ...await identity(deliveredExecutablePath),
+      ...await fileIdentity(deliveredExecutablePath),
       authority: true,
       source: "delivery-envelope-extraction",
     },
-    artifactLifecycleEvidence: { path: `.rd/benchmarks/editkin-artifact-lifecycle-${version}-windows-x64.json`, ...await identity(artifactEvidencePath) },
+    artifactLifecycleEvidence: { path: `.rd/benchmarks/editkin-artifact-lifecycle-${version}-windows-x64.json`, ...await fileIdentity(artifactEvidencePath) },
     runtimeJourney,
   };
   await writeFile(outputPath, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");

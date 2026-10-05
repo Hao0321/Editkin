@@ -1,4 +1,5 @@
 import { readFile, readdir, lstat, realpath } from "node:fs/promises";
+import { readRegularFile } from "./lib/regular-file.mjs";
 import { extname, isAbsolute, relative, resolve, sep } from "node:path";
 
 const appRoot = resolve(import.meta.dirname, "..");
@@ -210,7 +211,7 @@ async function regularSource(pathInput, symlinkPaths) {
   if (canonicalRelation.startsWith("..") || isAbsolute(canonicalRelation)) throw new Error(`Canonical policy path escaped app root: ${pathInput}`);
   const info = await lstat(absolute);
   if (!info.isFile()) return undefined;
-  return readFile(absolute, "utf8");
+  return (await readRegularFile(absolute)).toString("utf8");
 }
 
 async function discoverResearchSurfaces(policy, symlinkPaths) {
@@ -235,7 +236,7 @@ async function discoverResearchSurfaces(policy, symlinkPaths) {
       return;
     }
     if (!info.isFile() || excluded.has(label) || !extensions.has(extname(label))) return;
-    const source = await readFile(absolute, "utf8");
+    const source = (await readRegularFile(absolute)).toString("utf8");
     if (pathPatterns.some((pattern) => pattern.test(label)) || contentPatterns.some((pattern) => pattern.test(source))) discovered.push(label);
   }
   for (const root of discovery.roots) await visit(root);

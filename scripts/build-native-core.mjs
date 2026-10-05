@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { copyFile, mkdir, readFile, readdir, rename, rm, lstat, writeFile } from "node:fs/promises";
+import { readRegularFile } from "./lib/regular-file.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
@@ -25,7 +26,7 @@ async function collectBuildInputs() {
     const info = await lstat(path);
     if (info.isSymbolicLink()) throw new Error(`native build input rejects symlink: ${path}`);
     if (info.isFile()) {
-      const bytes = await readFile(path);
+      const bytes = await readRegularFile(path);
       files.push({ path: relative(projectRoot, path).split(sep).join("/"), bytes: bytes.length, sha256: sha256(bytes) });
       return;
     }

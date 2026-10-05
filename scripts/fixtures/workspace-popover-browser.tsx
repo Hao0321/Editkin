@@ -198,7 +198,7 @@ function Controller() {
     </div>
     <p>操作：點開「更多 → 專案、工作區與進階 → 剪輯工作區」後，檢查四個 checkbox 中心、預設版型、字級選單，再在主選單內滾輪到底；JSON 保留 <code>elementFromPoint</code>、祖先 overflow、scrollTop 與可信指標事件。換寬度／主題會重新掛載，請重開選單。</p>
     <iframe ref={frame} key={`${width}-${height}-${theme}-${generation}`} title="真工作區元件驗收視窗" data-testid="workspace-viewport"
-      src={`./workspace-popover-browser.html?frame=1&theme=${theme}&run=${generation}`} style={{ width, height }} />
+      src={`./workspace-popover-browser.html?frame=1&theme=${encodeURIComponent(theme)}&run=${generation}`} style={{ width, height }} />
     <h2>可見觀測 JSON（不等於 PASS）</h2><pre data-testid="workspace-popover-report">{JSON.stringify(report, null, 2)}</pre>
     <details><summary>保留的已驗證失敗 baseline</summary><p>c27281703c9d5489 桌面版 1440×900：第三個 checkbox 中心 (975.5, 586) 命中 timeline-toolbar。來源：.rd/workspace-checkbox-hit-target-p1-20260831.md；report SHA256 36c5460be630cdf5b003b1a2dfab03b9ac8f39d4cf9e01352cabfe1fdb10d8d6。本頁沒有把該舊版缺陷重命名成新版結果。</p></details>
   </main></>;

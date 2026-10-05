@@ -119,7 +119,7 @@ function Controller() {
       <label>主題<select value={theme} onChange={(event) => setTheme(event.target.value as EditorTheme)}>{EDITOR_THEMES.map(value => <option key={value} value={value}>{THEME_LABELS[value]}</option>)}</select></label>
       <button type="button" onClick={() => frame.current?.contentWindow?.postMessage({ type: "operation-fixture-measure" }, location.origin)}>擷取真實幾何</button>
     </div>
-    <iframe ref={frame} key={`${width}-${theme}`} title="常駐操作狀態驗收視窗" data-testid="status-viewport" src={`./operation-status-browser.html?frame=1&theme=${theme}`} style={{ width, height: 640 }} />
+    <iframe ref={frame} key={`${width}-${theme}`} title="常駐操作狀態驗收視窗" data-testid="status-viewport" src={`./operation-status-browser.html?frame=1&theme=${encodeURIComponent(theme)}`} style={{ width, height: 640 }} />
     <h2>可見觀測 JSON（不自動宣告 PASS）</h2><pre data-testid="operation-status-report">{JSON.stringify(report, null, 2)}</pre>
   </main></>;
 }

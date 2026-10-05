@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { readRegularFile } from "./lib/regular-file.mjs";
 import { basename, dirname, join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 
@@ -151,8 +152,7 @@ if (process.argv.includes("--self-test")) {
   const appPath = resolve(appArgument);
   const runtimeRoot = join(appPath, "Contents", "Resources", "runtime");
   const manifestPath = join(runtimeRoot, "PLATFORM-MANIFEST.json");
-  await access(manifestPath);
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  const manifest = JSON.parse((await readRegularFile(manifestPath)).toString("utf8"));
   if (manifest.schemaVersion !== 2 || manifest.platform !== "darwin" || manifest.arch !== arch) {
     throw new Error(`bundled runtime manifest target mismatch: schema=${manifest.schemaVersion}, ${manifest.platform}/${manifest.arch}`);
   }

@@ -52,11 +52,30 @@ These are **proposals**. I cannot dismiss alerts and no reviewer has approved th
 | `js/file-system-race` `src/application/autoRotoNativeProduct.ts:188` | Cache lock file | Lock removed only if the token read back matches ours; a replaced lock is not removed by mistake except in a tiny window between read and `rm` | Accepted risk to be reviewed; an identity-checked unlink would need a design |
 | `js/file-system-race` `src/application/materialColorCodeIdentity.ts:25` | The running module's own file | Compared with the hash captured at load; an attacker who can rewrite the application bundle already controls the code | Low value; reviewer decision |
 
-## Not reviewed individually (remain open)
+## Second pass: scripts, fixtures and tests
 
-- **Developer scripts (56):** 38 `file-system-race`, 9 `bad-code-sanitization`, 8 `http-to-file-access`, 1 `file-access-to-http`, in `scripts/`. They are maintainer tooling run on the maintainer's own build outputs and are not shipped, but the issue requires each to be reviewed and none has been dismissed. Keep production checks independent of this triage.
-- **Browser fixtures (3):** `js/xss-through-dom` in `scripts/fixtures/*-browser.tsx`.
-- **Test files (6):** `js/file-system-race` in `*.test.ts`.
+Scope: the 76 alerts open on the fork's `main` (`7fef8d7`) when GitHub code scanning was read back: 49 `js/file-system-race`, 11 `js/http-to-file-access`, 9 `js/bad-code-sanitization`, 3 `js/xss-through-dom`, 2 `js/file-access-to-http`, and one each of `js/double-escaping` and `js/user-controlled-bypass`. The `src/` items are the ten proposals above. The rest were reviewed here. None has been dismissed; dismissal needs the repository owner.
+
+### Fixed
+
+- **`js/xss-through-dom` (3, `scripts/fixtures/*-browser.tsx`).** The controller pages build an iframe URL from the theme picked in a `<select>`. The value is now passed through `encodeURIComponent`. Before, a value containing `&` or `#` would have changed the query of the isolated page. The picker only offers the built-in theme list, so this is defence in depth, not a reachable exploit.
+- **`js/file-system-race` in `scripts/` (37 of 38).** Two shapes were flagged: hashing a file for a report (`stat` for the size, a second read for the hash) and build-input walkers (`stat`/`lstat` type check, then `readFile`). Both now read through `scripts/lib/regular-file.mjs`: `readRegularFile` opens with `O_NOFOLLOW`/`O_NONBLOCK` where the platform has them, checks the type with `fstat` on that handle, and reads that handle; `fileIdentity` returns `{ bytes, sha256 }` from one read. Reported sizes and hashes now always describe the same bytes. Report JSON keeps its key order. Where a script only needed existence (`access`/`stat` before `readFile`), the pre-check was dropped because the read reports `ENOENT` itself.
+  - Behaviour changes to know about: a symlink or non-regular file at a *hashed* path now fails instead of being followed on POSIX (walkers already rejected symlinks). `editkin-product-mcp-launcher.mjs` also re-checks the size bound on the bytes actually read.
+
+### Reviewed, not changed: proposed dismissals
+
+| Alert group | Count | Why it is not a product risk | Proposed disposition |
+| --- | --- | --- | --- |
+| `js/bad-code-sanitization` `tauri-cdp-smoke.mjs`, `desktop-first-edit-smoke.mjs`, `native-audio-*-product-gate.ts` | 9 | Code strings sent to the app under test over the local debugging port embed selectors and file paths with `JSON.stringify`. Inputs are constants and paths the script itself created; nothing is parsed as HTML. | Not exploitable in a developer smoke script |
+| `js/http-to-file-access` in `scripts/` | 10 | Downloads are size- and SHA-256-pinned **before** they are written (`stage-platform-runtime.mjs`, `acquire-aces-config.mjs`); the rest write reports from the local debugging endpoint to a report directory the script chose. | Pinned artifacts; reports only |
+| `js/file-access-to-http` `scripts/lib/tauri-cdp-harness.mjs` | 1 | Connects to a loopback debugging URL read from a file the script wrote. | Loopback only |
+| `js/file-system-race` (`material-color-runtime-pair.mjs`) | 1 | Already opens a handle and compares `dev`/`ino`, size and times before and after the read. | Already mitigated |
+| `js/file-system-race` in `*.test.ts` | 6 | Tests intentionally rewrite fixtures they own and read them back to assert the effect. | Test scaffolding |
+
+## Not verified
+
+- I could not re-run CodeQL for this pass, so the hosted alert count after the change is unknown; the expected drop is not measured.
+- Most rewritten gate scripts depend on Windows vendored binaries, release artifacts or the desktop app and could not be executed here. They were syntax-checked (`node --check` / `esbuild` bundling), and the shared helper is covered by `scripts/lib/regular-file.test.mjs`. `hao-aesthetic-gate.mjs` was run and is GREEN; `retired-product-surfaces-gate.mjs` fails identically before and after the change.
 
 ## Verification
 

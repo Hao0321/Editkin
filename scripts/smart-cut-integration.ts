@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { fileIdentity } from "./lib/regular-file.mjs";
 import { dirname, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { analyzeSmartCut } from "../src/application/smartCut";
@@ -84,9 +84,10 @@ async function main() {
     outputDuration: Math.abs(probe.duration - expectedDuration) < 0.15 && probe.duration < 3.5,
     outputStreams: probe.hasVideo && probe.hasAudio && probe.width === 640 && probe.height === 360,
   };
+  const sourceIdentity = await fileIdentity(source);
   const payload = {
     status: Object.values(assertions).every(Boolean) ? "GREEN" : "BLOCK",
-    dataset: { id: "editkin-speaking-silence-synthetic-v1", sourceBytes: (await stat(source)).size, sourceSha256: createHash("sha256").update(await readFile(source)).digest("hex") },
+    dataset: { id: "editkin-speaking-silence-synthetic-v1", sourceBytes: sourceIdentity.bytes, sourceSha256: sourceIdentity.sha256 },
     analysis,
     cachedAnalysis,
     performance: { coldMs: Number(coldMs.toFixed(3)), cacheMs: Number(cacheMs.toFixed(3)), speedup: Number((coldMs / cacheMs).toFixed(2)) },
@@ -94,7 +95,7 @@ async function main() {
     editedClipCount: edited.tracks[0].clips.length,
     rendered,
     probe,
-    output: { bytes: (await stat(output)).size, sha256: createHash("sha256").update(await readFile(output)).digest("hex") },
+    output: await fileIdentity(output),
     assertions,
   };
   await mkdir(dirname(evidencePath), { recursive: true });
