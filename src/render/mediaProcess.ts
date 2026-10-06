@@ -56,10 +56,11 @@ export async function runProcess(executable: string, args: string[], timeoutMs: 
   });
 }
 
-export async function probeMedia(path: string, ffprobePath = "ffprobe"): Promise<MediaProbe> {
+/** `inputOptions` such as the media utility input policy are placed before the input path. */
+export async function probeMedia(path: string, ffprobePath = "ffprobe", inputOptions: readonly string[] = []): Promise<MediaProbe> {
   assertLocalMediaPath(path);
   const { stdout } = await runProcess(ffprobePath, [
-    "-v", "error", "-show_entries", "format=duration", "-show_entries", "stream=codec_type,codec_name,profile,width,height,sample_aspect_ratio,pix_fmt,bits_per_raw_sample,color_primaries,color_transfer,color_space,color_range:stream_side_data=side_data_type,rotation:stream_tags=rotate",
+    "-v", "error", ...inputOptions, "-show_entries", "format=duration", "-show_entries", "stream=codec_type,codec_name,profile,width,height,sample_aspect_ratio,pix_fmt,bits_per_raw_sample,color_primaries,color_transfer,color_space,color_range:stream_side_data=side_data_type,rotation:stream_tags=rotate",
     "-of", "json", path,
   ], 30_000);
   const data = JSON.parse(stdout) as { format?: { duration?: string }; streams?: Array<{ codec_type?: string; codec_name?: string; profile?: string; width?: number; height?: number; sample_aspect_ratio?: unknown; pix_fmt?: string; bits_per_raw_sample?: string; color_primaries?: string; color_transfer?: string; color_space?: string; color_range?: string; side_data_list?: Array<{ side_data_type?: string; rotation?: unknown }>; tags?: { rotate?: unknown } }> };

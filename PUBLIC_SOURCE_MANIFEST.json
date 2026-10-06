@@ -314,8 +314,8 @@
     },
     {
       "path": "electron/workflowIpc.ts",
-      "bytes": 13889,
-      "sha256": "930f5f89bd9191fa664d783f47845e25913422aa6b280e08647dd0bd2ce9be58",
+      "bytes": 14101,
+      "sha256": "736e6fd51119035b53abc07b987e8f0a699e8b423c64aa6a72441597e5aab831",
       "origin": "electron/workflowIpc.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -5067,15 +5067,15 @@
     },
     {
       "path": "src/application/inspectMedia.test.ts",
-      "bytes": 2464,
-      "sha256": "808651f1f5f0f7090aa757495bd7dbf4d752d56e4337a5b5923f74c8d9a4ab1c",
+      "bytes": 4155,
+      "sha256": "f7991ff37893afb77ee4652ef369239c36becb62d516f9b4c2c97d3feb27b061",
       "origin": "src/application/inspectMedia.test.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "src/application/inspectMedia.ts",
-      "bytes": 4493,
-      "sha256": "023affb4fa68fcda7822b8672d772558bee857c805b64adc8241e20903df248b",
+      "bytes": 4545,
+      "sha256": "e8458d2777a1c89162bd636f8fceb4fedc9f777436eeabe713e942e44209326e",
       "origin": "src/application/inspectMedia.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -6845,8 +6845,8 @@
     },
     {
       "path": "src/desktop/electronWorkflowIpc.test.ts",
-      "bytes": 22364,
-      "sha256": "6db221393a5f10fe084486215d80310a2be17a0a462149b6df286415b202fafa",
+      "bytes": 23289,
+      "sha256": "2437ad13528b5612efdd156b03623771843d70d8ac14e836d532ce6e5162d66b",
       "origin": "src/desktop/electronWorkflowIpc.test.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -9743,8 +9743,8 @@
     },
     {
       "path": "src/render/mediaProcess.ts",
-      "bytes": 5589,
-      "sha256": "7ee01d077aeddefc728eb566de7940d88182cbb8eab2cdc56834ff8ed73d7ac1",
+      "bytes": 5739,
+      "sha256": "3e1ae28193a874a9a15975aa01b31b3a5647613f64fc85e5f9157816dfa3255e",
       "origin": "src/render/mediaProcess.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -9770,9 +9770,16 @@
       "rights": "GPL-3.0-or-later"
     },
     {
+      "path": "src/render/mesh3dRender.inputPolicy.test.ts",
+      "bytes": 4803,
+      "sha256": "e8122213fcfcb05d22d4c352925dd7b25df855119d6dee3b9fb4f8dad31438c6",
+      "origin": "src/render/mesh3dRender.inputPolicy.test.ts",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
       "path": "src/render/mesh3dRender.ts",
-      "bytes": 11115,
-      "sha256": "0d188e0e5b1a387ea961970d863fa35b05bee27d76ae686dc8dbd075e36448f9",
+      "bytes": 11421,
+      "sha256": "143f253aded2b8f7803e055b60433a843e76f17a65edb2c39488e00a648d9d74",
       "origin": "src/render/mesh3dRender.ts",
       "rights": "GPL-3.0-or-later"
     },

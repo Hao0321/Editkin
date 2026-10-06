@@ -9,6 +9,7 @@ import {
   registerElectronWorkflowIpc,
 } from "../../electron/workflowIpc";
 import { safeEmptyWorkflowProfile } from "../plugins/workflowProfileFileStore";
+import { MEDIA_UTILITY_SELF_CONTAINED_FORMATS } from "../application/mediaUtilityInputPolicy";
 import type { MediaProbe } from "../render/ffmpegContracts";
 import type { HaoDesktopApi } from "./types";
 import { mediaProbeForDisplay } from "../render/mediaDisplayGeometry";
@@ -21,6 +22,7 @@ vi.mock("electron", () => ({
   contextBridge: { exposeInMainWorld: bridge.expose }, ipcRenderer: { invoke: bridge.invoke },
 }));
 
+const fileOnlyPolicy = ["-format_whitelist", MEDIA_UTILITY_SELF_CONTAINED_FORMATS.join(","), "-protocol_whitelist", "file"];
 const ownedRoots: string[] = [];
 beforeEach(() => { vi.clearAllMocks(); bridge.invoke.mockResolvedValue({}); });
 afterEach(async () => {
@@ -38,7 +40,7 @@ async function fixture(now?: () => number) {
   const userData = join(root, "userdata"), bundled = join(root, "bundled-plugins");
   await mkdir(userData); await mkdir(bundled);
   const paths = electronWorkflowPaths(userData, bundled);
-  const inspect = vi.fn<(path: string, ffprobePath?: string) => Promise<MediaProbe>>(async () => ({
+  const inspect = vi.fn<(path: string, ffprobePath?: string, inputOptions?: readonly string[]) => Promise<MediaProbe>>(async () => ({
     duration: 2.5, width: 320, height: 180, hasVideo: true, hasAudio: true,
   }));
   const previewUrl = vi.fn((path: string) => `fixture-preview:${path}`);
@@ -85,7 +87,16 @@ describe("real Electron workflow service and payload boundary (isolated source f
       hasVideo: true, hasAudio: true, sampleAspectRatio: 4 / 3, displayRotationDegrees: -90 }));
     const picked = await f.services.importMediaPaths([selected]);
     expect(picked[0]!.asset).toMatchObject({ uri: selected, duration: 9, width: 360, height: 640, displayAspectRatio: 27 / 64 });
-    expect(f.inspect).toHaveBeenCalledExactlyOnceWith(selected, "fixture-ffprobe-not-executed");
+    expect(f.inspect).toHaveBeenCalledExactlyOnceWith(selected, "fixture-ffprobe-not-executed", fileOnlyPolicy);
+  });
+  it("probes picked files only as self-contained local formats over the file protocol", async () => {
+    const f = await fixture(), selected = [join(f.root, "clip.mov"), join(f.root, "photo.JPG")];
+    await Promise.all(selected.map(path => writeFile(path, "isolated non-decoder fixture")));
+    await f.services.importMediaPaths(selected);
+    expect(f.inspect.mock.calls).toEqual([
+      [selected[0], "fixture-ffprobe-not-executed", fileOnlyPolicy],
+      [selected[1], "fixture-ffprobe-not-executed", [...fileOnlyPolicy, "-f", "jpeg_pipe"]],
+    ]);
   });
   it("preload forwards four exact typed routes without accepting profile/plugin filesystem paths", async () => {
     vi.resetModules();
@@ -118,6 +129,7 @@ describe("real Electron workflow service and payload boundary (isolated source f
     ]);
     expect(new Set(picked.map(item => item.asset.id)).size).toBe(3); expect(maximum).toBe(1);
     expect(f.inspect.mock.calls.map(call => call[1])).toEqual(Array(3).fill("fixture-ffprobe-not-executed"));
+    expect(f.inspect.mock.calls.map(call => call[2])).toEqual(Array(3).fill(fileOnlyPolicy));
   });
 
   it("serializes probes across two concurrent real IPC requests on the shared host service", async () => {

@@ -9,6 +9,7 @@ import { DEFAULT_CLIP_LAYER, DEFAULT_COLOR, DEFAULT_TRANSFORM } from "../domain/
 import { Mesh3dGeometryCache, parseMesh3dFont } from "../motion/mesh3dGeometry";
 import { renderMesh3dFrame, type Mesh3dTexture } from "../motion/mesh3dRasterizer";
 import { resolveBundledFontFace } from "../typography/fontFaces";
+import { mediaUtilityInputOptions } from "../application/mediaUtilityInputPolicy";
 import { probeMedia, resolveMediaPath } from "./mediaProcess";
 import type { RenderOptions } from "./ffmpegTypes";
 import { readMesh3dFont } from "./mesh3dFontSource";
@@ -76,13 +77,15 @@ export async function renderMesh3dVideo(project: EditProject, output: string, op
       try {
         for (const id of bindings) {
           const clip = project.tracks.flatMap(t => t.clips).find(c => c.id === id)!, asset = project.assets.find(a => a.id === clip.assetId)!, path = resolveMediaPath(asset.uri,options.assetBase);
-          const before = await stat(path), sourceSha256 = await meshSourceSha256(path), probe = await probeMedia(path,options.ffprobePath);
+          // Project media is an untrusted local file: self-contained formats over file:// only (no HLS/concat/image2 side files).
+          const inputOptions = mediaUtilityInputOptions(path);
+          const before = await stat(path), sourceSha256 = await meshSourceSha256(path), probe = await probeMedia(path,options.ffprobePath,inputOptions);
           if (!probe.hasVideo || !probe.width || !probe.height || ["smpte2084","arib-std-b67"].includes(probe.colorTransfer ?? "")) throw new Error("3D 材質來源非已驗證的 SDR 圖像");
           const scale = Math.min(1,640/Math.max(probe.width,probe.height)), tw = Math.max(2,Math.round(probe.width*scale)), th = Math.max(2,Math.round(probe.height*scale));
           const sourceStart = clip.sourceStart+segment.timelineStart-clip.timelineStart;
           sources.push({clipId:id,sourceSha256,sourceStart,duration:segment.duration,decodedWidth:tw,decodedHeight:th});
           fingerprints.push({path,bytes:before.size,mtimeMs:before.mtimeMs,sha256:sourceSha256});
-          const args = ["-hide_banner","-loglevel","error","-ss",String(asset.kind === "image" ? 0 : sourceStart),"-i",path,"-an","-vf",`fps=${project.fps},scale=${tw}:${th}:flags=lanczos,format=rgba`,"-frames:v",String(asset.kind === "image" ? 1 : Math.round(segment.duration*project.fps)),"-f","rawvideo","pipe:1"];
+          const args = ["-hide_banner","-loglevel","error","-ss",String(asset.kind === "image" ? 0 : sourceStart),...inputOptions,"-i",path,"-an","-vf",`fps=${project.fps},scale=${tw}:${th}:flags=lanczos,format=rgba`,"-frames:v",String(asset.kind === "image" ? 1 : Math.round(segment.duration*project.fps)),"-f","rawvideo","pipe:1"];
           const decoder = ownedPipe(ffmpeg,args,timeout); decoder.child.stdin.end(); decoders.push(decoder);
           records.push({id,width:tw,height:th,frames:rawFrames(decoder.child,tw*th*4)});
         }
