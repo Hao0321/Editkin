@@ -30,7 +30,8 @@ describe("floating video frame preview and formal render geometry", () => {
     const filters = floatingFrameFfmpegFilters(floatingVideoFramePreset("portrait_orbit"), 360, 640, 30);
     expect(filters[0]).toContain("force_original_aspect_ratio=increase");
     expect(filters[1]).toMatch(/^crop=\d+:\d+:/);
-    expect(filters.at(-1)).toContain("planes=8");
+    expect(filters.find(filter => filter.startsWith("gblur="))).toContain("planes=8");
+    expect(filters.at(-1)).toBe("format=rgba");
   });
 
   it("fades only the outside alpha and scales the feather with the project canvas", () => {
@@ -40,6 +41,6 @@ describe("floating video frame preview and formal render geometry", () => {
     const mask = filters.find(filter => filter.startsWith("format=rgba,geq="))!;
     expect(mask).toContain("min(min(X,W-1-X),min(Y,H-1-Y))/17");
     expect(mask).toContain("a='alpha(X,Y)*");
-    expect(filters.at(-1)).toContain("planes=8");
+    expect(filters.find(filter => filter.startsWith("gblur="))).toContain("planes=8");
   });
 });
