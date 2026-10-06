@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { availableParallelism, tmpdir } from "node:os";
 import type { EditProject, MediaAsset, OpenExrImageSequence, TimelineClip, TrackMatteMode } from "../domain/types";
@@ -319,6 +319,27 @@ async function addCompositeInput(
   return { clip, alphaPlan, asset, assetPath, inputIndex: nextIndex, probe };
 }
 
+const FILTER_SCRIPT_THRESHOLD = 8_192;
+
+/**
+ * Windows CreateProcess rejects a long command line before FFmpeg can start,
+ * so long graphs go through -filter_complex_script. The script is created
+ * exclusively (0600) inside a fresh mkdtemp directory (0700 on POSIX) rather
+ * than under a predictable name next to the export, and the directory is
+ * removed even when writing or rendering fails.
+ */
+export async function withFilterGraphArgs<T>(filterGraph: string, run: (filterArgs: string[]) => Promise<T>): Promise<T> {
+  if (filterGraph.length <= FILTER_SCRIPT_THRESHOLD) return run(["-filter_complex", filterGraph]);
+  const directory = await mkdtemp(join(tmpdir(), "editkin-filtergraph-"));
+  try {
+    const scriptPath = join(directory, "filtergraph.txt");
+    await writeFile(scriptPath, filterGraph, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    return await run(["-filter_complex_script", scriptPath]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
 export async function renderComposite(
   ffmpegPath: string,
   ffprobePath: string,
@@ -516,26 +537,18 @@ export async function renderComposite(
     }
   }
   const filterGraph = filters.join(";");
-  // Windows CreateProcess rejects a long command line before FFmpeg can start.
-  // Keep the graph in a short-lived file while retaining the same filter content.
-  const filterScriptPath = filterGraph.length > 8_192
-    ? join(dirname(output), `.${basename(output)}.${process.pid}.filtergraph.txt`)
-    : undefined;
-  if (filterScriptPath) await writeFile(filterScriptPath, filterGraph, "utf8");
-  args.push(
-    // The illustrated MV image graph benefits from a bounded worker pool.
-    // Three full-HD floating video frames need FFmpeg's normal parallelism;
-    // constraining that perspective/alpha graph slowed the delivered render.
-    ...(floatingBackdrop ? [] : ["-filter_complex_threads", String(Math.max(1, Math.min(12, availableParallelism())))]),
-    ...(filterScriptPath ? ["-filter_complex_script", filterScriptPath] : ["-filter_complex", filterGraph]), "-map", "[vout]", "-map", "[aout]",
-    ...encoderArgs(encoder), "-pix_fmt", pixelFormat,
-    ...outputColorMetadataArgs(encoder, !preserveHighBitDepthAlpha && project.colorManagement?.mode === "aces2" ? project.colorManagement.outputTransform : "rec709_sdr"),
-    "-c:a", preserveHighBitDepthAlpha ? "pcm_s24le" : "aac", ...(preserveHighBitDepthAlpha ? [] : ["-b:a", "192k"]), "-ar", "48000", "-ac", "2",
-    "-t", finite(plan.duration), "-video_track_timescale", "90000", "-movflags", "+faststart", output,
-  );
-  try {
+  await withFilterGraphArgs(filterGraph, async filterArgs => {
+    args.push(
+      // The illustrated MV image graph benefits from a bounded worker pool.
+      // Three full-HD floating video frames need FFmpeg's normal parallelism;
+      // constraining that perspective/alpha graph slowed the delivered render.
+      ...(floatingBackdrop ? [] : ["-filter_complex_threads", String(Math.max(1, Math.min(12, availableParallelism())))]),
+      ...filterArgs, "-map", "[vout]", "-map", "[aout]",
+      ...encoderArgs(encoder), "-pix_fmt", pixelFormat,
+      ...outputColorMetadataArgs(encoder, !preserveHighBitDepthAlpha && project.colorManagement?.mode === "aces2" ? project.colorManagement.outputTransform : "rec709_sdr"),
+      "-c:a", preserveHighBitDepthAlpha ? "pcm_s24le" : "aac", ...(preserveHighBitDepthAlpha ? [] : ["-b:a", "192k"]), "-ar", "48000", "-ac", "2",
+      "-t", finite(plan.duration), "-video_track_timescale", "90000", "-movflags", "+faststart", output,
+    );
     await runProcess(ffmpegPath, args, timeoutMs);
-  } finally {
-    if (filterScriptPath) await rm(filterScriptPath, { force: true });
-  }
+  });
 }
