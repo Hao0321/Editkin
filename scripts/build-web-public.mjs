@@ -36,9 +36,8 @@ try {
     await mkdir(dirname(targetPath), { recursive: true });
     await copyFile(sourcePath, targetPath);
   }
-  // The social-preview image and root favicon.ico reuse reviewed identity icons instead of
-  // adding binaries that the public-source binary policy would not cover.
-  await copyFile(resolve(root, "src-tauri/icons/icon.png"), resolve(staging, "og-image.png"));
+  // The root favicon.ico reuses a reviewed identity icon instead of adding a
+  // binary that the public-source binary policy would not cover.
   await copyFile(resolve(root, "src-tauri/icons/icon.ico"), resolve(staging, "favicon.ico"));
   if (existsSync(output)) {
     await rename(output, backup);
