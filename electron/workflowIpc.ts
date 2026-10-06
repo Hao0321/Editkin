@@ -4,6 +4,7 @@ import type { BigIntStats } from "node:fs";
 import { lstat, mkdir, realpath } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
 import { inspectMedia } from "../src/application/inspectMedia";
+import { mediaUtilityInputOptions } from "../src/application/mediaUtilityInputPolicy";
 import type { PickedMedia } from "../src/desktop/types";
 import { compilePluginCommands, discoverInstalledPlugins, findInstalledCapability } from "../src/plugins/registry";
 import { readHostWorkflowProfile, writeHostWorkflowProfileAtomic } from "../src/plugins/workflowProfileFileStore";
@@ -193,7 +194,8 @@ export function createElectronWorkflowServices(paths: ElectronWorkflowPaths, dep
           const path = receipt.path;
           const extension = extname(path).toLowerCase();
           const kind = IMAGE_EXTENSIONS.has(extension) ? "image" : AUDIO_EXTENSIONS.has(extension) ? "audio" : "video";
-          const metadata = await boundary(checkDeadline, () => inspect(path, dependencies.ffprobePath));
+          // Same self-contained file-only FFmpeg input policy as conversion and audio gain.
+          const metadata = await boundary(checkDeadline, () => inspect(path, dependencies.ffprobePath, mediaUtilityInputOptions(path)));
           await assertMediaUnchanged(receipt, checkDeadline);
           const duration = kind === "image" ? 5 : metadata.duration;
           if (!Number.isFinite(duration) || duration <= 0) throw new Error("媒體 duration 不合法");

@@ -66,8 +66,8 @@ async function inspectOpenExrSequence(path: string): Promise<MediaProbe> {
   };
 }
 
-export async function inspectMedia(path: string, ffprobePath?: string): Promise<MediaProbe> {
+export async function inspectMedia(path: string, ffprobePath?: string, inputOptions: readonly string[] = []): Promise<MediaProbe> {
   assertLocalMediaPath(path);
   if (extname(path).toLowerCase() === ".json") return inspectOpenExrSequence(path);
-  return mediaProbeForDisplay(await probeMedia(path, ffprobePath));
+  return mediaProbeForDisplay(await probeMedia(path, ffprobePath, inputOptions));
 }

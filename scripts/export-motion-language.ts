@@ -3,11 +3,13 @@
  * video-autopilot skill. TypeScript stays the single source of truth: the skill
  * reads this JSON and only scales pixel fields by its frame unit.
  *
- *   vendor/node/win32-x64/node.exe node_modules/tsx/dist/cli.mjs scripts/export-motion-language.ts [--check] [outPath]
+ *   vendor/node/win32-x64/node.exe node_modules/tsx/dist/cli.mjs scripts/export-motion-language.ts [--check] <outPath>
+ *
+ * Without <outPath>, EDITKIN_VIDEO_AUTOPILOT_SKILL_ROOT selects
+ * <root>/references/motion-language-v1.json; with neither, nothing is written.
  */
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { KINETIC_MOTION_PRESETS } from "../src/creative/kineticMotionPresets";
 import { ORIGINAL_ELEMENTS, ORIGINAL_ELEMENT_THEMES } from "../src/creative/originalElements";
@@ -24,7 +26,7 @@ export function motionLanguageExport() {
   const source = readFileSync(resolve("src/motion/motionLanguage.ts"));
   return {
     schema: MOTION_LANGUAGE_VERSION,
-    generator: "apps/hao-editor/scripts/export-motion-language.ts",
+    generator: "scripts/export-motion-language.ts",
     sourceSha256: createHash("sha256").update(source.toString("utf8").replace(/\r\n/g, "\n")).digest("hex"),
     reference: { unit: "min(projectWidth, projectHeight) / 1080", pixelFields: ["offsetXPixels", "offsetYPixels", "blurPixels", "spreadPixels"],
       staggerTailSeconds: { entrance: KINETIC_MAX_ENTRANCE_TAIL_SECONDS, exit: KINETIC_MAX_EXIT_TAIL_SECONDS },
@@ -42,11 +44,12 @@ export function motionLanguageExport() {
   };
 }
 
-export const DEFAULT_SKILL_EXPORT_PATH = join(process.env.VIDEO_AUTOPILOT_SKILL_ROOT ?? join(homedir(), ".codex", "skills", "video-autopilot"), "references", "motion-language-v1.json");
-
 if (process.argv[1] && /export-motion-language\.ts$/.test(process.argv[1])) {
   const check = process.argv.includes("--check");
-  const out = process.argv.slice(2).find(arg => !arg.startsWith("--")) ?? DEFAULT_SKILL_EXPORT_PATH;
+  // The skill lives outside this repository; never assume a home-directory default such as ~/.codex.
+  const skillRoot = process.env.EDITKIN_VIDEO_AUTOPILOT_SKILL_ROOT;
+  const out = process.argv.slice(2).find(arg => !arg.startsWith("--")) ?? (skillRoot ? join(skillRoot, "references", "motion-language-v1.json") : "");
+  if (!out) { console.error("請指定輸出路徑參數，或設定 EDITKIN_VIDEO_AUTOPILOT_SKILL_ROOT（video-autopilot Skill 根目錄）；未指定時不寫入任何檔案"); process.exit(1); }
   const text = `${JSON.stringify(motionLanguageExport(), null, 1)}\n`;
   if (check) {
     const current = readFileSync(out, "utf8");

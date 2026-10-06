@@ -26,9 +26,18 @@ const EXPECTED_RULE_FAMILIES = [
   "editorial-unit-cardinality", "dynamic-hard-rule-coverage", "anonymous-aesthetic-standard", "anonymous-community-knowledge", "bounded-runtime-loading",
   "dynamic-plugin-capabilities", "declarative-skill-pack-selection", "plugin-command-provenance", "roto-keyer-evidence-routing",
 ];
+// Personal Skill ids stay out of public source; the maintainer passes them explicitly.
+function personalSkillDependencies(): string[] {
+  const value = process.env.EDITKIN_PERSONAL_SKILL_DEPENDENCIES;
+  if (value === undefined) {
+    throw new Error("請設定 EDITKIN_PERSONAL_SKILL_DEPENDENCIES：以逗號分隔的私人 Skill 依賴 ID（沒有時設為空字串）；公開原始碼不列出私人 Skill 名稱");
+  }
+  return value.split(",").map((id) => id.trim()).filter(Boolean);
+}
 const EXPECTED_SKILL_DEPENDENCIES = [
-  "hao-voice", "yt-script-style", "video-craft-playbook", "yt-algorithm-mastery", "interview-show",
+  "yt-script-style", "video-craft-playbook", "yt-algorithm-mastery", "interview-show",
   "ai-media-generator", "ai-short-drama", "social-post",
+  ...personalSkillDependencies(),
 ];
 const REQUIRED_STARTER_PROMPT_MARKERS = [
   "get_autopilot_contract",

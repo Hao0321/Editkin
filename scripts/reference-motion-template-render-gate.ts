@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
-import { resolve, join } from "node:path";
+import { basename, delimiter, resolve, join } from "node:path";
 import { promisify } from "node:util";
 import { performance } from "node:perf_hooks";
 import { Client } from "@modelcontextprotocol/client";
@@ -20,7 +20,11 @@ const run = promisify(execFile), root = resolve(import.meta.dirname, ".."), evid
 const ffmpeg = resolve(root, "vendor/ffmpeg/win32-x64/ffmpeg.exe"), ffprobe = resolve(root, "vendor/ffmpeg/win32-x64/ffprobe.exe");
 const sha = (data: Uint8Array) => createHash("sha256").update(data).digest("hex");
 const duration = 5, fps = 30, renderOptions = { ffmpegPath: ffmpeg, ffprobePath: ffprobe, fontRoot: resolve(root, "public/fonts"), preferGpu: false, timeoutMs: 240_000 };
-const ownRoot = resolve(root, "../../videos/_INBOX/直式-vertical-Shorts-Reels/19");
+// Owned footage and music are explicit local inputs; public source never names private media.
+const ownedSources = (process.env.EDITKIN_REFERENCE_MOTION_OWNED_SOURCES ?? "").split(delimiter).map(item => item.trim()).filter(Boolean).map(item => resolve(item));
+if (ownedSources.length !== 4) throw new Error(`請設定 EDITKIN_REFERENCE_MOTION_OWNED_SOURCES：依序填入四支自有 1080×1920 直式影片路徑（以「${delimiter}」分隔，第一支至少 8 秒）；公開原始碼不內建私人素材`);
+if (!process.env.EDITKIN_REFERENCE_MOTION_OWNED_MUSIC) throw new Error("請設定 EDITKIN_REFERENCE_MOTION_OWNED_MUSIC：一個自有配樂檔路徑；公開原始碼不內建私人配樂");
+const musicPath = resolve(process.env.EDITKIN_REFERENCE_MOTION_OWNED_MUSIC);
 await mkdir(join(evidence, "sources"), { recursive: true });
 const priorReport = await readFile(join(evidence, "render-report.json"), "utf8").then(JSON.parse).catch(() => undefined);
 const repairOnly = process.argv.find(arg => arg.startsWith("--only="))?.slice(7).split(",");
@@ -32,15 +36,14 @@ if (priorReport && !await readFile(join(evidence, "first-art-failure.json")).the
 }
 const priorSources = await readFile(join(evidence, "owned-source-receipts.json"), "utf8").then(JSON.parse).catch(() => []);
 const assets: MediaAsset[] = [], receipts: unknown[] = [];
-const musicPath = resolve(root, "../../assets/bgm/教學/AI科技軟體教學-02.wav");
 const musicProbe = await inspectMedia(musicPath, ffprobe);
-const demoMusic: MediaAsset = { id: "owned-demo-music", name: "AI科技軟體教學-02.wav", kind: "audio", uri: musicPath,
+const demoMusic: MediaAsset = { id: "owned-demo-music", name: basename(musicPath), kind: "audio", uri: musicPath,
   duration: musicProbe.duration, role: "background-music" };
 await writeFile(join(evidence, "demo-music-receipt.json"), JSON.stringify({ path: musicPath, sha256: sha(await readFile(musicPath)),
-  source: "creator's existing private YT/Shorts BGM library", probe: musicProbe, distributedWithProduct: false }, null, 2));
+  source: "owner-supplied music (EDITKIN_REFERENCE_MOTION_OWNED_MUSIC)", probe: musicProbe, distributedWithProduct: false }, null, 2));
 // One local SDR working derivative per owned source; the original camera HLG files stay untouched.
-for (const [index, file] of ["IMG_5126.MOV", "IMG_5125.MOV", "IMG_5127.MOV", "IMG_5133.MOV"].entries()) {
-  const original = join(ownRoot, file), probe = await inspectMedia(original, ffprobe);
+for (const [index, original] of ownedSources.entries()) {
+  const file = basename(original), probe = await inspectMedia(original, ffprobe);
   const asset: MediaAsset = { id: `owned-${index}`, name: file, kind: "video", uri: original, duration: probe.duration,
     width: probe.width, height: probe.height, color: { interpretation: probe.colorTransfer === "arib-std-b67" ? "hlg" : "rec709",
       primaries: probe.colorPrimaries, transfer: probe.colorTransfer, matrix: probe.colorMatrix, range: probe.colorRange } };
