@@ -63,7 +63,8 @@ export type OriginalMotionSourceEvidenceV1 = OriginalMotionSourceEvidence;
 export const originalMotionSourceSetSchema = z.strictObject({
   schema: z.literal("editkin.original-motion-source/v1"), sources: z.array(evidenceSchema).min(1).max(16),
 });
-export const originalMaterialEvidenceSchema = originalMotionSourceSetSchema.extend({ receipts: z.tuple([]) });
+// Empty-only array, not z.tuple([]): same accepted values, but no empty prefixItems in MCP tool JSON Schema.
+export const originalMaterialEvidenceSchema = originalMotionSourceSetSchema.extend({ receipts: z.array(z.never()).max(0) });
 export type OriginalMotionSourceSet = z.infer<typeof originalMotionSourceSetSchema>;
 export interface OriginalMotionSourceEvidenceRuntime {
   prepareText?: OriginalMotionScene2dDependencies["prepareText"];

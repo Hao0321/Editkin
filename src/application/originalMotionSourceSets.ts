@@ -12,7 +12,7 @@ import type { EditorialPlan } from "./editorialPlan";
  * v2 branch; no creation manifest or manual command is promoted into it. */
 export const canonicalOriginalMotionSourceSetSchema = z.union([originalMotionSourceSetSchema, originalMotionSourceRevisionSetSchema, originalPaintedMediaSourceRevisionSetSchema]);
 export const canonicalOriginalMaterialEvidenceSchema = z.union([originalMaterialEvidenceSchema,
-  originalMotionSourceRevisionSetSchema.extend({ receipts: z.tuple([]) })]);
+  originalMotionSourceRevisionSetSchema.extend({ receipts: z.array(z.never()).max(0) })]);
 export type CanonicalOriginalMotionSourceSet = OriginalMotionSourceSet | OriginalMotionSourceRevisionSet | OriginalPaintedMediaSourceRevisionSet;
 export const ORIGINAL_SOURCE_REVISION_CAPABILITY = {
   schema: "editkin.original-motion-source-revision-capability/v1",

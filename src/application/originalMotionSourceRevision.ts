@@ -31,7 +31,7 @@ export const originalMotionSourceRevisionEvidenceSchema = z.strictObject({
 export const originalMotionSourceRevisionSetSchema = z.strictObject({
   schema: z.literal("editkin.original-motion-source/v2"), sources: z.tuple([originalMotionSourceRevisionEvidenceSchema]),
 });
-export const originalMotionSourceRevisionMaterialSchema = originalMotionSourceRevisionSetSchema.extend({ receipts: z.tuple([]) });
+export const originalMotionSourceRevisionMaterialSchema = originalMotionSourceRevisionSetSchema.extend({ receipts: z.array(z.never()).max(0) });
 export type OriginalMotionSourceRevisionEvidence = z.infer<typeof originalMotionSourceRevisionEvidenceSchema>;
 export type OriginalMotionSourceRevisionSet = z.infer<typeof originalMotionSourceRevisionSetSchema>;
 /** A separate media-preserving branch; the v1 standalone schema and guards do
@@ -43,7 +43,7 @@ export const originalPaintedMediaSourceRevisionEvidenceSchema = originalMotionSo
 export const originalPaintedMediaSourceRevisionSetSchema = z.strictObject({
   schema: z.literal("editkin.original-motion-source/v3"), sources: z.tuple([originalPaintedMediaSourceRevisionEvidenceSchema]),
 });
-export const originalPaintedMediaSourceRevisionMaterialSchema = originalPaintedMediaSourceRevisionSetSchema.extend({ receipts: z.tuple([]) });
+export const originalPaintedMediaSourceRevisionMaterialSchema = originalPaintedMediaSourceRevisionSetSchema.extend({ receipts: z.array(z.never()).max(0) });
 export type OriginalPaintedMediaSourceRevisionEvidence = z.infer<typeof originalPaintedMediaSourceRevisionEvidenceSchema>;
 export type OriginalPaintedMediaSourceRevisionSet = z.infer<typeof originalPaintedMediaSourceRevisionSetSchema>;
 type RevisionEvidence = OriginalMotionSourceRevisionEvidence | OriginalPaintedMediaSourceRevisionEvidence;
