@@ -1485,7 +1485,9 @@ fn string_field<'a>(value: &'a Value, field: &str) -> Result<&'a str, String> {
 /// UNC (`\\host\share`), `\\?\UNC\` and device (`\\.\`, `\\?\Volume{..}`) paths
 /// are absolute on Windows, but touching one opens an SMB connection (and may
 /// send NTLM credentials) to a host named by an untrusted project file. Only a
-/// verbatim drive path (`\\?\C:\`) stays local.
+/// verbatim drive path (`\\?\C:\`) stays local. `\??\` hands the rest of the
+/// path to the NT object manager unparsed (`\??\UNC\host\share`), so no path
+/// with that prefix is local media. Mirrors `src/shared/localMediaPath.ts`.
 fn is_windows_network_path(path: &str) -> bool {
     let normalized = path.replace('/', "\\");
     let bytes = normalized.as_bytes();
@@ -1494,7 +1496,36 @@ fn is_windows_network_path(path: &str) -> bool {
         && bytes[4].is_ascii_alphabetic()
         && bytes[5] == b':'
         && bytes.get(6).is_none_or(|byte| *byte == b'\\');
-    normalized.starts_with("\\\\") && !verbatim_drive
+    (normalized.starts_with("\\\\") && !verbatim_drive)
+        || normalized.starts_with("\\??\\")
+        || normalized
+            .split(['\\', ':'])
+            .any(is_windows_reserved_device_name)
+}
+
+/// Win32 opens a DOS device instead of a file for these names in any letter
+/// case, also with trailing spaces (`NUL `) and, before Windows 11, with an
+/// extension (`nul.txt`, `NUL .txt`); `:` also ends a name (`C:NUL`). Classic
+/// Win32 only maps the final component to a device; every component is checked
+/// anyway, a conservative choice that also covers a folder later opened on its
+/// own. COM0 and LPT0 are not on Microsoft's current list but are rejected too.
+fn is_windows_reserved_device_name(name: &str) -> bool {
+    let base = name
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(' ')
+        .to_uppercase();
+    match base.as_str() {
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$" => true,
+        _ => base
+            .strip_prefix("COM")
+            .or_else(|| base.strip_prefix("LPT"))
+            .is_some_and(|port| {
+                let mut chars = port.chars();
+                matches!(chars.next(), Some('0'..='9' | '¹' | '²' | '³')) && chars.next().is_none()
+            }),
+    }
 }
 
 fn allow_path(app: &AppHandle, path: &str) -> Result<(), String> {
@@ -1504,7 +1535,7 @@ fn allow_path(app: &AppHandle, path: &str) -> Result<(), String> {
     }
     if cfg!(windows) && is_windows_network_path(path) {
         return Err(format!(
-            "拒絕網路共用或裝置路徑作為媒體來源，請先複製到本機磁碟：{path}"
+            "拒絕網路共用或裝置路徑作為媒體來源，請先以一般檔名複製到本機磁碟：{path}"
         ));
     }
     app.asset_protocol_scope()
@@ -10739,6 +10770,39 @@ mod tests {
             r"\\?\Volume{01234567-89ab-cdef-0123-456789abcdef}\clip.mp4",
             r"\\?\GLOBALROOT\Device\HarddiskVolume1\clip.mp4",
             r"\\?\",
+            r"\??\UNC\host\share\clip.mp4",
+            r"\??\C:\media\clip.mp4",
+            "/??/UNC/host/share/clip.mp4",
+            r"C:\media\NUL",
+            r"C:\media\nul.txt",
+            r"C:\x\CON",
+            r"C:\media\aux.mp4",
+            r"C:\media\PRN",
+            r"C:\media\COM1",
+            r"C:\media\com9.mp4",
+            r"C:\media\LPT1",
+            r"C:\media\lpt9.wav",
+            r"C:\media\COM¹",
+            r"C:\media\com².mp4",
+            r"C:\media\COM³",
+            r"C:\media\LPT¹.mp4",
+            r"C:\media\lpt²",
+            r"C:\media\LPT³",
+            r"C:\media\CONIN$",
+            r"C:\media\conout$.mp4",
+            r"C:\media\nul.",
+            r"C:\media\NUL .txt",
+            r"C:\media\NUL ",
+            r"C:\media\Nul.tar.gz",
+            "C:/media/nul.mp4",
+            "C:NUL",
+            r"C:\media\NUL:stream",
+            "nul.mp4",
+            // Conservative choices: a non-final component, a verbatim path, COM0 and LPT0.
+            r"C:\media\NUL\clip.mp4",
+            r"\\?\C:\media\NUL",
+            r"C:\media\COM0.mp4",
+            r"C:\media\LPT0.mp4",
         ] {
             assert!(is_windows_network_path(path), "{path}");
         }
@@ -10749,6 +10813,13 @@ mod tests {
             r"\\?\c:",
             "/Users/someone/clip.mp4",
             "media/clip.mp4",
+            r"C:\media\null.mp4",
+            r"C:\media\console.mp4",
+            r"C:\media\COM10.mp4",
+            r"C:\media\LPT10.mp4",
+            r"C:\media\clip.nul.mp4",
+            r"C:\media\auxiliary\clip.mp4",
+            r"C:\media\nul-cut\clip.mp4",
         ] {
             assert!(!is_windows_network_path(path), "{path}");
         }
