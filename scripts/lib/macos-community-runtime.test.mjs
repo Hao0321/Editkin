@@ -93,6 +93,8 @@ describe("community macOS runtime pins", () => {
     expect(COMMUNITY_FONTTOOLS.url.endsWith(`/${COMMUNITY_FONTTOOLS.wheel}`)).toBe(true);
     expect(COMMUNITY_FONTTOOLS.wheel).toMatch(/-py3-none-any\.whl$/u);
     expect(COMMUNITY_FFMPEG_CONFIGURE_ARGS).toContain("--disable-autodetect");
+    // configure's --disable-autodetect iconv probe only looks in libc, which on macOS has no iconv.
+    expect(COMMUNITY_FFMPEG_CONFIGURE_ARGS).toEqual(expect.arrayContaining(["--enable-iconv", "--extra-libs=-liconv"]));
     expect(COMMUNITY_FFMPEG_CONFIGURE_ARGS).toContain("--enable-gpl");
     expect(COMMUNITY_FFMPEG_CONFIGURE_ARGS.some((arg) => (arg.includes("whisper") || arg.includes("nonfree") || arg.endsWith("shared")) && !arg.startsWith("--disable-"))).toBe(false);
     expect(REQUIRED_FFMPEG_CONFIG_SYMBOLS).toEqual(expect.arrayContaining(["CONFIG_LIBX264", "CONFIG_ZSCALE_FILTER", "CONFIG_SUBTITLES_FILTER", "CONFIG_H264_VIDEOTOOLBOX_ENCODER"]));

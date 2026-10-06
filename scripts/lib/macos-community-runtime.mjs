@@ -73,6 +73,9 @@ export const COMMUNITY_FFMPEG_CONFIGURE_ARGS = Object.freeze([
   "--enable-zlib",
   "--enable-bzlib",
   "--enable-iconv",
+  // With --disable-autodetect, configure probes iconv only in libc and never adds
+  // -liconv; on macOS iconv lives in the OS's /usr/lib/libiconv.2.dylib.
+  "--extra-libs=-liconv",
   "--enable-videotoolbox",
   "--enable-audiotoolbox",
   "--enable-libx264",
