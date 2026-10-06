@@ -4,7 +4,7 @@ import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node
 
 const root = resolve(import.meta.dirname, "..");
 // Generated output is skipped only where the root .gitignore ignores it (each entry must stay a .gitignore line); the same names elsewhere are committable and scanned.
-const ignoredGeneratedDirs = ["/.rd/", "/node_modules/", "/dist/", "/desktop-dist/", "/.web-public/", "/.web-public-*/", "/out/", "/release/", "/reports/", "/native/**/target/", "/src-tauri/target/", "/src-tauri/target-*/", "/src-tauri/product-*/"];
+const ignoredGeneratedDirs = ["/.rd/", "/node_modules/", "/dist/", "/desktop-dist/", "/.web-public/", "/.web-public-*/", "/out/", "/release/", "/reports/", "/native/**/target/", "/spikes/**/target/", "/src-tauri/target/", "/src-tauri/target-*/", "/src-tauri/product-*/"];
 const ignoredGeneratedPatterns = ignoredGeneratedDirs.map(gitignoreDirectory);
 const forbiddenDirs = new Set([".personal-packs", ".creative-packs", "vendor", "desktop-deliveries", ".desktop-resources", ".desktop-product-release-candidates"]);
 const forbiddenRootFiles = new Set(["audit.config.json", "autopilot-capabilities.json", "market-parity-contract.json", "model-capability-contract.json", "product-capabilities.json", "video-autopilot-rule-coverage.json"]);
@@ -55,7 +55,7 @@ function privateDirectory(path) { return path.split("/").some(part => forbiddenD
 function ownerOnlyRootFile(path) { return forbiddenRootFiles.has(path.toLowerCase()); }
 function workflowViolation(text) {
   if (/\b(?:pull_request_target|workflow_run)\b/.test(text)) return "pull_request_target or workflow_run trigger";
-  if (/\bsecrets\b/.test(text)) return "secrets reference";
+  if (/\$\{\{[^}]*\bsecrets\b/.test(text) || /^[ \t-]*secrets[ \t]*:/m.test(text)) return "secrets reference";
   if (/\bwrite-all\b|\bcontents["']?[ \t]*:[ \t]*["']?write\b/.test(text)) return "write-all or contents: write permission";
   for (const [, value] of text.matchAll(/\buses["']?[ \t]*:[ \t]*([^\n#,}]*)/g)) {
     const action = value.trim().replace(/^(["'])(.*)\1$/, "$2");
@@ -132,11 +132,11 @@ if (process.argv.includes("--self-test")) {
   }
   if (relativeModuleWithinRoot("src/creative/wave2Registry.ts", "../../../../community/private.json")) throw new Error("External module import accepted");
   negativeControls++;
-  for (const [path, directory] of [["src/release", true], ["src/out", true], ["scripts/dist", true], ["docs/node_modules", true], ["src/.rd", true], ["src/.git", true], ["public/.web-public", true], ["src/target-x", true], ["src/product-x", true], ["spikes/gpu-compositor/target", true], ["src-tauri/src/target", true], ["dist", false]]) {
+  for (const [path, directory] of [["src/release", true], ["src/out", true], ["scripts/dist", true], ["docs/node_modules", true], ["src/.rd", true], ["src/.git", true], ["public/.web-public", true], ["src/target-x", true], ["src/product-x", true], ["scripts/target", true], ["src-tauri/src/target", true], ["dist", false]]) {
     if (skippedGenerated(path, directory)) throw new Error(`Generated-directory negative control skipped: ${path}`);
     negativeControls++;
   }
-  for (const [path, directory] of [[".git", true], [".git", false], ["node_modules", true], [".web-public-x", true], ["native/hao-core/target", true], ["src-tauri/target-release", true], ["src-tauri/product-x", true]]) {
+  for (const [path, directory] of [[".git", true], [".git", false], ["node_modules", true], [".web-public-x", true], ["native/hao-core/target", true], ["spikes/gpu-compositor/target", true], ["src-tauri/target-release", true], ["src-tauri/product-x", true]]) {
     if (!skippedGenerated(path, directory)) throw new Error(`Generated-directory positive control scanned: ${path}`);
     positiveControls++;
   }
@@ -146,14 +146,14 @@ if (process.argv.includes("--self-test")) {
   positiveControls++;
   const pin = "f".repeat(40);
   for (const bad of [
-    "on: pull_request_target\n", "on:\n  workflow_run:\n", "env:\n  T: ${{ secrets.T }}\n", "env:\n  T: ${{ secrets['T'] }}\n", "jobs:\n  x:\n    secrets: inherit\n",
+    "on: pull_request_target\n", "on:\n  workflow_run:\n", "env:\n  T: ${{ secrets.T }}\n", "env:\n  T: ${{ secrets['T'] }}\n", "jobs:\n  x:\n    secrets: inherit\n", "env:\n  ALL: ${{ toJSON(secrets) }}\n",
     "permissions: write-all\n", "permissions:\n  contents: write\n", "steps:\n  - uses: actions/checkout@v4\n", `steps:\n  - uses: actions/checkout@${pin.slice(1)}\n`,
     "steps:\n  - uses: docker://alpine:3\n", "steps:\n  - {uses: actions/checkout@v4}\n", "steps:\n  - uses:\n      actions/checkout@v4\n",
   ]) {
     if (!workflowViolation(bad)) throw new Error(`Workflow negative control accepted: ${JSON.stringify(bad)}`);
     negativeControls++;
   }
-  for (const good of [`steps:\n  - uses: actions/checkout@${pin} # v4.3.1\n`, `steps:\n  - name: x\n    uses: 'actions/setup-node@${pin}'\n`, "steps:\n  - uses: ./.github/actions/local\n", "permissions:\n  contents: read\n  pages: write\n  id-token: write\n  security-events: write\n"]) {
+  for (const good of [`steps:\n  - uses: actions/checkout@${pin} # v4.3.1\n`, `steps:\n  - name: x\n    uses: 'actions/setup-node@${pin}'\n`, "steps:\n  - uses: ./.github/actions/local\n", "# This workflow reads no secrets.\npermissions:\n  contents: read\n", "permissions:\n  contents: read\n  pages: write\n  id-token: write\n  security-events: write\n"]) {
     if (workflowViolation(good)) throw new Error(`Workflow positive control rejected: ${JSON.stringify(good)}`);
     positiveControls++;
   }
