@@ -1259,8 +1259,8 @@
     },
     {
       "path": "scripts/autopilot-integration-gate.ts",
-      "bytes": 14465,
-      "sha256": "7cb0df11db069a8fd4a463b01258a62fd9b250abb44ffd9aea89b03661eba829",
+      "bytes": 14978,
+      "sha256": "a79657cb2af13029cd8ab916f16bee516242791557311b7293b13df19c9cd19f",
       "origin": "scripts/autopilot-integration-gate.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -1791,15 +1791,15 @@
     },
     {
       "path": "scripts/export-module-registry.ts",
-      "bytes": 3738,
-      "sha256": "07da1cc3345fef90033ecfaa55a645be2e038eeb87431b654a5b4f22347e6a5a",
+      "bytes": 3722,
+      "sha256": "625b70531659d6599f3860f623f6c7085f610568281be2d274b7278d4c10be95",
       "origin": "scripts/export-module-registry.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "scripts/export-motion-language.ts",
-      "bytes": 4825,
-      "sha256": "2f3f5d980adf2dfb049d88b57ff686282185d872f24022177a46b43efef1b9f4",
+      "bytes": 4809,
+      "sha256": "406f7b5fe31f08e88280fa1ae60ed56c009bf5f1f4668825aab70c0509dda3c3",
       "origin": "scripts/export-motion-language.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -2729,8 +2729,8 @@
     },
     {
       "path": "scripts/mesh3d-mcp-journey.ts",
-      "bytes": 3481,
-      "sha256": "4815fd288ae83506c7c677840d9d39333cbf566941033e3dc170113a9decb23b",
+      "bytes": 3456,
+      "sha256": "a27e43d02e904a593c180c5994461c68fa0d787a73e8fe5f0809d3046e308919",
       "origin": "scripts/mesh3d-mcp-journey.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -2792,8 +2792,8 @@
     },
     {
       "path": "scripts/music-mv-product-gate.ts",
-      "bytes": 7766,
-      "sha256": "329fda7e5291feb4ef1bb4b91370f14e04adf9793f6946f08b172a513fcba78a",
+      "bytes": 8159,
+      "sha256": "0e4f5160b20841b6b23a10e419d5891a87a8f9903870945922964c2d1b5f5c6e",
       "origin": "scripts/music-mv-product-gate.ts",
       "rights": "GPL-3.0-or-later"
     },
@@ -3107,8 +3107,8 @@
     },
     {
       "path": "scripts/reference-motion-template-render-gate.ts",
-      "bytes": 18485,
-      "sha256": "f8cf38f1363ca156b66df6280e5993f697e67b864b685b7d9db3826a6ddd15f2",
+      "bytes": 19062,
+      "sha256": "02304acf52383b7e723d1996ea147e76300a08e0977e6059edc04177af632e3f",
       "origin": "scripts/reference-motion-template-render-gate.ts",
       "rights": "GPL-3.0-or-later"
     },

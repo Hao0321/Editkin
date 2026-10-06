@@ -24,7 +24,7 @@ export function motionLanguageExport() {
   const source = readFileSync(resolve("src/motion/motionLanguage.ts"));
   return {
     schema: MOTION_LANGUAGE_VERSION,
-    generator: "apps/hao-editor/scripts/export-motion-language.ts",
+    generator: "scripts/export-motion-language.ts",
     sourceSha256: createHash("sha256").update(source.toString("utf8").replace(/\r\n/g, "\n")).digest("hex"),
     reference: { unit: "min(projectWidth, projectHeight) / 1080", pixelFields: ["offsetXPixels", "offsetYPixels", "blurPixels", "spreadPixels"],
       staggerTailSeconds: { entrance: KINETIC_MAX_ENTRANCE_TAIL_SECONDS, exit: KINETIC_MAX_EXIT_TAIL_SECONDS },

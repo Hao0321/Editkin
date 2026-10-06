@@ -21,7 +21,7 @@ export function moduleRegistryExport() {
   const modules = editkinModuleRegistry(), templates = editkinTemplateRegistry();
   return {
     schema: MODULE_REGISTRY_EXPORT_SCHEMA,
-    generator: "apps/hao-editor/scripts/export-module-registry.ts",
+    generator: "scripts/export-module-registry.ts",
     moduleRegistry: modules.identity,
     templateRegistry: templates.identity,
     tools: { listModules: "list_editkin_modules", prepareModule: "prepare_editkin_module", listTemplates: "list_editkin_templates", prepareTemplate: "prepare_editkin_template",

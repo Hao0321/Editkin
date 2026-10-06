@@ -15,6 +15,9 @@ import { probeMedia, renderProject } from "../src/render/ffmpeg";
 const run = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
 const useRealFootage = process.argv.includes("--real-footage");
+// Real footage comes from an explicit owner-supplied project; public source never names private media.
+const realFootageProject = useRealFootage ? process.env.EDITKIN_MUSIC_MV_REAL_FOOTAGE_PROJECT : undefined;
+if (useRealFootage && !realFootageProject) throw new Error("--real-footage 需要設定 EDITKIN_MUSIC_MV_REAL_FOOTAGE_PROJECT：一個含至少三段自有影片素材的 .editkin.json 專案路徑；公開原始碼不內建私人素材");
 const evidence = join(root, ".rd/benchmarks/jpop-mv-motion-20260928", useRealFootage ? "product-real-footage" : "product");
 const ffmpegPath = join(root, "vendor/ffmpeg/win32-x64/ffmpeg.exe");
 const ffprobePath = join(root, "vendor/ffmpeg/win32-x64/ffprobe.exe");
@@ -35,8 +38,8 @@ async function decode(path: string): Promise<void> {
 await mkdir(evidence, { recursive: true });
 await run(ffmpegPath, ["-y", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=6",
   "-af", "volume=0.15", "-ac", "2", song], { timeout: 30_000 });
-const realAssets = useRealFootage
-  ? (JSON.parse(await readFile(join(root, ".rd/benchmarks/personal-autocut-stable-20260923/pottery/project.editkin.json"), "utf8"))
+const realAssets = realFootageProject
+  ? (JSON.parse(await readFile(resolve(realFootageProject), "utf8"))
     .assets as Array<{ kind: string; uri: string; duration: number; width: number; height: number; color?: { interpretation: "hlg" } }>).filter(asset => asset.kind === "video").slice(0, 3)
   : [];
 if (useRealFootage) assert.equal(realAssets.length, 3);
@@ -99,7 +102,7 @@ assert.equal(candidateProbe.hasVideo, true);
 const report = {
   schema: "editkin.music-mv-native-product-gate/v1", status: "TECHNICAL_RENDER_GREEN_ART_REVIEW_REQUIRED",
   fixture: useRealFootage
-    ? "synthetic tone, placeholder text, Hao's real pottery footage; not a real music video or lyric verification"
+    ? "synthetic tone, placeholder text, owner-supplied real footage; not a real music video or lyric verification"
     : "synthetic tone, placeholder text, demo footage; not a real music video or lyric verification",
   baseline: { seconds: Number(baselineSeconds.toFixed(3)), frames: baselineFrames, planner: baselineRender.planner,
     sha256: sha(await readFile(baselineOutput)) },
