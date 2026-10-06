@@ -7,10 +7,11 @@
 // and every non-OS dylib it needs is copied into runtime/lib and rewritten to
 // @loader_path. Node.js and whisper.cpp use the same pins as the owner's stager.
 // Every Mach-O except the upstream-signed Node.js binary is ad-hoc re-signed.
+// The GPU compositor is not staged; see COMMUNITY_OMITTED_RUNTIME_FILES.
 //
 // Prerequisites (GitHub macos-15 runner): Xcode command-line tools, cmake,
-// `brew install pkgconf x264 x265 zimg libass dav1d`, and release builds of
-// native/hao-core and spikes/gpu-compositor.
+// `brew install pkgconf x264 x265 zimg libass dav1d`, and a release build of
+// native/hao-core.
 import { spawn } from "node:child_process";
 import { chmod, copyFile, cp, lstat, mkdir, mkdtemp, open, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
@@ -26,6 +27,7 @@ import {
   COMMUNITY_FONT_PACK_DIRECTORY,
   COMMUNITY_FONTTOOLS,
   COMMUNITY_NODE,
+  COMMUNITY_OMITTED_RUNTIME_FILES,
   COMMUNITY_WHISPER_CPP,
   disallowedLoadedImages,
   enabledConfigSymbols,
@@ -74,11 +76,11 @@ function cleanEnvironment(extra = {}) {
   return { ...environment, ...extra };
 }
 
-function run(executable, args, { cwd, env, timeoutMs = 20 * MINUTE, label = basename(executable) } = {}) {
+function run(executable, args, { cwd, env, input, timeoutMs = 20 * MINUTE, label = basename(executable) } = {}) {
   log(`run ${label}: ${executable} ${args.join(" ")}`);
   return new Promise((resolveRun, rejectRun) => {
     // Build logs go to stderr; stdout carries only the final JSON summary.
-    const child = spawn(executable, args, { cwd, env: env ?? cleanEnvironment(), stdio: ["ignore", 2, 2] });
+    const child = spawn(executable, args, { cwd, env: env ?? cleanEnvironment(), stdio: [input ? "pipe" : "ignore", 2, 2] });
     let settled = false;
     const finish = (error) => {
       if (settled) return;
@@ -89,7 +91,16 @@ function run(executable, args, { cwd, env, timeoutMs = 20 * MINUTE, label = base
     const timer = setTimeout(() => { child.kill("SIGKILL"); finish(new Error(`${label} timed out after ${timeoutMs} ms`)); }, timeoutMs);
     child.on("error", finish);
     child.on("exit", (code, signal) => finish(code === 0 ? undefined : new Error(`${label} failed: exit ${code ?? signal}`)));
+    if (input) {
+      child.stdin.on("error", finish);
+      child.stdin.end(input);
+    }
   });
+}
+
+/** Unpacks a downloaded archive that fetchPinned already verified, from memory; no archive file is written. */
+function extractVerifiedArchive(body, destination, label) {
+  return run("/usr/bin/tar", ["-x", "-f", "-", "-C", destination], { input: body, label: `extract ${label}` });
 }
 
 function capture(executable, args, { cwd, env, timeoutMs = 2 * MINUTE, allowFailure = false } = {}) {
@@ -214,9 +225,7 @@ async function brewJson(formulae) {
 
 async function stageNode(work, candidate) {
   const { body } = await fetchPinned([COMMUNITY_NODE.url], { sha256: COMMUNITY_NODE.sha256, label: `Node.js ${COMMUNITY_NODE.version}` });
-  const archive = join(work, COMMUNITY_NODE.archive);
-  await writeFile(archive, body);
-  await run("/usr/bin/tar", ["-xzf", archive, "-C", work], { label: "extract Node.js" });
+  await extractVerifiedArchive(body, work, "Node.js");
   const nodeRoot = join(work, COMMUNITY_NODE.archive.replace(/\.tar\.gz$/u, ""));
   await copyFile(join(nodeRoot, "bin/node"), join(candidate, "node"));
   await copyFile(join(nodeRoot, "LICENSE"), join(candidate, "NODE-LICENSE.txt"));
@@ -227,9 +236,7 @@ async function stageNode(work, candidate) {
 
 async function buildFfmpeg(work) {
   const { body, url } = await fetchPinned(COMMUNITY_FFMPEG.urls, { bytes: COMMUNITY_FFMPEG.bytes, sha256: COMMUNITY_FFMPEG.sha256, label: `FFmpeg ${COMMUNITY_FFMPEG.version}` });
-  const archive = join(work, COMMUNITY_FFMPEG.archive);
-  await writeFile(archive, body);
-  await run("/usr/bin/tar", ["-xf", archive, "-C", work], { label: "extract FFmpeg" });
+  await extractVerifiedArchive(body, work, "FFmpeg");
   const source = join(work, `ffmpeg-${COMMUNITY_FFMPEG.version}`);
   const brewPrefix = (await capture("brew", ["--prefix"])).stdout.trim();
   const pkgConfigDirectories = [join(brewPrefix, "lib/pkgconfig"), join(brewPrefix, "share/pkgconfig")];
@@ -296,9 +303,7 @@ async function buildWhisperCli(work) {
   const { body } = await fetchPinned([COMMUNITY_WHISPER_CPP.sourceUrl], {
     bytes: COMMUNITY_WHISPER_CPP.archiveBytes, sha256: COMMUNITY_WHISPER_CPP.archiveSha256, label: `whisper.cpp ${COMMUNITY_WHISPER_CPP.tag}`,
   });
-  const archive = join(work, `whisper.cpp-${COMMUNITY_WHISPER_CPP.commit}.tar.gz`);
-  await writeFile(archive, body);
-  await run("/usr/bin/tar", ["-xzf", archive, "-C", work], { label: "extract whisper.cpp" });
+  await extractVerifiedArchive(body, work, "whisper.cpp");
   const source = join(work, `whisper.cpp-${COMMUNITY_WHISPER_CPP.commit}`);
   const build = join(work, "whisper-build");
   // Same configuration as the owner's macOS stager: static, Metal library embedded.
@@ -343,11 +348,11 @@ export async function stageFontPack(work, candidate) {
   const python = await findPython();
   const venv = join(work, "fonttools-venv");
   await run(python.executable, ["-m", "venv", venv], { label: "python venv" });
-  const { body } = await fetchPinned([COMMUNITY_FONTTOOLS.url], { bytes: COMMUNITY_FONTTOOLS.bytes, sha256: COMMUNITY_FONTTOOLS.sha256, label: `fontTools ${COMMUNITY_FONTTOOLS.version}` });
-  const wheel = join(work, COMMUNITY_FONTTOOLS.wheel);
-  await writeFile(wheel, body);
+  // pip downloads the pinned wheel itself; hash-checking mode refuses any other bytes.
+  const requirements = join(work, "fonttools-requirements.txt");
+  await writeFile(requirements, `fonttools @ ${COMMUNITY_FONTTOOLS.url} --hash=sha256:${COMMUNITY_FONTTOOLS.sha256}\n`, "utf8");
   const venvPython = join(venv, "bin", "python");
-  await run(venvPython, ["-m", "pip", "install", "--disable-pip-version-check", "--no-deps", "--no-index", wheel], { label: "pip install fontTools" });
+  await run(venvPython, ["-m", "pip", "install", "--disable-pip-version-check", "--no-cache-dir", "--no-deps", "--only-binary=:all:", "--require-hashes", "-r", requirements], { label: "pip install fontTools" });
   const installed = (await capture(venvPython, ["-I", "-c", "import fontTools; print(fontTools.__version__)"])).stdout.trim();
   if (installed !== COMMUNITY_FONTTOOLS.version) throw new Error(`fontTools ${installed} installed, expected ${COMMUNITY_FONTTOOLS.version}`);
   const stage = join(work, COMMUNITY_FONT_PACK_DIRECTORY);
@@ -457,7 +462,11 @@ Bundled runtime components (runtime/):
 - Homebrew-built libraries that FFmpeg links (runtime/lib; notices in runtime/licenses)
 - Node.js ${COMMUNITY_NODE.version} official macOS binary (NODE-LICENSE.txt)
 - whisper.cpp ${COMMUNITY_WHISPER_CPP.version} whisper-cli (MIT, WHISPER-LICENSE.txt)
-- hao-core and editkin-gpu-compositor built from this repository
+- hao-core built from this repository
+
+Not bundled: editkin-gpu-compositor. It needs the generated ACES 2 output LUTs,
+which are not in the public source, so scene-linear ACES 2 output and GPU
+preview are unavailable in this build.
 
 Redistribution: FFmpeg in this build contains GPL components. Anyone who
 redistributes this app or its DMG must comply with the GNU GPL, including
@@ -508,8 +517,9 @@ export async function writeWhisperReceipts({ candidate, build, version, dependen
 }
 
 /**
- * Owner-compatible closed-world PLATFORM-MANIFEST (schema 2, exactly the twelve
- * runtime files) plus a community section hashing every other staged file.
+ * PLATFORM-MANIFEST in the owner's schema 2 format with the community runtime
+ * file set (the owner's set minus COMMUNITY_OMITTED_RUNTIME_FILES), plus a
+ * community section hashing every other staged file.
  */
 export async function writePlatformManifest({ candidate, nodeArchiveSha256, whisperBinarySha256, minimumMacOS, droppedRpaths, fontPack }) {
   const files = {};
@@ -546,6 +556,7 @@ export async function writePlatformManifest({ candidate, nodeArchiveSha256, whis
       declaredDeploymentTarget: COMMUNITY_DEPLOYMENT_TARGET,
       ffmpeg: { version: COMMUNITY_FFMPEG.version, sourceSha256: COMMUNITY_FFMPEG.sha256, provenanceSha256: additionalFiles["FFMPEG-PROVENANCE.json"] },
       codeSignature: { node: "upstream Node.js signature (unchanged)", otherMachO: "ad-hoc" },
+      omittedRuntimeFiles: [...COMMUNITY_OMITTED_RUNTIME_FILES],
       droppedRpaths,
       additionalFiles,
       fontPack: {
@@ -650,9 +661,8 @@ async function main() {
     throw new Error(`The community macOS runtime is built only on an Apple Silicon macOS host (host: ${process.platform}/${process.arch})`);
   }
   const corePath = resolve(process.env.HAO_NATIVE_CORE_PATH ?? join(root, "native/hao-core/target/release/hao-core"));
-  const gpuCompositorPath = resolve(process.env.EDITKIN_GPU_COMPOSITOR_PATH ?? join(root, "spikes/gpu-compositor/target/release/editkin-gpu-compositor"));
   const fontsDirectory = join(root, "public/fonts");
-  for (const required of [corePath, gpuCompositorPath, join(fontsDirectory, "NotoSansTC[wght].ttf")]) {
+  for (const required of [corePath, join(fontsDirectory, "NotoSansTC[wght].ttf")]) {
     if (!(await exists(required))) throw new Error(`Missing build input: ${required}`);
   }
   const host = {
@@ -682,10 +692,9 @@ async function main() {
     await copyFile(whisper.binary, join(candidate, "whisper-cli"));
     await copyFile(whisper.license, join(candidate, "WHISPER-LICENSE.txt"));
     await copyFile(corePath, join(candidate, "hao-core"));
-    await copyFile(gpuCompositorPath, join(candidate, "editkin-gpu-compositor"));
     for (const executable of RUNTIME_EXECUTABLES) await chmod(join(candidate, executable), 0o755);
     const droppedRpaths = {};
-    for (const name of ["whisper-cli", "hao-core", "editkin-gpu-compositor"]) {
+    for (const name of ["whisper-cli", "hao-core"]) {
       const dropped = await dropUnusedRpaths(join(candidate, name));
       if (dropped.length) droppedRpaths[name] = dropped;
     }

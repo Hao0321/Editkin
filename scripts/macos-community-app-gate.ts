@@ -2,7 +2,9 @@
 // the release app uses it: exact bundled runtime closure and hashes, relocatable
 // Mach-O files, FFmpeg capabilities via Editkin's own argument builders, and the
 // bundled Node service driven through its resident protocol (import, preview
-// proxy, save/reopen, export). Signing/notarization and GUI behaviour are not
+// proxy, save/reopen, export). The GPU compositor is not bundled (see
+// COMMUNITY_OMITTED_RUNTIME_FILES); the service still receives its release path,
+// as runtime_paths() passes it. Signing/notarization and GUI behaviour are not
 // claimed here; the workflow launches the app separately.
 //
 // Usage: npx tsx scripts/macos-community-app-gate.ts <Editkin.app> [report.json] [--source-root <repo>]
@@ -23,6 +25,7 @@ import {
   auditBundledMachO,
   COMMUNITY_FFMPEG,
   COMMUNITY_NODE,
+  COMMUNITY_OMITTED_RUNTIME_FILES,
   compareMacOSVersions,
   disallowedLoadedImages,
   ffmpegConfigurationLine,
@@ -101,7 +104,7 @@ export class GateReport {
     try {
       const value = await run();
       if (value && typeof value === "object" && "warning" in value && typeof value.warning === "string") {
-        this.steps.push({ name, status: "WARN", detail: value.detail, error: value.warning, elapsedMs: Date.now() - started });
+        this.steps.push({ name, status: "WARN", detail: value.detail as Detail, error: value.warning, elapsedMs: Date.now() - started });
         process.stderr.write(`[macos-community-app-gate]   WARN ${value.warning}\n`);
       } else {
         this.steps.push({ name, status: "PASS", detail: value as Detail, elapsedMs: Date.now() - started });
@@ -195,6 +198,9 @@ export async function verifyBundleClosure(layout: BundleLayout, sourceRoot?: str
   assert(!unexpected.length, `Unexpected files in Contents/Resources/runtime: ${unexpected.join(", ")}`);
   const missingEntrypoints = APP_RUNTIME_ENTRYPOINTS.filter((path) => !present.includes(path));
   assert(!missingEntrypoints.length, `Missing app runtime entrypoints: ${missingEntrypoints.join(", ")}`);
+  assert(JSON.stringify(manifest.community.omittedRuntimeFiles) === JSON.stringify(COMMUNITY_OMITTED_RUNTIME_FILES), "PLATFORM-MANIFEST does not record the omitted runtime files");
+  const shippedOmitted = COMMUNITY_OMITTED_RUNTIME_FILES.filter((path) => present.includes(path));
+  assert(!shippedOmitted.length, `Omitted runtime files are present: ${shippedOmitted.join(", ")}`);
 
   const identity = JSON.parse(await readFile(join(layout.runtime, "mcp.mjs.material-color-identity.json"), "utf8"));
   const mcp = await readFile(join(layout.runtime, "mcp.mjs"));
@@ -237,6 +243,7 @@ export async function verifyBundleClosure(layout: BundleLayout, sourceRoot?: str
   return {
     runtimeFiles: present.length,
     manifestFiles: expected.size,
+    omittedRuntimeFiles: [...COMMUNITY_OMITTED_RUNTIME_FILES],
     minimumMacOS: manifest.community.minimumMacOS,
     fontFaces: fontManifest.fonts.reduce((count: number, font: { faces: unknown[] }) => count + font.faces.length, 0),
     sourceComparedEntrypoints: compared,
@@ -309,7 +316,7 @@ export async function verifyFfmpegComponents(layout: BundleLayout, { expectCommu
     demuxers: missingNames(REQUIRED_FFMPEG_DEMUXERS, available.demuxers),
   };
   // A non-macOS development FFmpeg (only used to exercise this script) has no VideoToolbox.
-  if (!expectCommunityBuild) missing.encoders = missing.encoders.filter((name) => !name.includes("videotoolbox"));
+  if (!expectCommunityBuild) missing.encoders = missing.encoders.filter((name: string) => !name.includes("videotoolbox"));
   const missingAny = Object.entries(missing).filter(([, names]) => names.length);
   assert(!missingAny.length, `FFmpeg lacks required components: ${JSON.stringify(Object.fromEntries(missingAny))}`);
   return {
@@ -583,11 +590,10 @@ export async function nativeHelperChecks(layout: BundleLayout): Promise<Detail> 
   assert(engine.schema === "editkin.engine-capabilities/v1" && engine.engine === "hao-core", "hao-core engine-capabilities identity mismatch");
   const help = await runTool(layout.whisperCli, ["--help"]);
   assert(whisperCliHasRequiredCapabilities(`${help.stdout}\n${help.stderr}`), "whisper-cli lacks language/SRT/translate flags");
-  const compositor = await runTool(layout.gpuCompositor, ["probe"], { allowFailure: true, timeoutMs: MINUTE });
   return {
     haoCore: { schema: engine.schema, residentAudioPhysicalOutput: engine.residentAudio?.physicalOutput ?? null },
     whisperCli: "language/SRT/translate flags present",
-    gpuCompositorProbe: { exitCode: compositor.code, stdout: compositor.stdout.trim().slice(0, 1_000), stderr: compositor.stderr.trim().slice(0, 1_000) },
+    gpuCompositor: "not bundled (COMMUNITY_OMITTED_RUNTIME_FILES)",
   };
 }
 
@@ -607,7 +613,7 @@ async function main() {
     await report.step("Mach-O architecture, signature and relocation audit", () => auditMachOFiles(layout));
     await report.step("FFmpeg version, configuration and components", () => verifyFfmpegComponents(layout, { expectCommunityBuild: true }));
     await report.step("dyld loads only bundled and OS libraries", () => verifyLoadedImages(layout));
-    await report.step("hao-core, whisper-cli and GPU compositor launch", () => nativeHelperChecks(layout));
+    await report.step("hao-core and whisper-cli launch", () => nativeHelperChecks(layout));
     await report.step("FFmpeg encodes and filters used by Editkin", () => ffmpegFunctionalChecks(layout, join(work, "ffmpeg"), { videoToolbox: true }));
     await report.step("bundled service: import, preview proxy, save/reopen, export", () => residentServiceSmoke(layout, join(work, "service")));
   } finally {

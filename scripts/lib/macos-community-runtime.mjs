@@ -127,13 +127,21 @@ export const REQUIRED_FFMPEG_CONFIGURATION_FLAGS = Object.freeze([
   "--enable-videotoolbox", "--enable-audiotoolbox",
 ]);
 
-// The owner's closed-world PLATFORM-MANIFEST file set (scripts/macos-bundle-runtime-gate.mjs).
+// Files of the owner's closed-world PLATFORM-MANIFEST set (REQUIRED_FILES in
+// scripts/macos-bundle-runtime-gate.mjs) that this build does not ship. The GPU
+// compositor embeds the generated ACES 2 output LUTs (spikes/gpu-compositor) and
+// refuses to start unless their bytes match the owner's pinned SHA-256; those LUTs
+// are not in the repository and the published PyOpenColorIO 2.5.2 wheel does not
+// reproduce them byte for byte. Without it, scene-linear ACES 2 rendering and GPU
+// preview fail closed; the default Rec.709 pipeline does not use it.
+export const COMMUNITY_OMITTED_RUNTIME_FILES = Object.freeze(["editkin-gpu-compositor"]);
+// The community PLATFORM-MANIFEST file set: the owner's set without the omitted files.
 export const PLATFORM_RUNTIME_FILES = Object.freeze([
   "node", "NODE-LICENSE.txt", "ffmpeg", "ffprobe", "FFMPEG-LICENSE.txt", "FFPROBE-LICENSE.txt",
-  "hao-core", "editkin-gpu-compositor", "whisper-cli", "WHISPER-LICENSE.txt",
+  "hao-core", "whisper-cli", "WHISPER-LICENSE.txt",
   "WHISPER-PROVENANCE.json", "WHISPER-CAPABILITY.json",
 ]);
-export const RUNTIME_EXECUTABLES = Object.freeze(["node", "ffmpeg", "ffprobe", "hao-core", "editkin-gpu-compositor", "whisper-cli"]);
+export const RUNTIME_EXECUTABLES = Object.freeze(["node", "ffmpeg", "ffprobe", "hao-core", "whisper-cli"]);
 // Staged under .platform-runtime/font-pack and bundled as font-packs/editkin-open-fonts.
 export const COMMUNITY_FONT_PACK_DIRECTORY = "font-pack";
 // Added to Contents/Resources/runtime by the Tauri overlay, not by the stager.
@@ -288,11 +296,21 @@ export function auditBundledMachO({ file, bundleRoot, loadCommands, exists, buil
 
 /**
  * FFmpeg filter-option escaping for a path, identical to escapeFilterPath in
- * src/render/captionAss.ts (asserted by the unit test).
+ * src/render/captionAss.ts (asserted by the unit test). Backslashes become
+ * slashes; the option-value escapes of ' : and whitespace are themselves escaped
+ * for the filtergraph parser, which also needs [ ] , ; escaped. Both levels are
+ * applied per character in one pass.
  */
 export function escapeFilterOptionPath(path) {
-  const option = path.replaceAll("\\", "/").replace(/[\\':\s]/g, "\\$&");
-  return option.replace(/[\\'\[\],;\s]/g, "\\$&");
+  let escaped = "";
+  for (const character of path) {
+    if (character === "\\") escaped += "/";
+    else if (character === ":") escaped += "\\\\:";
+    else if (character === "'" || /\s/u.test(character)) escaped += `\\\\\\${character}`;
+    else if ("[],;".includes(character)) escaped += `\\${character}`;
+    else escaped += character;
+  }
+  return escaped;
 }
 
 export function isInside(root, candidate) {

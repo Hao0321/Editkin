@@ -11,6 +11,7 @@ import {
   COMMUNITY_FONT_PACK_DIRECTORY,
   COMMUNITY_FONTTOOLS,
   COMMUNITY_NODE,
+  COMMUNITY_OMITTED_RUNTIME_FILES,
   COMMUNITY_WHISPER_CPP,
   compareMacOSVersions,
   disallowedLoadedImages,
@@ -71,12 +72,16 @@ describe("community macOS runtime pins", () => {
     expect(gate).toContain(`sourceArchiveSha256: "${COMMUNITY_WHISPER_CPP.archiveSha256}"`);
   });
 
-  it("keeps the owner's closed-world PLATFORM-MANIFEST file set and macOS resource mapping", () => {
+  it("keeps the owner's PLATFORM-MANIFEST file set minus the omitted files, and the macOS resource mapping", () => {
     const gate = read("scripts/macos-bundle-runtime-gate.mjs");
     const block = /const REQUIRED_FILES = \[([\s\S]*?)\];/u.exec(gate)?.[1] ?? "";
-    expect([...block.matchAll(/"([^"]+)"/gu)].map((match) => match[1]).sort()).toEqual([...PLATFORM_RUNTIME_FILES].sort());
+    const owner = [...block.matchAll(/"([^"]+)"/gu)].map((match) => match[1]).sort();
+    expect([...PLATFORM_RUNTIME_FILES, ...COMMUNITY_OMITTED_RUNTIME_FILES].sort()).toEqual(owner);
+    expect(PLATFORM_RUNTIME_FILES.some((name) => COMMUNITY_OMITTED_RUNTIME_FILES.includes(name))).toBe(false);
     const resources = JSON.parse(read("src-tauri/tauri.macos.conf.json")).bundle.resources;
-    for (const name of PLATFORM_RUNTIME_FILES) expect(resources[`../.platform-runtime/${name}`]).toBe(`runtime/${name}`);
+    for (const name of owner) expect(resources[`../.platform-runtime/${name}`]).toBe(`runtime/${name}`);
+    const overlay = JSON.parse(read("src-tauri/tauri.macos.community.conf.json")).bundle.resources;
+    for (const name of COMMUNITY_OMITTED_RUNTIME_FILES) expect(overlay[`../.platform-runtime/${name}`]).toBeNull();
     expect(resources["../.platform-runtime/manifest.json"]).toBe("runtime/PLATFORM-MANIFEST.json");
   });
 
@@ -89,7 +94,7 @@ describe("community macOS runtime pins", () => {
     expect(COMMUNITY_FONTTOOLS.wheel).toMatch(/-py3-none-any\.whl$/u);
     expect(COMMUNITY_FFMPEG_CONFIGURE_ARGS).toContain("--disable-autodetect");
     expect(COMMUNITY_FFMPEG_CONFIGURE_ARGS).toContain("--enable-gpl");
-    expect(COMMUNITY_FFMPEG_CONFIGURE_ARGS.some((arg) => /whisper|nonfree|shared$/u.test(arg) && !arg.startsWith("--disable-"))).toBe(false);
+    expect(COMMUNITY_FFMPEG_CONFIGURE_ARGS.some((arg) => (arg.includes("whisper") || arg.includes("nonfree") || arg.endsWith("shared")) && !arg.startsWith("--disable-"))).toBe(false);
     expect(REQUIRED_FFMPEG_CONFIG_SYMBOLS).toEqual(expect.arrayContaining(["CONFIG_LIBX264", "CONFIG_ZSCALE_FILTER", "CONFIG_SUBTITLES_FILTER", "CONFIG_H264_VIDEOTOOLBOX_ENCODER"]));
   });
 });
@@ -299,6 +304,7 @@ describe("FFmpeg inventory parsers", () => {
     for (const [ass, fonts] of [
       ["/tmp/editkin/captions.ass", "/Applications/Editkin.app/Contents/Resources/font-packs/editkin-open-fonts/render"],
       ["/Users/a b/it's [x],y;z:1.ass", "C:\\Fonts\\Edit kin"],
+      ["/tmp/tab\there/new\nline/nbsp\u00a0/ideo\u3000/\u5b57\u5e55 'q'.ass", "D:\\a\\b's;[c],d=e:f"],
     ]) {
       expect(`subtitles=filename=${escapeFilterOptionPath(ass)}:fontsdir=${escapeFilterOptionPath(fonts)}:wrap_unicode=1`).toBe(buildAssFilter(ass, fonts));
     }
@@ -335,8 +341,10 @@ describe("font pack and bundle configuration", () => {
   });
 
   it("maps every file the release runtime resolves and nothing from owner-only roots", () => {
+    // JSON Merge Patch (RFC 7396), as tauri applies --config files.
     const merge = (target, patch) => {
       for (const [key, value] of Object.entries(patch)) {
+        if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
         if (value === null) delete target[key];
         else if (typeof value === "object" && !Array.isArray(value) && typeof target[key] === "object" && target[key] && !Array.isArray(target[key])) merge(target[key], value);
         else target[key] = value;
@@ -350,6 +358,7 @@ describe("font pack and bundle configuration", () => {
     for (const runtimeFile of [...PLATFORM_RUNTIME_FILES.filter((name) => name !== "manifest.json"), ...APP_RUNTIME_ENTRYPOINTS]) {
       expect(destinations.has(`runtime/${runtimeFile}`), runtimeFile).toBe(true);
     }
+    for (const omitted of COMMUNITY_OMITTED_RUNTIME_FILES) expect(destinations.has(`runtime/${omitted}`), omitted).toBe(false);
     for (const destination of ["agent-runtime-v3/launcher.mjs", "agent-runtime-v3/agent-setup-contract.json", "agent-runtime-v3/lib/regular-file.mjs",
       "color/aces2", "plugins", "runtime/lib", "runtime/licenses", "runtime/FFMPEG-PROVENANCE.json", "runtime/COMMUNITY-BUILD-NOTICE.txt"]) {
       expect(destinations.has(destination), destination).toBe(true);

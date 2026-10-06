@@ -91,16 +91,15 @@ jobs:
           ls -la desktop-dist
           shasum -a 256 desktop-dist/*
 
-      - name: Build hao-core and the GPU compositor
+      # The GPU compositor is not built: it embeds generated ACES 2 LUTs that are
+      # not in this repository (see COMMUNITY_OMITTED_RUNTIME_FILES).
+      - name: Build hao-core
         run: |
           set -euxo pipefail
           cargo build --release --locked --manifest-path native/hao-core/Cargo.toml
-          cargo build --release --locked --manifest-path spikes/gpu-compositor/Cargo.toml
-          for binary in native/hao-core/target/release/hao-core spikes/gpu-compositor/target/release/editkin-gpu-compositor; do
-            file "$binary"
-            otool -L "$binary"
-            shasum -a 256 "$binary"
-          done
+          file native/hao-core/target/release/hao-core
+          otool -L native/hao-core/target/release/hao-core
+          shasum -a 256 native/hao-core/target/release/hao-core
           df -h "$GITHUB_WORKSPACE"
 
       - name: Stage the runtime (FFmpeg, Node.js, whisper-cli, font faces)
@@ -172,7 +171,7 @@ jobs:
           set -euxo pipefail
           RUNTIME="$RUNNER_TEMP/clean/Editkin.app/Contents/Resources/runtime"
           ls -la "$RUNTIME" "$RUNTIME/lib"
-          for binary in "$RUNTIME/node" "$RUNTIME/ffmpeg" "$RUNTIME/ffprobe" "$RUNTIME/hao-core" "$RUNTIME/editkin-gpu-compositor" "$RUNTIME/whisper-cli" "$RUNTIME"/lib/*.dylib; do
+          for binary in "$RUNTIME/node" "$RUNTIME/ffmpeg" "$RUNTIME/ffprobe" "$RUNTIME/hao-core" "$RUNTIME/whisper-cli" "$RUNTIME"/lib/*.dylib; do
             echo "== $binary"
             file "$binary"
             lipo -archs "$binary"
@@ -188,12 +187,6 @@ jobs:
         run: |
           set -euxo pipefail
           npx tsx scripts/macos-community-app-gate.ts "$RUNNER_TEMP/clean/Editkin.app" "$EVIDENCE/app-gate.json" --source-root "$GITHUB_WORKSPACE"
-
-      - name: Run the owner's macOS runtime gate on the delivered app
-        run: |
-          set -euxo pipefail
-          node scripts/macos-bundle-runtime-gate.mjs --self-test
-          node scripts/macos-bundle-runtime-gate.mjs "$RUNNER_TEMP/clean/Editkin.app" arm64 "$EVIDENCE/owner-runtime-gate.json"
 
       - name: Run the source journey with the bundled FFmpeg
         run: |
