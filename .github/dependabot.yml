@@ -1,14 +1,17 @@
 version: 2
 
-# Weekly update PRs for the pinned Actions, the npm lockfile and the two Rust
+# Weekly update PRs for the pinned Actions, the npm lockfile and the three Rust
 # lockfiles that ship in the product. Minor and patch updates are grouped so a
 # weekly run opens one PR per ecosystem instead of one per package; major bumps
 # stay separate so a maintainer reviews each one. Every update still goes
 # through the normal PR boundary (Source CI, dependency review, CODEOWNERS).
 #
+# spikes/gpu-compositor is listed because scripts/build-gpu-compositor.mjs
+# builds it into the editkin-gpu-compositor runtime that the Windows and macOS
+# bundles ship.
+#
 # Not listed on purpose:
 # - native/effect-test-plugin has no registry crates.
-# - spikes/gpu-compositor is not part of the shipped product.
 updates:
   - package-ecosystem: github-actions
     directory: /
@@ -44,4 +47,13 @@ updates:
     open-pull-requests-limit: 5
     groups:
       cargo-hao-core:
+        update-types: [minor, patch]
+
+  - package-ecosystem: cargo
+    directory: /spikes/gpu-compositor
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      cargo-gpu-compositor:
         update-types: [minor, patch]
