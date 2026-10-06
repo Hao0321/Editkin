@@ -12,10 +12,11 @@ This file records the dependency advisories that are known and accepted, and how
 | `npm` | `/` | `package-lock.json`. |
 | `cargo` | `/src-tauri` | Desktop shell, the largest Rust dependency tree. |
 | `cargo` | `/native/hao-core` | Native core. |
+| `cargo` | `/spikes/gpu-compositor` | GPU compositor runtime. `scripts/build-gpu-compositor.mjs` builds it and the Windows and macOS bundles ship it as `editkin-gpu-compositor`. |
 
 Minor and patch updates are grouped into one PR per ecosystem. Major updates are separate PRs. Each update PR goes through the same checks as any other PR (Source CI, dependency review, CodeQL, CODEOWNERS review); Dependabot never merges anything.
 
-`native/effect-test-plugin` has no registry crates and `spikes/gpu-compositor` is not part of the shipped product, so neither is listed.
+`native/effect-test-plugin` has no registry crates, so it is not listed.
 
 ## Accepted advisories
 
@@ -43,7 +44,7 @@ The listed RustSec entries are classified as **unmaintained-crate** notices. Tha
 | `paste` | 1.0.15 | [RUSTSEC-2024-0436](https://rustsec.org/advisories/RUSTSEC-2024-0436.html) | `pulp` |
 | `ttf-parser` | 0.25.1 | [RUSTSEC-2026-0192](https://rustsec.org/advisories/RUSTSEC-2026-0192.html) | `fontdue` |
 
-**Status: accepted.** This directory is an experiment and is not built into the shipped product. Re-check if any of it is promoted into `src-tauri` or `native`.
+**Status: recorded maintenance exceptions, subject to release revalidation.** Despite the `spikes/` path, this crate ships: `scripts/build-gpu-compositor.mjs` runs `cargo build --release --locked` on it, and `src-tauri/tauri.windows.conf.json` and `src-tauri/tauri.macos.conf.json` bundle the resulting `editkin-gpu-compositor` runtime. `ttf-parser` parses font files at runtime through `fontdue` (`src/caption.rs`). Both entries are unmaintained-crate notices, not known vulnerabilities; re-check them with `cargo tree -i <crate>` before each release and prefer replacing the dependency over renewing the exception.
 
 ## Not automated
 
