@@ -1,4 +1,4 @@
-import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,7 +27,7 @@ const ownedRoots: string[] = [];
 beforeEach(() => { vi.clearAllMocks(); bridge.invoke.mockResolvedValue({}); });
 afterEach(async () => {
   for (const root of ownedRoots.splice(0)) {
-    if (dirname(root) !== resolve(tmpdir()) || !basename(root).startsWith("editkin-electron-workflow-")) {
+    if (dirname(root) !== await realpath(tmpdir()) || !basename(root).startsWith("editkin-electron-workflow-")) {
       throw new Error("Refuse cleanup outside the owned isolated fixture");
     }
     await rm(root, { recursive: true, force: true });
@@ -35,7 +35,9 @@ afterEach(async () => {
 });
 
 async function fixture(now?: () => number) {
-  const root = await mkdtemp(join(resolve(tmpdir()), "editkin-electron-workflow-"));
+  // Windows runners report tmpdir() with 8.3 short names (RUNNER~1), and the import
+  // boundary requires every ancestor to equal its realpath, so start from the real path.
+  const root = await mkdtemp(join(await realpath(tmpdir()), "editkin-electron-workflow-"));
   ownedRoots.push(root);
   const userData = join(root, "userdata"), bundled = join(root, "bundled-plugins");
   await mkdir(userData); await mkdir(bundled);
