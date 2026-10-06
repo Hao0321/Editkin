@@ -1791,15 +1791,15 @@
     },
     {
       "path": "scripts/export-module-registry.ts",
-      "bytes": 3722,
-      "sha256": "625b70531659d6599f3860f623f6c7085f610568281be2d274b7278d4c10be95",
+      "bytes": 4067,
+      "sha256": "350de21c6b89b5673ac6cf1a738decb6bd2c6bf02513cd3865234c5ca1aa28a4",
       "origin": "scripts/export-module-registry.ts",
       "rights": "GPL-3.0-or-later"
     },
     {
       "path": "scripts/export-motion-language.ts",
-      "bytes": 4809,
-      "sha256": "406f7b5fe31f08e88280fa1ae60ed56c009bf5f1f4668825aab70c0509dda3c3",
+      "bytes": 5154,
+      "sha256": "d05e24607c0b9422782c824fe68db1d7e07a45538bdec15ccba02eebfcb0373b",
       "origin": "scripts/export-motion-language.ts",
       "rights": "GPL-3.0-or-later"
     },

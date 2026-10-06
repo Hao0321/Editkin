@@ -5,10 +5,12 @@
  * validate fills before any MCP call. TypeScript stays the single source of
  * truth; the skill never edits this JSON.
  *
- *   vendor/node/win32-x64/node.exe node_modules/tsx/dist/cli.mjs scripts/export-module-registry.ts [--check] [outPath]
+ *   vendor/node/win32-x64/node.exe node_modules/tsx/dist/cli.mjs scripts/export-module-registry.ts [--check] <outPath>
+ *
+ * Without <outPath>, EDITKIN_VIDEO_AUTOPILOT_SKILL_ROOT selects
+ * <root>/references/editkin-modules-v1.json; with neither, nothing is written.
  */
 import { readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { AUTOPILOT_MAX_COMMANDS } from "../src/application/autopilotPlan";
 import { MOTION_TREATMENT_FAMILIES } from "../src/application/motionTreatment";
@@ -40,11 +42,12 @@ export function moduleRegistryExport() {
   };
 }
 
-export const DEFAULT_SKILL_EXPORT_PATH = join(process.env.VIDEO_AUTOPILOT_SKILL_ROOT ?? join(homedir(), ".codex", "skills", "video-autopilot"), "references", "editkin-modules-v1.json");
-
 if (process.argv[1] && /export-module-registry\.ts$/.test(process.argv[1])) {
   const check = process.argv.includes("--check");
-  const out = process.argv.slice(2).find(arg => !arg.startsWith("--")) ?? DEFAULT_SKILL_EXPORT_PATH;
+  // The skill lives outside this repository; never assume a home-directory default such as ~/.codex.
+  const skillRoot = process.env.EDITKIN_VIDEO_AUTOPILOT_SKILL_ROOT;
+  const out = process.argv.slice(2).find(arg => !arg.startsWith("--")) ?? (skillRoot ? join(skillRoot, "references", "editkin-modules-v1.json") : "");
+  if (!out) { console.error("請指定輸出路徑參數，或設定 EDITKIN_VIDEO_AUTOPILOT_SKILL_ROOT（video-autopilot Skill 根目錄）；未指定時不寫入任何檔案"); process.exit(1); }
   const text = `${JSON.stringify(moduleRegistryExport(), null, 1)}\n`;
   if (check) {
     let current = "";
