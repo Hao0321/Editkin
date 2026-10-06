@@ -14,6 +14,8 @@ For integration development, install or clone the Kit and set `EDITKIN_VIDEO_AUT
 
 Motion presets include an editable floating video frame with softened outer edges, portrait perspective orbit, and a scene with two larger portrait panels behind the main clip. `prepare_floating_frame_scene` compiles that scene into commands for the audited v4 plan. The effect uses a 2.5D perspective plane; it is not a 3D mesh. Timeline asset drops snap to editing anchors and clips can be moved in frame increments. Rendering and preview performance depend on the media runtime and machine; these source features do not certify the visual result for every project.
 
+Motion Design v3 adds 16 editable motion-graphics templates (titles, lower thirds, chapter, data, labels and emphasis) with 28 themed presets. Copy is one field per line. The editor preview and the Rec.709 export draw the same per-frame shapes and text, the export through libass. See `docs/MOTION_DESIGN_V3.md`. How a graphic finally looks still depends on the footage and the copy.
+
 ## Browser build
 
 The web build (`npm run build`, or `npm run dev` locally) provides a browser version of the desktop UI. It can import media, preview it, and edit the timeline. Automatic workflows that need local Whisper or FFmpeg, including speech transcription and media analysis, require the desktop build. The browser cannot render a video: "Export project" downloads the EditGraph JSON only. Projects are not autosaved or restored; reloading the page discards them. A published web build, for example through GitHub Pages, lets people try the interface. Use the desktop build for those automatic workflows and video output.

@@ -7,7 +7,7 @@ export interface MotionGraphicPreset {
   family: string;
   license: string;
   provenance: string;
-  renderer: "hao-motion-composition/v1" | "hao-motion-composition/v2";
+  renderer: "hao-motion-composition/v1" | "hao-motion-composition/v2" | "hao-motion-composition/v3";
   seed: MotionGraphicPresetSeed;
   routing?: {
     semanticRoles: string[];

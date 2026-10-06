@@ -93,7 +93,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
   registerRemoteOnboardingTools(server);
 
   server.registerTool("list_creative_presets", {
-    description: "列出 Editkin 可輸出的調色、特效、轉場、字幕、動態圖文、2D 片段動態、2.5D 浮空影片框與鏡頭語言 presets。動態圖文回低 Token 索引；motionPresetId 只展開單一 seed。",
+    description: "列出 Editkin 可輸出的調色、特效、轉場、字幕、動態圖文、2D 片段動態、2.5D 浮空影片框與鏡頭語言 presets。動態圖文回低 Token 索引；motionPresetId 只展開單一 seed。Motion Design v3（renderer hao-motion-composition/v3）排在最前，其 text 每行一個欄位，依 textFields 順序填寫。",
     inputSchema: z.object({
       kind: z.enum(["all", "look", "effect", "transition", "text", "motion", "template", "cinematic"]).default("all"),
       motionPresetId: z.string().min(1).max(128).optional(),

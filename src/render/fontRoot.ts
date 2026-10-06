@@ -4,6 +4,7 @@ import { isAbsolute, join, resolve } from "node:path";
 import type { EditProject } from "../domain/types";
 import { resolveBundledFontFace } from "../typography/fontFaces";
 import { bundledFontMetricDigest } from "../typography/fontEmMetrics";
+import { motionGraphicV3Faces } from "../motion/compositionV3";
 
 /** Private/legacy roots remain explicit legacy mode; malformed v2 never falls back. */
 export async function resolveAssFontRoot(fontRoot?: string, project?: EditProject): Promise<{ fontRoot?: string; bundledFaces: boolean }> {
@@ -32,6 +33,14 @@ export async function resolveAssFontRoot(fontRoot?: string, project?: EditProjec
   }
   const physicalRoot = join(root, "render");
   for (const graphic of project?.motionGraphics ?? []) {
+    if (graphic.schema === "hao.motion-composition/v3") {
+      // Every face a v3 template may draw with was measured; each must be that exact face.
+      for (const { family, weight } of motionGraphicV3Faces(graphic)) {
+        const file = resolveBundledFontFace(family, weight)?.fontFile;
+        if (!file || faces.get(file)?.sha256 !== bundledFontMetricDigest(family, weight)) throw new Error("v3 physical font does not match its measured metrics");
+      }
+      continue;
+    }
     if (graphic.schema !== "hao.motion-composition/v2") continue;
     const family = graphic.fontFamily ?? "Noto Sans TC", weight = graphic.fontWeight ?? 700;
     const file = resolveBundledFontFace(family, weight)?.fontFile;
@@ -41,7 +50,9 @@ export async function resolveAssFontRoot(fontRoot?: string, project?: EditProjec
   const requested = project ? [
     [project.captionStyle.fontFamily, project.captionStyle.bold ? 800 : 400],
     [project.captionStyle.translationFontFamily, project.captionStyle.translationBold ? 800 : 400],
-    ...project.motionGraphics.map(g => [g.fontFamily ?? "Noto Sans TC", g.fontWeight ?? 700]),
+    ...project.motionGraphics.flatMap(g => g.schema === "hao.motion-composition/v3"
+      ? motionGraphicV3Faces(g).map(face => [face.family, face.weight])
+      : [[g.fontFamily ?? "Noto Sans TC", g.fontWeight ?? 700]]),
   ] as [string, number][] : [];
   for (const file of new Set(requested.map(([family, weight]) => resolveBundledFontFace(family, weight)?.fontFile).filter((file): file is string => Boolean(file)))) {
     const face = faces.get(file);

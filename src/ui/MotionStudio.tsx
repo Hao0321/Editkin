@@ -1,5 +1,8 @@
 import type { Wave2MotionPreset } from "../creative/wave2Registry";
 import { findMotionGraphicPreset, HOLOGRAM_MOTION_PRESETS } from "../creative/motionGraphicPresets";
+import { motionDesignV3FieldHint, motionDesignV3Seed } from "../creative/motionDesignV3Presets";
+import { MOTION_DESIGN_V3_FIELDS } from "../domain/motionCompositionV3Contract";
+import MotionV3Library from "./MotionV3Library";
 import type { MediaAsset, MotionGraphic, MotionGraphicKind, MotionGraphicPresetSeed, MotionTrack, NormalizedRect } from "../domain/types";
 import { formatTime } from "../lib/format";
 import { EDITKIN_MOTION } from "../motion/identity";
@@ -23,7 +26,7 @@ export interface MotionStudioProps {
   onBeginMotionTrack: () => void;
   onCorrectMotionTrack: (trackId: string) => void;
   onDeleteMotionTrack: (trackId: string) => void;
-  onAddMotionGraphic: (kind: MotionGraphicKind, trackId?: string, seed?: MotionGraphicPresetSeed) => void;
+  onAddMotionGraphic: (kind: MotionGraphicKind, trackId?: string, seed?: MotionGraphicPresetSeed, options?: { ask?: boolean }) => void;
   wave2Presets: Wave2MotionPreset[];
   motionGraphics: MotionGraphic[];
   onUpdateMotionGraphic: (graphicId: string, patch: Partial<Omit<MotionGraphic, "schema" | "id">>) => void;
@@ -33,10 +36,11 @@ export interface MotionStudioProps {
 export default function MotionStudio({ asset, clip, onSetFloatingFrame, onApplyFloatingScene, portraitCanvas = false, onApplyClipMotionPreset, motionTracks, trackingBusy, trackingSelectionActive, trackingSelection, onBeginMotionTrack, onCorrectMotionTrack, onDeleteMotionTrack, onAddMotionGraphic, wave2Presets, motionGraphics, onUpdateMotionGraphic, onDeleteMotionGraphic }: MotionStudioProps) {
   return <div className="motion-controls" aria-label="動態圖卡與追蹤">
     <div className="creative-heading"><div><span className="eyebrow">{EDITKIN_MOTION.name}</span><strong>{EDITKIN_MOTION.label}</strong></div><small>文字可編輯</small></div>
+    <MotionV3Library onAddMotionGraphic={onAddMotionGraphic} />
     <div className="motion-quick-grid" data-testid="motion-template-previews">
-      <button type="button" className="motion-preset-card title" onClick={() => onAddMotionGraphic("title")}><span><b>你的主標題</b><i>slide up</i></span><small>＋ 動態標題</small></button>
-      <button type="button" className="motion-preset-card card" onClick={() => onAddMotionGraphic("card")}><span><b>本段重點</b><i>pop</i></span><small>＋ 重點卡</small></button>
-      <button type="button" className="motion-preset-card counter" onClick={() => onAddMotionGraphic("counter")}><span><b>01</b><i>spring</i></span><small>＋ 數字重點</small></button>
+      <button type="button" className="motion-preset-card title" onClick={() => onAddMotionGraphic("title", undefined, motionDesignV3Seed("v3_title_reveal"), { ask: true })}><span><b>你的主標題</b><i>reveal</i></span><small>＋ 動態標題</small></button>
+      <button type="button" className="motion-preset-card card" onClick={() => onAddMotionGraphic("title", undefined, motionDesignV3Seed("v3_highlight_sweep"), { ask: true })}><span><b>本段重點</b><i>marker</i></span><small>＋ 重點卡</small></button>
+      <button type="button" className="motion-preset-card counter" onClick={() => onAddMotionGraphic("counter", undefined, motionDesignV3Seed("v3_stat_counter"), { ask: true })}><span><b>01</b><i>count up</i></span><small>＋ 數字重點</small></button>
       <button type="button" className="motion-preset-card title" onClick={() => onAddMotionGraphic("title", undefined, findMotionGraphicPreset("v2-word-cascade").seed)}><span><b>逐詞登場</b><i>motion v2</i></span><small>＋ 彈性逐詞主標</small></button>
     </div>
     {asset.kind === "video" && clip && <>
@@ -100,7 +104,11 @@ export default function MotionStudio({ asset, clip, onSetFloatingFrame, onApplyF
     </details>
     {motionGraphics.length > 0 && <div className="motion-graphic-list">
       {motionGraphics.map((graphic) => <div key={graphic.id}>
-        <input value={graphic.text} aria-label={`${graphic.name}文字`} onChange={(event) => onUpdateMotionGraphic(graphic.id, { text: event.target.value })} />
+        {graphic.schema === "hao.motion-composition/v3" && graphic.designV3
+          ? <textarea value={graphic.text} aria-label={`${graphic.name}文字`} rows={MOTION_DESIGN_V3_FIELDS[graphic.designV3.template].length}
+            placeholder={motionDesignV3FieldHint(MOTION_DESIGN_V3_FIELDS[graphic.designV3.template])} title={motionDesignV3FieldHint(MOTION_DESIGN_V3_FIELDS[graphic.designV3.template])}
+            onChange={(event) => onUpdateMotionGraphic(graphic.id, { text: event.target.value })} />
+          : <input value={graphic.text} aria-label={`${graphic.name}文字`} onChange={(event) => onUpdateMotionGraphic(graphic.id, { text: event.target.value })} />}
         <span>{formatTime(graphic.timelineStart)} · {graphic.name}{graphic.visualStyle && graphic.visualStyle !== "solid_panel" ? ` · ${graphic.visualStyle}` : ""}</span>
         {graphic.schema === "hao.motion-composition/v2" && graphic.layoutV2 && <label className="motion-width-mode">底框
           <select aria-label={`${graphic.name}底框寬度`} value={graphic.layoutV2.widthMode ?? "fixed"} onChange={(event) => onUpdateMotionGraphic(graphic.id, { layoutV2: { ...graphic.layoutV2!, widthMode: event.target.value as "fixed" | "fit_content" } })}>
