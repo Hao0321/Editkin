@@ -16,3 +16,12 @@ export function bundledFontAssMetrics(family: string, weight: number, emSize: nu
   const cssBaseline=(lineHeight-(metrics.cssAscender+metrics.cssDescender)*scale)/2+metrics.cssAscender*scale;
   return {fontSize:(metrics.assAscender+metrics.assDescender)*scale,topOffset:cssBaseline-metrics.assAscender*scale};
 }
+
+/** Distance from the top of a CSS line box to the baseline, for aligning mixed faces. */
+export function bundledFontCssBaseline(family: string, weight: number, emSize: number, lineHeight: number): number {
+  const face=resolveBundledFontFace(family,weight);
+  const metrics=face&&index.faces.find(item=>item.id===face.faceId);
+  if(!metrics)throw new Error(`缺少已驗證的字型尺寸資料：${family}`);
+  const scale=emSize/metrics.unitsPerEm;
+  return (lineHeight-(metrics.cssAscender+metrics.cssDescender)*scale)/2+metrics.cssAscender*scale;
+}

@@ -236,9 +236,13 @@ async function renderResolvedProject(project: EditProject, outputPath: string, o
   const preserveHighBitDepthAlpha = alphaIntermediate || alphaDelivery;
   if (alphaDelivery) assertHighBitDepthAlphaDeliveryProject(project, outputPath);
   const hasMotionCompositionV2 = project.motionGraphics.some((graphic) => graphic.schema === "hao.motion-composition/v2");
+  const hasMotionDesignV3 = project.motionGraphics.some((graphic) => graphic.schema === "hao.motion-composition/v3");
   const hasFloatingVideoFrame = project.tracks.some(track => track.clips.some(clip => clip.floatingFrame));
   if (hasMotionCompositionV2 && (preserveHighBitDepthAlpha || containsSceneLinearMedia(project) || project.colorManagement?.mode === "aces2" || isHdrOutput(project))) {
     throw new Error("motion-composition/v2 本輪只支援一般 Rec.709 正式輸出；預合成 alpha、ACES 2 與 HDR 必須等待共享原生／scene-linear evaluator，禁止 silently downgrade。");
+  }
+  if (hasMotionDesignV3 && (preserveHighBitDepthAlpha || containsSceneLinearMedia(project) || project.colorManagement?.mode === "aces2" || isHdrOutput(project))) {
+    throw new Error("motion-composition/v3 只支援一般 Rec.709 正式輸出；預合成 alpha、ACES 2 與 HDR 尚無共享 evaluator，禁止 silently downgrade。");
   }
   const ffmpegPath = options.ffmpegPath ?? "ffmpeg";
   const ffprobePath = options.ffprobePath ?? "ffprobe";
@@ -274,9 +278,10 @@ async function renderResolvedProject(project: EditProject, outputPath: string, o
       runProcess, renderAudioBed, probeMedia, encoderArgs, finite,
     });
   }
-  let planner = hasFloatingVideoFrame ? "editkin-floating-video-frame-ffmpeg/v1" : hasMotionCompositionV2 ? "typescript-motion-composition-v2-ass-frame-receipt/v2" : "typescript-fallback";
+  let planner = hasFloatingVideoFrame ? "editkin-floating-video-frame-ffmpeg/v1" : hasMotionCompositionV2 ? "typescript-motion-composition-v2-ass-frame-receipt/v2"
+    : hasMotionDesignV3 ? "typescript-motion-design-v3-ass/v3" : "typescript-fallback";
   const nativeCoreReady = await nativeCoreAvailable(options.nativeCorePath);
-  if (nativeCoreReady && !hasMotionCompositionV2 && !hasFloatingVideoFrame) {
+  if (nativeCoreReady && !hasMotionCompositionV2 && !hasMotionDesignV3 && !hasFloatingVideoFrame) {
     await compileNativeEngineGraph(buildEngineRenderGraph(project), options.nativeCorePath!);
     const native = await createNativePlan(project, options.nativeCorePath!);
     const expectedFrames = Math.round(plan.duration * project.fps);

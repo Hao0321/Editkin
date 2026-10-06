@@ -3,6 +3,6 @@ export const EDITKIN_MOTION = {
   id: "editkin-motion",
   name: "Editkin Motion",
   label: "動態設計引擎",
-  schemas: ["hao.motion-composition/v1", "hao.motion-composition/v2"],
+  schemas: ["hao.motion-composition/v1", "hao.motion-composition/v2", "hao.motion-composition/v3"],
   comparisonStatus: "unmeasured",
 } as const;

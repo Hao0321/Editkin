@@ -27,6 +27,8 @@ import { useEditorTheme } from "./ui/useEditorTheme";
 import { usePlayheadTransport } from "./ui/playheadTransport";
 import { timelineAssetDuration } from "./ui/timelineAssetDrop";
 import { createMotionGraphic } from "./motion/composition";
+import { MOTION_DESIGN_V3_FIELDS, MOTION_V3_MIN_DURATION_SECONDS } from "./domain/motionCompositionV3Contract";
+import { MOTION_DESIGN_V3_FIELD_LABELS } from "./creative/motionDesignV3Presets";
 import type { TrackingMode } from "./ui/EditorShell";
 import type { MotionTrack } from "./domain/types";
 const EditorShell = lazy(() => import("./ui/EditorShell").then((module) => ({ default: module.EditorShell })));
@@ -428,12 +430,21 @@ function App() {
     onStatus: setStatus,
     onCommands: (commands, message) => runCommand({ type: "batch", commands }, message),
   });
-  const addMotionGraphic = (kind: MotionGraphicKind, trackId?: string, seed?: MotionGraphicPresetSeed) => {
+  const addMotionGraphic = (kind: MotionGraphicKind, trackId?: string, seed?: MotionGraphicPresetSeed, options: { ask?: boolean } = {}) => {
+    const designV3 = seed?.schema === "hao.motion-composition/v3";
     const defaults: Record<MotionGraphicKind, string> = { title: "輸入主標題", card: "輸入重點內容", tag: "追蹤重點", counter: "01" };
-    const text = window.prompt(kind === "tag" ? "追蹤標籤要顯示什麼？" : "圖卡要顯示什麼？", seed?.name ?? defaults[kind])?.trim();
+    const fields = seed?.designV3 ? MOTION_DESIGN_V3_FIELDS[seed.designV3.template] : [];
+    // v3 copy has one field per line. Quick actions ask for the one required field;
+    // gallery picks start from the full sample and are edited line by line in the list.
+    const askV3 = designV3 && options.ask && fields.filter((field) => !field.endsWith("?")).length === 1;
+    const text = designV3 && !askV3 ? seed?.text?.trim()
+      : askV3 ? window.prompt(`${seed?.name ?? "動態圖卡"}：輸入${MOTION_DESIGN_V3_FIELD_LABELS[fields[0]] ?? "文字"}`, seed?.text?.split("\n")[0] ?? "")?.trim()
+        : window.prompt(kind === "tag" ? "追蹤標籤要顯示什麼？" : "圖卡要顯示什麼？", seed?.name ?? defaults[kind])?.trim();
     if (!text) return;
-    const graphic = createMotionGraphic(makeId("motion"), kind, text, playhead, Math.max(0.5, Math.min(4, duration - playhead || 3)), trackId, seed);
-    runCommand({ type: "add_motion_graphic", graphic }, trackId ? "已把標籤綁到追蹤主體，預覽與輸出會同步移動。" : `已加入 ${graphic.schema} 動態圖卡。`);
+    const span = Math.min(4, duration - playhead || 3);
+    const graphic = createMotionGraphic(makeId("motion"), kind, text, playhead, Math.max(designV3 ? MOTION_V3_MIN_DURATION_SECONDS : 0.5, span), trackId, seed);
+    runCommand({ type: "add_motion_graphic", graphic }, trackId ? "已把標籤綁到追蹤主體，預覽與輸出會同步移動。"
+      : designV3 ? `已加入「${graphic.name}」；在動態圖卡清單逐行改字即可。` : `已加入 ${graphic.schema} 動態圖卡。`);
   };
   const acceptTrackingSelection = async (rect: NormalizedRect) => {
     if (trackingPending.current) return;

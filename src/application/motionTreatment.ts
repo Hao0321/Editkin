@@ -37,7 +37,7 @@ export function motionCommandFamilies(command: EditorCommand): MotionTreatmentFa
   if (command.type === "add_motion_graphic") {
     const graphic = command.graphic;
     families.add(graphic.kind === "title" ? "title" : graphic.kind === "card" ? "cards" : "hud");
-    if (graphic.schema === "hao.motion-composition/v2") families.add("motion");
+    if (graphic.schema === "hao.motion-composition/v2" || graphic.schema === "hao.motion-composition/v3") families.add("motion");
     if (graphic.trackId) families.add("tracking_masks");
   }
   if (["add_caption", "update_caption", "set_caption_style"].includes(command.type)) families.add("subtitles");

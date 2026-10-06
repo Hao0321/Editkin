@@ -1,6 +1,7 @@
 import * as z from "zod/v4";
 import type { EditorCommand } from "./commands";
-import type { EditProject, HaoExpressionSource } from "./types";
+import type { EditProject, HaoExpressionSource, MotionDesignV3TemplateId } from "./types";
+import { MOTION_DESIGN_V3_TEMPLATE_IDS } from "./motionCompositionV3Contract";
 import { AESTHETIC_BENCHMARKS, BENCHMARK_AXES } from "./aestheticBenchmarks";
 import {
   PRODUCT_AUTO_ROTO_ENGINE,
@@ -344,13 +345,14 @@ export const motionPresetVariantSchema = z.strictObject({
 export type MotionPresetVariant = z.infer<typeof motionPresetVariantSchema>;
 
 const motionGraphicBaseSchema = z.object({
-  schema: z.enum(["hao.motion-composition/v1", "hao.motion-composition/v2"]), id: z.string(), presetId: z.string().optional(), name: z.string(), kind: z.enum(["title", "card", "tag", "counter"]),
+  schema: z.enum(["hao.motion-composition/v1", "hao.motion-composition/v2", "hao.motion-composition/v3"]), id: z.string(), presetId: z.string().optional(), name: z.string(), kind: z.enum(["title", "card", "tag", "counter"]),
   text: z.string(), timelineStart: z.number(), duration: z.number(), x: z.number(), y: z.number(), width: z.number(), fontSize: z.number(),
   fontFamily: z.string().optional(), fontWeight: z.number().optional(), letterSpacing: z.number().optional(), outlineWidth: z.number().optional(), shadowDepth: z.number().optional(), cornerRadius: z.number().optional(),
   textColor: z.string(), backgroundColor: z.string(), accentColor: z.string(), animation: z.enum(["fade", "slide_up", "pop", "spring_soft"]),
   visualStyle: z.enum(["solid_panel", "holo_scan_cyan", "holo_grid_lime", "target_lock_red", "spectral_wire_violet", "depth_glass_blue", "telemetry_beam_amber", "neon_extrude_white", "quantum_label_magenta"]).optional(),
   trackId: z.string().optional(), trackingMode: z.enum(["anchor", "surface"]).optional(), offsetX: z.number(), offsetY: z.number(),
   motionV2: motionV2Schema.optional(), layoutV2: layoutV2Schema.optional(),
+  designV3: z.strictObject({ template: z.enum(MOTION_DESIGN_V3_TEMPLATE_IDS as [MotionDesignV3TemplateId, ...MotionDesignV3TemplateId[]]) }).optional(),
   templateOwner: templateElementOwnerSchema.optional(),
 });
 const motionGraphicSchema = motionGraphicBaseSchema.superRefine((graphic, context) => {
@@ -359,6 +361,12 @@ const motionGraphicSchema = motionGraphicBaseSchema.superRefine((graphic, contex
   }
   if (graphic.schema === "hao.motion-composition/v2" && (!graphic.motionV2 || !graphic.layoutV2)) {
     context.addIssue({ code: "custom", message: "v2 必須同時包含 motionV2 與 layoutV2", path: ["schema"] });
+  }
+  if ((graphic.schema === "hao.motion-composition/v3") !== (graphic.designV3 !== undefined)) {
+    context.addIssue({ code: "custom", message: "v3 必須且只有 v3 可以包含 designV3", path: ["designV3"] });
+  }
+  if (graphic.schema === "hao.motion-composition/v3" && (graphic.motionV2 !== undefined || graphic.layoutV2 !== undefined)) {
+    context.addIssue({ code: "custom", message: "v3 不可攜帶 v2 motion/layout 參數", path: ["schema"] });
   }
 });
 const directorMarkerSchema = z.object({
@@ -438,7 +446,7 @@ const templateApplicationSchema = z.strictObject({
 });
 
 export const projectSchema: z.ZodType<EditProject> = z.object({
-  schemaVersion: z.literal(8), revision: z.number().int().nonnegative(), id: z.string(), name: z.string(), width: z.number(), height: z.number(), fps: z.number(),
+  schemaVersion: z.literal(9), revision: z.number().int().nonnegative(), id: z.string(), name: z.string(), width: z.number(), height: z.number(), fps: z.number(),
   editorialProfile: z.enum(["auto", "gaming", "food", "travel", "podcast_on_camera", "podcast_no_face"]),
   aestheticSystem: aestheticSystemSchema.optional(),
   colorManagement: z.object({ mode: z.enum(["rec709", "aces2"]), workingSpace: z.literal("ACEScct"), outputTransform: z.enum(["rec709_sdr", "p3d65_sdr", "rec2100_hlg_1000", "rec2100_pq_1000"]), configId: z.literal("studio-config-v4.0.0_aces-v2.0_ocio-v2.5") }).optional(),

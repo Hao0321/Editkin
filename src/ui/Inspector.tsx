@@ -1,4 +1,5 @@
 import { lazy, Suspense, useRef, useState } from "react";
+import { motionDesignV3Seed } from "../creative/motionDesignV3Presets";
 import { useNativeWheelScroll } from "./wheelScroll";
 import { cssFontFamily, resolveBundledFontFace } from "../typography/fontFaces";
 import { LOOK_PRESETS, TEXT_STYLE_PRESETS, TRANSITION_PRESETS } from "../creative/corePack";
@@ -20,6 +21,7 @@ import "./creatorToolSurface.css";
 import "./displayType.css";
 
 const MotionStudio = lazy(() => import("./MotionStudio"));
+const MotionV3Library = lazy(() => import("./MotionV3Library"));
 const MaskStudio = lazy(() => import("./MaskStudio"));
 
 const PIP_PRESETS: Array<{ name: string; layout: ClipLayout }> = [
@@ -84,7 +86,7 @@ interface InspectorProps {
   onBeginMotionTrack: () => void;
   onCorrectMotionTrack: (trackId: string) => void;
   onDeleteMotionTrack: (trackId: string) => void;
-  onAddMotionGraphic: (kind: MotionGraphicKind, trackId?: string, seed?: MotionGraphicPresetSeed) => void;
+  onAddMotionGraphic: (kind: MotionGraphicKind, trackId?: string, seed?: MotionGraphicPresetSeed, options?: { ask?: boolean }) => void;
   motionGraphics: MotionGraphic[];
   onUpdateMotionGraphic: (graphicId: string, patch: Partial<Omit<MotionGraphic, "schema" | "id">>) => void;
   onDeleteMotionGraphic: (graphicId: string) => void;
@@ -109,6 +111,7 @@ interface InspectorProps {
 }
 
 export function Inspector({ playhead, projectFps, clip, asset, previewSource, caption, captionStyle, tracks, canTransitionIn, canTransitionOut, onMove, onTrackChange, onVolumeChange, onTrimStart, onTrimEnd, onTransformChange, scene25d, onScene25dToggle, onScene25dChange, onTransform3dChange, onSetFloatingFrame, onApplyFloatingScene, portraitCanvas, onApplyClipMotionPreset, particleSimulation, onParticleSimulationToggle, onParticleSimulationChange, onLayerChange, onExpressionChange, onMediaFrameApply, onColorChange, onCreativeChange, onNativeEffectAdd, onNativeEffectUpdate, onNativeEffectReorder, onNativeEffectRemove, onAddKeyframe, onKeyframeEasingChange, onDeleteKeyframe, motionTracks, trackingBusy, trackingSelectionActive, trackingSelection, onBeginMotionTrack, onCorrectMotionTrack, onDeleteMotionTrack, onAddMotionGraphic, motionGraphics, onUpdateMotionGraphic, onDeleteMotionGraphic, onCaptionChange, onCaptionStyleChange, onCaptionStylePatch, onOpenColorWorkspace, onAddCaption, onMakePictureInPicture, onAddMask, onUpdateMask, onDeleteMask, onBindMaskTrack, onSetMaskKeyframe, onFreezeMask, onAutoRotoMask, onQuickAutoRoto, onChromaKeyChange, autoRotoBusy, autoRotoRuntimeStatus, pluginRegistry }: InspectorProps) {
+  const addDesignV3 = (presetId: string) => { const seed = motionDesignV3Seed(presetId); onAddMotionGraphic(seed.kind ?? "title", undefined, seed, { ask: true }); };
   initializeStudioCreativeAssets();
   const wave2 = initializeWave2Registry();
   const [motionStudioOpened, setMotionStudioOpened] = useState(false);
@@ -365,7 +368,9 @@ export function Inspector({ playhead, projectFps, clip, asset, previewSource, ca
             </>}
             {clipTool === "text" && <>
               <div className="tool-surface-heading"><strong>文字與動態字卡</strong><span>新增後仍能逐項修改</span></div>
-              <div className="text-tool-grid"><button type="button" onClick={onAddCaption}><b>字幕</b><span>一般逐句文字</span></button><button type="button" onClick={() => onAddMotionGraphic("title")}><b>主標題</b><span>首秒 Hook</span></button><button type="button" onClick={() => onAddMotionGraphic("card")}><b>重點卡</b><span>資訊整理</span></button><button type="button" onClick={() => onAddMotionGraphic("tag")}><b>標籤</b><span>人物／產品</span></button><button type="button" onClick={() => onAddMotionGraphic("counter")}><b>數字</b><span>排行／步驟</span></button></div>
+              <div className="text-tool-grid"><button type="button" onClick={onAddCaption}><b>字幕</b><span>一般逐句文字</span></button><button type="button" onClick={() => addDesignV3("v3_title_reveal")}><b>主標題</b><span>首秒 Hook</span></button><button type="button" onClick={() => addDesignV3("v3_highlight_sweep")}><b>重點卡</b><span>資訊整理</span></button><button type="button" onClick={() => addDesignV3("v3_tag_chip")}><b>標籤</b><span>人物／產品</span></button><button type="button" onClick={() => addDesignV3("v3_stat_counter")}><b>數字</b><span>排行／步驟</span></button></div>
+              <div className="display-type-heading"><strong>Motion Design v3</strong><span>16 款版型 · 預覽與輸出逐格一致</span></div>
+              <Suspense fallback={<small>正在載入 Motion Design v3…</small>}><MotionV3Library onAddMotionGraphic={onAddMotionGraphic} /></Suspense>
               <div className="display-type-heading"><strong>花字試裝</strong><span>8 款原創可編輯字卡 · 字型已內建</span></div>
               <div className="display-type-grid" data-testid="display-type-library">{STUDIO_MOTION_ASSETS.map((preset) => { const face = resolveBundledFontFace(preset.seed.fontFamily ?? "Noto Sans TC", preset.seed.fontWeight ?? 700); return <button type="button" key={preset.id} className={`display-type-card ${preset.previewClass}`} title={`${preset.license} · ${preset.provenance}${face?.weightSubstituted ? ` · 字重 ${face.requestedWeight} → ${face.fontWeight}` : ""}`} onClick={() => onAddMotionGraphic("title", undefined, preset.seed)}><i data-font-weight-substituted={face?.weightSubstituted} style={{ fontFamily: cssFontFamily(face?.fontFamily ?? preset.seed.fontFamily), fontWeight: face?.fontWeight ?? preset.seed.fontWeight, fontSynthesis: "style", color: preset.seed.textColor, background: preset.seed.backgroundColor, borderColor: preset.seed.accentColor }}>Aa</i><span>{preset.name}</span></button>; })}</div>
               <details className="inline-motion-library"><summary>更多動態素材 <small>{wave2.motionPresets.length} 款</small></summary><div className="display-type-grid">{wave2.motionPresets.map((preset) => <button type="button" key={preset.id} className="display-type-card library" onClick={() => onAddMotionGraphic(preset.seed.kind ?? "card", undefined, preset.seed)}><i style={{ color: preset.seed.textColor, background: preset.seed.backgroundColor, borderColor: preset.seed.accentColor }}>{preset.presetType === "widget" ? "01" : "Aa"}</i><span>{preset.name}</span></button>)}</div></details>

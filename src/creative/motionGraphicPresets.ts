@@ -4,6 +4,8 @@ import { initializeStudioCreativeAssets, STUDIO_MOTION_ASSETS } from "./studioAs
 import { initializeWave2Registry } from "./wave2Registry";
 import { TRAVEL_EDITORIAL_PRESETS } from "./travelEditorialPresets";
 import { LOWER_THIRD_PRESETS } from "./lowerThirdPresets";
+import { MOTION_DESIGN_V3_PRESETS } from "./motionDesignV3Presets";
+import { MOTION_DESIGN_V3_FIELDS } from "../domain/motionCompositionV3Contract";
 
 export type { MotionGraphicPreset } from "./motionGraphicPresetTypes";
 
@@ -103,6 +105,8 @@ export function motionGraphicPresets(): readonly MotionGraphicPreset[] {
   initializeStudioCreativeAssets();
   const wave2 = initializeWave2Registry();
   const items: MotionGraphicPreset[] = [
+    // Motion Design v3 leads: template-driven layouts that preview and export identically.
+    ...MOTION_DESIGN_V3_PRESETS.map(({ category: _category, ...item }) => ({ ...item, seed: { ...item.seed } })),
     ...BUILTIN_MOTION_PRESETS.map((item) => ({ ...item, seed: { ...item.seed } })),
     ...TRAVEL_EDITORIAL_PRESETS.map((item) => ({ ...item, seed: { ...item.seed } })),
     ...LOWER_THIRD_PRESETS.flatMap((item) => [
@@ -183,6 +187,8 @@ export function compactMotionGraphicPresets() {
     kind: seed.kind ?? "card",
     animation: seed.animation ?? "fade",
     visualStyle: seed.visualStyle ?? "solid_panel",
+    // v3 copy is one field per line; agents need the field order to author `text`.
+    ...(seed.designV3 ? { template: seed.designV3.template, textFields: MOTION_DESIGN_V3_FIELDS[seed.designV3.template] } : {}),
     ...(routing ? { routing } : {}),
   }));
 }
