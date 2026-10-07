@@ -31,7 +31,7 @@ windows = { version = "0.62.2", features = [
 ] }
 
 [target.'cfg(unix)'.dependencies]
-libc = "=0.2.189"
+libc = "=0.2.190"
 
 [profile.release]
 lto = "thin"
