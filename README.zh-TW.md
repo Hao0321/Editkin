@@ -40,3 +40,10 @@ npm run dev
 外部 PR 視為不受信任的程式碼：CI 不持有正式簽章憑證，合併須經人工審查與檢查。自動掃描無法保證程式碼沒有惡意行為。發現漏洞請依 [安全通報](SECURITY.md)私下回報，不要在公開 Issue 放利用細節。
 
 目前公開的是可協作的原始碼，**沒有通過正式安裝包的發行審查**。任何 PR 產物或自行建置的執行檔都不代表官方發行。正式下載會在相依授權、各發布平台的實機測試、最終檔案雜湊、SBOM、專案簽章與來源證明完成後另行公告；若尚無作業系統簽章，會明確標示並停用現有需要 Authenticode 的 Windows 自動更新。
+
+## Mac 本機安裝
+
+請先依[Mac 安裝指南](docs/MACOS.md)準備開發工具與依賴，再於 Git 原始碼目錄執行
+`bash scripts/install-macos-community.sh`，或在 Finder 雙擊 `Install-on-Mac.command`。
+預設安裝到 `~/Applications/Editkin Community.app`，遇到同名程式會停止，不會覆寫。
+這是在自己的 Mac 編譯使用的社群版，仍依賴本機 Homebrew 函式庫，並非官方安裝包或可攜式下載版。

@@ -33,6 +33,13 @@ npm run dev
 
 The bundled demo videos are generated color bars with silent audio. You can use your own lawfully redistributable media when testing edits. Some advanced rendering, fonts, color transforms, captions, and native model features require separately obtained dependencies; a web build alone does not prove those paths.
 
+## Local macOS installation
+
+For a local community `.app`, see [the macOS installation guide](docs/MACOS.md).
+After installing the prerequisites, run `bash scripts/install-macos-community.sh`
+or double-click `Install-on-Mac.command` in a Git checkout. This builds on your Mac;
+it is not an official installer or a portable binary download.
+
 ## Contribute
 
 Start with the [public issue tracker](https://github.com/Hao0321/Editkin/issues), including tasks labeled `good first issue` or `help wanted`.
