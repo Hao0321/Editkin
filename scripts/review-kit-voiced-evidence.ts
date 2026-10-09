@@ -61,8 +61,9 @@ try {
   await client.connect(transport);
   if (framesOnly) {
     const next = await workflow({ command: "next" });
-    assert.deepEqual(next.ready.map((item: { step: string }) => item.step), ["keyframes:m01-clip-voiced"]);
-    const step = "keyframes:m01-clip-voiced";
+    const framePhase = "keyframes:";
+    const step = `${framePhase}m01-clip-voiced`;
+    assert.deepEqual(next.ready.map((item: { step: string }) => item.step), [step]);
     const claim = await workflow({ command: "claim", step });
     const batches = [], reviewedFrameIds: string[] = [];
     for (const [batchIndex, spec] of claim.instruction.request.calls.entries()) {
