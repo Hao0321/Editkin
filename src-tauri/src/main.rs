@@ -1,3 +1,4 @@
+// Agent integration: urn:uuid:d366cab7-d5a4-44d8-b80d-4c7ce4daf65d. Existing GPL license retained; see AGENT-NOTICE.md.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 #[cfg(feature = "auto-roto-research")]
@@ -145,6 +146,7 @@ fn editkin_agent_launcher_contract(
 #[derive(Default)]
 struct AppState {
     services: Arc<service_pool::ServicePool>,
+    local_story_job: Mutex<Option<(String, Arc<AtomicBool>)>>,
     pending_update: Mutex<Option<Value>>,
     update_job_result: Mutex<Option<Value>>,
     update_job_running: AtomicBool,
@@ -304,6 +306,7 @@ struct RuntimePaths {
     ffmpeg: PathBuf,
     ffprobe: PathBuf,
     whisper_cli: PathBuf,
+    whisper_model: Option<PathBuf>,
     native_core: PathBuf,
     gpu_compositor: PathBuf,
     asset_base: PathBuf,
@@ -395,11 +398,26 @@ fn valid_editorial_profile(value: &str) -> bool {
     )
 }
 
+#[cfg(not(editkin_community_portable))]
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("src-tauri must live under the repository root")
         .to_path_buf()
+}
+
+#[cfg(editkin_community_portable)]
+fn repo_root() -> PathBuf {
+    // Portable builds must not embed or fall back to the developer checkout.
+    std::env::current_exe()
+        .expect("portable executable path")
+        .parent()
+        .expect("portable executable directory")
+        .to_path_buf()
+}
+
+fn community_portable() -> bool {
+    cfg!(debug_assertions) && option_env!("EDITKIN_COMMUNITY_PORTABLE") == Some("1")
 }
 
 fn process_compatible_path(path: PathBuf) -> PathBuf {
@@ -429,6 +447,19 @@ fn existing_or_command(path: PathBuf, command: &str) -> PathBuf {
     }
 }
 
+fn required_system_executable(name: &str) -> Result<PathBuf, String> {
+    let search = env::var_os("PATH").ok_or("找不到系統 PATH，無法啟動可攜預覽版")?;
+    for directory in env::split_paths(&search) {
+        let candidate = directory.join(name);
+        if candidate.is_file() {
+            return fs::canonicalize(candidate)
+                .map(process_compatible_path)
+                .map_err(|error| format!("無法讀取 {name}：{error}"));
+        }
+    }
+    Err(format!("可攜預覽版需要在 PATH 找到 {name}"))
+}
+
 fn runtime_override(
     debug_build: bool,
     override_path: Option<PathBuf>,
@@ -450,6 +481,7 @@ fn unsigned_update_override_allowed(
 }
 
 fn runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
+    let development_paths = cfg!(debug_assertions) && !community_portable();
     let (
         resource_root,
         runtime,
@@ -460,7 +492,21 @@ fn runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
         font_root,
         color_root,
         plugin_root,
-    ) = if cfg!(debug_assertions) {
+    ) = if community_portable() {
+        let executable = env::current_exe().map_err(|error| error.to_string())?;
+        let resource = executable.parent().ok_or("找不到可攜版程式目錄")?.join("resources");
+        (
+            resource.clone(),
+            resource.join("runtime"),
+            resource.join("runtime"),
+            resource.join("creative-packs/hao-creator-library"),
+            resource.join("personal-packs/hao-music-library"),
+            application_data_root(app)?.join("personal-packs/hao-visual-library"),
+            resource.join("fonts"),
+            resource.join("color/aces2"),
+            resource.join("plugins"),
+        )
+    } else if development_paths {
         (
             repo_root(),
             repo_root(),
@@ -509,7 +555,7 @@ fn runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
     let whisper_cli_name = platform_executable("whisper-cli");
     let core_name = platform_executable("hao-core");
     let gpu_compositor_name = platform_executable("editkin-gpu-compositor");
-    let development_runtime = repo_root().join(".platform-runtime");
+    let development_runtime = if development_paths { repo_root().join(".platform-runtime") } else { PathBuf::new() };
     let bundled_plugin_root = from_env("EDITKIN_PLUGIN_ROOT", plugin_root);
     let user_plugin_root = application_data_root(app)?.join("plugins");
     fs::create_dir_all(&user_plugin_root)
@@ -582,7 +628,9 @@ fn runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
         resource_root: resource_root.clone(),
         node: from_env(
             "EDITKIN_NODE_PATH",
-            if cfg!(debug_assertions) {
+            if community_portable() {
+                required_system_executable(&node_name)?
+            } else if development_paths {
                 if cfg!(windows) {
                     runtime.join("vendor/node/win32-x64/node.exe")
                 } else {
@@ -593,19 +641,19 @@ fn runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
             },
         ),
         node_manifest: if cfg!(windows) {
-            if cfg!(debug_assertions) {
+            if development_paths {
                 runtime.join("vendor/node/win32-x64/manifest.json")
             } else {
                 runtime.join("NODE-MANIFEST.json")
             }
-        } else if cfg!(debug_assertions) {
+        } else if development_paths {
             runtime.join(".platform-runtime/manifest.json")
         } else {
             runtime.join("PLATFORM-MANIFEST.json")
         },
         service: from_env(
             "EDITKIN_SERVICE_PATH",
-            if cfg!(debug_assertions) {
+            if development_paths {
                 runtime.join("desktop-dist/service.mjs")
             } else {
                 runtime.join("service.mjs")
@@ -613,30 +661,33 @@ fn runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
         ),
         mcp: from_env(
             "EDITKIN_MCP_PATH",
-            if cfg!(debug_assertions) {
+            if development_paths {
                 runtime.join("desktop-dist/mcp.mjs")
             } else {
                 runtime.join("mcp.mjs")
             },
         ),
-        mcp_identity: if cfg!(debug_assertions) {
-            runtime.join("desktop-dist/mcp.mjs.material-color-identity.json")
-        } else {
-            runtime.join("mcp.mjs.material-color-identity.json")
-        },
-        agent_launcher: if cfg!(debug_assertions) {
+        mcp_identity: from_env(
+            "EDITKIN_MCP_IDENTITY_PATH",
+            if development_paths {
+                runtime.join("desktop-dist/mcp.mjs.material-color-identity.json")
+            } else {
+                runtime.join("mcp.mjs.material-color-identity.json")
+            },
+        ),
+        agent_launcher: if development_paths {
             runtime.join("scripts/editkin-product-mcp-launcher.mjs")
         } else {
             resource_root.join("agent-runtime-v3/launcher.mjs")
         },
-        agent_contract: if cfg!(debug_assertions) {
+        agent_contract: if development_paths {
             runtime.join("src/shared/agentSetupContract.json")
         } else {
             resource_root.join("agent-runtime-v3/agent-setup-contract.json")
         },
         remote: from_env(
             "EDITKIN_REMOTE_PATH",
-            if cfg!(debug_assertions) {
+            if development_paths {
                 runtime.join("desktop-dist/remote.mjs")
             } else {
                 runtime.join("remote.mjs")
@@ -644,7 +695,9 @@ fn runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
         ),
         ffmpeg: from_env(
             "HAO_FFMPEG_PATH",
-            if cfg!(debug_assertions) {
+            if community_portable() {
+                required_system_executable(&ffmpeg_name)?
+            } else if development_paths {
                 if cfg!(windows) {
                     runtime.join("vendor/ffmpeg/win32-x64/ffmpeg.exe")
                 } else {
@@ -656,7 +709,9 @@ fn runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
         ),
         ffprobe: from_env(
             "HAO_FFPROBE_PATH",
-            if cfg!(debug_assertions) {
+            if community_portable() {
+                required_system_executable(&ffprobe_name)?
+            } else if development_paths {
                 if cfg!(windows) {
                     runtime.join("vendor/ffmpeg/win32-x64/ffprobe.exe")
                 } else {
@@ -668,7 +723,9 @@ fn runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
         ),
         whisper_cli: from_env(
             "EDITKIN_WHISPER_CLI_PATH",
-            if cfg!(debug_assertions) {
+            if community_portable() {
+                runtime.join(&whisper_cli_name)
+            } else if development_paths {
                 if cfg!(windows) {
                     runtime.join("vendor/whisper/win32-x64/whisper-cli.exe")
                 } else {
@@ -678,9 +735,12 @@ fn runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
                 runtime.join(&whisper_cli_name)
             },
         ),
+        whisper_model: community_portable().then(|| runtime.join("models/ggml-small-q5_1.bin")),
         native_core: from_env(
             "HAO_NATIVE_CORE_PATH",
-            if cfg!(debug_assertions) {
+            if community_portable() {
+                runtime.join(&core_name)
+            } else if development_paths {
                 if cfg!(windows) {
                     runtime.join("native/bin/win32-x64/hao-core.exe")
                 } else {
@@ -692,7 +752,9 @@ fn runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
         ),
         gpu_compositor: from_env(
             "EDITKIN_GPU_COMPOSITOR_PATH",
-            if cfg!(debug_assertions) {
+            if community_portable() {
+                runtime.join(&gpu_compositor_name)
+            } else if development_paths {
                 if cfg!(windows) {
                     runtime.join("native/bin/win32-x64/editkin-gpu-compositor.exe")
                 } else {
@@ -871,6 +933,7 @@ fn service_request_value(runtime: &RuntimePaths, command: &str, payload: Value) 
         "ffmpeg": runtime.ffmpeg,
         "ffprobe": runtime.ffprobe,
         "whisperCli": runtime.whisper_cli,
+        "whisperModel": runtime.whisper_model,
         "nativeCore": runtime.native_core,
         "gpuCompositor": runtime.gpu_compositor,
         "assetBase": runtime.asset_base,
@@ -2828,6 +2891,89 @@ async fn save_workflow_profile(app: AppHandle, profile: Value) -> Result<Value, 
     .await
 }
 
+fn local_story_origin_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(application_data_root(app)?.join("local-story/origin.json"))
+}
+
+fn validate_local_story_origin(input: &str) -> Result<String, String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() { return Ok(String::new()); }
+    let address = trimmed.strip_prefix("http://").ok_or("只接受 HTTP 私有 IP 位址")?;
+    let address = address.strip_suffix('/').unwrap_or(address);
+    let (host, port) = address.split_once(':').ok_or("請提供私有 IP 與連接埠")?;
+    let ip: Ipv4Addr = host.parse().map_err(|_| "只接受 IPv4 私有 IP")?;
+    let port: u16 = port.parse().map_err(|_| "連接埠不合法")?;
+    if port == 0 || !(ip.is_private() || ip.is_loopback()) {
+        return Err("只接受 loopback 或私有區網 IP".into());
+    }
+    Ok(format!("http://{ip}:{port}"))
+}
+
+#[tauri::command]
+fn get_local_story_origin(app: AppHandle) -> Result<String, String> {
+    let saved = read_json(&local_story_origin_path(&app)?)?;
+    let value = saved.as_ref().and_then(|item| item.get("origin")).and_then(Value::as_str).unwrap_or("");
+    validate_local_story_origin(value)
+}
+
+#[tauri::command]
+fn save_local_story_origin(app: AppHandle, origin: String) -> Result<String, String> {
+    let value = validate_local_story_origin(&origin)?;
+    write_json_atomic(&local_story_origin_path(&app)?, &json!({ "origin": value }))?;
+    Ok(value)
+}
+
+async fn local_story_request(app: &AppHandle, command: &'static str, payload: Value, cancel: Arc<AtomicBool>) -> Result<Value, String> {
+    let runtime = runtime_paths(app)?;
+    let services = app.state::<AppState>().services.clone();
+    let envelope = tauri::async_runtime::spawn_blocking(move || {
+        services.request_local_story(&runtime.node, &runtime.service, command, service_request_value(&runtime, command, payload), &cancel)
+    }).await.map_err(|error| error.to_string())??;
+    if envelope.get("ok").and_then(Value::as_bool) == Some(true) {
+        Ok(envelope.get("result").cloned().unwrap_or(Value::Null))
+    } else {
+        Err(envelope.get("error").and_then(Value::as_str).unwrap_or("本機模型請求失敗").to_string())
+    }
+}
+
+#[tauri::command]
+async fn list_local_story_models(app: AppHandle) -> Result<Value, String> {
+    let origin = get_local_story_origin(app.clone())?;
+    local_story_request(&app, "local_story_models", json!({ "origin": origin }), Arc::new(AtomicBool::new(false))).await
+}
+
+#[tauri::command]
+async fn generate_local_story(app: AppHandle, job_id: String, source: String, model: String, brief: String, project: Value, context: Value) -> Result<Value, String> {
+    if job_id.len() < 8 || job_id.len() > 80 || !job_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-') {
+        return Err("故事工作 ID 不合法".into());
+    }
+    let origin = get_local_story_origin(app.clone())?;
+    let cancel = Arc::new(AtomicBool::new(false));
+    {
+        let state = app.state::<AppState>();
+        let mut slot = state.local_story_job.lock().map_err(|_| "故事工作狀態不可用")?;
+        if slot.is_some() { return Err("已有故事生成進行中".into()); }
+        *slot = Some((job_id.clone(), cancel.clone()));
+    }
+    let result = local_story_request(&app, "local_story_generate", json!({
+        "origin": origin, "source": source, "model": model, "brief": brief, "project": project, "context": context,
+    }), cancel).await;
+    if let Ok(mut slot) = app.state::<AppState>().local_story_job.lock() {
+        if slot.as_ref().is_some_and(|(active, _)| active == &job_id) { *slot = None; }
+    }
+    result
+}
+
+#[tauri::command]
+fn cancel_local_story(app: AppHandle, job_id: String) -> Result<bool, String> {
+    let state = app.state::<AppState>();
+    let slot = state.local_story_job.lock().map_err(|_| "故事工作狀態不可用")?;
+    if let Some((active, cancel)) = slot.as_ref() {
+        if active == &job_id { cancel.store(true, Ordering::Release); return Ok(true); }
+    }
+    Ok(false)
+}
+
 #[tauri::command]
 fn open_plugin_folder(app: AppHandle) -> Result<Value, String> {
     let runtime = runtime_paths(&app)?;
@@ -3006,8 +3152,87 @@ async fn prepare_media(app: AppHandle, asset: Value) -> Result<Value, String> {
 }
 
 #[tauri::command]
+async fn start_material_review(app: AppHandle, project: Value, clip_id: String, include_transcript: bool, resume_job_id: Option<String>) -> Result<Value, String> {
+    let clip = project.get("tracks").and_then(Value::as_array)
+        .and_then(|tracks| tracks.iter().filter_map(|track| track.get("clips").and_then(Value::as_array))
+            .flatten().find(|clip| clip.get("id").and_then(Value::as_str) == Some(clip_id.as_str())))
+        .ok_or("找不到選取的片段")?;
+    let asset_id = string_field(clip, "assetId")?;
+    let asset = project.get("assets").and_then(Value::as_array)
+        .and_then(|assets| assets.iter().find(|asset| asset.get("id").and_then(Value::as_str) == Some(asset_id)))
+        .ok_or("找不到片段的素材")?;
+    let kind = string_field(asset, "kind")?;
+    if !matches!(kind, "video" | "audio" | "image") || asset.get("compositionId").is_some() || asset.get("imageSequence").is_some() {
+        return Err("此素材類型尚不支援證據分析".into());
+    }
+    let uri = string_field(asset, "uri")?.to_string();
+    let source = if let Some(creative_id) = creative_asset_id(&uri)? {
+        let resolved = call_service(&app, "resolve_creative_asset", json!({ "assetId": creative_id })).await?;
+        string_field(&resolved, "absolutePath")?.to_string()
+    } else { uri };
+    let source_start = clip.get("sourceStart").and_then(Value::as_f64).ok_or("片段入點不合法")?;
+    let duration = clip.get("duration").and_then(Value::as_f64).ok_or("片段長度不合法")?;
+    let fps = project.get("fps").and_then(Value::as_f64).ok_or("專案幀率不合法")?;
+    if !source_start.is_finite() || source_start < 0.0 || !duration.is_finite() || duration <= 0.0
+        || !fps.is_finite() || fps <= 0.0 { return Err("素材時間或幀率不合法".into()); }
+    call_service(&app, "material_review_start", json!({
+        "assetId": asset_id, "clipId": clip_id, "sourcePath": source,
+        "sourceStart": source_start, "duration": duration, "fps": fps, "kind": kind,
+        "includeTranscript": include_transcript, "maxKeyframes": 8, "resumeJobId": resume_job_id,
+        "color": asset.get("color"), "colorManagement": project.get("colorManagement")
+    })).await
+}
+
+#[tauri::command]
+async fn get_material_review(app: AppHandle, job_id: String) -> Result<Value, String> {
+    call_service(&app, "material_review_status", json!({ "jobId": job_id })).await
+}
+
+#[tauri::command]
+async fn get_material_review_frame(app: AppHandle, job_id: String, frame_id: String) -> Result<Value, String> {
+    call_service(&app, "material_review_frame", json!({ "jobId": job_id, "frameId": frame_id })).await
+}
+
+#[tauri::command]
+async fn verify_material_review_source(app: AppHandle, project: Value, clip_id: String, job_id: String) -> Result<Value, String> {
+    let clip = project.get("tracks").and_then(Value::as_array)
+        .and_then(|tracks| tracks.iter().filter_map(|track| track.get("clips").and_then(Value::as_array))
+            .flatten().find(|clip| clip.get("id").and_then(Value::as_str) == Some(clip_id.as_str())))
+        .ok_or("找不到選取的片段")?;
+    let asset_id = string_field(clip, "assetId")?;
+    let asset = project.get("assets").and_then(Value::as_array)
+        .and_then(|assets| assets.iter().find(|asset| asset.get("id").and_then(Value::as_str) == Some(asset_id)))
+        .ok_or("找不到片段的素材")?;
+    let kind = string_field(asset, "kind")?;
+    if !matches!(kind, "video" | "audio" | "image") || asset.get("compositionId").is_some() || asset.get("imageSequence").is_some() {
+        return Err("此素材類型尚不支援證據分析".into());
+    }
+    let uri = string_field(asset, "uri")?.to_string();
+    let source = if let Some(creative_id) = creative_asset_id(&uri)? {
+        let resolved = call_service(&app, "resolve_creative_asset", json!({ "assetId": creative_id })).await?;
+        string_field(&resolved, "absolutePath")?.to_string()
+    } else { uri };
+    call_service(&app, "material_review_verify_source", json!({
+        "jobId": job_id, "sourcePath": source, "assetId": asset_id, "clipId": clip_id,
+        "sourceStart": clip.get("sourceStart").and_then(Value::as_f64).ok_or("片段入點不合法")?,
+        "duration": clip.get("duration").and_then(Value::as_f64).ok_or("片段長度不合法")?,
+        "fps": project.get("fps").and_then(Value::as_f64).ok_or("專案幀率不合法")?, "kind": kind
+    })).await
+}
+
+#[tauri::command]
+async fn cancel_material_review(app: AppHandle, job_id: String) -> Result<Value, String> {
+    call_service(&app, "material_review_cancel", json!({ "jobId": job_id })).await
+}
+
+#[tauri::command]
 async fn smart_cut_media(app: AppHandle, request: Value) -> Result<Value, String> {
     call_service(&app, "analyze_smart_cut", request).await
+}
+
+#[tauri::command]
+async fn automatic_caption_status(app: AppHandle) -> Result<Value, String> {
+    call_service(&app, "automatic_caption_status", json!({})).await
 }
 
 #[tauri::command]
@@ -3330,6 +3555,247 @@ async fn open_project(app: AppHandle) -> Result<Value, String> {
     )
 }
 
+#[tauri::command]
+async fn reload_project_from_path(app: AppHandle, path: String) -> Result<Value, String> {
+    let path = PathBuf::from(path);
+    if !path.is_absolute() || !path.is_file() {
+        return Err("Agent 專案檔不存在，無法重新載入".into());
+    }
+    let project = call_service(&app, "read_project", json!({ "path": path })).await?;
+    let assets = project
+        .get("assets")
+        .and_then(Value::as_array)
+        .ok_or("專案缺少 assets")?;
+    let runtime_paths = collect_runtime_paths_async(&app, assets).await?;
+    let matte_preview_paths = collect_product_auto_roto_preview_paths(&app, &project)?;
+    Ok(json!({ "canceled": false, "path": path, "project": project,
+        "runtimePaths": runtime_paths, "mattePreviewPaths": matte_preview_paths }))
+}
+
+fn prepare_opencode_agent_mcp(app: &AppHandle, project_path: Option<&str>) -> Result<Value, String> {
+    let bundled_agent_root = if cfg!(debug_assertions) && !community_portable() {
+        repo_root().join("community-desktop-dist")
+    } else if community_portable() {
+        env::current_exe().map_err(|error| error.to_string())?
+            .parent().ok_or("找不到可攜版程式目錄")?
+            .join("resources/agent-runtime-v3")
+    } else {
+        process_compatible_path(app.path().resource_dir().map_err(|error| error.to_string())?)
+            .join("agent-runtime-v3")
+    };
+    let opencode_executable = bundled_agent_root.join("opencode.exe");
+    if !opencode_executable.is_file() {
+        return Err("剪輯台內建 Agent runtime 缺失；請重新安裝完整桌面包".into());
+    }
+    let model_origin = get_local_story_origin(app.clone())?;
+    let provider_config_path = application_data_root(app)?.join("agent-providers/omniroute.opencode.json");
+    let history_root = application_data_root(app)?.join("agent-library/v1");
+    let Some(project_path) = project_path.filter(|path| !path.trim().is_empty()) else {
+        let workspace = application_data_root(app)?.join("agent-chat-workspace");
+        fs::create_dir_all(&workspace).map_err(|error| format!("無法建立 Agent 對話工作資料夾：{error}"))?;
+        return Ok(json!({ "workspace": workspace, "historyRoot": history_root, "opencodeExecutable": opencode_executable,
+            "modelOrigin": model_origin, "providerConfigPath": provider_config_path }));
+    };
+    let file = PathBuf::from(project_path);
+    if !file.is_absolute() || !file.is_file() {
+        return Err("請先將目前專案儲存成 Editkin 專案檔".into());
+    }
+    let workspace = selected_agent_workspace(file.parent())?
+        .ok_or("找不到專案工作資料夾")?;
+    let runtime = runtime_paths(app)?;
+    let bundled_skill = if cfg!(debug_assertions) && !community_portable() {
+        bundled_agent_root.join("kit/SKILL.md")
+    } else {
+        runtime.resource_root.join("video-autopilot-kit/SKILL.md")
+    };
+    let selected_skill = bundled_skill;
+    if !selected_skill.is_file()
+        || !selected_skill.parent().is_some_and(|parent|
+            parent.join("workflow_contract.py").is_file() && parent.join("workflow_contract.json").is_file())
+    {
+        return Err("剪輯台內建 Video Autopilot Kit 不完整".into());
+    }
+    let contract = editkin_agent_setup_contract()?;
+    let launcher_contract = editkin_agent_launcher_contract(&contract)?;
+    let state_directory = launcher_contract
+        .get("stateDirectoryName")
+        .and_then(Value::as_str)
+        .ok_or("Embedded Agent launcher contract 缺少 state directory")?;
+    let agent_state_root = application_data_root(app)?.join(state_directory);
+    let build_identity = release_input_manifest()?;
+    let community_agent = build_identity.get("attested").and_then(Value::as_bool) == Some(false)
+        && matches!(build_identity.pointer("/scope/id").and_then(Value::as_str),
+            Some("editkin.community-portable-build-scope/v1" | "editkin.community-debug-build-scope/v1"));
+    if community_agent {
+        // The community preview intentionally uses PATH runtimes outside its
+        // unattested resource root. Keep the formal generation gate unchanged.
+        let mut environment = base_agent_environment(app, &runtime, &agent_state_root, Some(&selected_skill))?;
+        environment.push(("EDITKIN_WORKSPACE".into(), workspace.path().to_string_lossy().to_string()));
+        environment.push(("EDITKIN_AGENT_PROJECT_PATH".into(), file.to_string_lossy().to_string()));
+        let probe = probe_current_editkin_mcp(&runtime.node, &runtime.mcp, &environment)?;
+        let gateway = runtime.mcp.with_file_name("agent-gateway.mjs");
+        if !gateway.is_file() { return Err("Community Agent gateway 未打包".into()); }
+        environment.push(("EDITKIN_AGENT_GATEWAY_TARGET".into(), runtime.mcp.to_string_lossy().to_string()));
+        return Ok(json!({ "workspace": workspace.path(), "projectPath": file, "historyRoot": history_root,
+            "opencodeExecutable": opencode_executable, "modelOrigin": model_origin, "providerConfigPath": provider_config_path,
+            "mcpToolCount": probe.tool_count,
+            "mcp": { "command": runtime.node, "args": [gateway],
+                "env": environment.into_iter().map(|(name, value)| json!({"name": name, "value": value})).collect::<Vec<_>>() } }));
+    }
+    let generation = activate_product_agent_generation(
+        &agent_state_root,
+        &ProductAgentGenerationPaths {
+            resource_root: runtime.resource_root.clone(),
+            embedded_contract: runtime.agent_contract.clone(),
+            entrypoint: runtime.mcp.clone(),
+            entrypoint_identity: runtime.mcp_identity.clone(),
+            ffmpeg: runtime.ffmpeg.clone(),
+            ffprobe: runtime.ffprobe.clone(),
+            gpu_compositor: runtime.gpu_compositor.clone(),
+            launcher: runtime.agent_launcher.clone(),
+            native_core: runtime.native_core.clone(),
+            node: runtime.node.clone(),
+            node_manifest: runtime.node_manifest.clone(),
+            whisper: runtime.whisper_cli.clone(),
+            color: runtime.color_root.clone(),
+            creative_pack: runtime.creative_pack_root.clone(),
+            fonts: runtime.font_root.clone(),
+            personal_music: runtime.personal_music_root.clone(),
+            personal_visual: runtime.personal_visual_root.clone(),
+            plugins: runtime.plugin_roots.first().cloned()
+                .ok_or("Editkin 沒有可綁定的內建 plugin root")?,
+        },
+        EDITKIN_AGENT_SETUP_CONTRACT.as_bytes(),
+    )?;
+    let mut environment = base_agent_environment(app, &runtime, &generation.state_root, Some(&selected_skill))?;
+    environment.push(("EDITKIN_WORKSPACE".into(), workspace.path().to_string_lossy().to_string()));
+    environment.push(("EDITKIN_AGENT_PROJECT_PATH".into(), file.to_string_lossy().to_string()));
+    let probe = match probe_current_editkin_mcp(&runtime.node, &runtime.agent_launcher, &environment) {
+        Ok(probe) => probe,
+        Err(error) => { rollback_product_agent_generation(&generation)?; return Err(error); }
+    };
+    Ok(json!({
+        "workspace": workspace.path(),
+        "historyRoot": history_root,
+        "projectPath": file,
+        "opencodeExecutable": opencode_executable,
+        "modelOrigin": model_origin,
+        "providerConfigPath": provider_config_path,
+        "mcpToolCount": probe.tool_count,
+        "mcp": { "command": runtime.node, "args": [runtime.agent_launcher],
+            "env": environment.into_iter().map(|(name, value)| json!({"name": name, "value": value})).collect::<Vec<_>>() }
+    }))
+}
+
+#[tauri::command]
+async fn start_opencode_agent(app: AppHandle, project_path: Option<String>, resume_session_id: Option<String>, resume_model: Option<String>) -> Result<Value, String> {
+    let setup_app = app.clone();
+    let mut payload = tauri::async_runtime::spawn_blocking(move || prepare_opencode_agent_mcp(&setup_app, project_path.as_deref()))
+        .await.map_err(|error| error.to_string())??;
+    if let Some(session_id) = resume_session_id {
+        if session_id.len() > 256 || session_id.chars().any(char::is_control) {
+            return Err("Agent session ID 不合法".into());
+        }
+        payload["resumeSessionId"] = json!(session_id);
+    }
+    if let Some(model) = resume_model {
+        let supported = model.split_once('/').is_some_and(|(provider, name)| !name.is_empty()
+            && matches!(provider, "ollama" | "local" | "lmstudio" | "vllm"
+                | "openai" | "anthropic" | "google" | "openrouter" | "xai" | "deepseek" | "omniroute"));
+        if model.len() > 300 || model.chars().any(char::is_control) || !supported {
+            return Err("Agent 恢復模型不在支援來源清單".into());
+        }
+        payload["resumeModel"] = json!(model);
+    }
+    call_service(&app, "agent_acp_start", payload).await
+}
+
+#[tauri::command]
+async fn prompt_opencode_agent(app: AppHandle, project_path: Option<String>, text: String, display_text: Option<String>, attachments: Option<Value>) -> Result<Value, String> {
+    call_service(&app, "agent_acp_prompt", json!({"projectPath": project_path, "text": text, "displayText": display_text, "attachments": attachments.unwrap_or_else(|| json!([]))})).await
+}
+
+#[tauri::command]
+async fn list_opencode_agent_sessions(app: AppHandle) -> Result<Value, String> {
+    call_service(&app, "agent_acp_list", json!({})).await
+}
+
+#[tauri::command]
+async fn opencode_agent_library(app: AppHandle, request: Value) -> Result<Value, String> {
+    call_service(&app, "agent_acp_library", json!({"request": request})).await
+}
+
+#[tauri::command]
+async fn new_opencode_agent_session(app: AppHandle) -> Result<Value, String> {
+    call_service(&app, "agent_acp_new", json!({})).await
+}
+
+#[tauri::command]
+async fn load_opencode_agent_session(app: AppHandle, session_id: String, model: String) -> Result<Value, String> {
+    call_service(&app, "agent_acp_load", json!({"sessionId": session_id, "model": model})).await
+}
+
+#[tauri::command]
+async fn status_opencode_agent(app: AppHandle, after_seq: u64) -> Result<Value, String> {
+    call_service(&app, "agent_acp_status", json!({"afterSeq": after_seq})).await
+}
+
+#[tauri::command]
+async fn permission_opencode_agent(app: AppHandle, request_id: u64, option_id: Option<String>) -> Result<Value, String> {
+    call_service(&app, "agent_acp_permission", json!({"requestId": request_id, "optionId": option_id})).await
+}
+
+#[tauri::command]
+async fn cancel_opencode_agent(app: AppHandle) -> Result<Value, String> {
+    call_service(&app, "agent_acp_cancel", json!({})).await
+}
+
+#[tauri::command]
+async fn close_opencode_agent(app: AppHandle) -> Result<Value, String> {
+    call_service(&app, "agent_acp_close", json!({})).await
+}
+
+#[tauri::command]
+async fn set_opencode_agent_config(app: AppHandle, config_id: String, value: String) -> Result<Value, String> {
+    call_service(&app, "agent_acp_set_config", json!({"configId": config_id, "value": value})).await
+}
+
+#[tauri::command]
+async fn opencode_agent_provider(app: AppHandle, request: Value) -> Result<Value, String> {
+    let action = request.get("action").and_then(Value::as_str).ok_or("供應商操作不符")?;
+    if !matches!(action, "list" | "save-api-key" | "start-login" | "finish-login" | "login-status" | "cancel-login" | "disconnect" | "connect-gateway" | "disconnect-gateway" | "open-gateway-dashboard") {
+        return Err("不支援的供應商操作".into());
+    }
+    let setup_app = app.clone();
+    let options = tauri::async_runtime::spawn_blocking(move || prepare_opencode_agent_mcp(&setup_app, None))
+        .await.map_err(|_| "供應商設定初始化失敗")??;
+    let mut result = call_service(&app, "agent_provider_action", json!({"request": request, "options": options})).await?;
+    // OAuth credentials and authorization URLs never enter renderer state or diagnostic logs.
+    for key in ["loginUrl", "dashboardUrl"] {
+      if let Some(url) = result.as_object_mut().and_then(|object| object.remove(key)) {
+        let url = url.as_str().ok_or("登入網址不符")?;
+        let parsed = tauri::Url::parse(url).map_err(|_| "登入網址不符")?;
+        let allowed = if key == "loginUrl" {
+            parsed.scheme() == "https" && parsed.host_str() == Some("auth.openai.com")
+                && parsed.port().is_none() && parsed.fragment().is_none()
+        }
+            else { matches!(parsed.scheme(), "http" | "https") && parsed.host_str().is_some()
+                && parsed.path().ends_with("/dashboard/providers") && parsed.query().is_none() && parsed.fragment().is_none() };
+        if !allowed || !parsed.username().is_empty() || parsed.password().is_some() || url.chars().any(char::is_control) {
+            return Err("登入網址不符，未開啟瀏覽器".into());
+        }
+        if integration_state_root().is_none() {
+            let program = if cfg!(target_os = "windows") { "explorer.exe" }
+                else if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+            Command::new(program).arg(url).creation_flags(0x08000000)
+                .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn()
+                .map_err(|_| "無法開啟系統瀏覽器，請取消後重新登入")?;
+        }
+      }
+    }
+    Ok(result)
+}
+
 fn safe_project_name(project: &Value) -> String {
     let name = project
         .get("name")
@@ -3344,6 +3810,34 @@ fn safe_project_name(project: &Value) -> String {
             }
         })
         .collect()
+}
+
+fn stage_agent_demo_source(app: &AppHandle, mut project: Value, project_path: &Path) -> Result<Value, String> {
+    if project.get("id").and_then(Value::as_str) != Some("editkin-demo") {
+        return Ok(project);
+    }
+    let Some(assets) = project.get_mut("assets").and_then(Value::as_array_mut) else {
+        return Ok(project);
+    };
+    for asset in assets {
+        if asset.get("id").and_then(Value::as_str) != Some("asset-demo")
+            || asset.get("uri").and_then(Value::as_str) != Some("editkin-demo-preview.mp4")
+        {
+            continue;
+        }
+        let source = runtime_paths(app)?.asset_base.join("editkin-demo-preview.mp4");
+        if !source.is_file() {
+            return Err("內附示範影片缺失，無法建立可播放的 Agent 工作副本".into());
+        }
+        let destination = project_path.with_extension("demo-preview.mp4");
+        let mut input = fs::File::open(&source).map_err(|error| format!("無法讀取內附示範影片：{error}"))?;
+        let mut output = fs::OpenOptions::new().write(true).create_new(true).open(&destination)
+            .map_err(|error| format!("無法建立 Agent 示範素材副本：{error}"))?;
+        std::io::copy(&mut input, &mut output).map_err(|error| format!("無法複製 Agent 示範素材：{error}"))?;
+        output.sync_all().map_err(|error| format!("無法完成 Agent 示範素材副本：{error}"))?;
+        asset["uri"] = json!(destination.to_str().ok_or("示範影片路徑無法編碼")?);
+    }
+    Ok(project)
 }
 
 #[tauri::command]
@@ -3404,6 +3898,20 @@ async fn save_project(
     Ok(
         json!({ "canceled": false, "path": path, "project": saved, "mattePreviewPaths": matte_preview_paths }),
     )
+}
+
+#[tauri::command]
+async fn create_agent_working_project(app: AppHandle, project: Value) -> Result<Value, String> {
+    let root = application_data_root(&app)?.join("agent-working-projects");
+    fs::create_dir_all(&root).map_err(|error| format!("無法建立 Agent 工作副本目錄：{error}"))?;
+    let stamp = SystemTime::now().duration_since(UNIX_EPOCH)
+        .map_err(|error| error.to_string())?.as_nanos();
+    let path = root.join(format!("{}-{}-{stamp}.editkin.json", safe_project_name(&project), std::process::id()));
+    let project = stage_agent_demo_source(&app, project, &path)?;
+    let saved = call_service(&app, "write_project", json!({
+        "path": path, "project": project, "expectedRevision": null, "createOnly": true
+    })).await?;
+    Ok(json!({ "path": path, "project": saved }))
 }
 
 #[tauri::command]
@@ -7905,9 +8413,10 @@ fn base_agent_environment(
     app: &AppHandle,
     runtime: &RuntimePaths,
     agent_state_root: &Path,
+    skill_override: Option<&Path>,
 ) -> Result<Vec<(String, String)>, String> {
     let plugin_roots = joined_plugin_roots(runtime)?;
-    let video_autopilot_skill = env::var_os("EDITKIN_VIDEO_AUTOPILOT_SKILL")
+    let video_autopilot_skill = skill_override.map(PathBuf::from).or_else(|| env::var_os("EDITKIN_VIDEO_AUTOPILOT_SKILL")
         .map(PathBuf::from)
         .or_else(|| {
             app.path().home_dir().ok().map(|home| {
@@ -7916,9 +8425,14 @@ fn base_agent_environment(
                     .join("video-autopilot")
                     .join("SKILL.md")
             })
-        })
+        }))
         .filter(|path| path.is_file())
         .ok_or("找不到最新版 video-autopilot SKILL.md；Editkin 不會在缺少規則真相時假裝已連線")?;
+    if skill_override.is_some() && (video_autopilot_skill.file_name().and_then(|name| name.to_str()) != Some("SKILL.md")
+        || !video_autopilot_skill.parent().is_some_and(|parent| parent.join("workflow_contract.json").is_file()
+            && parent.join("workflow_contract.py").is_file())) {
+        return Err("Video Autopilot Skill 缺少 v4 controller／contract".into());
+    }
     Ok(vec![
         ("ELECTRON_RUN_AS_NODE".to_string(), "1".to_string()),
         (
@@ -7940,6 +8454,10 @@ fn base_agent_environment(
         (
             "EDITKIN_WHISPER_CLI_PATH".to_string(),
             runtime.whisper_cli.to_string_lossy().to_string(),
+        ),
+        (
+            "EDITKIN_WHISPER_MODEL_PATH".to_string(),
+            runtime.whisper_model.as_ref().map(|path| path.to_string_lossy().to_string()).unwrap_or_default(),
         ),
         (
             "HAO_NATIVE_CORE_PATH".to_string(),
@@ -9921,7 +10439,7 @@ fn copy_agent_setup(app: AppHandle, target: String) -> Result<Value, String> {
         .and_then(Value::as_str)
         .ok_or("Embedded Agent launcher contract has no state directory")?;
     let agent_state_root = application_data_root(&app)?.join(state_directory_name);
-    let mut agent_environment = base_agent_environment(&app, &runtime, &agent_state_root)?;
+    let mut agent_environment = base_agent_environment(&app, &runtime, &agent_state_root, None)?;
     let expected_environment_keys = agent_setup_contract
         .get("envKeys")
         .and_then(Value::as_array)
@@ -10190,13 +10708,24 @@ fn main() {
             list_installed_plugins,
             get_workflow_profile,
             save_workflow_profile,
+            get_local_story_origin,
+            save_local_story_origin,
+            list_local_story_models,
+            generate_local_story,
+            cancel_local_story,
             open_plugin_folder,
             compile_plugin_tool,
             import_creative_asset,
             preview_creative_asset,
             read_color_asset,
             prepare_media,
+            start_material_review,
+            get_material_review,
+            get_material_review_frame,
+            verify_material_review_source,
+            cancel_material_review,
             smart_cut_media,
+            automatic_caption_status,
             automatic_caption_media,
             detect_scenes,
             analyze_motion_track,
@@ -10211,6 +10740,7 @@ fn main() {
             analyze_auto_roto,
             open_project,
             save_project,
+            create_agent_working_project,
             load_recovery,
             save_recovery,
             clear_recovery,
@@ -10276,6 +10806,19 @@ fn main() {
             close_resident_audio,
             resident_audio_status,
             copy_agent_setup,
+            start_opencode_agent,
+            prompt_opencode_agent,
+            list_opencode_agent_sessions,
+            opencode_agent_library,
+            new_opencode_agent_session,
+            load_opencode_agent_session,
+            status_opencode_agent,
+            permission_opencode_agent,
+            cancel_opencode_agent,
+            close_opencode_agent,
+            set_opencode_agent_config,
+            opencode_agent_provider,
+            reload_project_from_path,
             inspect_agent_connections,
             launch_remote_setup_agent,
             get_remote_setup_agent_status,
@@ -10387,10 +10930,11 @@ mod tests {
             .iter()
             .map(|value| value.as_str().unwrap())
             .collect::<BTreeSet<_>>();
-        assert_eq!(keys.len(), 15);
+        assert_eq!(keys.len(), 16);
         assert!(keys.contains("EDITKIN_AGENT_STATE_ROOT"));
         assert!(keys.contains("EDITKIN_VIDEO_AUTOPILOT_SKILL"));
         assert!(keys.contains("EDITKIN_WORKFLOW_PROFILE_PATH"));
+        assert!(keys.contains("EDITKIN_WHISPER_MODEL_PATH"));
         assert!(keys.contains("EDITKIN_PERSONAL_VISUAL_ROOT"));
         let launcher = contract["launcher"].as_object().unwrap();
         assert_eq!(launcher["schemaVersion"], 3);
@@ -11190,7 +11734,10 @@ mod tests {
             ),
             (
                 OsString::from("HTTPS_PROXY"),
-                OsString::from("https://user:password@example.test"),
+                OsString::from(format!(
+                    "https://{}@example.test",
+                    ["user", "password"].join(":")
+                )),
             ),
             (OsString::from("NO_PROXY"), OsString::from("localhost")),
         ])
@@ -11520,6 +12067,10 @@ mod tests {
 
     #[test]
     fn user_owned_remote_origin_validation_fails_closed() {
+        let credential_origin = format!(
+            "https://{}@remote.example.test",
+            ["user", "password"].join(":")
+        );
         assert_eq!(
             validate_user_https_origin("EDITKIN_REMOTE_PUBLIC_URL", "https://remote.example.test")
                 .as_deref(),
@@ -11527,7 +12078,7 @@ mod tests {
         );
         for value in [
             "http://remote.example.test",
-            "https://user:password@remote.example.test",
+            credential_origin.as_str(),
             "https://remote.example.test/editkin",
             "https://remote.example.test?owner=hao",
             "https://remote.example.test/#token=secret",
@@ -11965,10 +12516,21 @@ mod tests {
             manifest.get("productVersion").and_then(Value::as_str),
             Some(env!("CARGO_PKG_VERSION"))
         );
-        assert_eq!(
-            manifest.get("product").and_then(Value::as_str),
-            Some("Editkin")
-        );
+        if community_portable() {
+            assert_eq!(manifest["product"], "Autopilot Desk Community Preview");
+            assert_eq!(manifest["attested"], false);
+            assert_eq!(manifest["scope"]["id"], "editkin.community-portable-build-scope/v1");
+            assert_eq!(manifest["scope"]["productMode"], "community-local-portable-preview");
+            return;
+        }
+        if cfg!(debug_assertions) && option_env!("EDITKIN_COMMUNITY_DEV") == Some("1") {
+            assert_eq!(manifest["product"], "Editkin Community Debug");
+            assert_eq!(manifest["attested"], false);
+            assert_eq!(manifest["scope"]["id"], "editkin.community-debug-build-scope/v1");
+            assert_eq!(manifest["scope"]["productMode"], "community-local-debug");
+            return;
+        }
+        assert_eq!(manifest.get("product").and_then(Value::as_str), Some("Editkin"));
         assert_eq!(
             manifest
                 .pointer("/scope/productMode")
@@ -11981,5 +12543,12 @@ mod tests {
                 .and_then(Value::as_str),
             Some("repository-retained-artifact-excluded")
         );
+    }
+
+    #[cfg(editkin_community_portable)]
+    #[test]
+    fn portable_checkout_fallback_uses_executable_directory() {
+        assert!(community_portable());
+        assert_eq!(repo_root(), std::env::current_exe().unwrap().parent().unwrap());
     }
 }

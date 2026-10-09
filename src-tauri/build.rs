@@ -8,6 +8,41 @@ const EDITKIN_PRODUCT_POLICY_SHA256: &str =
     "163608ac9aeb7da11b3db6c8753ac9fe5d7c288f1b72467d28400d2be75f905a";
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=EDITKIN_COMMUNITY_DEV");
+    println!("cargo:rerun-if-env-changed=EDITKIN_COMMUNITY_PORTABLE");
+    println!("cargo:rustc-check-cfg=cfg(editkin_community_portable)");
+    let community_debug = env::var("EDITKIN_COMMUNITY_DEV").as_deref() == Ok("1")
+        && env::var("PROFILE").as_deref() == Ok("debug");
+    let community_portable = env::var("EDITKIN_COMMUNITY_PORTABLE").as_deref() == Ok("1")
+        && env::var("PROFILE").as_deref() == Ok("debug");
+    assert!(!(community_debug && community_portable), "select one community build profile");
+    if community_portable {
+        println!("cargo:rustc-cfg=editkin_community_portable");
+    }
+    if community_debug || community_portable {
+        let output = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"))
+            .join("release-input-identity.json");
+        let (product, scope, mode) = if community_portable {
+            ("Autopilot Desk Community Preview", "editkin.community-portable-build-scope/v1", "community-local-portable-preview")
+        } else {
+            ("Editkin Community Debug", "editkin.community-debug-build-scope/v1", "community-local-debug")
+        };
+        let identity = serde_json::json!({
+            "schemaVersion": 2,
+            "product": product,
+            "productVersion": env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION"),
+            "attested": false,
+            "scope": {
+                "id": scope,
+                "productMode": mode,
+                "researchBoundary": "repository-retained-artifact-excluded"
+            }
+        });
+        fs::write(output, serde_json::to_vec(&identity).expect("serialize community identity"))
+            .expect("write community identity");
+        tauri_build::build();
+        return;
+    }
     let manifest_dir =
         PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     // Community verification cannot attest the owner-only delivered product.

@@ -28,6 +28,7 @@ export interface AgentSetupOptions {
   ffmpegPath: string;
   ffprobePath: string;
   whisperCliPath: string;
+  whisperModelPath?: string;
   nativeCorePath: string;
   creativePackRoot: string;
   personalMusicRoot: string;
@@ -82,6 +83,7 @@ function setupEnvironment(options: AgentSetupOptions): Record<string, string> {
     HAO_FFMPEG_PATH: options.ffmpegPath,
     HAO_FFPROBE_PATH: options.ffprobePath,
     EDITKIN_WHISPER_CLI_PATH: options.whisperCliPath,
+    EDITKIN_WHISPER_MODEL_PATH: options.whisperModelPath ?? "",
     HAO_NATIVE_CORE_PATH: options.nativeCorePath,
     EDITKIN_CREATIVE_PACK_ROOT: options.creativePackRoot,
     EDITKIN_PERSONAL_MUSIC_ROOT: options.personalMusicRoot,

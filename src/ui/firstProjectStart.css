@@ -105,28 +105,6 @@
 .first-project-trust { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; color: var(--muted); font-size: 11px; }
 .first-project-trust span::first-letter { color: var(--success); }
 
-.demo-workspace-banner {
-  position: absolute;
-  z-index: 35;
-  top: 10px;
-  left: 50%;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  padding: 0 12px;
-  border: 1px solid color-mix(in srgb, var(--warning) 42%, var(--line));
-  border-radius: 11px;
-  background: color-mix(in srgb, var(--surface) 94%, var(--warning));
-  color: var(--soft);
-  font-size: 11px;
-  font-weight: 750;
-  box-shadow: none;
-  transform: translateX(-50%);
-}
-
-.demo-workspace-banner b { color: var(--warning); }
-
 @media (max-width: 980px) {
   .app-shell[data-workspace-mode="welcome"] .toolbar { grid-template-columns: 150px minmax(320px, 1fr) auto; }
   .app-shell[data-workspace-mode="welcome"] .project-flow { grid-template-columns: 1fr; }

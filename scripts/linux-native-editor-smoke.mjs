@@ -1,3 +1,4 @@
+// Agent integration: urn:uuid:d366cab7-d5a4-44d8-b80d-4c7ce4daf65d. Existing GPL license retained; see AGENT-NOTICE.md.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -257,7 +258,8 @@ if (!process.argv[2] || process.argv[2] === "--help") {
     assert.equal(report.windowHandles.length, 1, "Expected one actual Editkin native window");
     await command("POST", "/window/rect", { width: 1400, height: 950 });
     mark("native-window-and-ipc-ready");
-    const ready = await poll("Interactive native editor", healthyState, (value) => value.desktop && value.ipc && value.toolbar && value.welcome, 30000);
+    const ready = await poll("Interactive native editor", healthyState, (value) => value.desktop && value.ipc && value.toolbar
+      && value.workspace === "editor" && value.blocked === "false" && !value.welcome && !value.guide, 30000);
     const url = new URL(ready.url);
     assert((url.protocol === "tauri:" && url.hostname === "localhost") || (["http:", "https:"].includes(url.protocol) && url.hostname === "tauri.localhost" && !url.port), `Expected embedded native assets, not browser/dev URL: ${ready.url}`);
     report.initial = ready;
@@ -268,14 +270,8 @@ if (!process.argv[2] || process.argv[2] === "--help") {
     const initialRecovery = await evaluateAsync("window.haoDesktop.loadRecovery()");
     assert.equal(initialRecovery.found, false, "Isolated profile must not restore an existing user project");
     assert.equal(initialRecovery.reason, "missing", "Initial native recovery read must succeed with missing state");
-    // The welcome screen and first-run guide are separate lazy chunks. A single
-    // query can miss the guide before it mounts and click the covered welcome UI.
-    mark("wait-for-visible-first-run-guide");
-    await poll("First-run guide is ready for native input", healthyState, (state) => state.guide && state.blocked === "true");
-    await click('[data-testid="guide-skip"]');
-    await poll("First-run guide is dismissed", healthyState, (state) => !state.guide && state.blocked === "false" && state.welcome);
-    await click('[data-testid="explore-editor-button"]');
-    await poll("Editor workspace is mounted", healthyState, (state) => state.workspace === "editor" && state.blocked === "false");
+    // Desktop starts directly in the editor; browser onboarding remains a
+    // separate flow. Exercise the native editor without onboarding clicks.
     for (const selector of [".project-menu", ".project-menu-group", '[data-testid="workspace-controls"]']) {
       if (!await evaluate("return !!document.querySelector(arguments[0])?.open;", [selector])) await click(`${selector} > summary`);
     }
@@ -300,6 +296,8 @@ if (!process.argv[2] || process.argv[2] === "--help") {
     mark("user-enters-distinct-caption-text");
     const userText = "Linux native caption edit";
     await replaceText('[data-testid="caption-text-input"]', userText);
+    await poll("Caption draft accepts native keyboard input", healthyState, (state) => state.captionInput === userText);
+    await click('[data-testid="caption-text-input-apply"]');
     const textEdited = await poll("User-entered caption appears on the timeline", healthyState, (state) => state.captions[0]?.text === userText && state.captionInput === userText);
     const originalTiming = { id: captionId, text: userText, start: textEdited.captions[0].start, duration: textEdited.captions[0].duration };
     assertCaption(textEdited, originalTiming);

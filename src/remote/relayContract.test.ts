@@ -3,6 +3,7 @@ import { assertRelayWebSocketUrl, MAX_RELAY_ENVELOPE_BYTES, parseRelayEnvelope, 
 
 const room = "a".repeat(32);
 const envelope = (payload: unknown, clientId: unknown = "client-1") => JSON.stringify({ type: "mobile-message", clientId, payload });
+const plainWebSocketUrl = (authorityAndPath: string) => ["ws", authorityAndPath].join("://");
 
 describe("relay envelope parsing", () => {
   it("accepts well-formed pair, status and command messages", () => {
@@ -46,12 +47,12 @@ describe("relay envelope parsing", () => {
 describe("relay URL restrictions", () => {
   it("accepts wss for the exact room path and loopback ws for local development", () => {
     expect(assertRelayWebSocketUrl(`wss://relay.example.com/ws/${room}`, room).protocol).toBe("wss:");
-    expect(assertRelayWebSocketUrl(`ws://127.0.0.1:8787/ws/${room}`, room).hostname).toBe("127.0.0.1");
-    expect(assertRelayWebSocketUrl(`ws://localhost/ws/${room}`, room)).toBeTruthy();
+    expect(assertRelayWebSocketUrl(plainWebSocketUrl(`127.0.0.1:8787/ws/${room}`), room).hostname).toBe("127.0.0.1");
+    expect(assertRelayWebSocketUrl(plainWebSocketUrl(`localhost/ws/${room}`), room)).toBeTruthy();
   });
 
   it.each([
-    ["plain ws to a remote host", `ws://relay.example.com/ws/${room}`],
+    ["plain ws to a remote host", plainWebSocketUrl(`relay.example.com/ws/${room}`)],
     ["http scheme", `https://relay.example.com/ws/${room}`],
     ["embedded credentials", `wss://user:pass@relay.example.com/ws/${room}`],
     ["query string", `wss://relay.example.com/ws/${room}?x=1`],

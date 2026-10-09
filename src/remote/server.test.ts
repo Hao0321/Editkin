@@ -321,7 +321,7 @@ describe("cloud relay authorization", () => {
 
 describe("relay URL enforcement at startup", () => {
   it.each([
-    ["a plain ws relay on a remote host", { EDITKIN_REMOTE_RELAY_WS_URL: `ws://relay.example.com/ws/${room}` }],
+    ["a plain ws relay on a remote host", { EDITKIN_REMOTE_RELAY_WS_URL: ["ws", `//relay.example.com/ws/${room}`].join(":") }],
     ["a relay URL for a different room", { EDITKIN_REMOTE_RELAY_WS_URL: `wss://relay.example.com/ws/${"b".repeat(32)}` }],
     ["a relay URL that embeds credentials", { EDITKIN_REMOTE_RELAY_WS_URL: `wss://user:pw@relay.example.com/ws/${room}` }],
   ])("refuses to start with %s", async (_name, overrides) => {

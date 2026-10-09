@@ -1,8 +1,9 @@
-import { mkdtemp, mkdir, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { createFileSymlinkOrSkip } from "../testSupport/fileSymlink";
 import { compilePluginApplication, compilePluginAutomationApplication, compilePluginCommands, discoverInstalledPlugins, findInstalledCapability, resolveGpuEffectGraphBinding, resolveGpuEffectGraphBindings, resolveNativeEffectBinding } from "./registry";
 
 const manifest = {
@@ -28,9 +29,12 @@ const manifest = {
     runtime: { type: "editgraph_commands", operations: [{ command: "update_clip_transform", template: { patch: { scale: "$parameter.scale" } } }] },
   }],
 };
+const roots: string[] = [];
+afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 
 async function fixtureRoot(value: unknown = manifest): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "editkin-plugin-test-"));
+  roots.push(root);
   const directory = join(root, "fixture");
   await mkdir(directory);
   await writeFile(join(directory, "editkin-plugin.json"), JSON.stringify(value));
@@ -38,8 +42,9 @@ async function fixtureRoot(value: unknown = manifest): Promise<string> {
 }
 
 describe("Editkin plugin registry", () => {
-  it("blocks a Skill Pack index symlink that escapes the plugin directory", async () => {
+  it("blocks a Skill Pack index symlink that escapes the plugin directory", async (context) => {
     const root = await mkdtemp(join(tmpdir(), "editkin-plugin-symlink-"));
+    roots.push(root);
     const directory = join(root, "fixture");
     await mkdir(directory);
     const pack = {
@@ -57,7 +62,7 @@ describe("Editkin plugin registry", () => {
     const source = JSON.stringify(pack);
     const outside = join(root, "outside-skill.json");
     await writeFile(outside, source);
-    await symlink(outside, join(directory, "skill.json"), "file");
+    await createFileSymlinkOrSkip(outside, join(directory, "skill.json"), context);
     await writeFile(join(directory, "editkin-plugin.json"), JSON.stringify({
       schema: "editkin.plugin/v1", id: "test.escape.skill", name: "Escape", version: "1.0.0", minimumHostVersion: "0.15.0",
       publisher: { name: "Fixture" }, license: { spdx: "MIT", commercialUse: true }, permissions: ["workflow.read"],

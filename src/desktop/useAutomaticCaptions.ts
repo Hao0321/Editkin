@@ -32,7 +32,7 @@ export function useAutomaticCaptions({ api, project, projectSession, selectedCli
       setBusy(true);
       onStatus(mode === "bilingual-en"
         ? "正在本機辨識原文並翻成英文；兩行都會放進 Timeline，完成後可逐句修改…"
-        : "正在本機產生字幕；第一次會下載並驗證約 190 MB 的多語 Whisper 模型，素材不會上傳…");
+        : "正在本機產生字幕並檢查多語辨識模型，素材不會上傳…");
       const result = await api.automaticCaptionMedia({
         sourcePath: asset.uri,
         sourceStart: selectedClip.sourceStart,

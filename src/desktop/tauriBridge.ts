@@ -1,3 +1,4 @@
+// Agent integration: urn:uuid:d366cab7-d5a4-44d8-b80d-4c7ce4daf65d. Existing GPL license retained; see AGENT-NOTICE.md.
 import { Channel, convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { createTauriGpuPreviewApi, createTauriGpuPreviewOwner } from "./tauriGpuPreview";
 import type { NativeAudioPreviewStatus } from "./nativeAudioTypes";
@@ -33,6 +34,32 @@ async function pollUpdateJob(download: boolean): Promise<UpdateCheckResult> {
 if (window.__TAURI_INTERNALS__) {
   const api: HaoDesktopApi = {
     isDesktop: true,
+    agentLibrary: (request) => invoke("opencode_agent_library", { request }),
+    openCodeAgentProvider: (request) => invoke("opencode_agent_provider", { request }),
+    startOpenCodeAgent: (projectPath, resumeSessionId, resumeModel) => invoke("start_opencode_agent", { projectPath, resumeSessionId, resumeModel }),
+    promptOpenCodeAgent: (projectPath, text, displayText, attachments) => invoke("prompt_opencode_agent", { projectPath, text, displayText, attachments }),
+    listOpenCodeAgentSessions: () => invoke("list_opencode_agent_sessions"),
+    newOpenCodeAgentSession: () => invoke("new_opencode_agent_session"),
+    loadOpenCodeAgentSession: (sessionId, model) => invoke("load_opencode_agent_session", { sessionId, model }),
+    statusOpenCodeAgent: (afterSeq) => invoke("status_opencode_agent", { afterSeq }),
+    permissionOpenCodeAgent: (requestId, optionId) => invoke("permission_opencode_agent", { requestId, optionId }),
+    cancelOpenCodeAgent: () => invoke("cancel_opencode_agent"),
+    closeOpenCodeAgent: () => invoke("close_opencode_agent"),
+    setOpenCodeAgentConfig: (configId, value) => invoke("set_opencode_agent_config", { configId, value }),
+    reloadProjectFromPath: async (path) => {
+      const opened = await invoke<Omit<OpenProjectResult, "runtimeUrls"> & { runtimePaths?: Record<string, string>; mattePreviewPaths?: string[] }>("reload_project_from_path", { path });
+      return { ...opened, project: opened.project ? hydrateAutoRotoFramePreviews(opened.project, opened.mattePreviewPaths ?? [], convertFileSrc) : undefined, runtimeUrls: opened.runtimePaths ? urls(opened.runtimePaths) : undefined };
+    },
+    getLocalStoryOrigin: () => invoke("get_local_story_origin"),
+    saveLocalStoryOrigin: (origin) => invoke("save_local_story_origin", { origin }),
+    listLocalStoryModels: () => invoke("list_local_story_models"),
+    generateLocalStory: (jobId, source, model, brief, project, context) => invoke("generate_local_story", { jobId, source, model, brief, project, context }),
+    cancelLocalStory: (jobId) => invoke("cancel_local_story", { jobId }),
+    startMaterialReview: (project, clipId, includeTranscript, resumeJobId) => invoke("start_material_review", { project, clipId, includeTranscript, resumeJobId }),
+    getMaterialReview: (jobId) => invoke("get_material_review", { jobId }),
+    getMaterialReviewFrame: (jobId, frameId) => invoke("get_material_review_frame", { jobId, frameId }),
+    verifyMaterialReviewSource: (project, clipId, jobId) => invoke("verify_material_review_source", { project, clipId, jobId }),
+    cancelMaterialReview: (jobId) => invoke("cancel_material_review", { jobId }),
     pickMedia: async () => {
       const picked = await invoke<Array<{ asset: MediaAsset; previewPath: string }>>("pick_media");
       return picked.map(({ asset, previewPath }): PickedMedia => ({ asset, previewUrl: convertFileSrc(previewPath) }));
@@ -68,6 +95,7 @@ if (window.__TAURI_INTERNALS__) {
       const saved = await invoke<import("./types").SaveProjectResult & { mattePreviewPaths?: string[] }>("save_project", { project: dehydrateAutoRotoFramePreviews(project), currentPath, saveAs });
       return { ...saved, project: saved.project ? hydrateAutoRotoFramePreviews(saved.project, saved.mattePreviewPaths ?? [], convertFileSrc) : undefined };
     },
+    createAgentWorkingProject: (project) => invoke("create_agent_working_project", { project: dehydrateAutoRotoFramePreviews(project) }),
     renderProject: (project) => invoke("render_project", { project: dehydrateAutoRotoFramePreviews(project) }),
     renderAlphaMaster: (project) => invoke("render_alpha_master", { project: dehydrateAutoRotoFramePreviews(project) }),
     renderOpenExrSequence: (project) => invoke("render_openexr_sequence", { ...buildOpenExrSequenceRenderRequest(project) }),
@@ -81,6 +109,7 @@ if (window.__TAURI_INTERNALS__) {
       return { ...prepared, runtimeUrls: urls(prepared.runtimePaths) };
     },
     smartCutMedia: (request) => invoke("smart_cut_media", { request }),
+    automaticCaptionStatus: () => invoke("automatic_caption_status"),
     automaticCaptionMedia: (request) => invoke("automatic_caption_media", { request }),
     detectScenes: (request) => invoke("detect_scenes", { request }),
     analyzeMotionTrack: (request) => invoke("analyze_motion_track", { request }),

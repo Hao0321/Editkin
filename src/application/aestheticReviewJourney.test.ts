@@ -73,4 +73,23 @@ describe("output-bound aesthetic review journey (not certification)", () => {
     expect(bind).toHaveBeenCalledWith(f.project, f.artifact);
     expect(setStatus.mock.lastCall?.[0]).toContain("尚未取得人工品質認證");
   });
+  it("blocks duplicate and competing exports across action recreations until the active render settles", async () => {
+    const f = await fixture(); const gate = { current: false }; const busy = vi.fn(); const setStatus = vi.fn();
+    let finish!: (value: unknown) => void;
+    const renderProject = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+    const renderAlphaMaster = vi.fn(async () => ({ canceled: true }));
+    const api = { renderProject, renderAlphaMaster } as unknown as HaoDesktopApi;
+    const create = () => createAppRenderActions({ project: f.project, api, setStatus, renderGate: gate, onRenderBusyChange: busy });
+    const active = create().renderVideo();
+    await create().renderVideo();
+    await create().renderAlphaMaster();
+    expect(renderProject).toHaveBeenCalledTimes(1);
+    expect(renderAlphaMaster).not.toHaveBeenCalled();
+    expect(gate.current).toBe(true);
+    finish({ canceled: true }); await active;
+    expect(gate.current).toBe(false);
+    await create().renderAlphaMaster();
+    expect(renderAlphaMaster).toHaveBeenCalledTimes(1);
+    expect(busy.mock.calls.map(([value]) => value)).toEqual([true, false, true, false]);
+  });
 });

@@ -1,7 +1,6 @@
 import type { EngineNode } from "../render/engineGraph";
 import type { GpuEngineVideoPreviewGraph, GpuRenderGraph } from "../render/gpuCompositor";
-
-type GpuEngineVideoLayerLoadResult = import("./types").GpuEngineVideoLayerLoadResult;
+import type { GpuEngineVideoLayerLoadResult, GpuEngineVideoVisualGraph } from "./gpuTypes";
 
 export interface ExpectedEngineVideoLayer {
   sourceNodeId: string;
@@ -44,7 +43,7 @@ export interface ExpectedEngineVideoAdjustment {
   shaderEffectExpected: boolean;
 }
 
-export const engineBlendCodes: Record<GpuEngineVideoLayerLoadResult["blendMode"], import("./types").GpuEngineVideoVisualGraph["blendMode"]> = {
+export const engineBlendCodes: Record<GpuEngineVideoLayerLoadResult["blendMode"], GpuEngineVideoVisualGraph["blendMode"]> = {
   normal: 0, add: 1, screen: 2, multiply: 3, overlay: 4, soft_light: 5,
   hard_light: 6, difference: 7, darken: 8, lighten: 9, color_dodge: 10, color_burn: 11,
 };

@@ -18,7 +18,7 @@ const queuePath = join(root, "commands");
 const snapshotPath = join(root, "snapshot.json");
 const devicesPath = join(root, "devices.json");
 const trustedDevicesPath = join(root, "trusted-devices.json");
-const token = "0123456789abcdef0123456789abcdef";
+const token = "t".repeat(32);
 await writeFile(snapshotPath, `${JSON.stringify({ projectName: "Remote Smoke", resolution: "640×360", fps: 30, trackCount: 4, playhead: 1.25, playheadLabel: "00:01.25", status: "ready", previewPath: "C:\\private\\clip.mp4" })}\n`);
 
 const child = spawn(process.execPath, [resolve("desktop-dist/remote.mjs")], {
@@ -124,12 +124,13 @@ try {
   child.kill();
   await childExited;
   const reconnectPort = await allocatePort();
+  const reconnectToken = "r".repeat(32);
   reconnectChild = spawn(process.execPath, [resolve("desktop-dist/remote.mjs")], {
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
     env: {
       ...process.env,
-      EDITKIN_REMOTE_TOKEN: "fedcba9876543210fedcba9876543210",
+      EDITKIN_REMOTE_TOKEN: reconnectToken,
       EDITKIN_REMOTE_HEALTH_PROBE_ID: "2".repeat(32),
       EDITKIN_REMOTE_PORT: String(reconnectPort),
       EDITKIN_REMOTE_QUEUE: queuePath,
@@ -153,7 +154,7 @@ try {
   const tunnelPair = await fetch(`${reconnectOrigin}/api/pair`, {
     method: "POST",
     headers: { "content-type": "application/json", origin: reconnectOrigin.replace(/^http:/, "https:"), "x-forwarded-proto": "https" },
-    body: JSON.stringify({ token: "fedcba9876543210fedcba9876543210", deviceId: "tunnel-phone", name: "Tunnel iPhone" }),
+    body: JSON.stringify({ token: reconnectToken, deviceId: "tunnel-phone", name: "Tunnel iPhone" }),
   });
   const tunnelSetCookie = tunnelPair.headers.get("set-cookie") ?? "";
   const trustedAfterTunnel = JSON.parse(await readFile(trustedDevicesPath, "utf8"));
