@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { desktopDropStartupError, subscribeDesktopDragEvents } from "../desktop/desktopDropBroker";
 import { partitionSupportedMedia, rejectedMediaMessage } from "./mediaDrop";
 import "./workspaceDropImport.css";
 
@@ -59,24 +60,19 @@ export function WorkspaceDropImport({ onBrowserFiles, onDesktopPaths, onStatus }
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!window.__TAURI_INTERNALS__ || !onDesktopPathsRef.current) return;
-    let disposed = false;
-    let unlisten: (() => void) | undefined;
-    void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
-      unlisten = await getCurrentWindow().onDragDropEvent(({ payload }) => {
-        if (disposed) return;
-        if (payload.type === "over") setActive(true);
-        if (payload.type === "leave") setActive(false);
-        if (payload.type !== "drop") return;
-        setActive(false);
-        const { supported, rejected } = partitionSupportedMedia(payload.paths, (path) => path);
-        if (rejected.length) onStatusRef.current(rejectedMediaMessage(rejected.length));
-        if (supported.length) onDesktopPathsRef.current?.(supported);
-      });
-      if (disposed) unlisten();
-    }).catch((error) => onStatusRef.current(`拖放匯入初始化失敗：${error instanceof Error ? error.message : String(error)}`));
-    return () => { disposed = true; unlisten?.(); };
+    const error = desktopDropStartupError();
+    if (error) onStatusRef.current(error);
+    return subscribeDesktopDragEvents((payload) => {
+      if (payload.type === "over") setActive(true);
+      if (payload.type === "leave") setActive(false);
+      if (payload.type !== "drop" || !payload.paths) return;
+      setActive(false);
+      const { supported, rejected } = partitionSupportedMedia(payload.paths, (path) => path);
+      if (rejected.length) onStatusRef.current(rejectedMediaMessage(rejected.length));
+      if (supported.length) onDesktopPathsRef.current?.(supported);
+    });
   }, []);
 
   if (!active) return null;

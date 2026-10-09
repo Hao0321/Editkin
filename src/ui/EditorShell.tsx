@@ -1,6 +1,8 @@
+// Agent integration: urn:uuid:d366cab7-d5a4-44d8-b80d-4c7ce4daf65d. Existing GPL license retained; see AGENT-NOTICE.md.
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import type { ActivePreviewLayer } from "../application/previewMedia";
 import { selectAutomaticMusicAsset } from "../creative/musicSelection";
+import { projectPotentialAudioGaps } from "../application/audioCoverage";
 import { buildCaptionTrimCommand, buildClipTrimCommand } from "../application/timelineTrim";
 import { resolveAestheticSystem } from "../application/editkinAesthetic";
 import type { useAutomaticEditing } from "../desktop/useAutomaticEditing";
@@ -21,12 +23,14 @@ import { DEFAULT_COLOR_MANAGEMENT } from "../domain/types";
 import { motionClipPresetCommands } from "../motion/motionClipPresets";
 import { floatingFrameSceneCommands } from "../motion/floatingFrameScenes";
 import type { CaptionCue, ClipLayout, EditProject, MotionGraphicKind, MotionGraphicPresetSeed, MotionTrack, NormalizedRect, TimelineClip } from "../domain/types";
-import { makeId } from "../lib/format";
+import { formatTime, makeId } from "../lib/format";
 import type { EditorTheme } from "./theme";
 import { Toolbar } from "./Toolbar";
+import { OpenCodeAgentDock } from "./OpenCodeAgentDock";
 import { WorkspaceControls } from "./WorkspaceControls";
 import { OperationStatus } from "./OperationStatus";
 import { MediaImportStatus } from "./MediaImportStatus";
+import { WorkspaceDropImport } from "./WorkspaceDropImport";
 import { WorkspaceResizeHandle } from "./WorkspaceResizeHandle";
 import { useWorkspaceLayout } from "./workspaceLayout";
 import { autoRotoRuntimeStatusFromReceipt, initialAutoRotoRuntimeStatus } from "./autoRotoRuntimeStatus";
@@ -36,16 +40,37 @@ import { PROJECT_FORMATS, projectFormatLabel } from "../application/projectForma
 import type { ProjectTask } from "../application/projectSession";
 import "./layoutHardening.css";
 import "./projectFormatControl.css";
+import "./agentDock.css";
+import "./materialReviewDialog.css";
 
-import { AgentConnectModal, AutoEditDialog, AgentPanel, BatchAutoEditPanel, BeginnerGuide, ColorWorkspace, DirectorConsole, EditingProfilePicker, FirstProjectStart, Inspector, MediaBin, MobileConnectModal, Preview, Timeline, WorkspaceDropImport, BEGINNER_GUIDE_KEY } from "./editorShellLazy";
+import { AgentConnectModal, AutoEditDialog, AgentPanel, BatchAutoEditPanel, BeginnerGuide, ColorWorkspace, DirectorConsole, EditingProfilePicker, FirstProjectStart, Inspector, LocalStoryDraftDialog, MaterialReviewDialog, MediaBin, MobileConnectModal, Preview, Timeline, BEGINNER_GUIDE_KEY } from "./editorShellLazy";
 import type { EditorShellProps, TrackingMode } from "./editorShellTypes";
 export type { TrackingMode } from "./editorShellTypes";
 
 export function EditorShell(props: EditorShellProps) {
+  // Desktop users start in the editor; the browser keeps the existing onboarding
+  // unless the explicit Autopilot Desk workspace URL was requested.
+  const editorFirst = props.isDesktop || new URLSearchParams(window.location.search).get("workspace") === "editor";
   const [colorWorkspaceOpened, setColorWorkspaceOpened] = useState(false);
   const [directorConsoleOpened, setDirectorConsoleOpened] = useState(false);
-  const [demoWorkspaceOpened, setDemoWorkspaceOpened] = useState(false);
+  const [demoWorkspaceOpened, setDemoWorkspaceOpened] = useState(editorFirst);
   const [agentConnectOpened, setAgentConnectOpened] = useState(false);
+  const [agentDockOpen, setAgentDockOpen] = useState(() => {
+    try { const saved = window.localStorage.getItem("editkin.agent-dock.v1"); return saved === null ? Boolean(window.haoDesktop) : saved === "open"; }
+    catch { return Boolean(window.haoDesktop); }
+  });
+  const [agentDockMounted, setAgentDockMounted] = useState(agentDockOpen);
+  const [agentDockWidth, setAgentDockWidth] = useState(() => {
+    try { return Math.max(300, Math.min(560, Number(window.localStorage.getItem("editkin.agent-dock-width.v1")) || 380)); }
+    catch { return 380; }
+  });
+  const [agentDockView, setAgentDockView] = useState<"home" | "story" | "material">("home");
+  const [materialReviewClipId, setMaterialReviewClipId] = useState<string>();
+  useEffect(() => {
+    try { window.localStorage.setItem("editkin.agent-dock.v1", agentDockOpen ? "open" : "closed");
+      window.localStorage.setItem("editkin.agent-dock-width.v1", String(agentDockWidth)); } catch { /* storage may be disabled */ }
+  }, [agentDockOpen, agentDockWidth]);
+  useEffect(() => { if (agentDockOpen) setAgentDockMounted(true); }, [agentDockOpen]);
   const [returnToRemoteAfterAgent, setReturnToRemoteAfterAgent] = useState(false);
   const [autoEditOpened, setAutoEditOpened] = useState(false);
   const [draggingAssetId, setDraggingAssetId] = useState<string>();
@@ -53,7 +78,8 @@ export function EditorShell(props: EditorShellProps) {
   const [autoRotoBusy, setAutoRotoBusy] = useState(false);
   const autoRotoBusyRef = useRef(false);
   const [autoRotoRuntimeStatus, setAutoRotoRuntimeStatus] = useState(() => initialAutoRotoRuntimeStatus(window.haoDesktop?.analyzeAutoRoto));
-  const [beginnerGuideOpened, setBeginnerGuideOpened] = useState(() => window.localStorage.getItem(BEGINNER_GUIDE_KEY) !== "done");
+  const [beginnerGuideOpened, setBeginnerGuideOpened] = useState(() =>
+    !editorFirst && window.localStorage.getItem(BEGINNER_GUIDE_KEY) !== "done");
   const workspace = useWorkspaceLayout();
   const {
     history, project, duration, theme, setTheme, isDesktop, playhead, setPlayhead, seekRevision, onPlaybackClock, playing, setPlaying,
@@ -61,7 +87,7 @@ export function EditorShell(props: EditorShellProps) {
     selectedClipAtPlayhead, selectedCaption, transitionNeighbors, selectedMotionTracks, activeLayers,
     activeAudioLayers, runtimeUrls, status, setStatus, trackingMode, setTrackingMode, trackingSelection,
     setTrackingSelection, trackingBusy, recovery, desktopActions, automatic, creativeLibrary, batchAutoEdit, mobile,
-    newProject, openProject, saveProject, undoEdit, redoEdit, renderVideo, renderOpenExrSequence, renderAlphaMaster, importFiles,
+    newProject, openProject, saveProject, undoEdit, redoEdit, renderVideo, renderBusy, renderOpenExrSequence, renderAlphaMaster, importFiles,
     acceptTrackingSelection, startPodcastDirector, submitAgentInstruction, runCommand, updateAnimatedClipProperty,
     addMotionGraphic, addCaption, addTrack, addAssetToTimeline, makeSelectedPictureInPicture, precomposeSelected, applyShortFormTemplate, applyLongFormTemplate, addLowerThird, clearTemplateApplication, splitSelected, deleteSelected,
   } = props;
@@ -69,14 +95,48 @@ export function EditorShell(props: EditorShellProps) {
   const engineUnavailableReason = isDesktop ? undefined : "網頁版沒有本機 Whisper／FFmpeg 引擎，這項功能需要桌面版。";
   const selectedAsset = selectedClip ? project.assets.find((asset) => asset.id === selectedClip.assetId) : undefined;
   const hasUserMedia = project.assets.some((asset) => asset.id !== "asset-demo");
+  const audioGaps = useMemo(() => hasUserMedia ? projectPotentialAudioGaps(project) : [], [hasUserMedia, project]);
   const showWelcome = !hasUserMedia && !demoWorkspaceOpened;
+  const projectFileSaved = isDesktop && Boolean(props.projectPath) && !recovery.dirty && !props.projectSavePending;
+  let saveStateLabel = "網頁預覽 · 尚未存成專案檔";
+  if (isDesktop) {
+    if (props.projectSavePending) saveStateLabel = "專案正在儲存";
+    else if (!recovery.dirty) saveStateLabel = props.projectPath ? "專案檔已儲存" : "尚未存成專案檔";
+    else if (recovery.recoveryState === "saved") saveStateLabel = "專案有修改 · 復原快照已保存";
+    else if (recovery.recoveryState === "error") saveStateLabel = "專案有修改 · 復原快照失敗";
+    else saveStateLabel = "專案有修改 · 正在保存復原快照";
+  }
+  const saveStateTone = recovery.recoveryState === "error" ? "red"
+    : projectFileSaved || (recovery.dirty && recovery.recoveryState === "saved") ? "green" : "amber";
   const [nativePreviewBounds, setNativePreviewBounds] = useState<NativePreviewBounds>();
   const [audioTransport, setAudioTransport] = useState<NativeAudioTransportState>();
   const latestSeekRevision = useRef(seekRevision);
   latestSeekRevision.current = seekRevision;
+  const sessionId = props.projectSession.getSnapshot().sessionId;
+  const captionAudition = useRef<{ sessionId: number; captionId: string; start: number; end: number } | undefined>(undefined);
+  const [auditioningCaptionId, setAuditioningCaptionId] = useState<string>();
+  const stopCaptionAudition = useCallback(() => {
+    captionAudition.current = undefined;
+    setAuditioningCaptionId(undefined);
+    setPlaying(false);
+  }, [setPlaying]);
+  useEffect(() => {
+    const audition = captionAudition.current;
+    if (!audition) return;
+    if (audition.sessionId !== sessionId || audition.captionId !== selectedCaptionId
+      || playhead < audition.start - 0.5 / project.fps) return stopCaptionAudition();
+    if (!playing) { captionAudition.current = undefined; setAuditioningCaptionId(undefined); }
+    else if (playhead >= audition.end) { stopCaptionAudition(); setPlayhead(audition.end); }
+  }, [sessionId, selectedCaptionId, playhead, playing, project.fps, stopCaptionAudition, setPlayhead]);
   const publishPlaybackClock = useCallback((time: number) => {
+    const audition = captionAudition.current;
+    if (audition?.sessionId === sessionId && latestSeekRevision.current === seekRevision && time >= audition.end) {
+      onPlaybackClock(audition.end, seekRevision);
+      stopCaptionAudition();
+      return;
+    }
     onPlaybackClock(Math.max(0, Math.min(duration, time)), seekRevision);
-  }, [onPlaybackClock, duration, seekRevision]);
+  }, [onPlaybackClock, duration, seekRevision, sessionId, stopCaptionAudition]);
   const finishPlayback = useCallback(() => {
     if (latestSeekRevision.current === seekRevision) setPlaying(false);
   }, [seekRevision, setPlaying]);
@@ -107,8 +167,8 @@ export function EditorShell(props: EditorShellProps) {
   const workspaceColumns = useMemo(() => [
     workspace.layout.mediaVisible && !directorConsoleOpened ? `${workspace.layout.mediaWidth}px 8px` : "",
     "minmax(0,1fr)",
-    directorConsoleOpened ? "8px minmax(340px,440px)" : workspace.layout.inspectorVisible ? `8px ${workspace.layout.inspectorWidth}px` : "",
-  ].filter(Boolean).join(" "), [directorConsoleOpened, workspace.layout.inspectorVisible, workspace.layout.inspectorWidth, workspace.layout.mediaVisible, workspace.layout.mediaWidth]);
+    directorConsoleOpened ? "8px minmax(340px,440px)" : agentDockOpen ? `8px ${agentDockWidth}px` : workspace.layout.inspectorVisible ? `8px ${workspace.layout.inspectorWidth}px` : "",
+  ].filter(Boolean).join(" "), [agentDockOpen, agentDockWidth, directorConsoleOpened, workspace.layout.inspectorVisible, workspace.layout.inspectorWidth, workspace.layout.mediaVisible, workspace.layout.mediaWidth]);
   const shellStyle = {
     "--timeline-height": workspace.layout.timelineVisible ? `${workspace.layout.timelineHeight}px` : "0px",
   } as CSSProperties;
@@ -118,7 +178,15 @@ export function EditorShell(props: EditorShellProps) {
     window.localStorage.setItem(BEGINNER_GUIDE_KEY, "done");
     setBeginnerGuideOpened(false);
   };
-  const shortcutsBlocked = beginnerGuideOpened || colorWorkspaceOpened || (directorConsoleOpened && showWelcome) || batchAutoEdit.show || mobile.showConnect || agentConnectOpened || autoEditOpened;
+  const shortcutsBlocked = beginnerGuideOpened || colorWorkspaceOpened || (directorConsoleOpened && showWelcome) || batchAutoEdit.show || mobile.showConnect || agentConnectOpened || (agentDockOpen && agentDockView !== "home") || autoEditOpened;
+  const openStoryDock = () => { setDirectorConsoleOpened(false); setAgentDockOpen(true); setAgentDockView("story"); };
+  const openMaterialDock = (clipId: string) => { setDirectorConsoleOpened(false); setMaterialReviewClipId(clipId); setAgentDockOpen(true); setAgentDockView("material"); };
+  const addCaptionAndRevealInspector = () => {
+    addCaption();
+    setDirectorConsoleOpened(false);
+    setAgentDockOpen(false);
+    if (!workspace.layout.inspectorVisible) workspace.patch({ inspectorVisible: true });
+  };
   const closeAgentConnect = () => {
     setAgentConnectOpened(false);
     if (!returnToRemoteAfterAgent) return;
@@ -173,13 +241,30 @@ export function EditorShell(props: EditorShellProps) {
     void runAutoRoto(mask.id, props.projectSession.getSnapshot().history.present);
   };
 
+  const agentWorkbench = <Suspense fallback={<div className="agent-dock-loading">正在載入剪輯助理…</div>}><AgentPanel
+    status={status}
+    hasMedia={hasUserMedia}
+    onSubmit={submitAgentInstruction}
+    onSmartCut={() => void automatic.smartCut.run()}
+    smartCutBusy={automatic.smartCut.busy}
+    onAutomaticCaptions={(mode) => void automatic.captions.run(mode)}
+    automaticCaptionsBusy={automatic.captions.busy}
+    onSceneSplit={() => void automatic.scenes.run()}
+    sceneSplitBusy={automatic.scenes.busy}
+    onSemanticAutoEdit={openAutoEdit}
+    semanticAutoEditBusy={automatic.semantic.busy}
+    semanticAutoEditStage={automatic.semantic.stage}
+    onOpenAgentConnect={isDesktop ? () => setAgentConnectOpened(true) : undefined}
+    onOpenLocalDraft={openStoryDock}
+    unavailableReason={engineUnavailableReason}
+  /></Suspense>;
   return (
     <main className="app-shell" data-import-active={importActive} data-shortcuts-blocked={shortcutsBlocked} data-workspace-mode={showWelcome ? "welcome" : "editor"} data-text-size={workspace.layout.textSize} style={shellStyle}>
-      <Suspense fallback={null}><WorkspaceDropImport
+      <WorkspaceDropImport
         onBrowserFiles={(files) => void importFiles(files)}
         onDesktopPaths={isDesktop ? (paths) => void creativeLibrary.importDesktopPaths(paths) : undefined}
         onStatus={setStatus}
-      /></Suspense>
+      />
       <Toolbar
         projectName={project.name}
         hasUserMedia={hasUserMedia}
@@ -187,21 +272,27 @@ export function EditorShell(props: EditorShellProps) {
         theme={theme}
         onThemeChange={setTheme}
         dirty={recovery.dirty}
+        hasSavedProjectFile={Boolean(props.projectPath)}
         recoveryState={recovery.recoveryState}
         playhead={playhead}
         canUndo={history.past.length > 0}
         canRedo={history.future.length > 0}
         isDesktop={isDesktop}
-        onNew={() => { setDemoWorkspaceOpened(false); newProject(); }}
+        onNew={() => { setDemoWorkspaceOpened(editorFirst); newProject(); }}
         onOpen={openProject}
         onSave={() => void saveProject()}
         onUndo={undoEdit}
         onRedo={redoEdit}
         onExport={renderVideo}
+        renderBusy={renderBusy}
         onExportOpenExrSequence={() => void renderOpenExrSequence()}
         onExportAlphaMaster={() => void renderAlphaMaster()}
         onOpenAgentConnect={() => { setReturnToRemoteAfterAgent(false); setAgentConnectOpened(true); }}
         onAutoEdit={openAutoEdit}
+        onOpenStoryDraft={openStoryDock}
+        onToggleAgentDock={() => { if (directorConsoleOpened) { setDirectorConsoleOpened(false); setAgentDockOpen(true); setAgentDockView("home"); }
+          else setAgentDockOpen((current) => !current); }}
+        agentDockOpen={agentDockOpen && !directorConsoleOpened}
         autoEditBusy={automatic.semantic.busy}
         autoEditUnavailableReason={engineUnavailableReason}
         onMobileRemote={window.haoDesktop?.startMobileRemote ? () => void mobile.open() : undefined}
@@ -223,7 +314,7 @@ export function EditorShell(props: EditorShellProps) {
         onConnectAgent={isDesktop ? () => setAgentConnectOpened(true) : undefined}
       /></Suspense> : <>
       <section className="workspace-grid" style={{ gridTemplateColumns: workspaceColumns }} data-testid="modular-workspace">
-        {!hasUserMedia && <div className="demo-workspace-banner" data-testid="demo-workspace-banner"><b>示範模式</b><span>{isDesktop ? "先熟悉介面；加入自己的影片後才會啟用自動剪輯與輸出" : "先熟悉介面；加入自己的影片後可手動剪輯並下載專案檔。自動剪輯與影片輸出需要桌面版"}</span></div>}
+        {!hasUserMedia && project.assets.some((asset) => asset.id === "asset-demo") && <div className="demo-workspace-banner" data-testid="demo-workspace-banner"><b>示範模式</b><span>{isDesktop ? "先熟悉介面；加入自己的影片後才會啟用自動剪輯與輸出" : "先熟悉介面；加入自己的影片後可手動剪輯並下載專案檔。自動剪輯與影片輸出需要桌面版"}</span></div>}
         {workspace.layout.mediaVisible && !directorConsoleOpened && <><Suspense fallback={<aside className="panel media-bin" aria-label="正在載入素材面板" />}><MediaBin
           assets={project.assets}
           runtimeUrls={runtimeUrls}
@@ -312,40 +403,49 @@ export function EditorShell(props: EditorShellProps) {
             onPlayingChange={setPlaying}
             onPlayheadChange={(time) => setPlayhead(Math.max(0, Math.min(duration, time)))}
           /></Suspense>
-          <Suspense fallback={null}><EditingProfilePicker
-            profile={project.editorialProfile}
-            hasVideo={Boolean(selectedClip && selectedAsset?.kind === "video")}
-            trackingBusy={trackingBusy}
-            onChange={(profile) => runCommand({ type: "batch", commands: [
-              { type: "set_editorial_profile", profile },
-              { type: "set_aesthetic_system", aestheticSystem: resolveAestheticSystem(profile, project.width > project.height ? "longform" : "shorts") },
-            ] }, "已套用剪輯類型與匿名美感標準；自動剪輯、批量與 AI 都會沿用。")}
-            onStartSpeakerDirector={startPodcastDirector}
-            unavailableReason={engineUnavailableReason}
-          /></Suspense>
-          {workspace.layout.automationVisible && <Suspense fallback={null}><AgentPanel
-            status={status}
-            hasMedia={hasUserMedia}
-            onSubmit={submitAgentInstruction}
-            onSmartCut={() => void automatic.smartCut.run()}
-            smartCutBusy={automatic.smartCut.busy}
-            onAutomaticCaptions={(mode) => void automatic.captions.run(mode)}
-            automaticCaptionsBusy={automatic.captions.busy}
-            onSceneSplit={() => void automatic.scenes.run()}
-            sceneSplitBusy={automatic.scenes.busy}
-            onSemanticAutoEdit={openAutoEdit}
-            unavailableReason={engineUnavailableReason}
-            semanticAutoEditBusy={automatic.semantic.busy}
-            semanticAutoEditStage={automatic.semantic.stage}
-            onOpenAgentConnect={isDesktop ? () => setAgentConnectOpened(true) : undefined}
-          /></Suspense>}
+          <div className="preview-secondary-actions">
+            <Suspense fallback={null}><EditingProfilePicker
+              profile={project.editorialProfile}
+              hasVideo={Boolean(selectedClip && selectedAsset?.kind === "video")}
+              trackingBusy={trackingBusy}
+              onChange={(profile) => runCommand({ type: "batch", commands: [
+                { type: "set_editorial_profile", profile },
+                { type: "set_aesthetic_system", aestheticSystem: resolveAestheticSystem(profile, project.width > project.height ? "longform" : "shorts") },
+              ] }, "已套用剪輯類型與匿名美感標準；自動剪輯、批量與 AI 都會沿用。")}
+              onStartSpeakerDirector={startPodcastDirector}
+              unavailableReason={engineUnavailableReason}
+            /></Suspense>
+            {isDesktop && selectedClip && selectedAsset && selectedAsset.id !== "asset-demo" && !selectedAsset.compositionId && !selectedAsset.imageSequence && ["video", "audio", "image"].includes(selectedAsset.kind) && <button type="button" className="material-review-open" onClick={() => openMaterialDock(selectedClip.id)} data-testid="material-review-open">素材證據</button>}
+          </div>
+          {workspace.layout.automationVisible && !agentDockOpen && agentWorkbench}
         </div>
-        {workspace.layout.inspectorVisible && !directorConsoleOpened && <><WorkspaceResizeHandle axis="horizontal" label="調整屬性面板寬度" onDelta={(delta) => workspace.resize("inspector", delta)} /><Suspense fallback={<aside className="inspector inspector-empty"><small>正在載入調整面板…</small></aside>}><Inspector
+        {workspace.layout.inspectorVisible && !directorConsoleOpened && !agentDockOpen && <><WorkspaceResizeHandle axis="horizontal" label="調整屬性面板寬度" onDelta={(delta) => workspace.resize("inspector", delta)} /><Suspense fallback={<aside className="inspector inspector-empty"><small>正在載入調整面板…</small></aside>}><Inspector
+          key={sessionId}
           projectFps={project.fps}
           playhead={playhead}
           pluginRegistry={creativeLibrary.plugins}
           clip={selectedClipAtPlayhead}
           caption={selectedCaption}
+          captions={project.captions}
+          auditioningCaptionId={auditioningCaptionId}
+          onSelectCaption={(captionId) => {
+            const cue = project.captions.find(item => item.id === captionId);
+            if (!cue) return;
+            stopCaptionAudition();
+            setSelectedClipId(undefined);
+            setSelectedCaptionId(captionId);
+            setPlayhead(Math.max(0, Math.min(duration, cue.start)));
+          }}
+          onAuditionCaption={() => {
+            if (!selectedCaption || selectedCaption.duration <= 0) return;
+            if (captionAudition.current) return stopCaptionAudition();
+            const start = Math.max(0, selectedCaption.start), end = Math.min(duration, selectedCaption.start + selectedCaption.duration);
+            if (end <= start) return;
+            captionAudition.current = { sessionId, captionId: selectedCaption.id, start, end };
+            setAuditioningCaptionId(selectedCaption.id);
+            setPlayhead(start);
+            setPlaying(true);
+          }}
           captionStyle={project.captionStyle}
           tracks={project.tracks}
           canTransitionIn={transitionNeighbors.before}
@@ -476,7 +576,7 @@ export function EditorShell(props: EditorShellProps) {
             setPlaying(false);
             setColorWorkspaceOpened(true);
           }}
-          onAddCaption={addCaption}
+          onAddCaption={addCaptionAndRevealInspector}
           onMakePictureInPicture={makeSelectedPictureInPicture}
           onAddMask={(kind) => {
             if (!selectedClip || !selectedAsset || selectedAsset.kind === "audio") return setStatus("請先選一段影片或照片。");
@@ -514,6 +614,33 @@ export function EditorShell(props: EditorShellProps) {
           autoRotoBusy={autoRotoBusy}
           autoRotoRuntimeStatus={autoRotoRuntimeStatus}
         /></Suspense></>}
+        {agentDockOpen && !directorConsoleOpened && <WorkspaceResizeHandle axis="horizontal" label="調整 Agent 側欄寬度" onDelta={(delta) => setAgentDockWidth((current) => Math.max(300, Math.min(560, current - delta)))} />}
+        {agentDockMounted && <aside id="editor-agent-dock" className="agent-dock" aria-label="Agent 剪輯助理" data-testid="editor-agent-dock" data-view={agentDockView} hidden={!agentDockOpen || directorConsoleOpened}>
+            <header className="agent-dock-header"><div><strong>Agent</strong></div><nav className="agent-dock-tabs" aria-label="Agent 工作區">
+              <button type="button" aria-current={agentDockView === "home" ? "page" : undefined} onClick={() => setAgentDockView("home")}>對話</button>
+              <button type="button" aria-current={agentDockView === "story" ? "page" : undefined} onClick={openStoryDock}>編劇</button>
+              <button type="button" aria-current={agentDockView === "material" ? "page" : undefined} disabled={!selectedClip && !materialReviewClipId} onClick={() => selectedClip ? openMaterialDock(selectedClip.id) : setAgentDockView("material")}>素材</button>
+            </nav><button type="button" onClick={() => setAgentDockOpen(false)} aria-label="收合 Agent 側欄" title="收合側欄" data-testid="agent-dock-collapse">×</button></header>
+            <div className="agent-dock-content agent-dock-agent-content" hidden={agentDockView !== "home"}>
+              <OpenCodeAgentDock projectPath={props.projectPath} projectId={project.id} projectName={project.name}
+                projectSessionId={props.projectSession.getSnapshot().sessionId} projectSaved={Boolean(projectFileSaved)} projectSavePending={props.projectSavePending}
+                sourceBindingKey={JSON.stringify({ assets: project.assets.map(asset => [asset.id, asset.kind, asset.uri]),
+                  clips: project.tracks.flatMap(track => track.clips.map(clip => [clip.id, clip.assetId])) })}
+                selection={selectedCaption ? { kind: "caption", captionId: selectedCaption.id, text: selectedCaption.text,
+                  start: selectedCaption.start, duration: selectedCaption.duration, playhead } : selectedClip && selectedAsset ? { kind: "clip", clipId: selectedClip.id, assetName: selectedAsset.name, assetKind: selectedAsset.kind,
+                  timelineStart: selectedClip.timelineStart, duration: selectedClip.duration, playhead } : undefined}
+                onSaveProject={() => saveProject()}
+                onEnsureAgentProject={props.ensureAgentWorkingProject} onReloadProject={props.reloadAgentProject}
+                onOpenCompletedProject={props.openCompletedAgentProject} />
+            </div>
+            {agentDockView === "story" && <div className="agent-dock-content"><Suspense fallback={<p>正在載入編劇面板…</p>}><LocalStoryDraftDialog project={project} docked onClose={() => setAgentDockView("home")} /></Suspense></div>}
+            {agentDockView === "material" && <div className="agent-dock-content">{(() => {
+                const clip = project.tracks.flatMap((track) => track.clips).find((item) => item.id === materialReviewClipId);
+                const asset = clip ? project.assets.find((item) => item.id === clip.assetId) : undefined;
+                return clip && asset ? <Suspense fallback={<p>正在載入素材證據…</p>}><MaterialReviewDialog key={clip.id} project={project} clip={clip} asset={asset} docked onClose={() => setAgentDockView("home")} /></Suspense>
+                  : <p>先在時間軸選取影片、音訊或照片。</p>;
+              })()}</div>}
+          </aside>}
         {directorConsoleOpened && <><div className="director-divider" aria-hidden="true" /><Suspense fallback={<aside aria-label="正在載入導演台" />}><DirectorConsole docked project={project} runtimeUrls={runtimeUrls} playhead={playhead} currentArtifact={props.currentAestheticArtifact} onSeek={(time) => setPlayhead(Math.max(0, Math.min(Math.max(duration, 12), time)))} onCommand={runCommand} onClose={() => setDirectorConsoleOpened(false)} /></Suspense></>}
       </section>
       {workspace.layout.timelineVisible && <div className="timeline-region"><WorkspaceResizeHandle axis="vertical" label="調整時間軸高度" onDelta={(delta) => workspace.resize("timeline", delta)} /><Suspense fallback={<section className="timeline-shell" aria-label="正在載入時間軸" />}><Timeline
@@ -527,7 +654,12 @@ export function EditorShell(props: EditorShellProps) {
         onInsertAsset={(assetId, trackId, timelineStart) => addAssetToTimeline(assetId, "timeline", { trackId, timelineStart })}
         onSeek={(time) => setPlayhead(Math.max(0, Math.min(Math.max(duration, 12), time)))}
         onSelect={(clipId) => { setSelectedCaptionId(undefined); setSelectedClipId(clipId); }}
-        onSelectCaption={(captionId) => { setSelectedClipId(undefined); setSelectedCaptionId(captionId); }}
+        onSelectCaption={(captionId) => {
+          setSelectedClipId(undefined);
+          setSelectedCaptionId(captionId);
+          setAgentDockOpen(false);
+          if (!workspace.layout.inspectorVisible) workspace.patch({ inspectorVisible: true });
+        }}
         onMoveClip={(clipId, timelineStart, trackId) => {
           const clip = project.tracks.flatMap((track) => track.clips).find((item) => item.id === clipId);
           if (!clip) return;
@@ -545,7 +677,7 @@ export function EditorShell(props: EditorShellProps) {
           if (!caption) return;
           runCommand(buildCaptionTrimCommand(caption, edge, seconds, project.fps), `已拖曳修剪字幕${edge === "start" ? "開頭" : "結尾"}。`);
         }}
-        onAddCaption={addCaption}
+        onAddCaption={addCaptionAndRevealInspector}
         onAddTrack={addTrack}
         onRenameTrack={(trackId, name) => runCommand({ type: "rename_track", trackId, name }, `軌道已重新命名為「${name}」。`)}
         onToggleTrackLock={(trackId) => runCommand({ type: "toggle_track_lock", trackId }, "已切換軌道鎖定狀態。")}
@@ -558,9 +690,14 @@ export function EditorShell(props: EditorShellProps) {
       /></Suspense></div>}
       </>}
       <footer className="status-bar">
-        <span data-testid="save-state"><i className={recovery.recoveryState === "error" ? "red" : "green"} /> {recovery.dirty ? recovery.recoveryState === "saved" ? "未儲存 · Autosave 安全" : recovery.recoveryState === "error" ? "未儲存 · Autosave 失敗" : "未儲存 · Autosave…" : "所有變更已儲存"}</span>
+        <span data-testid="save-state"><i className={saveStateTone} /> {saveStateLabel}</span>
         <details className="project-format-control" data-testid="project-format-control" data-project-width={project.width} data-project-height={project.height}><summary aria-label="設定專案比例"><span data-testid="project-resolution">{projectFormatLabel(project.width, project.height)}</span><small>{project.width}×{project.height} · {project.fps} fps</small></summary><div><header><strong>專案比例</strong><span>只改畫布，不破壞原素材；可再到檢查器調整裁切與位置。</span></header>{PROJECT_FORMATS.map((format) => <button type="button" key={format.id} aria-label={`切換為 ${format.ratio} ${format.label}`} title={`${format.ratio} ${format.label} · ${format.width}×${format.height}`} className={project.width === format.width && project.height === format.height ? "active" : ""} onClick={(event) => { runCommand({ type: "set_project_resolution", width: format.width, height: format.height }, `專案已切換為 ${format.ratio} ${format.label}；素材位置與裁切仍可逐片調整。`); event.currentTarget.closest("details")?.removeAttribute("open"); }}><b>{format.ratio}</b><span><strong>{format.label}</strong><small>{format.use}</small></span></button>)}</div></details>
-        <OperationStatus status={status} runtimeInfo={isDesktop ? `桌面版 · 即時預覽 · 自動儲存${mobile.remote?.active ? ` · 手機已連線${mobile.remoteStatus?.connectedCount ? ` ${mobile.remoteStatus.connectedCount}` : ""}` : ""}` : "本機編輯 · 自動儲存"} />
+        {audioGaps.length > 0 && <button type="button" className="audio-gap-action" data-testid="audio-gap-notice"
+          title={`沒有可發聲片段：${audioGaps.map((gap) => `${formatTime(gap.start)}–${formatTime(gap.end)}`).join("、")}。影片本身是否有音軌仍需播放確認。`}
+          onClick={() => { const gap = audioGaps[0]; setPlayhead(gap.start); setStatus(`${formatTime(gap.start)}–${formatTime(gap.end)} 沒有可發聲片段；可加入配音或音樂，若是刻意留白也可直接輸出。`); }}>
+          聲音空檔 {audioGaps.length === 1 ? `${Math.round(audioGaps[0].start)}–${Math.round(audioGaps[0].end)} 秒` : `${audioGaps.length} 處`}
+        </button>}
+        <OperationStatus status={status} runtimeInfo={isDesktop ? `桌面版 · 即時預覽 · 復原保護${mobile.remote?.active ? ` · 手機已連線${mobile.remoteStatus?.connectedCount ? ` ${mobile.remoteStatus.connectedCount}` : ""}` : ""}` : "網頁預覽 · 尚未連接專案存檔"} />
       </footer>
       {beginnerGuideOpened && <Suspense fallback={null}><BeginnerGuide onClose={closeBeginnerGuide} onChooseMedia={() => document.querySelector<HTMLElement>('[data-testid="import-media-button"]')?.click()} /></Suspense>}
       {mobile.showConnect && (
@@ -582,7 +719,8 @@ export function EditorShell(props: EditorShellProps) {
       {directorConsoleOpened && showWelcome && (
         <Suspense fallback={null}><DirectorConsole project={project} playhead={playhead} currentArtifact={props.currentAestheticArtifact} onSeek={(time) => setPlayhead(Math.max(0, Math.min(Math.max(duration, 12), time)))} onCommand={runCommand} onClose={() => setDirectorConsoleOpened(false)} /></Suspense>
       )}
-      {agentConnectOpened && <Suspense fallback={null}><AgentConnectModal onClose={closeAgentConnect} onConnect={desktopActions.connectAgent} /></Suspense>}
+      {agentConnectOpened && <Suspense fallback={null}><AgentConnectModal onClose={closeAgentConnect} onConnect={desktopActions.connectAgent}
+        internalReady={!showWelcome} onUseInternal={() => { setAgentConnectOpened(false); setReturnToRemoteAfterAgent(false); setDirectorConsoleOpened(false); setAgentDockOpen(true); setAgentDockView("home"); }} /></Suspense>}
       {autoEditOpened && <Suspense fallback={null}><AutoEditDialog onClose={() => setAutoEditOpened(false)} onStart={(policy) => {
         setAutoEditOpened(false);
         const target = autoEditTarget.current;

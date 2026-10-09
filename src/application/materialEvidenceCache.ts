@@ -1,3 +1,4 @@
+// Agent integration: urn:uuid:d366cab7-d5a4-44d8-b80d-4c7ce4daf65d. Existing GPL license retained; see AGENT-NOTICE.md.
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { access, readFile, rename } from "node:fs/promises";
@@ -11,6 +12,8 @@ import { verifyMaterialKeyframeDisplay } from "./materialKeyframeValidation";
 export interface MaterialCacheIdentity {
   schema: "hao.editkin.material-intelligence/v1"; engineRevision: 3 | 4;
   assetId: string; clipId: string; sourceSha256: string;
+  /** Present only for packets prepared inside one bound Agent project. */
+  agentProjectScope?: string;
   sourceStart: number; duration: number; fps: number; kind: "audio" | "video" | "image";
   language: string; includeTranscript: boolean; maxKeyframes: number;
   keyframeTimes?: number[];
@@ -50,6 +53,7 @@ export function verifyMaterialPacket(packet: CachePacket, expectedId: string): v
     return; // Legacy read-only evidence remains readable; new preparation never uses its ID.
   }
   const { identity } = packet.cache;
+  if (identity.agentProjectScope !== undefined && !/^[a-f0-9]{64}$/.test(identity.agentProjectScope)) throw new Error("Agent 素材專案範圍不合法");
   if (![3, 4].includes(identity.engineRevision) || hashMaterialJson(identity) !== expectedId || packetDigest(packet) !== packet.cache.packetSha256) throw new Error("素材 cache 完整性驗證失敗");
   for (const key of ["assetId", "clipId", "sourceSha256", "sourceStart", "duration", "fps", "kind", "color", "colorManagement"] as const) {
     if (canonicalJson(packet.source[key] ?? null) !== canonicalJson(identity[key] ?? null)) throw new Error(`素材 cache 來源完整性不一致：${key}`);

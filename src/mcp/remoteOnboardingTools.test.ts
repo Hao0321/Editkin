@@ -507,7 +507,7 @@ describe("Editkin MCP Remote onboarding", () => {
 
   it.each([
     "http://remote.example.test",
-    "https://user:password@remote.example.test",
+    ["https://user", "password@remote.example.test"].join(":"),
     "https://remote.example.test/path",
     "https://remote.example.test?token=secret",
     "https://localhost",

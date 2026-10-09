@@ -22,6 +22,13 @@ describe("anonymous Editkin aesthetic standard", () => {
     expect(system.primaryFamily).toBe(EDITKIN_AESTHETIC_STANDARD.domain_routes.technology.primary);
   });
 
+  it("can bind a current Kit recipe family without changing the portable default", () => {
+    const selected = resolveAestheticSystemForDomain("technology", "longform", "cobalt_lime_ui");
+    expect(selected.primaryFamily).toBe("cobalt_lime_ui");
+    expect(selected.primaryLabel).toBe(EDITKIN_AESTHETIC_STANDARD.style_families.cobalt_lime_ui.label_zh);
+    expect(() => resolveAestheticSystemForDomain("technology", "longform", "not-a-family")).toThrow("Unknown Editkin aesthetic family");
+  });
+
   it("never lets machine checks impersonate the required human review", () => {
     const system = resolveAestheticSystem("gaming", "shorts");
     const perfect = Object.fromEntries(system.dimensions.map((row) => [row.id, 5]));

@@ -6,9 +6,9 @@ import type { AgentTarget } from "../src/application/agentSetup";
 export interface ChildResult { code: number; stdout: string; stderr: string }
 export interface AgentCli { command: string; prefixArgs: string[] }
 
-function runChild(command: string, args: string[], timeoutMs = 45_000, shell = false): Promise<ChildResult> {
+function runChild(command: string, args: string[], timeoutMs = 45_000): Promise<ChildResult> {
   return new Promise((resolveRun, rejectRun) => {
-    const child = spawn(command, args, { windowsHide: true, shell, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, args, { windowsHide: true, shell: false, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     let settled = false;

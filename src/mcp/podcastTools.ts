@@ -8,7 +8,7 @@ import { analyzeMotionTrack } from "../application/motionTracking";
 import { buildPodcastDirectorCommand } from "../application/podcastDirector";
 import { resolveAestheticSystem } from "../application/editkinAesthetic";
 import { findAsset, findClip, summarizeProject } from "../domain/editGraph";
-import { applyProjectCommands, readProject, resolveWorkspaceMediaPath, workspaceRoot } from "./storage";
+import { applyProjectCommands, readProject, resolveProjectAssetMediaPath, workspaceRoot } from "./storage";
 import { creativePackRoot, errorResult, personalMusicRoot, personalVisualRoot, textResult } from "./toolRuntime";
 
 export function registerPodcastTools(server: McpServer): void {
@@ -28,7 +28,7 @@ export function registerPodcastTools(server: McpServer): void {
       const asset = findAsset(project, clip.assetId);
       if (asset.kind !== "video") throw new Error("雙人物導播只支援影片片段");
       const creativeId = creativeAssetIdFromUri(asset.uri);
-      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveWorkspaceMediaPath(asset.uri);
+      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveProjectAssetMediaPath(asset.uri);
       const ffmpegPath = process.env.HAO_FFMPEG_PATH ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../vendor/ffmpeg/win32-x64/ffmpeg.exe") : "ffmpeg");
       const nativeCorePath = process.env.HAO_NATIVE_CORE_PATH ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../native/bin/win32-x64/hao-core.exe") : "hao-core");
       const modelRoot = process.env.EDITKIN_MODEL_ROOT ?? resolve(workspaceRoot(), ".editkin-models");

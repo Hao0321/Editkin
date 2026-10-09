@@ -53,6 +53,7 @@ const AUTO_ROTO_RUNTIME_BOUNDARY_KEYS = new Set<string>([
   "ffmpeg",
   "ffprobe",
   "whisperCli",
+  "whisperModel",
   "nativeCore",
   "gpuCompositor",
   "assetBase",

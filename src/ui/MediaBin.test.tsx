@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { MediaAsset } from "../domain/types";
+import { createUiDemoProject } from "../domain/demo";
 import { MediaBin, PROJECT_ASSET_ROW_HEIGHT } from "./MediaBin";
 
 const assets: MediaAsset[] = Array.from({ length: 100 }, (_, index) => ({
@@ -12,6 +13,14 @@ const assets: MediaAsset[] = Array.from({ length: 100 }, (_, index) => ({
 }));
 
 describe("compact project media bin", () => {
+  it("does not advertise an empty optional library or call the demo a user asset", () => {
+    const html = renderToStaticMarkup(<MediaBin assets={createUiDemoProject().assets} runtimeUrls={{}}
+      onImport={vi.fn()} onCreativeImport={vi.fn()} creativeLibrary={{ id: "local", name: "本機素材庫", version: "uninstalled",
+        attribution: "", packInstalled: false, assetCount: 0, assetBytes: 0, assets: [], musicAssetCount: 0,
+        sfxAssetCount: 0, restrictedAssetCount: 0 }} />);
+    expect(html).not.toContain('data-testid="asset-preview-entry"');
+    expect(html).toContain("加入自己的素材時會自動移除它");
+  });
   it("virtualizes large projects, keeps native wheel scrolling and avoids eager source video decoding", () => {
     const runtimeUrls = Object.fromEntries(assets.map((asset) => [asset.id, `asset://raw/${asset.id}`]));
     const html = renderToStaticMarkup(<MediaBin assets={assets} runtimeUrls={runtimeUrls} onImport={vi.fn()} onAddAssetToTimeline={vi.fn()} onAddAssetAsPictureInPicture={vi.fn()} />);

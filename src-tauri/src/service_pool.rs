@@ -1,3 +1,4 @@
+// Agent integration: urn:uuid:d366cab7-d5a4-44d8-b80d-4c7ce4daf65d. Existing GPL license retained; see AGENT-NOTICE.md.
 //! Separate lazy workers keep long analysis/export away from project/library I/O.
 //! All project mutations share the control lane; unknown commands fail before launch.
 use crate::resident_service::ResidentService;
@@ -5,7 +6,7 @@ use serde_json::Value;
 use std::{path::Path, sync::{atomic::AtomicBool, Mutex}, time::Duration};
 
 #[derive(Debug, PartialEq, Eq)]
-enum Lane { Control, Preparation, Analysis, Export }
+enum Lane { Control, Preparation, Analysis, Export, Agent }
 
 fn policy(command: &str) -> Result<(Lane, Duration), String> {
     let (lane, seconds) = match command {
@@ -15,12 +16,23 @@ fn policy(command: &str) -> Result<(Lane, Duration), String> {
         | "compile_plugin_tool" | "resolve_gpu_effect_bindings" | "read_workflow_profile"
         | "write_workflow_profile" => (Lane::Control, 60),
         "inspect_media" | "inspect_media_batch" => (Lane::Preparation, 120),
+        "automatic_caption_status" => (Lane::Preparation, 60),
         "prepare_media" => (Lane::Preparation, 10 * 60),
         "stage_native_audio_preview" | "stage_native_audio_project" => (Lane::Preparation, 120),
         "analyze_smart_cut" | "transcribe_media" | "detect_scenes"
         | "analyze_motion_track" | "analyze_auto_roto" => (Lane::Analysis, 60 * 60),
         "render_project" | "render_native_effect_preview" | "batch_auto_edit_item" => (Lane::Export, 2 * 60 * 60),
         "check_update" => (Lane::Export, 60),
+        "local_story_models" => (Lane::Preparation, 20),
+        "local_story_generate" => (Lane::Analysis, 130),
+        "material_review_start" | "material_review_status" | "material_review_frame"
+        | "material_review_cancel" | "material_review_verify_source" => (Lane::Analysis, 30),
+        "agent_acp_start" | "agent_acp_new" | "agent_acp_load" => (Lane::Agent, 90),
+        "agent_acp_list" | "agent_acp_library" => (Lane::Agent, 30),
+        "agent_provider_action" => (Lane::Agent, 60),
+        "agent_acp_set_config" => (Lane::Agent, 30),
+        "agent_acp_prompt" | "agent_acp_status" | "agent_acp_permission"
+        | "agent_acp_cancel" | "agent_acp_close" => (Lane::Agent, 15),
         "stage_update" => (Lane::Export, 30 * 60),
         _ => return Err(format!("Unknown service command; not submitted: {command}")),
     };
@@ -33,6 +45,8 @@ pub struct ServicePool {
     preparation: ResidentService,
     analysis: ResidentService,
     export: ResidentService,
+    local_story: ResidentService,
+    agent: ResidentService,
     previews: PreviewWorkers,
 }
 
@@ -78,6 +92,16 @@ fn verify_product_response(host: &ResidentService, response: Value) -> Result<Va
 }
 
 impl ServicePool {
+    pub fn request_local_story(&self, node: &Path, service: &Path, command: &str, request: Value, cancel: &AtomicBool) -> Result<Value, String> {
+        if !matches!(command, "local_story_models" | "local_story_generate")
+            || request.get("command").and_then(Value::as_str) != Some(command) {
+            return Err("Local story command mismatch; not submitted".into());
+        }
+        let timeout = if command == "local_story_models" { Duration::from_secs(20) } else { Duration::from_secs(130) };
+        let response = self.local_story.request_with_cancel(node, service, request, timeout, Some(cancel))?;
+        verify_product_response(&self.local_story, response)
+    }
+
     pub fn request(&self, node: &Path, service: &Path, command: &str, request: Value) -> Result<Value, String> {
         let (lane, timeout) = policy(command)?;
         if request.get("command").and_then(Value::as_str) != Some(command) {
@@ -88,6 +112,7 @@ impl ServicePool {
             Lane::Preparation => &self.preparation,
             Lane::Analysis => &self.analysis,
             Lane::Export => &self.export,
+            Lane::Agent => &self.agent,
         };
         let response = host.request(node, service, request, timeout)?;
         verify_product_response(host, response)
@@ -107,7 +132,7 @@ impl ServicePool {
         // Shutdown is terminal and only acts on workers created by this pool.
         // Parallel cleanup keeps application exit bounded by one worker deadline.
         std::thread::scope(|scope| {
-            for host in [&self.control, &self.preparation, &self.analysis, &self.export,
+            for host in [&self.control, &self.preparation, &self.analysis, &self.export, &self.local_story, &self.agent,
                 &self.previews.hosts[0], &self.previews.hosts[1]] {
                 scope.spawn(move || host.shutdown());
             }
@@ -125,6 +150,9 @@ mod tests {
         assert_eq!(policy("prepare_media").unwrap().0, Lane::Preparation);
         assert_eq!(policy("analyze_auto_roto").unwrap().0, Lane::Analysis);
         assert_eq!(policy("render_project").unwrap().0, Lane::Export);
+        assert_eq!(policy("agent_acp_prompt").unwrap().0, Lane::Agent);
+        assert_eq!(policy("agent_acp_library").unwrap(), (Lane::Agent, Duration::from_secs(30)));
+        assert_eq!(policy("agent_provider_action").unwrap(), (Lane::Agent, Duration::from_secs(60)));
         assert!(policy("execute_shell").is_err());
         assert!(policy("resolve_creative_preview").is_err(), "preview must use its bounded dedicated workers");
     }

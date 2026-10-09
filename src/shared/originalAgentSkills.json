@@ -1,0 +1,1561 @@
+{
+  "schema": "editkin.original-agent-skills/v1",
+  "kitCommit": "9fcd84691a0a2c2af1b8144ca5b6d4df04d7b0ba",
+  "editorCommit": "41163ea553f79fd58abe5d7bedea91af6a2d1c38",
+  "skills": [
+    {
+      "id": "video-autopilot",
+      "role": "editing",
+      "entry": "SKILL.md"
+    },
+    {
+      "id": "code-cleanup-helper",
+      "role": "maintenance-reference",
+      "entry": "upstream/tools/code-cleanup-helper/SKILL.md"
+    },
+    {
+      "id": "studio.hao.creator-workflow/balanced-creator-workflow",
+      "role": "editor-skill-pack",
+      "entry": "upstream/editor/creator-workflow/editkin-skill.json"
+    }
+  ],
+  "files": [
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "LICENSE",
+      "resource": "Kit-LICENSE.txt",
+      "license": "MIT",
+      "bytes": 1071,
+      "sha256": "7f29ea8ecc9473502a2d3c70c0931dce2c5543ce7f2bd154d654f9844aad5f07"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/SKILL.md",
+      "resource": "SKILL.md",
+      "license": "MIT",
+      "bytes": 6750,
+      "sha256": "64f47ea53128c3afedf41ec5e2c0b17f6b705bac6489c755788a1e22ad157232"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/agents/openai.yaml",
+      "resource": "agents/openai.yaml",
+      "license": "MIT",
+      "bytes": 313,
+      "sha256": "0f144cca8ce214d0733f56b8c03d4dec5e1dabce2d1305def3d3f3c3b6c3596b"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/design_runtime/knowledge/runtime/aesthetic_standard.json",
+      "resource": "design_runtime/knowledge/runtime/aesthetic_standard.json",
+      "license": "MIT",
+      "bytes": 19919,
+      "sha256": "3d05d0fe77065f0584c6bcedd190cad4df649187fa8434d3b40407e01f5488f5"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/design_runtime/knowledge/runtime/design_reference_dna.json",
+      "resource": "design_runtime/knowledge/runtime/design_reference_dna.json",
+      "license": "MIT",
+      "bytes": 20748,
+      "sha256": "b65f17f0dda02eddeff1ca3e1e5c62451f02a04923475838a7dc6617fe3a181e"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/design_runtime/src/aesthetic_score.py",
+      "resource": "design_runtime/src/aesthetic_score.py",
+      "license": "MIT",
+      "bytes": 11030,
+      "sha256": "011e65dcd864b955a634b39191622de8dabab43fdc77a681d89f769e6fc41bc9"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/design_runtime/src/design_system_v6.py",
+      "resource": "design_runtime/src/design_system_v6.py",
+      "license": "MIT",
+      "bytes": 20252,
+      "sha256": "7ef454ac24fa7846d46796b65422af5e76b679feb6238fe5fe93fdfb4a69b524"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/editkin_design_bridge.py",
+      "resource": "editkin_design_bridge.py",
+      "license": "MIT",
+      "bytes": 3158,
+      "sha256": "4dcb2fdad52ae7abc4056e87c112cf24b9e962f3d386bfb737b5959ce281b3b0"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/ai-evidence-canvas.md",
+      "resource": "references/ai-evidence-canvas.md",
+      "license": "MIT",
+      "bytes": 4333,
+      "sha256": "00e008517d06aac09284b812973e72184d6f7d2cd8c9de524c47dcaed7722b44"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/architecture-foundation-v6-3.md",
+      "resource": "references/architecture-foundation-v6-3.md",
+      "license": "MIT",
+      "bytes": 5342,
+      "sha256": "d7fbf23da6d6c88c171076f2bee5898fcf9627e99ee92df5658a064f7e4e84fc"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/asset-intelligence-hub.md",
+      "resource": "references/asset-intelligence-hub.md",
+      "license": "MIT",
+      "bytes": 4903,
+      "sha256": "9f017ecdb29d7de769000be016d19b410b0d89079619fd87df4451e53052d004"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/asset-workshop.md",
+      "resource": "references/asset-workshop.md",
+      "license": "MIT",
+      "bytes": 1775,
+      "sha256": "aa5272c470c1100f41942906f5ba8cbe38c3862cbd2c3457ff41d7db34a45793"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/autopilot-modes.md",
+      "resource": "references/autopilot-modes.md",
+      "license": "MIT",
+      "bytes": 1463,
+      "sha256": "251f98c6c7941d2533999539a6a65946d3f3a4eb8ecc71509dc5c1164412d47b"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/benchmark-effect-parity.md",
+      "resource": "references/benchmark-effect-parity.md",
+      "license": "MIT",
+      "bytes": 5256,
+      "sha256": "b38d4a5a0c2f4dec78d26afcf24b326c1c123525978a473e2d1b7f5da09bba6d"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/beyblade-x-finish-judging.md",
+      "resource": "references/beyblade-x-finish-judging.md",
+      "license": "MIT",
+      "bytes": 4286,
+      "sha256": "976d693f7bc41980dccb96b6de5984761eebb296ebb9278560fd3a0b87e0a506"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/bright-editorial-template-system.md",
+      "resource": "references/bright-editorial-template-system.md",
+      "license": "MIT",
+      "bytes": 6108,
+      "sha256": "ec6a1abe2d094e1bbe1278f4074f5c34c9bd2510ee48e3f45163cff40456c6f1"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/calibration-learning-and-license.md",
+      "resource": "references/calibration-learning-and-license.md",
+      "license": "MIT",
+      "bytes": 3522,
+      "sha256": "e0e717ae13c029f6f42e948e85a8e984ab8e60104c6c27bfcda5170a3b7656b9"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/camera-transition-and-value-visualization.md",
+      "resource": "references/camera-transition-and-value-visualization.md",
+      "license": "MIT",
+      "bytes": 7114,
+      "sha256": "525fc3da7316578014a53bba4e3cb837dc1397899a66a2761255d0c9e44bc650"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/caption-art-direction.md",
+      "resource": "references/caption-art-direction.md",
+      "license": "MIT",
+      "bytes": 5981,
+      "sha256": "de5d7fca2b6f64922bdffd7f56c9ceff944f0119df72cfbb2d909c2b8fb457ba"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/cinematic-wave-and-domain-grammar-2026.md",
+      "resource": "references/cinematic-wave-and-domain-grammar-2026.md",
+      "license": "MIT",
+      "bytes": 9279,
+      "sha256": "76af913e7da8851be7c93e0d776abf1cdf16c2bcf587f0c4961ab12a5a0117b5"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/color-science-and-visual-master.md",
+      "resource": "references/color-science-and-visual-master.md",
+      "license": "MIT",
+      "bytes": 4081,
+      "sha256": "ea84f03e66cf9f19d493aaebdc45b446084ee5d75faa9bbe9c58adf70fc74f67"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/competitor-vertical-teardown-2026.md",
+      "resource": "references/competitor-vertical-teardown-2026.md",
+      "license": "MIT",
+      "bytes": 1618,
+      "sha256": "118719358466870f83d1e91aa2583dd9627738a33b89d14b708d35109ae218a0"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/craft-index.md",
+      "resource": "references/craft-index.md",
+      "license": "MIT",
+      "bytes": 1485,
+      "sha256": "d72a2daedfad18d8f1779951dc2bc656be7322b6122f1bed85d228413d842bff"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/design-reference-dna-v6.md",
+      "resource": "references/design-reference-dna-v6.md",
+      "license": "MIT",
+      "bytes": 5725,
+      "sha256": "b4a60205a8cb933a165f9de1ceb84f55986f9f58df39f1517b41d320444e9581"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/editing-craft-fundamentals.md",
+      "resource": "references/editing-craft-fundamentals.md",
+      "license": "MIT",
+      "bytes": 76467,
+      "sha256": "7f7b5244a72d787fcbdedf8914116dc809fe4449eb65970aba080eab1cc8d541"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/editing-master-techniques.md",
+      "resource": "references/editing-master-techniques.md",
+      "license": "MIT",
+      "bytes": 2713,
+      "sha256": "d40abaf0e77b41ee758cd4585d93d09aa3c7f75db4913a2c1db99b1137087309"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/editing-techniques-2026.md",
+      "resource": "references/editing-techniques-2026.md",
+      "license": "MIT",
+      "bytes": 1747,
+      "sha256": "8cce280cf3c77e3c13e453faaad225340cae1a84f3083ce269de0c1d348b3c8b"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/editing-wave5-finecut-2026.md",
+      "resource": "references/editing-wave5-finecut-2026.md",
+      "license": "MIT",
+      "bytes": 1432,
+      "sha256": "9c5c98c9c6a51e451957584f4cde0f56855d47fca8f4a0dcb5af16c72c8599a0"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/editing-wave6-2026.md",
+      "resource": "references/editing-wave6-2026.md",
+      "license": "MIT",
+      "bytes": 41131,
+      "sha256": "d6c5094e5fb2379005d78a9f0f810b8528b3559627ce4309b174331ccc1df49c"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/editkin-batch-workflow.md",
+      "resource": "references/editkin-batch-workflow.md",
+      "license": "MIT",
+      "bytes": 2987,
+      "sha256": "90862871cc78b31f28a0d72a1b19add9046f7f72548610cc29a15401b5bc361c"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/editkin-mobile-device-binding.md",
+      "resource": "references/editkin-mobile-device-binding.md",
+      "license": "MIT",
+      "bytes": 5222,
+      "sha256": "41fd756a3a5048b21a38fc80c12d7d7bd36ef637ed27c6189c9428c3858c7108"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/editkin-plugin-automation.md",
+      "resource": "references/editkin-plugin-automation.md",
+      "license": "MIT",
+      "bytes": 2823,
+      "sha256": "0d16c004cc89aa8927e791cb73bfd0c375dce3f4c5b3fc156c3613f2de57129d"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/editkin-workflow-execution.md",
+      "resource": "references/editkin-workflow-execution.md",
+      "license": "MIT",
+      "bytes": 9759,
+      "sha256": "e274d1025c0bc38229f3b95d6901dd643dc1c937bc1dd671a5c6ef0272627f34"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/editorial-intelligence-contract.md",
+      "resource": "references/editorial-intelligence-contract.md",
+      "license": "MIT",
+      "bytes": 5128,
+      "sha256": "74fd64bb3268e47fff26ed9819953eacb1731475f3e5e181b657046740106298"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/filter-library.md",
+      "resource": "references/filter-library.md",
+      "license": "MIT",
+      "bytes": 5215,
+      "sha256": "8c7f93740df2fadc6c5a11970d1d16c884cc14c65b7a95fc3f0ff5bc71a98b05"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/genre-copy-grammar-2026.md",
+      "resource": "references/genre-copy-grammar-2026.md",
+      "license": "MIT",
+      "bytes": 4004,
+      "sha256": "aaed0cc65b6c8155b66e96bf1a9260d2462442dad193160a07d4faf53fe78a00"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/genre-editing-craft-2026.md",
+      "resource": "references/genre-editing-craft-2026.md",
+      "license": "MIT",
+      "bytes": 1750,
+      "sha256": "70beef481a7637021d87b2dbac75f8c6fad95d0c4f329283a770655d7baaff2a"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/hao-aesthetic-standard.md",
+      "resource": "references/hao-aesthetic-standard.md",
+      "license": "MIT",
+      "bytes": 1730,
+      "sha256": "948b07c850ad3bc4396d29012d9200d5db06a255d021127ff044aec53e102177"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/knowledge-lifecycle.md",
+      "resource": "references/knowledge-lifecycle.md",
+      "license": "MIT",
+      "bytes": 1894,
+      "sha256": "f5f607126f9c5a2047448958958111537dbfa336e6143f4dffa2f279ad7a4c3e"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/mediastorm-craft-system.md",
+      "resource": "references/mediastorm-craft-system.md",
+      "license": "MIT",
+      "bytes": 4597,
+      "sha256": "15070d4858289a91b1f2b9334ed13094421311330138a56dbae94615fda8cb90"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/model-and-context-adaptation.md",
+      "resource": "references/model-and-context-adaptation.md",
+      "license": "MIT",
+      "bytes": 3413,
+      "sha256": "8ad20825fd686ce5868a9b1d13baf740683144ecab27e21ab643a3750bbc2b22"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/motion-asset-library.md",
+      "resource": "references/motion-asset-library.md",
+      "license": "MIT",
+      "bytes": 3537,
+      "sha256": "8aa00b35c554fd64380e2d7d05b3ed2408786125de1fddd41eed568d7f342c8e"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/mrbeast-and-yingshi-benchmark.md",
+      "resource": "references/mrbeast-and-yingshi-benchmark.md",
+      "license": "MIT",
+      "bytes": 9980,
+      "sha256": "6be63bf903c1ebd8fd3d2e23fbfde69a0453c23b9b4e417fa5c65c2943a9f080"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/mrbeast-production-source-map.md",
+      "resource": "references/mrbeast-production-source-map.md",
+      "license": "MIT",
+      "bytes": 8539,
+      "sha256": "465c3350158b30f864c3a402f595c73725b57fdd002216e2e61105e66503d0bd"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/niche-editing-grammar.md",
+      "resource": "references/niche-editing-grammar.md",
+      "license": "MIT",
+      "bytes": 55250,
+      "sha256": "f072fe9cd9c525360653724db161bc69cd30618914bcb88691ab430927e0c7c2"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/niche-fonts-colors.md",
+      "resource": "references/niche-fonts-colors.md",
+      "license": "MIT",
+      "bytes": 1319,
+      "sha256": "9a032cee07a4ad60aaf1cfbeb259ead5d4da4d136639513681540bdb0f722664"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/open-source-release-and-upgrade.md",
+      "resource": "references/open-source-release-and-upgrade.md",
+      "license": "MIT",
+      "bytes": 3954,
+      "sha256": "0b04df92034ba1adff0fb6b36542d3b1b0ef16b18eaf8ae3cdd9961be4c07d30"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/programmatic-motion-runtime.md",
+      "resource": "references/programmatic-motion-runtime.md",
+      "license": "MIT",
+      "bytes": 5155,
+      "sha256": "3a80bfcfe8c7ad2f92da3073bcc3952ac385e7b049545b9495648042595ed534"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/publish-hub-and-remix.md",
+      "resource": "references/publish-hub-and-remix.md",
+      "license": "MIT",
+      "bytes": 3564,
+      "sha256": "32edc462781a6f089e1ed979c97737e38669d05addf6288c4221668e4e771a4f"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/quality-95-system.md",
+      "resource": "references/quality-95-system.md",
+      "license": "MIT",
+      "bytes": 3619,
+      "sha256": "f3d87d5140de62bc4e1ee60779e8bc5c6510c57a02bd0421363d66d6cacfe24c"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/script-retention-2026.md",
+      "resource": "references/script-retention-2026.md",
+      "license": "MIT",
+      "bytes": 2885,
+      "sha256": "425ca6e15eff4308699bb2a877036bb018f486958e11079f2d217d1a3934a0f0"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/shorts-mastery-2026.md",
+      "resource": "references/shorts-mastery-2026.md",
+      "license": "MIT",
+      "bytes": 1896,
+      "sha256": "7280266fe6a37c77f328563416eef5182e109c672b9ee95a7db7f63c959b152b"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/shorts_reels_2026_best_practices.md",
+      "resource": "references/shorts_reels_2026_best_practices.md",
+      "license": "MIT",
+      "bytes": 2391,
+      "sha256": "d7cc5d242bef992b85eaf4910e08aafc8f0fd712b4f7de5e47a34c640f435ef2"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/storage-lifecycle.md",
+      "resource": "references/storage-lifecycle.md",
+      "license": "MIT",
+      "bytes": 5807,
+      "sha256": "7ba0bde460fa9a942a8c65531c770c4eb7f2764935070d645c893ddbe08a70be"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/template-compiler-v2.md",
+      "resource": "references/template-compiler-v2.md",
+      "license": "MIT",
+      "bytes": 2766,
+      "sha256": "b53312cb993e7c00a6744444a6d21fbba62619b6b0061cfbf44b3fdd6a05b7ab"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/ten-million-editorial-system.md",
+      "resource": "references/ten-million-editorial-system.md",
+      "license": "MIT",
+      "bytes": 1410,
+      "sha256": "362e4bd5ac68ee78b6df54a0e3a03c4897d3e3cf50a6a66cd36eee5dca3b9d54"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/three-d-and-subject-fx.md",
+      "resource": "references/three-d-and-subject-fx.md",
+      "license": "MIT",
+      "bytes": 3625,
+      "sha256": "fa33a60ed94daae2416c20a5ad79ba8bb415605626335b8ad5a7cb63c843bb8c"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/thumbnail-algorithm-score.md",
+      "resource": "references/thumbnail-algorithm-score.md",
+      "license": "MIT",
+      "bytes": 2645,
+      "sha256": "36f49008a699f57001f2a1263f339835548653332924caff2f515519ae11bcb6"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/token-budget-system.md",
+      "resource": "references/token-budget-system.md",
+      "license": "MIT",
+      "bytes": 2543,
+      "sha256": "02792e81bc09ce1811c232ab86eb51be36437a69ff9f96bff022b9b031cae45f"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/tracked-typography-and-challenge-ledger.md",
+      "resource": "references/tracked-typography-and-challenge-ledger.md",
+      "license": "MIT",
+      "bytes": 8404,
+      "sha256": "ec080029e6d32b6985da2f33f63c00a5e1820f01a34976634cd12aa8a0ccc30e"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/unattended-autonomy-standard.md",
+      "resource": "references/unattended-autonomy-standard.md",
+      "license": "MIT",
+      "bytes": 3193,
+      "sha256": "c6c694bb020c1be73b9b51bf8750342a8910e2143cffbbd30f89511f6f151fca"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/references/visual-art-direction-2026.md",
+      "resource": "references/visual-art-direction-2026.md",
+      "license": "MIT",
+      "bytes": 4968,
+      "sha256": "3afedf10d7aed051e81ef7f88154c9b5dd449d6d698f98f7044c5b310a710975"
+    },
+    {
+      "repository": "editkin",
+      "sourcePath": "plugins/creator-workflow/editkin-plugin.json",
+      "resource": "upstream/editor/creator-workflow/editkin-plugin.json",
+      "license": "GPL-3.0-or-later",
+      "bytes": 1193,
+      "sha256": "4853259b25690460d16ef35fd3ee2f793289f874fea846bf348ba2ee8e9ace98"
+    },
+    {
+      "repository": "editkin",
+      "sourcePath": "plugins/creator-workflow/editkin-skill.json",
+      "resource": "upstream/editor/creator-workflow/editkin-skill.json",
+      "license": "GPL-3.0-or-later",
+      "bytes": 2113,
+      "sha256": "05f60d79bb7ed1f740d70afd2b4d387effbe6831ce2499b19976ddcdc8888462"
+    },
+    {
+      "repository": "editkin",
+      "sourcePath": "video-autopilot-skill-integration.json",
+      "resource": "upstream/editor/video-autopilot-skill-integration.json",
+      "license": "GPL-3.0-or-later",
+      "bytes": 118,
+      "sha256": "d17b72c3e8a30ff2ca4dd356fbecc065caf1e9a546cbb01ed593efaa501f7e93"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/README.md",
+      "resource": "upstream/knowledge/README.md",
+      "license": "MIT",
+      "bytes": 6106,
+      "sha256": "399c22eabb435465924157e72f0ec0726f7a3bf647da39b27c35179b4f90b546"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/agent-token-efficiency.md",
+      "resource": "upstream/knowledge/agent-token-efficiency.md",
+      "license": "MIT",
+      "bytes": 4103,
+      "sha256": "6a0b00667122fd6c870c0a7ee183cc269c226f237f3d27c07f047133ab8e2cd9"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/ai-content-compliance-sources.md",
+      "resource": "upstream/knowledge/ai-content-compliance-sources.md",
+      "license": "MIT",
+      "bytes": 55626,
+      "sha256": "4d34b7b83fabfe42eec7b18bf9ca8ca535110e917bda9c30751b295ed7f02ddc"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/ai-content-compliance.md",
+      "resource": "upstream/knowledge/ai-content-compliance.md",
+      "license": "MIT",
+      "bytes": 18144,
+      "sha256": "20af1e53b880ec310e64e67fd26d75ece1fb32d0ccf07fd8c4d37a6cf78900fb"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/autopilot-workflow.md",
+      "resource": "upstream/knowledge/autopilot-workflow.md",
+      "license": "MIT",
+      "bytes": 19267,
+      "sha256": "45a7c8085fb4da247dd982470252982e09097770cc591bebe810c0b8eacccbc1"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/genre-editing-craft.md",
+      "resource": "upstream/knowledge/genre-editing-craft.md",
+      "license": "MIT",
+      "bytes": 35771,
+      "sha256": "177182f282fed5e12692260b7162d68e2ce8eb27c88496ec6fc8c9026d90e95b"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/ig-caption-patterns.md",
+      "resource": "upstream/knowledge/ig-caption-patterns.md",
+      "license": "MIT",
+      "bytes": 14031,
+      "sha256": "8478e7f63de653277b4b5846d068a22e16327dc75ec1aa6f25deec96119840b6"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/interview-show-playbook.md",
+      "resource": "upstream/knowledge/interview-show-playbook.md",
+      "license": "MIT",
+      "bytes": 11964,
+      "sha256": "8a92b43d7b2f0c617e01fa3d46bc1ad1879750f960d2197447b1181b2729298a"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/launch-hype-sop.md",
+      "resource": "upstream/knowledge/launch-hype-sop.md",
+      "license": "MIT",
+      "bytes": 5782,
+      "sha256": "83f9ada051cf77ecd631516e74387e45de94e2446ef7210fe834efc347d7ed1b"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/ops-automation.md",
+      "resource": "upstream/knowledge/ops-automation.md",
+      "license": "MIT",
+      "bytes": 1988,
+      "sha256": "7c24c5f4e0afbca2d594ab75d50c2c667250fe686dc8ec5183e90aba4642aed4"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/premium-motion-fx.md",
+      "resource": "upstream/knowledge/premium-motion-fx.md",
+      "license": "MIT",
+      "bytes": 20495,
+      "sha256": "7efa6941f94bc893c3e075e6a45e3a6be64bdbb5196d5bd391cfaa48742eedef"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/production-safety-principles.md",
+      "resource": "upstream/knowledge/production-safety-principles.md",
+      "license": "MIT",
+      "bytes": 1685,
+      "sha256": "d0419d4a2ea7cebeb87a8f565946bffc1b9e22c19a30bac2c92774ee463830e3"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/programmatic-video-build.md",
+      "resource": "upstream/knowledge/programmatic-video-build.md",
+      "license": "MIT",
+      "bytes": 5459,
+      "sha256": "b3740a4c09c45b395e4ecf07d922ea09d98f4d2de9cc9f76155d2e91577636b3"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/aesthetic_standard.json",
+      "resource": "upstream/knowledge/runtime/aesthetic_standard.json",
+      "license": "MIT",
+      "bytes": 19919,
+      "sha256": "3d05d0fe77065f0584c6bcedd190cad4df649187fa8434d3b40407e01f5488f5"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/asset_license_overrides.json",
+      "resource": "upstream/knowledge/runtime/asset_license_overrides.json",
+      "license": "MIT",
+      "bytes": 45,
+      "sha256": "8b443854fb341ff4ad4658b1e8e688e350d0df81a75168de14754b17556bf13e"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/asset_license_policy.json",
+      "resource": "upstream/knowledge/runtime/asset_license_policy.json",
+      "license": "MIT",
+      "bytes": 644,
+      "sha256": "a3e7e4df99fd42918ba65e0f506d03f9ede27de3f2aa7f55ad8831d786524872"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/beyblade_x_rules.json",
+      "resource": "upstream/knowledge/runtime/beyblade_x_rules.json",
+      "license": "MIT",
+      "bytes": 3411,
+      "sha256": "4eed9df62d0bd833846c0805a6fe6a2e080728f91f7377029fa7f0e7341691ff"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/camera_color_profiles.json",
+      "resource": "upstream/knowledge/runtime/camera_color_profiles.json",
+      "license": "MIT",
+      "bytes": 618,
+      "sha256": "792c775186d1adc388560cb410a13289072c0e73244b5252547a095b24ed3983"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/color_grading_profiles.json",
+      "resource": "upstream/knowledge/runtime/color_grading_profiles.json",
+      "license": "MIT",
+      "bytes": 6965,
+      "sha256": "2eed758476d55cd17144f91d9fce68baa6d51bd4f5c4d82950b35c8fd4ede9a7"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/design_reference_dna.json",
+      "resource": "upstream/knowledge/runtime/design_reference_dna.json",
+      "license": "MIT",
+      "bytes": 20748,
+      "sha256": "b65f17f0dda02eddeff1ca3e1e5c62451f02a04923475838a7dc6617fe3a181e"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/design_trend_radar.json",
+      "resource": "upstream/knowledge/runtime/design_trend_radar.json",
+      "license": "MIT",
+      "bytes": 2443,
+      "sha256": "bdfd3df1baec901cad2c317200970726b23da0782c1cc02dec7d83893d979217"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/filter_library.json",
+      "resource": "upstream/knowledge/runtime/filter_library.json",
+      "license": "MIT",
+      "bytes": 13590,
+      "sha256": "ddcfb55c16aae483853bf34dc697aa90948932f59a321d11821bf556ded11756"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/filter_materials.json",
+      "resource": "upstream/knowledge/runtime/filter_materials.json",
+      "license": "MIT",
+      "bytes": 2588,
+      "sha256": "bd9d05f167d26e73202350088eab0c5e06684307e4bb566666dbccce7a044c8a"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/imagegen_asset_policy.json",
+      "resource": "upstream/knowledge/runtime/imagegen_asset_policy.json",
+      "license": "MIT",
+      "bytes": 1029,
+      "sha256": "0692f1cdb94c96b154a6941139c613d9eb5d993aadffa7ff60efe465c2dce876"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/mediastorm_craft_benchmark.json",
+      "resource": "upstream/knowledge/runtime/mediastorm_craft_benchmark.json",
+      "license": "MIT",
+      "bytes": 5673,
+      "sha256": "f32b60590ceb31b06b09a4735701fb3971d046bf98af58f0941d2a1550cfd6be"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/mrbeast_effect_source_map.json",
+      "resource": "upstream/knowledge/runtime/mrbeast_effect_source_map.json",
+      "license": "MIT",
+      "bytes": 17407,
+      "sha256": "6cbe27dec9a2e9a53adb6883af6eb4032eda834e4205c469dd95a609165cbab0"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/publishing_copy_playbooks.json",
+      "resource": "upstream/knowledge/runtime/publishing_copy_playbooks.json",
+      "license": "MIT",
+      "bytes": 2191,
+      "sha256": "4179740c1807b9689502b8b9da5578789389193f1e145be7bc52670e219e4796"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/quality_corpus.json",
+      "resource": "upstream/knowledge/runtime/quality_corpus.json",
+      "license": "MIT",
+      "bytes": 10984,
+      "sha256": "1ad426bbd50244364e55dfc31c5f2b43bf2337fde1c19d526d4a0b7a7d25119e"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/state.json",
+      "resource": "upstream/knowledge/runtime/state.json",
+      "license": "MIT",
+      "bytes": 385,
+      "sha256": "f3d3dd52bf9b10125f138886697f8bcb89e336d2d7a94a3b9bb492d44b1cf9a3"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/thumbnail_algorithm_standard.json",
+      "resource": "upstream/knowledge/runtime/thumbnail_algorithm_standard.json",
+      "license": "MIT",
+      "bytes": 5180,
+      "sha256": "a4890dc2ce88eefd1bceb5d33beb0269e5fdddedf62dcf0dc64c8b12eac7cb75"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/runtime/topic_research_catalog.json",
+      "resource": "upstream/knowledge/runtime/topic_research_catalog.json",
+      "license": "MIT",
+      "bytes": 3937,
+      "sha256": "9ac2731642e53db5798ad4f15aab5b1fcabce010cc9f9af3c6eec4f345fef826"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/script-retention-craft.md",
+      "resource": "upstream/knowledge/script-retention-craft.md",
+      "license": "MIT",
+      "bytes": 11730,
+      "sha256": "ed2664bdcabf9c233c68be25247544e69e5ce7cc3093dba1a28eabcd2a314368"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/script-style-framework.md",
+      "resource": "upstream/knowledge/script-style-framework.md",
+      "license": "MIT",
+      "bytes": 14770,
+      "sha256": "6985d9175e64f670dd299a83e21015a84c2a93dc9cb5f0cc09eddaf2f03d4e56"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/shorts-mastery-2026.md",
+      "resource": "upstream/knowledge/shorts-mastery-2026.md",
+      "license": "MIT",
+      "bytes": 18792,
+      "sha256": "cc516badb3fa249aef697743dda8105e56e039abb2a8668d6ae44675e2574a51"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/shorts-reels-best-practices.md",
+      "resource": "upstream/knowledge/shorts-reels-best-practices.md",
+      "license": "MIT",
+      "bytes": 3128,
+      "sha256": "365dfc6ff1fc817b487b6c28afe78ca1a48a8619baeba280d8799c4874c86f0f"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/storage-lifecycle.md",
+      "resource": "upstream/knowledge/storage-lifecycle.md",
+      "license": "MIT",
+      "bytes": 3221,
+      "sha256": "1c394da4f92328c4ba783ef1ab437b1a6eec8c1626f76c9e7be129a5646edc18"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/teaching-niche-playbook.md",
+      "resource": "upstream/knowledge/teaching-niche-playbook.md",
+      "license": "MIT",
+      "bytes": 13818,
+      "sha256": "aa5a2bd1257debd58203393b314cbddcce7939cb23ca5c5a1ff4f8de08ad4e6a"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/vertical-teardown-method.md",
+      "resource": "upstream/knowledge/vertical-teardown-method.md",
+      "license": "MIT",
+      "bytes": 25962,
+      "sha256": "a018bca367b463f762663e9bb8f17ce954664422b8c5c7fd5b8f1fe37c05fc4c"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/video-craft-overview.md",
+      "resource": "upstream/knowledge/video-craft-overview.md",
+      "license": "MIT",
+      "bytes": 7867,
+      "sha256": "8f51aadc7c18c6d2f2eb79d23d1d9d3b6503eb60fd8b566ffb0e3ba644ebce06"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/video-craft-playbook.md",
+      "resource": "upstream/knowledge/video-craft-playbook.md",
+      "license": "MIT",
+      "bytes": 22143,
+      "sha256": "4dc80723fd0fd4e3f2d2b2c13cc629005f6ff30284a874c83fa64412e21071dc"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/viral-playbook-framework.md",
+      "resource": "upstream/knowledge/viral-playbook-framework.md",
+      "license": "MIT",
+      "bytes": 16310,
+      "sha256": "0ef27acf7eed06cc9658f831abfc140050cad900a5be21e5023a63723f155a20"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/viral-short-playbook.md",
+      "resource": "upstream/knowledge/viral-short-playbook.md",
+      "license": "MIT",
+      "bytes": 11716,
+      "sha256": "f8c17da20a425f60f4531108332e6c708324f4806baeef0cb87c7d33ccb94f9c"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/youtube-algorithm-2026.md",
+      "resource": "upstream/knowledge/youtube-algorithm-2026.md",
+      "license": "MIT",
+      "bytes": 28286,
+      "sha256": "595c7e93c31b1f9f3d3852e80bacb8f96116cfae2871dd27ccf2475ffa17aec7"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/youtube-algorithm-mastery.md",
+      "resource": "upstream/knowledge/youtube-algorithm-mastery.md",
+      "license": "MIT",
+      "bytes": 36350,
+      "sha256": "af07d6a7fb9c74272a9699a2718fbf4b43f5cbcc10d9f2e8eceaaad785912d4e"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "knowledge/youtube-algorithm-overview.md",
+      "resource": "upstream/knowledge/youtube-algorithm-overview.md",
+      "license": "MIT",
+      "bytes": 12631,
+      "sha256": "3d280f4672286f4617a54867a64fe30d7409302bb61bac9ccf579679784aa592"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/algorithm_context.template.md",
+      "resource": "upstream/templates/algorithm_context.template.md",
+      "license": "MIT",
+      "bytes": 1245,
+      "sha256": "efb018fb1cbad874021cd4e323ae66435cbd2235aa0560b2404b6c0097d2aad7"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/audience_vocab.example.json",
+      "resource": "upstream/templates/audience_vocab.example.json",
+      "license": "MIT",
+      "bytes": 2124,
+      "sha256": "1a656cc067e69d6f2bd2c9dcb4afd9cf55bb537eeeca90a24ab0d8323c5409a6"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/brand_profile.template.md",
+      "resource": "upstream/templates/brand_profile.template.md",
+      "license": "MIT",
+      "bytes": 1002,
+      "sha256": "3616ed7160ab69d4f4c38b6e24a8e247a41aef0076e484d1554a7f7bb3376c7d"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/community_mobilization.template.md",
+      "resource": "upstream/templates/community_mobilization.template.md",
+      "license": "MIT",
+      "bytes": 1136,
+      "sha256": "9639808ac4792490e485b578491c871371eed7baa82ad539350cc47fc1b8c8b8"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/content_pipeline.template.md",
+      "resource": "upstream/templates/content_pipeline.template.md",
+      "license": "MIT",
+      "bytes": 1578,
+      "sha256": "fe16ae7da4b1925ccc30262491172ba805f0f682fcadb05793a1a8f15f6672f6"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/interview/consent_form.template.md",
+      "resource": "upstream/templates/interview/consent_form.template.md",
+      "license": "MIT",
+      "bytes": 2487,
+      "sha256": "b4f70d843ac5d61aaab274b71857577944d116d4d9df815820c524677e8fd6cc"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/interview/format_bible.template.md",
+      "resource": "upstream/templates/interview/format_bible.template.md",
+      "license": "MIT",
+      "bytes": 4372,
+      "sha256": "66b670274610ba7529900c50f2f80b829afb4bab1bd2e8021c8bbd45e1d62ab9"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/interview/guest_intake.template.md",
+      "resource": "upstream/templates/interview/guest_intake.template.md",
+      "license": "MIT",
+      "bytes": 1273,
+      "sha256": "9341058900a159934be178a8973a3f622b7937b7696f8cae10fe29975ca078db"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/interview/guest_prep_kit.template.md",
+      "resource": "upstream/templates/interview/guest_prep_kit.template.md",
+      "license": "MIT",
+      "bytes": 1354,
+      "sha256": "5b6b610c385f8a4ba8aa0cc1135269022eef6b7ab08b293a44b512c0f97ac002"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/interview/host_script.template.md",
+      "resource": "upstream/templates/interview/host_script.template.md",
+      "license": "MIT",
+      "bytes": 5303,
+      "sha256": "e68cb4b510363306962d3e399035242f8b8822f60210f1577788bf60407c507c"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/interview/interview_outline.template.md",
+      "resource": "upstream/templates/interview/interview_outline.template.md",
+      "license": "MIT",
+      "bytes": 2306,
+      "sha256": "2ba5f9208904ad23bb002d189f725e8c9abb03e36ec519e224df94f6ebd044d9"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/interview/invite_pack.template.md",
+      "resource": "upstream/templates/interview/invite_pack.template.md",
+      "license": "MIT",
+      "bytes": 2562,
+      "sha256": "f90586f797c8f58645b6543ebd9ffc205abe1b352e5357575eb6892c18a4c0d4"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/interview/packaging.template.md",
+      "resource": "upstream/templates/interview/packaging.template.md",
+      "license": "MIT",
+      "bytes": 2364,
+      "sha256": "199673da7a784570c8b2f44a853264c698cff8a0c7ac685147c9a5b828a9c62e"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/interview/publish_kit.template.md",
+      "resource": "upstream/templates/interview/publish_kit.template.md",
+      "license": "MIT",
+      "bytes": 2698,
+      "sha256": "c430e2e81fd3476d3be522040e1d9a27d80a1ca5c532dd35d920d992305940bb"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/interview/recording_checklist.template.md",
+      "resource": "upstream/templates/interview/recording_checklist.template.md",
+      "license": "MIT",
+      "bytes": 1845,
+      "sha256": "36f787b548002b25bafc06f1cc8350e3ecdbc4e496ae6eff497dcb4aa4707a84"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/interview/shorts_cuts.template.md",
+      "resource": "upstream/templates/interview/shorts_cuts.template.md",
+      "license": "MIT",
+      "bytes": 1494,
+      "sha256": "b3c30c7d82dd8ae0d052382b44fa8720e4330aae4f1dd6e4eccd961f0614e671"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/show_profile.template.md",
+      "resource": "upstream/templates/show_profile.template.md",
+      "license": "MIT",
+      "bytes": 2040,
+      "sha256": "7781f668fbff34f3d854d5000afa63dbdaf94e36b7a8bdd04f01d2e078336a96"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/style_profile.template.md",
+      "resource": "upstream/templates/style_profile.template.md",
+      "license": "MIT",
+      "bytes": 9751,
+      "sha256": "4af5202e29750271412ed47519f2b3702eaedfb733743d172e3bf5b78f9209fa"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/voice_profile.template.md",
+      "resource": "upstream/templates/voice_profile.template.md",
+      "license": "MIT",
+      "bytes": 1680,
+      "sha256": "d99b3f4ad5b3197adc189de1ff5f8399ca2370dce757201fdd2b6d74d54b5288"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "templates/your_context.template.md",
+      "resource": "upstream/templates/your_context.template.md",
+      "license": "MIT",
+      "bytes": 1228,
+      "sha256": "3128f30e184b438840cb2881e52e3283d64ac756d44b8efd14fe49596571423d"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/CHANGELOG.md",
+      "resource": "upstream/tools/code-cleanup-helper/CHANGELOG.md",
+      "license": "MIT",
+      "bytes": 26756,
+      "sha256": "9be892f4eea9e588d16dc6049f919a949346d211f378cb3f6de9bfce9316ebff"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/SKILL.md",
+      "resource": "upstream/tools/code-cleanup-helper/SKILL.md",
+      "license": "MIT",
+      "bytes": 3499,
+      "sha256": "210eb7b6682bba0eb617779f0dfe4680d24804cfb0de8ae21da55b00378dba65"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/agents/openai.yaml",
+      "resource": "upstream/tools/code-cleanup-helper/agents/openai.yaml",
+      "license": "MIT",
+      "bytes": 280,
+      "sha256": "962144589ff3650c2c7e8ebad45ef15dfd7b4620ef31398571efc03f62831990"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/audit.config.example.json",
+      "resource": "upstream/tools/code-cleanup-helper/audit.config.example.json",
+      "license": "MIT",
+      "bytes": 1120,
+      "sha256": "1486b20e0fbad1f38162f0ad50bfa4a86c991c8c32c5a058bf9e32442e25e1fa"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/audit.config.json",
+      "resource": "upstream/tools/code-cleanup-helper/audit.config.json",
+      "license": "MIT",
+      "bytes": 340,
+      "sha256": "38885e8722d97fe48e676e341efe69db53dc9a210a8d785e40127acd38d18fa0"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/profiles/context-budget.json",
+      "resource": "upstream/tools/code-cleanup-helper/profiles/context-budget.json",
+      "license": "MIT",
+      "bytes": 5841,
+      "sha256": "7a332db5f0ee07493b080aed80ddba396b9afa79652638cd4137bc7664be36f1"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/build-receipt-audit.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/build-receipt-audit.md",
+      "license": "MIT",
+      "bytes": 4764,
+      "sha256": "a77ca81bccedf065e7e870b24ee6579c42ce274446e6d605e9ddc40d371d1967"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/capability-obligations.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/capability-obligations.md",
+      "license": "MIT",
+      "bytes": 4605,
+      "sha256": "0c51a56537082a9d7a5b7692a909ec224068df65b2059d193ea02bf6892b3806"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/config-and-report.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/config-and-report.md",
+      "license": "MIT",
+      "bytes": 8902,
+      "sha256": "05fe5e70741ea9d23ab46fb1e6616c9df8fb8608160312735af71a515c81ea0d"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/cross-system-integration-audit.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/cross-system-integration-audit.md",
+      "license": "MIT",
+      "bytes": 23881,
+      "sha256": "1b02e140bb910810f14053c786b1987d78faf384c4fd99b5b029a7ee4ec26e73"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/disk-hygiene.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/disk-hygiene.md",
+      "license": "MIT",
+      "bytes": 3419,
+      "sha256": "8e26369534fe0931ab377dfbc9999c8a89000feef08de96fc84bde0e63f803ba"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/maintenance.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/maintenance.md",
+      "license": "MIT",
+      "bytes": 1846,
+      "sha256": "30ba8e7931e3ba4561d1c5e82722d5de3dc484debd4e0d98f54ff9d69f836679"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/mode-a.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/mode-a.md",
+      "license": "MIT",
+      "bytes": 3560,
+      "sha256": "b0e6847cead7a131e0f3bb4540448319846e0f0eea01324e0d1b510c889f6601"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/mode-b.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/mode-b.md",
+      "license": "MIT",
+      "bytes": 2078,
+      "sha256": "5a45e6aeda97651297a0b8e8c930a8bbcbbf4624745fccad918512f17edcb005"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/model-context-contract-audit.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/model-context-contract-audit.md",
+      "license": "MIT",
+      "bytes": 1849,
+      "sha256": "e65d8c0860cf9ec09523776b35d5bdf47093446efbf89119dab215112dea25cc"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/rd-integration.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/rd-integration.md",
+      "license": "MIT",
+      "bytes": 7964,
+      "sha256": "55e77b7a1e32fbe28c8a37515809ad867303778ee96f51eb5811d9c7a425cdd0"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/security-and-release-hygiene.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/security-and-release-hygiene.md",
+      "license": "MIT",
+      "bytes": 8229,
+      "sha256": "80094dcbb7ad7ded1d5eee896116d24b970dcdc54b9efb262099ecc5d00e93c2"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/security-assessment-contract.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/security-assessment-contract.md",
+      "license": "MIT",
+      "bytes": 8490,
+      "sha256": "58499faf1db478a7d453e8fbd462b637597ca39af51322d4274046ce248fae70"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/topics/character-3d-audit.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/topics/character-3d-audit.md",
+      "license": "MIT",
+      "bytes": 8643,
+      "sha256": "18c87517670ab4024dd00d9afd664d4786384adb49cf452f822acbd5d77d6ed4"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/topics/character-retopology-audit.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/topics/character-retopology-audit.md",
+      "license": "MIT",
+      "bytes": 2268,
+      "sha256": "1f19574197c6926d8b021e48726b1d720f7225e110762b27c2f7dc045864877b"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/topics/context-routing-and-memory.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/topics/context-routing-and-memory.md",
+      "license": "MIT",
+      "bytes": 2688,
+      "sha256": "972e0a16fa8217a806863f165421c98740c8d1174886da7a770e9a0c4d2f85b4"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/topics/cross-system-core.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/topics/cross-system-core.md",
+      "license": "MIT",
+      "bytes": 1174,
+      "sha256": "d7a20b303ca47a154cdf4fc82bf16b2b1e3d981688ffd16793605b7ebe685a67"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/topics/desktop-runtime.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/topics/desktop-runtime.md",
+      "license": "MIT",
+      "bytes": 1323,
+      "sha256": "c8e4f1b89b06f5c28837d57f3604c5124aec06bade2e1970ed7323d13983f8a0"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/topics/media-workstation.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/topics/media-workstation.md",
+      "license": "MIT",
+      "bytes": 1951,
+      "sha256": "f6a910cd6d6219475a9ed1a9dfdc618f3bd6ed5533e390358f2add91ffb9d037"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/topics/secure-self-update.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/topics/secure-self-update.md",
+      "license": "MIT",
+      "bytes": 3542,
+      "sha256": "d0d5a72393594965022f26eb8dca77fd020a4d178f2c5e4237a6a708bf48334a"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/topics/session-native-ai.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/topics/session-native-ai.md",
+      "license": "MIT",
+      "bytes": 1209,
+      "sha256": "d18fd5f8833bd7ac949573c4bcf68f22302e574f0ca9a81981f5b6b1fdaf6378"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/references/topics/visual-quality-audit.md",
+      "resource": "upstream/tools/code-cleanup-helper/references/topics/visual-quality-audit.md",
+      "license": "MIT",
+      "bytes": 1283,
+      "sha256": "7a3fb2d520cfc3b9cd1ac3fcc3a33f2a78868ac6b8b5923494258af8b3e42b12"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/audit.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/audit.py",
+      "license": "MIT",
+      "bytes": 1368,
+      "sha256": "f19dfbbc45c5e606f3171497d94c25b60cfb59d9bd4f128aa7c0bda91135446f"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/audit_core.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/audit_core.py",
+      "license": "MIT",
+      "bytes": 63127,
+      "sha256": "ded4e1f2c910384a195093b8ffda28cc212f0dc96a034e193b833bae60e00ef4"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/check_audit_snapshot.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/check_audit_snapshot.py",
+      "license": "MIT",
+      "bytes": 6945,
+      "sha256": "7610ea1f861f1861ce03dd1a89179176b477041b5368e6fc59cdefd61b4663ba"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/check_build_receipt.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/check_build_receipt.py",
+      "license": "MIT",
+      "bytes": 7799,
+      "sha256": "2022106dc690bfcbb42b09a4bf9c8369f20b304633a60c570a77517f03040893"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/check_context_budget.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/check_context_budget.py",
+      "license": "MIT",
+      "bytes": 26054,
+      "sha256": "16def1fa1097274f3c993f126ae67fba14a2c4e6bc21d83c3a9abc30921356e1"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/check_drift.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/check_drift.py",
+      "license": "MIT",
+      "bytes": 1002,
+      "sha256": "e26ad54d7c7b4e097310264932302b1f700c60f3d834b08be668b41ab56064af"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/check_links.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/check_links.py",
+      "license": "MIT",
+      "bytes": 832,
+      "sha256": "52d0c07fe4da4542f3c7e07aa3ed18eddd4a8086ec33e14604edca4ce47815a9"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/check_security_assessment.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/check_security_assessment.py",
+      "license": "MIT",
+      "bytes": 2429,
+      "sha256": "c25839f24ac31e39888003f4e76fccdecd69d29bbbe18d2ce516a1083598209d"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/check_skill_revision.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/check_skill_revision.py",
+      "license": "MIT",
+      "bytes": 17814,
+      "sha256": "d9b9abae0e69512ed0cd5c30dafe21b54669ad66134cf3f6ebca02a61b4277ad"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/check_sync.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/check_sync.py",
+      "license": "MIT",
+      "bytes": 865,
+      "sha256": "a7fbb4ac1cf03d41910435c2385e112e827ea876795351d44cce7975841cca37"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/security_assessment_evaluator.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/security_assessment_evaluator.py",
+      "license": "MIT",
+      "bytes": 9741,
+      "sha256": "f68c7c6b6f40a66cded31aaea83b202784b49d61387b811f5e112a9c8f016dca"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/security_assessment_network.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/security_assessment_network.py",
+      "license": "MIT",
+      "bytes": 4677,
+      "sha256": "4dc1348fb3f7ff4365435273485a8b977f5f84c4d0e75116fc1e5cc0dc5e3774"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/security_assessment_registry.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/security_assessment_registry.py",
+      "license": "MIT",
+      "bytes": 18015,
+      "sha256": "48326f93954c246d0a8d551596bc3fa80f8ef12b753930ce11cd6dd9b314d67a"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/security_assessment_selftest.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/security_assessment_selftest.py",
+      "license": "MIT",
+      "bytes": 14778,
+      "sha256": "303d10311ce683dea93596df4a33fb1b6ef5b1b9558d14b729f784650b1abe4f"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/security_assessment_shared.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/security_assessment_shared.py",
+      "license": "MIT",
+      "bytes": 13311,
+      "sha256": "cf62225bf78dc9e698ee9fd5c7bd20f136068eb9794a3ba827abac7c16faca6b"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/security_assessment_snapshot.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/security_assessment_snapshot.py",
+      "license": "MIT",
+      "bytes": 11425,
+      "sha256": "1c08540a2d2dc7290c6f37fbf9e496ea59ffcf7751949ec8a9017bc9cc04aba5"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/security_assessment_tasks.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/security_assessment_tasks.py",
+      "license": "MIT",
+      "bytes": 20802,
+      "sha256": "dce68fdae4f7ecd7170e8f3a3c42681f5db2c56678b13be9de6c0a253bddf15b"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/security_assessment_v2_bindings.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/security_assessment_v2_bindings.py",
+      "license": "MIT",
+      "bytes": 7738,
+      "sha256": "b2870d869dd367c8ee435e6d349531317e75d05e0d1dae194b4ff67131473201"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/security_assessment_v2_common.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/security_assessment_v2_common.py",
+      "license": "MIT",
+      "bytes": 7191,
+      "sha256": "69505ecf7ed33f1d74b2c260b14bf88b15a54b99576b128cac2f40369a3e4f74"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/security_assessment_v2_evidence.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/security_assessment_v2_evidence.py",
+      "license": "MIT",
+      "bytes": 13183,
+      "sha256": "d5f24972e685f8743e863542e8e96d8228fe8d7aaee4abe49364c7caf39ea104"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/security_assessment_v2_fixtures.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/security_assessment_v2_fixtures.py",
+      "license": "MIT",
+      "bytes": 11396,
+      "sha256": "d7a82aee84fb35b66877341cbfd36be728af753bc2c15cae746250a607b726bb"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/security_assessment_v2_negative_tests.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/security_assessment_v2_negative_tests.py",
+      "license": "MIT",
+      "bytes": 21404,
+      "sha256": "1e4e2b808cd94a06cbc9d9308a1d77bab4bae6b58ea38c96eb5d7aeb9e08c2e2"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/self_test.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/self_test.py",
+      "license": "MIT",
+      "bytes": 32856,
+      "sha256": "5a9e53d988e28be1088e215b788beee61973987a85df9aa2db873dda1e6fea86"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "tools/code-cleanup-helper/scripts/sync_public.py",
+      "resource": "upstream/tools/code-cleanup-helper/scripts/sync_public.py",
+      "license": "MIT",
+      "bytes": 5307,
+      "sha256": "e11c6a2f4e82fd750b88f9707f2068eaf1946b4817becc6b36eec2714297a87c"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/workflow_audit_binding.py",
+      "resource": "workflow_audit_binding.py",
+      "license": "MIT",
+      "bytes": 5556,
+      "sha256": "971134e75d4142cd476c22c046ed7233b759fb2ffc3bd8202047cda29b8ea9a2"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/workflow_binding_fixture.py",
+      "resource": "workflow_binding_fixture.py",
+      "license": "MIT",
+      "bytes": 2411,
+      "sha256": "f037d3f2ef40be49a1fcb3b8f589e2332d2d3ff171a648d40a31b60393465d09"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/workflow_context_chain.py",
+      "resource": "workflow_context_chain.py",
+      "license": "MIT",
+      "bytes": 5678,
+      "sha256": "f7a82d4b09c4dc315cbfc6d435d0b7fb9609cc6681e7c2150a36f09a13b50d93"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/workflow_contract.json",
+      "resource": "workflow_contract.json",
+      "license": "MIT",
+      "bytes": 6503,
+      "sha256": "d897c1aa1be9371b5c8c42ec11edc9b7b5afae5c1b52eee68307f376abc33c89"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/workflow_contract.py",
+      "resource": "workflow_contract.py",
+      "license": "MIT",
+      "bytes": 41373,
+      "sha256": "0882c67f03cdd54d2a246e6bd0ce7cadd11b9cccd1abda16da68d03b9543f007"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/workflow_json.py",
+      "resource": "workflow_json.py",
+      "license": "MIT",
+      "bytes": 2460,
+      "sha256": "8503174339c0be5284d984896638bb6a5f4981e2cae9f8b7a8481f805370a43c"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/workflow_material_receipts.py",
+      "resource": "workflow_material_receipts.py",
+      "license": "MIT",
+      "bytes": 22942,
+      "sha256": "402186725b532e4844f5a92b3a46476414dfbe05f9f9509ff291c32d050ec1a3"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/workflow_receipts.py",
+      "resource": "workflow_receipts.py",
+      "license": "MIT",
+      "bytes": 28953,
+      "sha256": "5937604ee86b202090dec34bb83e1792ce1a8329974be59cc75434a18dde37b2"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/workflow_render_retry.py",
+      "resource": "workflow_render_retry.py",
+      "license": "MIT",
+      "bytes": 14149,
+      "sha256": "c5167be8dd117e6d84f119e47b8b59f11c8087f007899994bbbfcc93cde5829c"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/workflow_state.py",
+      "resource": "workflow_state.py",
+      "license": "MIT",
+      "bytes": 26714,
+      "sha256": "158d6d83dfd3141d6b1d14a0a31dc3382a78689186d1fd36c123f1c35ef229e9"
+    },
+    {
+      "repository": "video-autopilot-kit",
+      "sourcePath": "codex-skill/video-autopilot/workflow_transport.py",
+      "resource": "workflow_transport.py",
+      "license": "MIT",
+      "bytes": 4705,
+      "sha256": "8891d78b1882c4c204f53665eeac3ace568363353577d52da5974749b9e5651e"
+    }
+  ],
+  "inventoryDigest": "182deba988566a78128172552766443f90e3d7d618acd8e2f7de6f0ee401dff9"
+}

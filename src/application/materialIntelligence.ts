@@ -1,3 +1,4 @@
+// Agent integration: urn:uuid:d366cab7-d5a4-44d8-b80d-4c7ce4daf65d. Existing GPL license retained; see AGENT-NOTICE.md.
 import { createHash, randomUUID } from "node:crypto";
 import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
@@ -126,6 +127,7 @@ export function materialTranscriptCueSha256(cue: Pick<AutomaticCaptionCue, "star
 export interface PrepareMaterialRequest {
   assetId: string;
   clipId: string;
+  agentProjectScope?: string;
   sourcePath: string;
   sourceStart: number;
   duration: number;
@@ -213,6 +215,7 @@ export async function prepareMaterialIntelligence(
     throw new Error("素材時間範圍不合法");
   }
   if (!Number.isFinite(request.fps) || request.fps <= 0 || (request.maxKeyframes !== undefined && !Number.isFinite(request.maxKeyframes))) throw new Error("素材幀率／抽幀預算不合法");
+  if (request.agentProjectScope !== undefined && !MATERIAL_ID.test(request.agentProjectScope)) throw new Error("Agent 素材專案範圍不合法");
   if (request.keyframeTimes !== undefined) {
     if (request.kind !== "video") throw Error("explicit-keyframe-times-require-video");
     request = { ...request, keyframeTimes: validateExplicitKeyframeTimes(request.keyframeTimes, request.duration, clamp(Math.floor(request.maxKeyframes ?? 8), 1, 12)) };
@@ -228,6 +231,7 @@ export async function prepareMaterialIntelligence(
   if (!preparation) throw new Error("material-preparation-implementation-missing");
   const identity: MaterialCacheIdentity = {
     schema: MATERIAL_INTELLIGENCE_SCHEMA, assetId: request.assetId, clipId: request.clipId,
+    ...(request.agentProjectScope ? { agentProjectScope: request.agentProjectScope } : {}),
     sourceSha256, sourceStart: request.sourceStart, duration: request.duration, fps: request.fps, kind: request.kind,
     language: request.language ?? "auto", includeTranscript: request.includeTranscript !== false,
     maxKeyframes: clamp(Math.floor(request.maxKeyframes ?? 8), 1, 12), engineRevision: 4,
@@ -305,7 +309,8 @@ async function prepareMaterialContent(
   }
 
   const keyframes: MaterialKeyframe[] = [];
-  const samples = request.kind === "audio" ? [] : selectMaterialKeyframeTimes(request.duration, scene.cuts, identity.maxKeyframes, identity.keyframeTimes)
+  const samples = request.kind === "audio" ? [] : (request.kind === "image" ? [0]
+    : selectMaterialKeyframeTimes(request.duration, scene.cuts, identity.maxKeyframes, identity.keyframeTimes))
     .map((time, index) => ({ id: `kf-${index + 1}`, time, sceneIndex: scene.cuts.filter(cut => cut.time <= time).length }));
   const visualRequest = {
     sourcePath: request.sourcePath, sourceSha256, sourceStart: request.sourceStart, duration: request.duration,

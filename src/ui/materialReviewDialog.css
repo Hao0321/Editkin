@@ -1,0 +1,20 @@
+.material-review-dialog{position:relative;width:min(900px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow:auto;padding:28px;border:1px solid var(--line);border-radius:18px;background:var(--surface);color:var(--ink);box-shadow:0 22px 70px rgba(0,0,0,.25)}
+.material-review-dialog>small{color:var(--accent);font-weight:800;letter-spacing:.04em}
+.material-review-dialog h2{margin:7px 0 8px;font-size:26px}
+.material-review-dialog p{line-height:1.5}
+.material-review-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:18px 0}
+.material-review-actions label{display:flex;align-items:center;gap:6px}
+.material-review-actions button,.material-review-frames button,.material-review-open{min-height:36px;padding:7px 12px;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:#fff;font-weight:750;cursor:pointer}
+.material-review-actions button:disabled,.material-review-frames button:disabled{opacity:.5;cursor:not-allowed}
+.material-review-warning{padding:10px;border:1px solid #dfb857;border-radius:8px;background:#fff7df;color:#694500}
+.material-review-status{min-height:24px;color:var(--soft)}
+.material-review-job,.material-review-facts{display:grid;gap:7px;margin:12px 0;padding:13px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2)}
+.material-review-job small,.material-review-facts code{overflow-wrap:anywhere}
+.material-review-facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+.material-review-frames{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.material-review-frames button{background:var(--surface);color:var(--accent)}
+.material-review-frames small{display:block;font-weight:400}
+.material-review-dialog figure{margin:12px 0}.material-review-dialog figure img{display:block;max-width:100%;max-height:420px;object-fit:contain;background:#000}.material-review-dialog figcaption{margin-top:6px;color:var(--soft)}
+.material-review-dialog details{margin:12px 0;max-height:220px;overflow:auto}.material-review-dialog details li{margin:5px 0}
+.material-review-open{align-self:flex-start;margin:6px 0 0 12px;background:var(--surface);color:var(--accent)}
+@media(max-width:700px){.material-review-dialog{padding:20px}.material-review-facts{grid-template-columns:1fr}}

@@ -42,10 +42,14 @@ export function resolveAestheticSystem(profile: EditorialProfileId, format = "sh
   return resolveAestheticSystemForDomain(aestheticDomainForProfile(profile), format);
 }
 
-export function resolveAestheticSystemForDomain(domain: string, format = "shorts"): AestheticSystem {
+export function resolveAestheticSystemForDomain(domain: string, format = "shorts", selectedFamily?: string): AestheticSystem {
   const selectedFormat = normalizeFormat(format);
   const route = EDITKIN_AESTHETIC_STANDARD.domain_routes[domain] ?? EDITKIN_AESTHETIC_STANDARD.domain_routes.general;
-  const family = EDITKIN_AESTHETIC_STANDARD.style_families[route.primary];
+  // The current Kit design compiler may select a different family from this
+  // older portable standard's default route. Keep the authored choice explicit.
+  const primaryFamily = selectedFamily ?? route.primary;
+  const family = EDITKIN_AESTHETIC_STANDARD.style_families[primaryFamily];
+  if (!family) throw new Error(`Unknown Editkin aesthetic family: ${primaryFamily}`);
   const rawWeights = Object.fromEntries(Object.entries(EDITKIN_AESTHETIC_STANDARD.dimensions).map(([id, row]) => [
     id,
     row.weight * (EDITKIN_AESTHETIC_STANDARD.format_multipliers[selectedFormat][id] ?? 1),
@@ -58,7 +62,7 @@ export function resolveAestheticSystemForDomain(domain: string, format = "shorts
     sourceSha256: EDITKIN_AESTHETIC_STANDARD.source_sha256,
     format: selectedFormat,
     domain,
-    primaryFamily: route.primary,
+    primaryFamily,
     primaryLabel: family.label_zh,
     supportFamilies: [...route.support],
     avoid: [...route.avoid],
