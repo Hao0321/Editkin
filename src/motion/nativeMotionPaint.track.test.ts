@@ -63,7 +63,7 @@ describe("factory-owned numeric native motion paint tracks", () => {
     const track = nativeMotionPaintTrack(project, handle, graphic.id);
     expect(track.timeline).toEqual({ timelineStartFrame: 15, sourceStartFrame: 0, durationFrames: 90 });
     expect(track.frames).toHaveLength(90);
-    expect(track.scene).toMatchObject({ width: 640, height: 360, max_scale: 32, background: [0, 0, 0, 0] });
+    expect(track.scene).toMatchObject({ width: 640, height: 360, max_scale: Math.max(1, ...track.frames.flat().map(pose => pose.scale)), background: [0, 0, 0, 0] });
     expect(track.scene.layers).toHaveLength(3);
     expect(track.frames.every(row => row.length === track.scene.layers.length)).toBe(true);
     expect(track.frames[0].every(pose => pose.opacity === 0)).toBe(true);
@@ -161,11 +161,11 @@ describe("factory-owned numeric native motion paint tracks", () => {
     expect(preview.graph.nodes.some(node => node.id === "source:clip-demo" && node.kind === "source")).toBe(true);
     expect(preview.graph.nodes.find(node => node.id === "display:aces2")?.processor).toBe("editkin-ocio-aces2-linear-rec709-to-rec709-sdr/v1");
     const resources = estimateGpuEngineVideoResources(project.width, project.height, preview.graph.cacheBudgetMb, 1, 1, 0, 0, 0, 0, 8, 0, 0, 1)!;
-    const pixels = project.width * project.height, geometryReserve = 16 * 1024 * 1024;
-    expect(resources).toMatchObject({ nativePaintCount: 1, overlayBytes: pixels * 8, nativePaintCpuBytes: pixels * 16,
+    const pixels = project.width * project.height, geometryReserve = 16 * 1024 * 1024, maskReserve = 64 * 1024 * 1024;
+    expect(resources).toMatchObject({ nativePaintCount: 1, overlayBytes: pixels * 8, nativePaintCpuBytes: pixels * 16 + maskReserve,
       nativePaintStagingBytes: pixels * 8, nativePaintGeometryBytes: geometryReserve,
-      requiredBytes: pixels * (36 + 24 + 8 + 16 + 8) + geometryReserve });
-    expect(resources.maxVideoLayers).toBe(Math.floor((resources.budgetBytes - pixels * (24 + 8 + 16 + 8) - geometryReserve) / (pixels * 36)));
+      requiredBytes: pixels * (36 + 24 + 8 + 16 + 8) + geometryReserve + maskReserve });
+    expect(resources.maxVideoLayers).toBe(Math.floor((resources.budgetBytes - pixels * (24 + 8 + 16 + 8) - geometryReserve - maskReserve) / (pixels * 36)));
     expect(estimateGpuEngineVideoResources(640, 360, 1024, 1, 1, 0, 0, 0, 0, 4, 0, 0, 1)).toBeUndefined();
   });
 

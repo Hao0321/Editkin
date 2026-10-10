@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MotionFontSelection } from "../typography/motionFontReadiness";
 import { createEmptyProject } from "../domain/editGraph";
-import { createMotionGraphic } from "../motion/composition";
+import { createMotionGraphic, legacyMotionGraphicSeed } from "../motion/composition";
 import { findMotionGraphicPreset } from "../creative/motionGraphicPresets";
 import MotionOverlay from "./MotionOverlay";
 
@@ -16,7 +16,7 @@ beforeEach(() => { requests.length = 0; });
 describe("Motion font boundary wiring with a pending hook adapter (no browser or SSR readiness proof)", () => {
   it("mounts the same font request before a future v1 title is visible and emits no offscreen placeholder", () => {
     const project = createEmptyProject("Preload v1", { width: 1920, height: 1080, fps: 30 });
-    project.motionGraphics = [createMotionGraphic("future", "title", "Future title", 5, 3)];
+    project.motionGraphics = [createMotionGraphic("future", "title", "Future title", 5, 3, undefined, legacyMotionGraphicSeed("title"))];
     const hidden = renderToStaticMarkup(<MotionOverlay project={project} playhead={0} trackingSelectionEnabled={false} />);
     expect(hidden).toBe(""); expect(requests).toHaveLength(1);
     const key = requests[0].selectionKey;

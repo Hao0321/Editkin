@@ -543,7 +543,8 @@ export async function renderComposite(
   // Compound animation expressions can exceed Windows' command-line limit.
   // Use one owned UTF-8 graph file instead of truncating the authored scene.
   const graphPath = graph.length > 10_000 ? `${output}.${randomUUID()}.ffgraph` : undefined;
-  if (graphPath) await writeFile(graphPath, graph, { encoding: "utf8", flag: "wx" });
+  // Owner-only: these per-render files can sit next to an output in a shared directory.
+  if (graphPath) await writeFile(graphPath, graph, { encoding: "utf8", flag: "wx", mode: 0o600 });
   args.push(
     ...(graphPath ? ["-filter_complex_script", graphPath] : ["-filter_complex", graph]), "-map", "[vout]", "-map", "[aout]",
     ...encoderArgs(encoder), "-pix_fmt", pixelFormat,
@@ -552,7 +553,7 @@ export async function renderComposite(
     "-t", finite(plan.duration), "-video_track_timescale", "90000", "-movflags", "+faststart", output,
   );
   try {
-    if (backgroundAssPath) await writeFile(backgroundAssPath, writeAssContent(project, project.captionStyle, { ...motionAss, bundledFaces: assBundledFaces, compositeLayer: "background" }), { encoding: "utf8", flag: "wx" });
+    if (backgroundAssPath) await writeFile(backgroundAssPath, writeAssContent(project, project.captionStyle, { ...motionAss, bundledFaces: assBundledFaces, compositeLayer: "background" }), { encoding: "utf8", flag: "wx", mode: 0o600 });
     await runProcess(ffmpegPath, args, timeoutMs);
   } finally {
     if (graphPath) await rm(graphPath, { force: true });

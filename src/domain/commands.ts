@@ -74,13 +74,6 @@ function normalizeMotionReferences(project: EditProject): void {
   }
 }
 
-function normalizeLayerState(project: EditProject): void {
-  for (const clip of project.tracks.flatMap((track) => track.clips)) {
-    clip.layer = { ...DEFAULT_CLIP_LAYER, ...clip.layer };
-    clip.expressions ??= {};
-  }
-}
-
 function assertInstanceRoleTargets(project: EditProject, instance: ReferenceMotionTemplateInstance): void {
   if (instance.frameFormat.width !== project.width || instance.frameFormat.height !== project.height || instance.frameFormat.fps !== project.fps) {
     throw new EditGraphError("Reference Motion instance frame format must match the current project");
@@ -692,7 +685,9 @@ export function applyCommand(input: EditProject, command: EditorCommand, context
   if (command.type !== "replace_clip_source" && !sceneContentOnly && !originalSourceSceneId) {
     normalizeCreativeTransitions(project);
     normalizeMotionReferences(project);
-    normalizeLayerState(project);
+    // Optional clip layer/role/expressions are authored shape (schema 9/10 keeps their omission on save
+    // and reopen); readers resolve DEFAULT_CLIP_LAYER at use. A command must not stamp defaults onto
+    // unrelated clips, or literal-preservation guards such as the motion sequence check fail.
   }
   touch(project);
   return validateProject(revalidateAestheticAcceptance(project, context));

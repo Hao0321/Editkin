@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { canonicalJson } from "../shared/canonicalJson";
@@ -23,7 +23,8 @@ function authoredFile(focused: boolean) {
 }
 
 async function file(focused: boolean) {
-  const root = await mkdtemp(join(tmpdir(), "editkin-focus-file-ingress-"));
+  // Real temporary path: macOS tmpdir() sits under the /var symlink and Windows runners report 8.3 short names.
+  const root = await mkdtemp(join(await realpath(tmpdir()), "editkin-focus-file-ingress-"));
   await mkdir(join(root, ".editkin", "original-sources"), { recursive: true });
   const path = ".editkin/original-sources/created.json", payload = authoredFile(focused), bytes = canonicalJson(payload) + "\n";
   await writeFile(join(root, path), bytes);

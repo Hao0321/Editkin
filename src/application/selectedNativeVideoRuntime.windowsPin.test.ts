@@ -24,6 +24,11 @@ const afterMarker = "// OWNED_FIXTURE_BARRIER_AFTER_CHILD_EXIT";
 const csString = (s: string) => '@"' + s.replaceAll('"', '""') + '"';
 const psString = (s: string) => "'" + s.replaceAll("'", "''") + "'";
 const absent = async (p: string) => { await expect(lstat(p)).rejects.toMatchObject({ code: "ENOENT" }); };
+/** Holds an ordinary read/write handle on the file while `run` executes. */
+async function whileWriterHolds(path: string, run: () => Promise<void>): Promise<void> {
+  const writer = await open(path, "r+");
+  try { await run(); } finally { await writer.close(); }
+}
 
 function consoleSource(kind: "A" | "B") {
   return String.raw`using System; using System.IO; using System.Diagnostics; using System.Security.Cryptography; using System.Threading;
@@ -134,11 +139,16 @@ beforeAll(async () => {
 afterAll(async () => {
   if (process.platform !== "win32" || !root) return;
   if (children.size !== 0) throw new Error("Owned child still live; retain precise fixture directory");
-  async function collectPids(path: string): Promise<void> {
-    const s = await lstat(path); if (s.isSymbolicLink()) throw new Error("Unretired fixture reparse entry");
-    if (s.isDirectory()) { for (const name of await readdir(path)) await collectPids(join(path, name)); }
-    else if (path.endsWith(".started")) for (const text of (await readFile(path, "utf8")).trim().split("\n")) { const pid = Number(text); if (!Number.isSafeInteger(pid) || pid < 1) throw new Error("Malformed fixture PID evidence"); fixturePids.add(pid); }
+  // Directory entries carry their own type, so each file is read without a separate path check first.
+  async function collectPids(directory: string): Promise<void> {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isSymbolicLink()) throw new Error("Unretired fixture reparse entry");
+      if (entry.isDirectory()) await collectPids(path);
+      else if (path.endsWith(".started")) for (const text of (await readFile(path, "utf8")).trim().split("\n")) { const pid = Number(text); if (!Number.isSafeInteger(pid) || pid < 1) throw new Error("Malformed fixture PID evidence"); fixturePids.add(pid); }
+    }
   }
+  if ((await lstat(root)).isSymbolicLink()) throw new Error("Unretired fixture reparse entry");
   await collectPids(root);
   for (const pid of fixturePids) { try { process.kill(pid, 0); throw new Error("Owned fixture PID still live; retain evidence"); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error; } }
   const within = relative(ownedParent, root); if (!within || within.startsWith("..") || resolve(ownedParent, within) !== root) throw new Error("Owned cleanup path rejected");
@@ -151,10 +161,13 @@ afterAll(async () => {
   // executable cleanup window. Do not delete the only denial/marker record.
   const evidenceRoot = join(ownedParent, "retained-" + basename(root)); await mkdir(evidenceRoot);
   const identities: Array<{ path: string; bytes: number; sha256: string }> = [];
-  async function preserve(path: string): Promise<void> {
-    const s = await lstat(path); if (s.isDirectory()) { for (const name of await readdir(path)) await preserve(join(path, name)); return; }
-    const bytes = await readFile(path), name = relative(root, path); identities.push({ path: name, bytes: bytes.length, sha256: sha(bytes) });
-    if (bytes.length <= 64 * 1024 && !name.endsWith(".exe")) { const target = join(evidenceRoot, name); await mkdir(dirname(target), { recursive: true }); await writeFile(target, bytes); }
+  async function preserve(directory: string): Promise<void> {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) { await preserve(path); continue; }
+      const bytes = await readFile(path), name = relative(root, path); identities.push({ path: name, bytes: bytes.length, sha256: sha(bytes) });
+      if (bytes.length <= 64 * 1024 && !name.endsWith(".exe")) { const target = join(evidenceRoot, name); await mkdir(dirname(target), { recursive: true }); await writeFile(target, bytes); }
+    }
   }
   await preserve(root); await writeFile(join(evidenceRoot, "OWNED_CLEANUP_IDENTITIES.json"), JSON.stringify({ resolvedRoot: root, allOwnedDirectChildrenClosed: true, fixturePids: [...fixturePids], identities }));
   await rm(root, { recursive: true, force: false });
@@ -232,9 +245,8 @@ describe.skipIf(process.platform !== "win32")("selected native metadata real Win
     await writeFile(join(f.caseRoot, "after-release-write-calibration.json"), JSON.stringify({ stdout: calibration.stdout, stderr: calibration.stderr, operation: "same CreateFileW GENERIC_WRITE/share7/BACKUP_SEMANTICS|OPEN_REPARSE_POINT after pins released" }));
   }, 25_000);
   it("fails closed before spawn when a writer already owns the selected file", async () => {
-    const f = await fixture("preexisting-writer"), writer = await open(f.exe, "r+");
-    try { const response = await currentChild(await helperEntry(f), { path: f.exe, expected: f.expected }); expect(response.code).not.toBe(0); expect(response.stderr).toContain("selected-native-metadata:safe-open-failed"); await absent(join(f.parent, "A.started")); await absent(join(f.parent, "B.started")); }
-    finally { await writer.close(); }
+    const f = await fixture("preexisting-writer");
+    await whileWriterHolds(f.exe, async () => { const response = await currentChild(await helperEntry(f), { path: f.exe, expected: f.expected }); expect(response.code).not.toBe(0); expect(response.stderr).toContain("selected-native-metadata:safe-open-failed"); await absent(join(f.parent, "A.started")); await absent(join(f.parent, "B.started")); });
     expect(sha(await readFile(f.exe))).toBe(sha(aBytes));
   }, 25_000);
   it("rejects a genuine parent junction without executing either fixture", async () => {

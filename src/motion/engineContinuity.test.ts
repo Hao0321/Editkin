@@ -26,7 +26,7 @@ describe("current engine continuity declaration", () => {
     expect(contract.engineContinuity.planSchema).toBe(contract.planSchema);
     expect(contract.engineContinuity.visualReviewPolicyBound).toBe(contract.visualReview.policyBound);
     expect(contract.engineContinuity.originalSource.schema).toBe(contract.originalSourceExecution.schema);
-    expect(contract.originalSourceExecution.commitAuthentication).toBe("same_process");
+    expect(contract.originalSourceExecution.commitAuthentication).toBe("protected_user");
     expect(contract.engineContinuity.floatingFrame.schema).toBe(floatingVideoFramePresetV2("matte").schema);
     expect(contract.engineContinuity.floatingFrame.mediaFit).toBe(floatingVideoFramePresetV2("matte").mediaFit);
     expect(contract.engineContinuity).not.toHaveProperty("artworkAccepted");

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { copyFile, link, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { copyFile, link, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -50,7 +50,8 @@ afterEach(async () => {
 });
 
 async function fixture() {
-  const base = await mkdtemp(join(tmpdir(), "editkin-selected-font-")); owned.push(base);
+  // Real temporary path: macOS tmpdir() sits under the /var symlink and Windows runners report 8.3 short names.
+  const base = await mkdtemp(join(await realpath(tmpdir()), "editkin-selected-font-")); owned.push(base);
   const parent = join(base, "parent"), root = join(parent, "pack"), render = join(root, "render");
   await mkdir(render, { recursive: true });
   const manifest = join(root, "editkin-open-fonts.json"), font = join(root, spec.fontFile);

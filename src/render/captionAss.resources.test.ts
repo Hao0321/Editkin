@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createEmptyProject } from "../domain/editGraph";
 import type { EditProject, MotionGraphic } from "../domain/types";
 import { findMotionGraphicPreset } from "../creative/motionGraphicPresets";
-import { createMotionGraphic } from "../motion/composition";
+import { createMotionGraphic, legacyMotionGraphicSeed } from "../motion/composition";
 import * as composition from "../motion/compositionV2";
 import type { MotionGraphicV2LayoutReceipt } from "../motion/compositionV2";
 import { bundledFontFaceSpec } from "../typography/bundledFontCatalog";
@@ -176,7 +176,7 @@ describe("ASS aggregate admission and actual retention boundaries", () => {
   });
 
   it("includes v1 tracked-point work even when points emit no visible events", () => {
-    const p = project(), graphic = createMotionGraphic("legacy", "title", "legacy", 0, 3);
+    const p = project(), graphic = createMotionGraphic("legacy", "title", "legacy", 0, 3, undefined, legacyMotionGraphicSeed("title"));
     graphic.trackId = "tracked"; p.motionGraphics = [graphic];
     p.motionTracks = [{ id: "tracked", clipId: "none", name: "control", engine: "fixture", analysisFps: 30,
       initialRect: { x: 0, y: 0, width: .1, height: .1 }, lostRatio: 1, createdAt: "2026-10-01T00:00:00Z",

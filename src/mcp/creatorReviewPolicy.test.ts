@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, rm, symlink, writeFile, readFile, readdir } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile, readFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { normalizeReviewPolicy } from "../domain/reviewPolicy";
@@ -10,7 +10,8 @@ import { resolveAestheticSystemForDomain } from "../application/editkinAesthetic
 import { parseProject, acquireProjectLock, writeProjectFileAtomic } from "../application/projectFiles";
 
 const roots: string[] = [];
-async function fixture() { const root = await mkdtemp(join(tmpdir(), "editkin-policy-")); roots.push(root); return root; }
+// Real temporary path: macOS tmpdir() sits under the /var symlink and Windows runners report 8.3 short names.
+async function fixture() { const root = await mkdtemp(join(await realpath(tmpdir()), "editkin-policy-")); roots.push(root); return root; }
 async function configure(root: string, input: unknown) {
   await mkdir(join(root, ".autopilot"), { recursive: true });
   await writeFile(join(root, ".autopilot", "creator-review-policy.json"), JSON.stringify(input));

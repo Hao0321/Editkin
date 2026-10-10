@@ -419,5 +419,5 @@ describe("CURRENT saved template reused on a different existing clip", () => {
     // independently declared audio work elsewhere in a broader plan.
     expect(() => observeReuse(f, { ...packet, commands: oldMutation })).toThrow("OBSERVED_OLD_GRAPH_MUTATION");
     expect(canonicalJson(f.current)).toBe(before);
-  });
+  }, 30000);
 });

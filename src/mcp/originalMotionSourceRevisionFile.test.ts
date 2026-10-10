@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createEmptyProject } from "../domain/editGraph";
@@ -21,7 +21,8 @@ import { MOTION_TREATMENT_FAMILIES, motionCommandFamilies, assertMotionTreatment
 
 const fontRoot = resolve("public/fonts");
 const beforePath = ".editkin/original-sources/before.json", afterPath = ".editkin/original-sources/after.json";
-const evidenceRoot = resolve(".rd/benchmarks/original-source-owner-revision-20261005");
+// Opt-in only: a closed run's evidence folder must never be overwritten by an ordinary test run.
+const packetOut = process.env.EDITKIN_REVISION_PACKET_OUT;
 const originalWorkspace = process.env.EDITKIN_WORKSPACE;
 afterAll(() => { if (originalWorkspace === undefined) delete process.env.EDITKIN_WORKSPACE; else process.env.EDITKIN_WORKSPACE = originalWorkspace; });
 function payload(): OriginalMotionAuthoringFile {
@@ -34,12 +35,14 @@ function payload(): OriginalMotionAuthoringFile {
       camera: { initial: { centerX: 320, centerY: 180, zoom: 1 }, dynamics: { stiffness: 120, damping: 24, mass: 1 } },
       elements: [{ id: "source-title", kind: "text", text: "我的作品", typographyRole: "heading", fontWeight: 700, range: { startFrame: 0, endFrame: 150 },
         xPixels: 60, yPixels: 100, widthPixels: 500, fontSize: 64, minFontSize: 32, maxLines: 1, lineGapPixels: 8, letterSpacingPixels: 0, colorRole: "text" }],
-      semanticCues: [0, 50, 100].map((frame, index) => ({ id: `owner-phase-${index}`, frame, purpose: "依語意讀完原創標題", graphicIds: ["source-title"], evidenceRefs: [`brief:owner-${index}`] })) },
+      semanticCues: [0, 50, 100].map((frame, index) => ({ id: `owner-phase-${index}`, frame, purpose: "依語意讀完原創標題", graphicIds: ["source-title"], evidenceRefs: [`brief:owner-${index}`],
+        ...(index === 0 ? { focus: { centerX: 320, centerY: 180, zoom: 1 } } : {}) })) },
     fontBindings: [{ graphicId: "source-title", faceId: face.faceId, fontSha256: face.sha256, manifestSha256: face.manifestSha256, parserVersion: "opentype.js@1.3.4" }] });
 }
 async function fixture() {
   // Owned generated source controls retained for failure diagnosis; no user media.
-  const root = await mkdtemp(join(tmpdir(), "editkin-owner-revision-control-"));
+  // Real temporary path: macOS tmpdir() sits under the /var symlink and Windows runners report 8.3 short names.
+  const root = await mkdtemp(join(await realpath(tmpdir()), "editkin-owner-revision-control-"));
   await mkdir(join(root, ".editkin", "original-sources"), { recursive: true });
   const before = payload(), after = structuredClone(before);
   after.authoring.expectedRevision = 7;
@@ -88,7 +91,7 @@ describe("canonical file-bound saved owner revision", () => {
       owner: { sceneId: f.revision.evidence.scene.id, sceneSha256: sha256Canonical(f.revision.evidence.scene), orderedGraphicsSha256: sha256Canonical(f.revision.evidence.expectedGraphics) },
       before: f.revision.evidence.before.authoringSource, after: f.revision.evidence.after.authoringSource };
     await writeFile(join(f.root, descriptorPath), canonicalJson(descriptor) + "\n");
-    await writeFile(join(evidenceRoot, "ACTUAL_SOURCE_PACKET.json"), canonicalJson({ workspace: f.root, descriptor: "1=" + descriptorPath,
+    if (packetOut) await writeFile(packetOut, canonicalJson({ workspace: f.root, descriptor: "1=" + descriptorPath,
       project: f.project, before: f.before, after: f.after, packet: f.revision, plan: f.plan, boundary: "Actual component source compiler output, not fresh MCP transport or authenticated audit/apply/render" }) + "\n");
   });
   it("independently verifies for audit and again for apply, binds exact full batch and saves/reopens the same owner", async () => {

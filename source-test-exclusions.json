@@ -11,8 +11,20 @@
       "prerequisite": "External FFmpeg/FFprobe for decoded synthetic geometry; run separately with EDITKIN_FFMPEG_PATH and EDITKIN_FFPROBE_PATH"
     },
     {
+      "file": "src/render/ffmpeg.nativeMotionPaint.test.ts",
+      "prerequisite": "Vendored Windows FFmpeg/FFprobe under vendor/ffmpeg/win32-x64 for the actual formal audio-stream render and decode"
+    },
+    {
+      "file": "src/render/motionStageUnderlay.test.tsx",
+      "prerequisite": "Vendored Windows FFmpeg/FFprobe under vendor/ffmpeg/win32-x64 for decoded production RGB/vector stage layering pixels"
+    },
+    {
       "file": "src/application/autopilotPlanHash.integration.test.ts",
       "prerequisite": "Separately installed video-autopilot skill and its Python workflow_state module"
+    },
+    {
+      "file": "src/application/editkinAesthetic.test.ts",
+      "prerequisite": "Owner aesthetic standard with fourteen style families and the illustrated music MV route; this checkout ships the neutral 1.0.0-public standard"
     },
     {
       "file": "src/application/autoColorExposure.integration.test.ts",

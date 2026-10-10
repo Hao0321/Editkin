@@ -45,6 +45,27 @@ async function child(trustRoot: string, op: "prepare" | "sign", expected?: strin
   });
 }
 
+/** Damages the stored key through one handle and returns the SHA-256 of the damaged bytes. */
+async function damageKeyInPlace(keyPath: string): Promise<string> {
+  const handle = await open(keyPath, "r+");
+  try {
+    const { size } = await handle.stat(), bytes = Buffer.alloc(size);
+    for (let offset = 0; offset < size;) {
+      const { bytesRead } = await handle.read(bytes, offset, size - offset, offset);
+      if (!bytesRead) throw new Error("Key fixture shrank while it was read");
+      offset += bytesRead;
+    }
+    if (process.platform === "win32") {
+      // Preserve a valid-size DPAPI blob, but corrupt its authenticated
+      // ciphertext. This exercises Unprotect rather than only a size guard.
+      bytes[bytes.length - 1] ^= 1;
+      await handle.write(bytes, 0, bytes.length, 0);
+    } else await handle.truncate(17);
+    await handle.sync();
+    return createHash("sha256").update(process.platform === "win32" ? bytes : bytes.subarray(0, 17)).digest("hex");
+  } finally { await handle.close(); }
+}
+
 describe("OS-user original Motion commit signing key", () => {
   it("keeps one key across concurrent prepare and actual restarted signing processes", async () => {
     const trust = join(root, "concurrent");
@@ -78,18 +99,7 @@ describe("OS-user original Motion commit signing key", () => {
     const trust = join(root, "damaged");
     const identity = await child(trust, "prepare");
     const keyPath = join(trust, "signing-key.v2");
-    const handle = await open(keyPath, "r+");
-    try {
-      if (process.platform === "win32") {
-        // Preserve a valid-size DPAPI blob, but corrupt its authenticated
-        // ciphertext. This exercises Unprotect rather than only a size guard.
-        const bytes = await readFile(keyPath);
-        bytes[bytes.length - 1] ^= 1;
-        await handle.write(bytes, 0, bytes.length, 0);
-      } else await handle.truncate(17);
-      await handle.sync();
-    } finally { await handle.close(); }
-    const damagedHash = createHash("sha256").update(await readFile(keyPath)).digest("hex");
+    const damagedHash = await damageKeyInPlace(keyPath);
     await expect(child(trust, "prepare")).rejects.toThrow("rejected");
     await expect(child(trust, "sign", identity.keyId)).rejects.toThrow("rejected");
     expect(createHash("sha256").update(await readFile(keyPath)).digest("hex")).toBe(damagedHash);

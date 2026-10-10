@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MotionFontSelection, MotionFontStatus } from "../typography/motionFontReadiness";
 import { createEmptyProject } from "../domain/editGraph";
-import { createMotionGraphic } from "../motion/composition";
+import { createMotionGraphic, legacyMotionGraphicSeed } from "../motion/composition";
 import { findMotionGraphicPreset } from "../creative/motionGraphicPresets";
 import MotionOverlay from "./MotionOverlay";
 
@@ -63,7 +63,7 @@ describe("selected desktop font consumer admission (hook adapters; no mounted br
 
   it("keeps an unknown custom font explicit instead of substituting a bundled family", () => {
     const project = createEmptyProject("Custom", { width: 1920, height: 1080, fps: 30 });
-    const title = createMotionGraphic("first", "title", "CUSTOM TEXT", 0, 3); title.fontFamily = "Unknown custom"; project.motionGraphics = [title];
+    const title = createMotionGraphic("first", "title", "CUSTOM TEXT", 0, 3, undefined, legacyMotionGraphicSeed("title")); title.fontFamily = "Unknown custom"; project.motionGraphics = [title];
     adapter.status = "unverified"; adapter.reason = "字型 Unknown custom 尚未驗證";
     const html = markup(project, 1); expect(html).toContain("請選擇內建字型"); expect(html).not.toContain("CUSTOM TEXT");
     expect(adapter.requests[0].face).toBeUndefined();

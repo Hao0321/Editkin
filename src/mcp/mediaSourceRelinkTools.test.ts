@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -21,12 +21,13 @@ afterEach(async () => {
   else process.env.EDITKIN_WORKSPACE = originalWorkspace;
   for (const path of roots.splice(0)) {
     const target = resolve(path);
-    if (dirname(target) !== resolve(tmpdir()) || !basename(target).startsWith("editkin-source-relink-")) throw new Error("Refusing unowned fixture cleanup");
+    if (dirname(target) !== await realpath(tmpdir()) || !basename(target).startsWith("editkin-source-relink-")) throw new Error("Refusing unowned fixture cleanup");
     await rm(target, { recursive: true, force: true });
   }
 });
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), "editkin-source-relink-")); roots.push(root);
+  // Real temporary path: macOS tmpdir() sits under the /var symlink and Windows runners report 8.3 short names.
+  const root = await mkdtemp(join(await realpath(tmpdir()), "editkin-source-relink-")); roots.push(root);
   const workspace = join(root, "workspace"); await mkdir(workspace);
   process.env.EDITKIN_WORKSPACE = workspace;
   const sourcePath = join(workspace, "moved.mp4"), projectPath = join(workspace, "saved.editkin.json");

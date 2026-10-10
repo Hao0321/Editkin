@@ -90,6 +90,14 @@ function kindOfFile(file: File): AssetKind {
   throw new Error("瀏覽器無法識別所選檔案的媒體類型。");
 }
 
+/** The metadata probe only ever loads the object URL created for the user's chosen file. */
+function localObjectUrl(url: string): string {
+  if (!url.startsWith("blob:")) throw new Error("只能讀取所選檔案的媒體資訊。");
+  // CodeQL does not model the scheme check above as a sanitizer. A blob: URL
+  // is plain ASCII, so encodeURI returns it unchanged.
+  return encodeURI(url);
+}
+
 function readMetadata(url: string, kind: AssetKind): Promise<BrowserRelinkMetadata> {
   return new Promise((resolve, reject) => {
     const element = kind === "image" ? document.createElement("img") : document.createElement(kind);
@@ -113,7 +121,7 @@ function readMetadata(url: string, kind: AssetKind): Promise<BrowserRelinkMetada
       element.onloadedmetadata = () => finish({ kind, duration: element.duration,
         ...(element instanceof HTMLVideoElement ? { width: element.videoWidth, height: element.videoHeight } : {}) });
     }
-    try { element.src = url; }
+    try { element.src = localObjectUrl(url); }
     catch (error) { finish(undefined, error instanceof Error ? error : new Error("無法讀取媒體資訊。")); }
   });
 }

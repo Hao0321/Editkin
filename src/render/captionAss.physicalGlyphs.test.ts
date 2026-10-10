@@ -1,4 +1,4 @@
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -87,7 +87,8 @@ function write(p: EditProject, layouts?: ReadonlyMap<string, MotionGraphicV2Layo
 }
 
 async function copiedLatinPack() {
-  const base = await mkdtemp(join(tmpdir(), "editkin-physical-ass-"));
+  // Real temporary path: macOS tmpdir() sits under the /var symlink and Windows runners report 8.3 short names.
+  const base = await mkdtemp(join(await realpath(tmpdir()), "editkin-physical-ass-"));
   ownedBases.push(base);
   const root = join(base, "pack"), spec = bundledFontFaceSpec(latinFaceId), font = join(root, spec.fontFile);
   await mkdir(join(root, "render"), { recursive: true });

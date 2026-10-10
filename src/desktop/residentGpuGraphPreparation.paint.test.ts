@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -122,9 +123,14 @@ describe("desktop resident verified font producer (real font bytes; controlled F
         controllerCount: 0, controllers: [], layers: [], visualLayers: [], resourcePlan: {}, decodeSchedule: {},
         engineGraph: { directExecution: true, blockedNodeIds: [], ignoredNodeIds: [], executedNodeIds: preview.graph.nodes.map(node => node.id) } };
       let includePaint = false;
+      const paint = preview.graph.nodes.find(node => node.kind === "native_motion_paint")!;
+      const colorBinding = { nodeId: paint.id, graphicId: paint.graphicId,
+        sourceSignatureSha256: createHash("sha256").update((paint.track as nativePaint.NativeMotionPaintTrack).sourceSignature).digest("hex"),
+        colorIntent: "scene_linear_rec709", compositionBoundary: "before_aces2", overlayOrder: 0 };
       const load = vi.fn(async () => ({ ...base, ...(includePaint ? { nativeMotionPaintCount: count, nativeMotionPaintResidentTextureCount: count,
         nativeMotionPaintTextureUploads: count, nativeMotionPaintInitialRasterCount: count,
-        nativeMotionPaintInitialCpuUploadBytes: count * preview.graph.width * preview.graph.height * 8, activeNativeMotionPaints: [] } : {}) }));
+        nativeMotionPaintInitialCpuUploadBytes: count * preview.graph.width * preview.graph.height * 8, activeNativeMotionPaints: [],
+        nativeMotionPaintColorBindings: [colorBinding] } : {}) }));
       const ref = <T,>(current: T) => ({ current });
       const context: EngineVideoPreviewContext = { next: { kind: "engine-video", preview, token: 1, fps: 30, nativeBounds: { x: 0, y: 0, width: 640, height: 360, revision: 1 } },
         desktop: { loadGpuEngineVideoPreviewSession: load } as unknown as GpuPreviewApi,

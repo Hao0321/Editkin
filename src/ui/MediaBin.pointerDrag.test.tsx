@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement, ReactNode } from "react";
 const h = vi.hoisted(() => ({ effects: [] as Array<() => void | (() => void)>, start: vi.fn() }));
 vi.mock("react", async original => ({ ...await original<typeof import("react")>(),
-  useState: (value: unknown) => [value, vi.fn()], useRef: (current: unknown) => ({ current }),
+  useState: (value: unknown) => [typeof value === "function" ? (value as () => unknown)() : value, vi.fn()], useRef: (current: unknown) => ({ current }),
   useMemo: (factory: () => unknown) => factory(), useDeferredValue: (value: unknown) => value, useCallback: (callback: unknown) => callback,
   useEffect: (effect: () => void | (() => void)) => h.effects.push(effect),
 }));

@@ -7,13 +7,30 @@ import { PassThrough, Writable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EngineRenderGraph } from "./engineGraph";
 import { DEFAULT_COLOR } from "../domain/types";
+import { canonicalJson } from "../shared/canonicalJson";
+import { selectedNativeVideoRuntimeIdentitySchema } from "../application/selectedNativeVideoRuntime";
 import { renderResidentSceneLinearVideoSequence } from "./residentSceneLinearVideoSequence";
 
 const mocked = vi.hoisted(() => ({ spawn: vi.fn() }));
-vi.mock("node:child_process", () => ({ spawn: mocked.spawn }));
+vi.mock("node:child_process", async importOriginal => ({ ...await importOriginal<typeof import("node:child_process")>(), spawn: mocked.spawn }));
 
 const DISPLAY = "editkin-ocio-aces2-linear-rec709-to-rec709-sdr/v1";
 const INPUT = "editkin-srgb-to-linear-rec709-primary/v1";
+const sha = (value: string) => createHash("sha256").update(value).digest("hex");
+// Synthetic selected-runtime identity for the mock transport: no native binary, target or pixels are certified.
+const METADATA = { schema: "editkin.native-video-runtime-metadata/v1", platform: "win32",
+  executableSha256: sha("mock-only.exe"), executableBytes: 13, videoInteropProtocol: "media-foundation-d3d11-d3d12-wgpu/v1",
+  nativeFloatingVideoFrameContract: "editkin.native-floating-frame-material/v1",
+  offscreenVideoProtocol: "editkin.resident-offscreen-video-target/v1", displayPaintSchema: "editkin.native-motion-paint-track/v2",
+  videoTargetAdmission: { schema: "editkin.shared-video-target-admission/v1", requiredBackend: "Dx12", factory: "new_dx12_video",
+    selection: "deferred-until-target-bind", offscreenProtocol: "editkin.resident-offscreen-video-target/v1" },
+  actualTargetMeasured: false, noNativeWindowCreated: true };
+const RUNTIME = selectedNativeVideoRuntimeIdentitySchema.parse({ schema: "editkin.selected-native-video-runtime/v1",
+  executablePathSha256: sha("mock-only.exe"), executableSha256: METADATA.executableSha256, executableBytes: METADATA.executableBytes,
+  metadataSha256: sha(canonicalJson(METADATA)), metadata: METADATA, verification: "selected_binary_metadata_only" });
+const TARGET = { schema: "editkin.actual-video-target-identity/v1", generation: 1, backend: "Dx12", adapter: "mock transport adapter",
+  deviceType: "mock", executableSha256: RUNTIME.executableSha256, executableBytes: RUNTIME.executableBytes,
+  target: { renderTargetContract: "editkin.resident-offscreen-render-target/v1", offscreen: true, width: 4, height: 4, nativeWindow: false, nativeSwapChain: false } };
 function fixture(): EngineRenderGraph {
   const track = { schema: "editkin.native-motion-paint-track/v1", sourceSignature: "source-control-authored-track",
     scene: { width: 4, height: 4, background: [0, 0, 0, 0], max_scale: 1, layers: [{ id: "ink", path: { fill_rule: "non_zero", commands: [
@@ -53,13 +70,17 @@ function mockRuntime(graph: EngineRenderGraph, defect?: "decoded-copy" | "zero-t
   };
   const child = new EventEmitter() as EventEmitter & { stdout: PassThrough; stderr: PassThrough; stdin: Writable; killed: boolean; kill(): void };
   child.stdout = new PassThrough(); child.stderr = new PassThrough(); child.killed = false;
-  child.kill = () => { child.killed = true; };
+  // Like an owned child process, a terminated mock reports exit and close.
+  child.kill = () => { if (child.killed) return; child.killed = true;
+    queueMicrotask(() => { child.emit("exit", null, "SIGTERM"); child.emit("close", null, "SIGTERM"); }); };
   child.stdin = new Writable({ write(chunk, _encoding, done) {
     const request = JSON.parse(String(chunk));
     void (async () => {
       let result: Record<string, unknown> = {};
-      if (request.command === "surface_bind") result = { backend: "Dx12", nativeSwapChain: true, cpuPixelReadbacks: 0 };
-      if (request.command === "engine_video_load") result = {
+      if (request.command === "offscreen_bind") result = { backend: "Dx12", nativeSwapChain: false, nativeWindow: false, offscreen: true,
+        bound: false, visible: false, presentCount: 0, renderTargetContract: "editkin.resident-offscreen-render-target/v1", cpuPixelReadbacks: 0,
+        videoTargetIdentity: TARGET };
+      if (request.command === "engine_video_load") result = { videoTargetIdentity: TARGET,
         executor: "media-foundation-d3d11-d3d12-wgpu/v1", displayTransform: "aces2_rec709_sdr",
         resourcePlan: { workingBytesPerPixel: 8, maximumFullFramePassesPerPresent: 4 },
         engineGraph: { directExecution: true, blockedNodeIds: [], ignoredNodeIds: [] }, gpuEffects: { resolved: true, programs: [] },
@@ -71,7 +92,9 @@ function mockRuntime(graph: EngineRenderGraph, defect?: "decoded-copy" | "zero-t
         const frame = request.timelineFrame, active = frame >= 1 && frame <= 2;
         const activePaint = active ? receipt(frame) : undefined, copies = active ? 1 : 0;
         await writeFile(request.outputPath, `source-control-frame-${frame}`);
-        result = { sceneLinearExecution: true, workingColorSpace: "linear_rec709", workingFormat: "rgba16_float", displayTransform: DISPLAY,
+        result = { videoTargetIdentity: TARGET, offscreen: true, nativeSurfacePresented: false, outputReadbackCopies: 1,
+          renderTarget: { renderTargetContract: "editkin.resident-offscreen-render-target/v1", nativeWindow: false, nativeSwapChain: false },
+          sceneLinearExecution: true, workingColorSpace: "linear_rec709", workingFormat: "rgba16_float", displayTransform: DISPLAY,
           inputTransform: INPUT, ocioVersion: "2.5.2", acesVersion: "2.0", configSha256: "eda5b0008a43b72b98ad540e32eb0eb83b340dde54e35bddba64ccbafac1029a",
           verificationReadback: true, outputWritten: true, engineGraph: { directExecution: true, blockedNodeIds: [], ignoredNodeIds: [] },
           activeNativeMotionPaints: activePaint ? [activePaint] : [], nativeMotionPaintResidentTextureCount: 1, nativeMotionPaintTextureUploads: uploads,
@@ -85,7 +108,8 @@ function mockRuntime(graph: EngineRenderGraph, defect?: "decoded-copy" | "zero-t
     })().catch(error => child.stdout.write(`${JSON.stringify({ id: request.id, ok: false, error: String(error) })}\n`));
     done();
   } });
-  mocked.spawn.mockImplementation(() => { queueMicrotask(() => child.stdout.write('{"event":"ready"}\n')); return child; });
+  mocked.spawn.mockImplementation(() => { queueMicrotask(() => child.stdout.write(`${JSON.stringify({ event: "ready", generation: TARGET.generation,
+    offscreenVideoProtocol: "editkin.resident-offscreen-video-target/v1", nativeRuntimeMetadata: METADATA })}\n`)); return child; });
 }
 
 const owned: string[] = [];
@@ -102,7 +126,7 @@ async function run(defect?: "decoded-copy" | "zero-total") {
   const graph = fixture(), directory = await mkdtemp(join(tmpdir(), "editkin-native-paint-sequence-control-")); owned.push(directory);
   mockRuntime(graph, defect);
   return renderResidentSceneLinearVideoSequence({ executable: "mock-only.exe", graph, assetBindings: { video: "fixture.mp4" }, startFrame: 0,
-    frameCount: 3, outputDirectory: directory, timeoutMs: 1000 });
+    frameCount: 3, outputDirectory: directory, timeoutMs: 1000, selectedNativeVideoRuntime: RUNTIME });
 }
 
 describe("formal sequence paint upload accounting (mock transport, no GPU)", () => {

@@ -14,7 +14,7 @@ describe('ASS samples select the authored integer motion frame',()=>{
  it('does not pretend centisecond events support more than 100 states per second',()=>{
   for(const fps of [0,NaN,101,120,240])expect(()=>assMotionFrameTime(0,fps)).toThrow();
   const p=createEmptyProject('high-fps',{width:1920,height:1080,fps:120});p.motionGraphics=[createMotionGraphic('g','title','TEXT',0,3,undefined,findMotionGraphicPreset('v2-word-cascade').seed)];
-  expect(()=>writeAssContent(p,p.captionStyle)).toThrow(/100 fps/);
+  expect(()=>writeAssContent(p,p.captionStyle)).toThrow(/invalid frame duration\/fps/);
  });
  it('removes the last-frame panel instead of holding the previous fade sample',()=>{
   const p=createEmptyProject('last-frame'),g=createMotionGraphic('g','title','TEXT',0,3,undefined,findMotionGraphicPreset('v2-word-cascade').seed);p.motionGraphics=[g];

@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -17,12 +17,13 @@ import { prepareMediaBootstrapInputSchema, prepareMediaBootstrapReadOnly, regist
 const ownedRoots: string[] = [];
 afterEach(async () => { for (const root of ownedRoots.splice(0)) {
   const target = resolve(root);
-  if (dirname(target) !== resolve(tmpdir()) || !basename(target).startsWith("editkin-bootstrap-adapter-")) throw new Error("Refusing cleanup outside this test's owned temporary roots");
+  if (dirname(target) !== await realpath(tmpdir()) || !basename(target).startsWith("editkin-bootstrap-adapter-")) throw new Error("Refusing cleanup outside this test's owned temporary roots");
   await rm(target, { recursive: true, force: true });
 } });
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), "editkin-bootstrap-adapter-"));
+  // Real temporary path: macOS tmpdir() sits under the /var symlink and Windows runners report 8.3 short names.
+  const root = await mkdtemp(join(await realpath(tmpdir()), "editkin-bootstrap-adapter-"));
   ownedRoots.push(root);
   const workspace = join(root, "workspace");
   await mkdir(workspace);

@@ -5,7 +5,7 @@ import { createEmptyProject } from "../domain/editGraph";
 import type { EditProject, MotionGraphic } from "../domain/types";
 import type { MotionScene2D } from "../domain/motionScene2d";
 import type { SpringTargetTrack } from "../domain/motionContinuity";
-import { createMotionGraphic } from "../motion/composition";
+import { createMotionGraphic, legacyMotionGraphicSeed } from "../motion/composition";
 import { findMotionGraphicPreset } from "../creative/motionGraphicPresets";
 import { motionGraphicV2FrameReceipt, motionGraphicV2LayoutReceipt, motionGraphicV2PhysicalLayoutReceipt } from "../motion/compositionV2";
 import { motionVectorPaths } from "../motion/vectorGeometry";
@@ -135,7 +135,7 @@ describe("actual ASS scene2d projection (original fixtures, genuine font, no pix
     const { p, layouts } = fixture();
     expect(() => writeAssContent(p, p.captionStyle)).toThrow(/scene2d.*physical glyph.*estimated/);
     expect(() => writeAssContent(p, p.captionStyle, { physicalLayouts: new Map() })).toThrow(/physical glyph/);
-    p.motionGraphics = [createMotionGraphic("title", "title", "AV", 0, 2)];
+    p.motionGraphics = [createMotionGraphic("title", "title", "AV", 0, 2, undefined, legacyMotionGraphicSeed("title"))];
     expect(() => write(p, layouts)).toThrow(/foreground.*v2/);
   });
 
@@ -155,7 +155,7 @@ describe("actual ASS scene2d projection (original fixtures, genuine font, no pix
     p.motionGraphics.push(legacy, estimated);
     const sceneOutput = writeAssContent(p, p.captionStyle, { physicalLayouts: layouts });
     const baseline = writeAssContent({ ...p, motionScenes: [] }, p.captionStyle, { physicalLayouts: layouts });
-    const textLines = (value: string) => value.split("\n").filter(line => line.startsWith("Dialogue: ") && /LEGACY|KEEP$/.test(line));
+    const textLines = (value: string) => value.split("\n").filter(line => line.startsWith("Dialogue: ") && (line.includes("LEGACY") || line.endsWith("KEEP")));
     expect(textLines(sceneOutput)).toEqual(textLines(baseline));
     expect(textLines(sceneOutput).length).toBeGreaterThan(1);
   });

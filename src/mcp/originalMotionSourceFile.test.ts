@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
-import { link, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { createEmptyProject } from "../domain/editGraph";
@@ -25,7 +25,7 @@ const rights: OriginalMotionSourceRights = { origin: "self_authored", medium: "n
   realityProof: false, importedReferenceMedia: false, declaration: "Self-authored illustration with native geometry and bundled physical glyphs only." };
 afterEach(async () => {
   io.beforeOpen = undefined; vi.restoreAllMocks();
-  const resolvedTemp = resolve(tmpdir());
+  const resolvedTemp = await realpath(tmpdir());
   for (const root of roots) {
     const target = resolve(root), parent = dirname(target);
     const directTempChild = process.platform === "win32" ? parent.toLowerCase() === resolvedTemp.toLowerCase() : parent === resolvedTemp;
@@ -50,12 +50,14 @@ function fixture(text = false) {
         maxLines: 1, lineGapPixels: 0, letterSpacingPixels: 0, colorRole: "text" }]
         : [{ id: "owned-object", kind: "panel", range: { startFrame: 0, endFrame: 90 }, xPixels: 210, yPixels: 130,
           widthPixels: 220, heightPixels: 100, cornerRadiusPixels: 12, colorRole: "accent" }],
-      semanticCues: [{ id: "original-focus", frame: 0, purpose: "Present the authored object", graphicIds: ["owned-object"], evidenceRefs: ["authoring:owned"] }] },
+      semanticCues: [{ id: "original-focus", frame: 0, purpose: "Present the authored object", graphicIds: ["owned-object"], evidenceRefs: ["authoring:owned"],
+        focus: { centerX: 320, centerY: 180, zoom: 1 } }] },
     fontBindings: text ? [{ graphicId: "owned-object", faceId: spec.faceId, fontSha256: spec.sha256, manifestSha256: spec.manifestSha256, parserVersion: "opentype.js@1.3.4" }] : [] });
   return { project, payload };
 }
 async function store(payload: OriginalMotionAuthoringFile | string | Uint8Array) {
-  const root = await mkdtemp(join(tmpdir(), "editkin-original-source-")); roots.add(root);
+  // Real temporary path: macOS tmpdir() sits under the /var symlink and Windows runners report 8.3 short names.
+  const root = await mkdtemp(join(await realpath(tmpdir()), "editkin-original-source-")); roots.add(root);
   await mkdir(join(root, ".editkin", "original-sources"), { recursive: true });
   const path = join(root, sourcePath);
   await writeFile(path, typeof payload === "string" || payload instanceof Uint8Array ? payload : `${canonicalJson(payload)}\n`);

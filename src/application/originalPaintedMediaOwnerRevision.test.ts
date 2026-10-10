@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createEmptyProject, validateProject } from "../domain/editGraph";
@@ -75,7 +75,8 @@ function mediaProject(): EditProject {
   return validateProject(project);
 }
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), "editkin-painted-owner-source-control-"));
+  // Real temporary path: macOS tmpdir() sits under the /var symlink and Windows runners report 8.3 short names.
+  const root = await mkdtemp(join(await realpath(tmpdir()), "editkin-painted-owner-source-control-"));
   await mkdir(join(root, ".editkin", "original-sources"), { recursive: true });
   const before = payload(), after = structuredClone(before), face = bundledFontFaceSpec("EditkinFace-noto-sans-tc-500");
   after.authoring.expectedRevision = 7;

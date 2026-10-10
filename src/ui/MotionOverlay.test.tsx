@@ -1,18 +1,39 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { findMotionGraphicPreset } from "../creative/motionGraphicPresets";
 import { createEmptyProject } from "../domain/editGraph";
+import type { MotionGraphic } from "../domain/types";
 import { createMotionGraphic, legacyMotionGraphicSeed } from "../motion/composition";
-import { motionGraphicV2LayoutReceipt } from "../motion/compositionV2";
+import { motionGraphicV2PhysicalLayoutReceipt } from "../motion/compositionV2";
 import { writeAssContent } from "../render/captionAss";
+import { bundledFontFaceSpec } from "../typography/bundledFontCatalog";
+import { motionFontSelection } from "../typography/motionFontReadiness";
+import { prepareGlyphRun, type PreparedGlyphRun } from "../typography/preparedGlyphRun";
+const fonts = vi.hoisted(() => ({ run: undefined as PreparedGlyphRun | undefined }));
+// SSR keeps the actual hook: browser font loading is never observed there. A v2
+// test that needs painted layout resolves readiness with an authentic factory run.
+vi.mock("./useMotionFontReadiness", async importOriginal => {
+  const actual = await importOriginal<typeof import("./useMotionFontReadiness")>();
+  return { ...actual, useMotionFontReadiness: (...args: Parameters<typeof actual.useMotionFontReadiness>) => {
+    const readiness = actual.useMotionFontReadiness(...args);
+    return fonts.run ? { selectionKey: readiness.selectionKey, face: readiness.face, status: "ready" as const, glyphRun: fonts.run } : readiness;
+  } };
+});
 import MotionOverlay from "./MotionOverlay";
 
 const chrome = "C:/Program Files/Google/Chrome/Application/chrome.exe";
+afterEach(() => { fonts.run = undefined; });
+async function resolveFont(graphic: MotionGraphic): Promise<PreparedGlyphRun> {
+  const face = motionFontSelection({ family: graphic.fontFamily ?? "Noto Sans TC", weight: graphic.fontWeight ?? 700, text: graphic.text }).face!;
+  fonts.run = await prepareGlyphRun(face.faceId, graphic.text, new Uint8Array(await readFile(resolve("public/fonts", bundledFontFaceSpec(face.faceId).fontFile))));
+  return fonts.run;
+}
 
 describe("MotionOverlay v1 project-pixel preview geometry", () => {
   it.skipIf(!existsSync(chrome))("matches authored ASS font and spacing at two letterboxed stage sizes", () => {
@@ -50,32 +71,39 @@ describe("MotionOverlay v1 project-pixel preview geometry", () => {
       const oldFixedPx = Math.max(14, graphic.fontSize * .45);
       expect(Math.abs(oldFixedPx - 72 * metrics[1].stageWidth / project.width)).toBeGreaterThan(1);
     } finally {
-      rmSync(sandbox, { recursive: true, force: true });
+      // Headless Chrome can briefly hold its profile files on Windows after --dump-dom returns.
+      rmSync(sandbox, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     }
   }, 30_000);
 });
 
 describe("MotionOverlay v2", () => {
-  it("uses the physical alias and exposes substituted weight without synthetic bold", () => {
+  it("uses the physical alias and exposes substituted weight without synthetic bold", async () => {
     const project=createEmptyProject("font consumer",{width:1920,height:1080,fps:30});
     const g=createMotionGraphic("font","title","TEXT",0,3,undefined,findMotionGraphicPreset("v2-word-cascade").seed);
     g.fontFamily="Fredoka";g.fontWeight=850;project.motionGraphics=[g];
+    const ssr=renderToStaticMarkup(<MotionOverlay project={project} playhead={1} trackingSelectionEnabled={false}/>);
+    expect(ssr).toContain('data-motion-font-status="unobserved"');expect(ssr).not.toContain('data-motion-font-status="ready"');
+    expect(ssr).toContain('data-motion-font-face="EditkinFace-fredoka-700"');expect(ssr).not.toContain('data-testid="motion-glyph-outlines"');
+    // Physical outlines of the pinned 700 face replace CSS text, so no browser bold can be synthesized.
+    const run=await resolveFont(g);expect(run.faceId).toBe("EditkinFace-fredoka-700");
     const html=renderToStaticMarkup(<MotionOverlay project={project} playhead={1} trackingSelectionEnabled={false}/>);
-    expect(html).toContain('data-motion-font-status="unobserved"');expect(html).not.toContain('data-motion-font-status="ready"');
-    expect(html).toContain("EditkinFace fredoka 700");expect(html).toContain("font-weight:700");expect(html).toContain("font-synthesis:style");expect(html).toContain('data-font-weight-substituted="true"');
+    expect(html).toContain('data-motion-font-face="EditkinFace-fredoka-700"');expect(html).toContain(`data-motion-font-sha="${bundledFontFaceSpec("EditkinFace-fredoka-700").sha256}"`);
+    expect(html).toContain('data-motion-glyph-source="physical-outline"');expect(html).toContain('data-font-weight-substituted="true"');expect(html).toContain("字重 850 → 700");
+    expect(html).not.toContain("font-family:");expect(html).not.toContain("font-weight:");expect(html).not.toContain("<span");
   });
-  it("renders the exact shared layout receipt and sequenced segments", () => {
+  it("renders the exact shared layout receipt and sequenced segments", async () => {
     const project = createEmptyProject("Motion v2", { width: 1920, height: 1080, fps: 30 });
     const preset = findMotionGraphicPreset("v2-word-cascade");
     const graphic = createMotionGraphic("dom-v2", "title", "DOM AND EXPORT", 0, 3, undefined, preset.seed);
     project.motionGraphics.push(graphic);
-    const layout = motionGraphicV2LayoutReceipt(project, graphic);
+    const layout = motionGraphicV2PhysicalLayoutReceipt(project, graphic, await resolveFont(graphic));
     const html = renderToStaticMarkup(<MotionOverlay project={project} playhead={.2} trackingSelectionEnabled={false} />);
     expect(html).toContain(`data-motion-layout-receipt="${layout.receiptId}"`);
-    expect(html.match(/<span/g)).toHaveLength(layout.segments.length);
+    expect(html.match(/data-motion-segment=/g)).toHaveLength(layout.segments.length);
   });
 
-  it("shows an explicit blocked state instead of silently using v1 layout", () => {
+  it("shows an explicit blocked state instead of silently using v1 layout", async () => {
     const project = createEmptyProject("Motion v2", { width: 320, height: 180, fps: 30 });
     const preset = findMotionGraphicPreset("v2-word-cascade");
     const graphic = createMotionGraphic("dom-blocked", "title", "THIS CANNOT FIT", 0, 3, undefined, preset.seed);
@@ -83,17 +111,21 @@ describe("MotionOverlay v2", () => {
     graphic.fontSize = 72;
     graphic.layoutV2 = { ...graphic.layoutV2!, minFontSize: 72, maxLines: 1 };
     project.motionGraphics.push(graphic);
+    await resolveFont(graphic);
     const html = renderToStaticMarkup(<MotionOverlay project={project} playhead={.2} trackingSelectionEnabled={false} />);
-    expect(html).toContain("data-testid=\"motion-v2-blocked\"");
-    expect(html).toContain("v2 排版受阻");
+    expect(html).toContain("data-testid=\"motion-font-blocked\"");
+    expect(html).toContain("role=\"alert\"");
+    expect(html).toContain("無法在 safe-area 與 1 行內 auto-fit");
     expect(html).not.toContain("data-testid=\"motion-graphic\"");
+    expect(html).not.toContain("data-testid=\"motion-glyph-outlines\"");
   });
 
-  it("keeps v2 lower-third tags on their declared width", () => {
+  it("keeps v2 lower-third tags on their declared width", async () => {
     const project = createEmptyProject("Lower third", { width: 1920, height: 1080, fps: 30 });
     const preset = findMotionGraphicPreset("lower_third_clean_blue_unit");
     const graphic = createMotionGraphic("unit", "tag", "Editkin 創辦人", 0, 3, undefined, preset.seed);
     project.motionGraphics.push(graphic);
+    await resolveFont(graphic);
     const html = renderToStaticMarkup(<MotionOverlay project={project} playhead={.5} trackingSelectionEnabled={false} />);
     expect(html).toContain('data-motion-preset="lower_third_clean_blue_unit"');
     expect(html).toContain(`width:${graphic.width * 100}%`);

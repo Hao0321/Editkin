@@ -6,7 +6,7 @@ import { createEmptyProject } from "../domain/editGraph";
 import type { EditProject, MotionGraphic } from "../domain/types";
 import type { MotionScene2D } from "../domain/motionScene2d";
 import type { SpringTargetTrack } from "../domain/motionContinuity";
-import { createMotionGraphic } from "../motion/composition";
+import { createMotionGraphic, legacyMotionGraphicSeed } from "../motion/composition";
 import { findMotionGraphicPreset } from "../creative/motionGraphicPresets";
 import { motionGraphicV2FrameReceipt, motionGraphicV2LayoutReceipt, motionGraphicV2PhysicalLayoutReceipt } from "../motion/compositionV2";
 import { motionVectorPaths } from "../motion/vectorGeometry";
@@ -125,7 +125,7 @@ describe("actual SVG scene2d projection (real glyphs, controlled readiness; no m
     const { p } = fixture(); adapter.status = "pending";
     expect(markup(p)).toContain('data-testid="motion-font-blocked"');
     expect(markup(p)).not.toContain('data-testid="motion-glyph-outlines"');
-    p.motionGraphics = [createMotionGraphic("text", "title", "AV", 0, 2)];
+    p.motionGraphics = [createMotionGraphic("text", "title", "AV", 0, 2, undefined, legacyMotionGraphicSeed("title"))];
     expect(markup(p)).toContain('data-testid="motion-scene-blocked"');
     const ordinary = fixture("vector").p; delete ordinary.motionScenes;
     expect(markup({ ...ordinary, motionScenes: [] })).toBe(markup(ordinary));

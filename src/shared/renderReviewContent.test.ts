@@ -5,13 +5,18 @@ import { DEFAULT_CLIP_LAYER } from "../domain/types";
 import { renderReviewContentJson } from "./renderReviewContent";
 
 describe("render-equivalent default normalization", () => {
-  it("equates missing clip defaults and the actual command-normalized defaults", () => {
+  it("equates missing clip defaults and explicitly written defaults", () => {
     const project = createDemoProject();
+    // Commands keep an omitted layer/expressions omitted (schema 9/10 save-reopen preserves omission).
     const next = applyCommand(project, { type: "set_director_review_state", reviewState: "reviewing" });
     expect(project.tracks[0].clips[0].layer).toBeUndefined();
-    expect(next.tracks[0].clips[0].layer).toEqual(DEFAULT_CLIP_LAYER);
+    expect(next.tracks[0].clips[0].layer).toBeUndefined();
+    expect(next.tracks[0].clips[0].expressions).toBeUndefined();
     expect(renderReviewContentJson(next)).toBe(renderReviewContentJson(project));
-    expect(project.tracks[0].clips[0].expressions).toBeUndefined();
+    const explicit = structuredClone(project);
+    explicit.tracks[0].clips[0].layer = { ...DEFAULT_CLIP_LAYER };
+    explicit.tracks[0].clips[0].expressions = {};
+    expect(renderReviewContentJson(explicit)).toBe(renderReviewContentJson(project));
   });
   it("does not hide actual enabled/blending/role or expression changes", () => {
     const project = createDemoProject(); const baseline = renderReviewContentJson(project);

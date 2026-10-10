@@ -16,12 +16,14 @@ vi.mock("./ffmpegMedia", async original => ({
   ...await original<typeof import("./ffmpegMedia")>(), probeMedia: controls.probe,
 }));
 
+// Absolute on every platform; neither path is opened because probe and the resident route are mocked.
+const controlSource = resolve("explicit-source-control/landscape.mp4"), controlOutput = resolve("explicit-source-control/not-a-film.mp4");
 function fixture() {
   const project = createDemoProject();
   project.width = 360; project.height = 640; project.fps = 30;
   project.captions = []; project.motionGraphics = [];
   project.colorManagement = { ...project.colorManagement!, mode: "aces2", outputTransform: "rec709_sdr" };
-  Object.assign(project.assets[0], { uri: "C:/explicit-source-control/landscape.mp4", width: 1280, height: 720,
+  Object.assign(project.assets[0], { uri: controlSource, width: 1280, height: 720,
     displayAspectRatio: 16 / 9, duration: 6, color: { interpretation: "rec709", primaries: "bt709", transfer: "bt709", matrix: "bt709" } });
   const clip = project.tracks[0].clips[0];
   Object.assign(clip, { timelineStart: 0, sourceStart: 0, duration: 1, floatingFrame: floatingVideoFramePresetV2("matte") });
@@ -41,7 +43,7 @@ beforeEach(() => {
 describe("actual formal floating caller admission (mocked media, not output certification)", () => {
   it("prepares the literal same-project floating descriptor and uses the resident route without mutating the authored project", async () => {
     const project = fixture(), before = JSON.stringify(project);
-    await renderProject(project, "C:/explicit-source-control/not-a-film.mp4", options);
+    await renderProject(project, controlOutput, options);
     expect(controls.probe).toHaveBeenCalledTimes(1);
     expect(controls.resident).toHaveBeenCalledTimes(1);
     const graph = controls.resident.mock.calls[0][1].graph;
@@ -60,7 +62,7 @@ describe("actual formal floating caller admission (mocked media, not output cert
     if (defect === "codedDrift") probe.encodedWidth = 1920;
     if (defect === "HDR") probe.colorTransfer = "arib-std-b67";
     controls.probe.mockResolvedValue(probe);
-    await expect(renderProject(fixture(), "C:/explicit-source-control/not-a-film.mp4", options)).rejects.toThrow();
+    await expect(renderProject(fixture(), controlOutput, options)).rejects.toThrow();
     expect(controls.encoder).not.toHaveBeenCalled(); expect(controls.resident).not.toHaveBeenCalled();
   });
 });

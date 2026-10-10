@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { createAutopilotV4Fixture } from "../application/autopilotPlanFixture";
@@ -110,7 +110,8 @@ function body(result: { content: { type: string; text: string }[] }) { return JS
 beforeEach(async () => {
   controls.fault = undefined; controls.originalCalls = 0; controls.blockOriginalBeforeCommit = false; controls.keyUnavailable = false;
   priorWorkspace = process.env.EDITKIN_WORKSPACE;
-  workspace = await mkdtemp(join(tmpdir(), prefix)); roots.push(workspace);
+  // Real temporary path: macOS tmpdir() sits under the /var symlink and Windows runners report 8.3 short names.
+  workspace = await mkdtemp(join(await realpath(tmpdir()), prefix)); roots.push(workspace);
   process.env.EDITKIN_WORKSPACE = workspace;
 });
 afterEach(async () => {
@@ -118,7 +119,7 @@ afterEach(async () => {
   else process.env.EDITKIN_WORKSPACE = priorWorkspace;
   for (const created of roots.splice(0)) {
     const target = resolve(created);
-    if (dirname(target) !== resolve(tmpdir()) || !basename(target).startsWith(prefix)) throw new Error("Refuse unowned parity fixture cleanup");
+    if (dirname(target) !== await realpath(tmpdir()) || !basename(target).startsWith(prefix)) throw new Error("Refuse unowned parity fixture cleanup");
     await rm(target, { recursive: true, force: true });
   }
 });

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -76,7 +76,7 @@ afterEach(async () => {
   if (oldWorkspace === undefined) delete process.env.EDITKIN_WORKSPACE; else process.env.EDITKIN_WORKSPACE = oldWorkspace;
   if (oldCache === undefined) delete process.env.EDITKIN_CACHE_ROOT; else process.env.EDITKIN_CACHE_ROOT = oldCache;
   for (const root of roots.splice(0)) {
-    if (dirname(resolve(root)) !== resolve(tmpdir()) || !basename(root).startsWith(prefix)) throw Error("Unowned fixture cleanup");
+    if (dirname(resolve(root)) !== await realpath(tmpdir()) || !basename(root).startsWith(prefix)) throw Error("Unowned fixture cleanup");
     await rm(root, { recursive: true, force: true });
   }
 });
@@ -84,7 +84,8 @@ afterEach(async () => {
 const silentAudio: CurrentAutopilotPlan["editorial"]["audio"] = { mode: "silent_media", dialoguePriority: true, blanketWhooshEveryCut: false, layers: [], impactFrames: [], breathFrames: [] };
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), prefix)); roots.push(root);
+  // Real temporary path: macOS tmpdir() sits under the /var symlink and Windows runners report 8.3 short names.
+  const root = await mkdtemp(join(await realpath(tmpdir()), prefix)); roots.push(root);
   const sourcePath = join(root, "owned source.mp4"), bytes = Buffer.from("owned silent fixture bytes A");
   await writeFile(sourcePath, bytes);
   const sha = createHash("sha256").update(bytes).digest("hex");

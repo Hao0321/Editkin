@@ -320,26 +320,31 @@ async function posixKey(root: string, prepare: boolean): Promise<Buffer> {
   if (rootStat.uid !== uid || (rootStat.mode & 0o777) !== 0o700) throw new Error("User commit key directory must be owner-only");
   const path = join(root, KEY_FILE);
   async function read(): Promise<Buffer> {
-    let before = await lstat(path);
-    // A creator atomically publishes a complete private file via link, then
-    // removes its temporary link. Concurrent prepare may wait for that precise
-    // two-link state; sign and every other unsafe state remain fail-closed.
-    if (prepare && before.nlink === 2) {
-      const published = before;
-      for (let attempt = 0; attempt < 30 && before.nlink === 2; attempt++) {
-        if (!before.isFile() || before.isSymbolicLink() || before.uid !== uid || (before.mode & 0o777) !== 0o600
-          || before.size !== 32 || !sameFile(published, before) || before.mtimeMs !== published.mtimeMs) throw new Error("User commit key file is damaged or unsafe");
-        await recheckPosixAncestry(ancestry);
-        await new Promise((done) => setTimeout(done, 10));
-        before = await lstat(path);
-      }
-      if (!sameFile(published, before) || before.mtimeMs !== published.mtimeMs) throw new Error("User commit key initialization changed");
-    }
-    if (!before.isFile() || before.isSymbolicLink() || before.uid !== uid || (before.mode & 0o777) !== 0o600 || before.nlink !== 1 || before.size !== 32) throw new Error("User commit key file is damaged or unsafe");
-    const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const unsafe = "User commit key file is damaged or unsafe";
+    // Open first, then bind the path to the opened inode. A check made before
+    // opening could describe a different file from the one that is read.
+    const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK).catch((error: NodeJS.ErrnoException) => {
+      throw error.code === "ELOOP" || error.code === "EISDIR" ? new Error(unsafe) : error;
+    });
     let bytes: Buffer | undefined;
     try {
-      const opened = await handle.stat();
+      let opened = await handle.stat();
+      // A creator atomically publishes a complete private file via link, then
+      // removes its temporary link. Concurrent prepare may wait for that precise
+      // two-link state; sign and every other unsafe state remain fail-closed.
+      if (prepare && opened.nlink === 2) {
+        const published = opened;
+        for (let attempt = 0; attempt < 30 && opened.nlink === 2; attempt++) {
+          if (!opened.isFile() || opened.uid !== uid || (opened.mode & 0o777) !== 0o600
+            || opened.size !== 32 || opened.mtimeMs !== published.mtimeMs) throw new Error(unsafe);
+          await recheckPosixAncestry(ancestry);
+          await new Promise((done) => setTimeout(done, 10));
+          opened = await handle.stat();
+        }
+        if (opened.mtimeMs !== published.mtimeMs) throw new Error("User commit key initialization changed");
+      }
+      const before = await lstat(path);
+      if (!before.isFile() || before.isSymbolicLink() || before.uid !== uid || (before.mode & 0o777) !== 0o600 || before.nlink !== 1 || before.size !== 32) throw new Error(unsafe);
       if (!sameFile(before, opened) || opened.nlink !== 1 || opened.size !== 32 || opened.uid !== uid || (opened.mode & 0o777) !== 0o600) throw new Error("User commit key file changed");
       bytes = Buffer.alloc(32);
       const result = await handle.read(bytes, 0, 32, 0);

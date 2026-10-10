@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
-import { appendFileSync } from "node:fs";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { appendFileSync, constants } from "node:fs";
+import { mkdir, open, writeFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { executeBatchCalls, validateBatchCalls, type BatchResultRow, type BatchToolResult } from "./mcpBatchReferences";
@@ -36,11 +36,17 @@ async function main(): Promise<void> {
 
   const appRoot = resolve(import.meta.dirname, "..");
   const readCalls = async (path: string) => {
-    const info = await stat(path);
-    if (!info.isFile() || info.size > 4 * 1024 * 1024) throw new Error("calls.json must be a regular file no larger than 4 MiB");
-    const source = await readFile(path, "utf8");
-    if (Buffer.byteLength(source, "utf8") > 4 * 1024 * 1024) throw new Error("calls.json exceeds 4 MiB");
-    return validateBatchCalls(JSON.parse(source));
+    // Check and read the same opened file, so the path cannot be swapped in between.
+    const handle = await open(path, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0));
+    try {
+      const info = await handle.stat();
+      if (!info.isFile() || info.size > 4 * 1024 * 1024) throw new Error("calls.json must be a regular file no larger than 4 MiB");
+      const source = await handle.readFile("utf8");
+      if (Buffer.byteLength(source, "utf8") > 4 * 1024 * 1024) throw new Error("calls.json exceeds 4 MiB");
+      return validateBatchCalls(JSON.parse(source));
+    } finally {
+      await handle.close();
+    }
   };
   const initialCalls = callsPath ? await readCalls(resolve(callsPath)) : undefined;
 
