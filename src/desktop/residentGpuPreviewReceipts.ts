@@ -238,6 +238,7 @@ export function sceneLinearAces2PresentContractValid(
   receipt: import("./types").GpuEngineVideoPresentedFrame["receipt"],
   output: NativeAces2PreviewOutput = "rec709_sdr",
   expectedInputTransform: "editkin-srgb-to-linear-rec709-primary/v1" | "editkin-rec709-to-linear-rec709-primary/v2" = "editkin-srgb-to-linear-rec709-primary/v1",
+  expectedPaintCpuPixelCopies = 0,
 ): boolean {
   const display = ACES2_DISPLAY_CONTRACTS[output];
   const effectReceiptValid = (receipt.effectExecutionMode === "none" || receipt.effectExecutionMode === "scene-linear-bounded-effect-stack/v1")
@@ -275,7 +276,9 @@ export function sceneLinearAces2PresentContractValid(
     && receipt.inputTransform === expectedInputTransform
     && receipt.ocioVersion === "2.5.2" && receipt.acesVersion === "2.0"
     && receipt.configSha256 === "eda5b0008a43b72b98ad540e32eb0eb83b340dde54e35bddba64ccbafac1029a"
-    && receipt.productPathCpuPixelCopies === 0
+    && Number.isSafeInteger(expectedPaintCpuPixelCopies) && expectedPaintCpuPixelCopies >= 0
+    && receipt.productPathCpuPixelCopies === expectedPaintCpuPixelCopies
+    && (expectedPaintCpuPixelCopies === 0 || receipt.decodedVideoCpuPixelCopies === 0)
     && nativeAces2PreviewSurfaceValid(receipt.surface, output)
     && effectReceiptValid && temporalReceiptValid && matteReceiptValid && depthReceiptValid && depthOfFieldReceiptValid;
 }

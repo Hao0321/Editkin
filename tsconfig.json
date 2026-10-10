@@ -3,7 +3,7 @@
     "target": "ES2022",
     "useDefineForClassFields": true,
     "lib": [
-      "ES2022",
+      "ES2024",
       "DOM",
       "DOM.Iterable"
     ],
@@ -21,7 +21,8 @@
     "jsx": "react-jsx",
     "types": [
       "vitest/globals",
-      "node"
+      "node",
+      "vite/client"
     ]
   },
   "include": [

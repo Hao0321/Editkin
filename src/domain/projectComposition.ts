@@ -7,7 +7,7 @@ export function projectFromComposition(
   compositions: EditComposition[] = root.compositions,
 ): EditProject {
   return {
-    schemaVersion: 8,
+    schemaVersion: 9,
     revision: root.revision,
     id: `${root.id}:composition:${composition.id}`,
     name: composition.name,
@@ -18,6 +18,7 @@ export function projectFromComposition(
     aestheticSystem: root.aestheticSystem,
     colorManagement: composition.colorManagement ?? root.colorManagement,
     scene25d: composition.scene25d,
+    scene3d: composition.scene3d,
     particleSimulation: composition.particleSimulation,
     assets: structuredClone(assets),
     compositions: structuredClone(compositions),
@@ -26,6 +27,7 @@ export function projectFromComposition(
     captionStyle: structuredClone(composition.captionStyle),
     motionTracks: structuredClone(composition.motionTracks),
     motionGraphics: structuredClone(composition.motionGraphics),
+    ...(composition.motionScenes ? { motionScenes: structuredClone(composition.motionScenes) } : {}),
     director: structuredClone(composition.director),
     updatedAt: composition.updatedAt,
   };

@@ -1,0 +1,2 @@
+.motion-text-dialog label{display:grid;gap:8px;font-size:15px;font-weight:700}
+.auto-edit-dialog.motion-text-dialog input{box-sizing:border-box;width:100%;height:auto;min-height:48px;margin:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);color:var(--ink);font:inherit}

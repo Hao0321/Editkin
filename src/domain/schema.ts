@@ -1,4 +1,11 @@
 import * as z from "zod/v4";
+import { motionScene2dSchema } from "./motionScene2dSchema";
+import { assertMotionScenes2D } from "./motionScene2d";
+import { assertReferenceMotionInstances, referenceMotionInstanceSchema } from "./referenceMotionInstance";
+import { reviewPolicySchema } from "./reviewPolicy";
+import { continuityVectorSchema } from "./motionContinuitySchema";
+import { assertMotionPaintContract, motionPaintDescriptorSchema } from "./motionPaint";
+import { mesh3dSceneSchema } from "../motion/mesh3dScene";
 import type { EditorCommand } from "./commands";
 import type { EditProject, HaoExpressionSource } from "./types";
 import { AESTHETIC_BENCHMARKS, BENCHMARK_AXES } from "./aestheticBenchmarks";
@@ -19,17 +26,23 @@ const templateElementOwnerSchema = z.strictObject({
 });
 const finiteVec3Schema = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
 const transform3dSchema = z.object({ position: finiteVec3Schema, rotationDegrees: finiteVec3Schema, scale: finiteVec3Schema });
-const floatingVideoFrameSchema = z.strictObject({
-  schema: z.literal("editkin.floating-video-frame/v1"),
-  style: z.enum(["prism", "graphite"]),
+const floatingVideoFrameFields = {
+  style: z.enum(["prism", "graphite", "matte"]),
   size: z.number().finite().min(.3).max(.82),
   yawDegrees: z.number().finite().min(-35).max(35),
   pitchDegrees: z.number().finite().min(-25).max(25),
-  aspect: z.enum(["canvas", "portrait"]).optional(),
   centerX: z.number().finite().min(.2).max(.8).optional(),
   centerY: z.number().finite().min(.2).max(.8).optional(),
   orbit: z.strictObject({ amplitudeDegrees: z.number().finite().min(0).max(30), periodSeconds: z.number().finite().min(2).max(8) }).optional(),
-});
+};
+const floatingVideoFrameSchema = z.discriminatedUnion("schema", [
+  z.strictObject({ ...floatingVideoFrameFields, schema: z.literal("editkin.floating-video-frame/v1"),
+    aspect: z.enum(["canvas", "portrait"]).optional() }),
+  z.strictObject({ ...floatingVideoFrameFields, schema: z.literal("editkin.floating-video-frame/v2"),
+    aspect: z.enum(["source", "canvas", "portrait"]), mediaFit: z.literal("contain"),
+    motion: z.strictObject({ entranceFrames: z.number().int().min(0).max(24),
+      exitFrames: z.number().int().min(0).max(24), travelY: z.number().finite().min(0).max(.03) }).optional() }),
+]);
 const easingSchema = z.enum(["linear", "hold", "ease_in", "ease_out", "ease_in_out", "spring_soft"]);
 const scene25dCameraKeyframeSchema = z.object({
   id: z.string(), time: z.number().finite().positive(), position: finiteVec3Schema, target: finiteVec3Schema,
@@ -243,6 +256,7 @@ const openExrImageSequenceSchema = z.object({
 const assetSchema = z.object({
   id: z.string(), name: z.string(), kind: z.enum(["video", "audio", "image"]), uri: z.string(), duration: z.number(),
   width: z.number().optional(), height: z.number().optional(), derivatives: derivativesSchema.optional(),
+  displayAspectRatio: z.number().finite().positive().optional(),
   compositionId: z.string().optional(),
   role: z.string().optional(), bpm: z.number().optional(), license: z.string().optional(), provenance: z.string().optional(), redistributable: z.boolean().optional(),
   rightsBasis: z.string().optional(), distributionScope: z.string().optional(),
@@ -292,9 +306,11 @@ const motionV2EasingSchema = z.discriminatedUnion("type", [
 const motionV2PhaseSchema = z.object({
   durationFrames: z.number().int().min(1).max(600), offsetXPixels: z.number().finite().min(-4_096).max(4_096), offsetYPixels: z.number().finite().min(-4_096).max(4_096),
   scale: z.number().finite().min(.01).max(4), opacity: z.number().finite().min(0).max(1), easing: motionV2EasingSchema,
+  blurPixels: z.number().finite().min(0).max(64).optional(), rotationDegrees: z.number().finite().min(-180).max(180).optional(),
+  spreadPixels: z.number().finite().min(-1_024).max(1_024).optional(),
 });
 const motionV2Schema = z.object({
-  sequence: z.object({ unit: z.enum(["all", "word", "character"]), order: z.enum(["forward", "reverse", "center_out"]), exitOrder: z.enum(["forward", "reverse", "center_out"]), staggerFrames: z.number().int().min(0).max(120) }),
+  sequence: z.object({ unit: z.enum(["all", "word", "character"]), order: z.enum(["forward", "reverse", "center_out"]), exitOrder: z.enum(["forward", "reverse", "center_out"]), staggerFrames: z.number().int().min(0).max(120), exitStaggerFrames: z.number().int().min(0).max(120).optional(), scaleOrigin: z.enum(["top_left", "center"]).optional(), holdScale: z.number().finite().min(.8).max(1.25).optional() }),
   entrance: motionV2PhaseSchema, exit: motionV2PhaseSchema,
 });
 const layoutV2Schema = z.object({
@@ -302,6 +318,37 @@ const layoutV2Schema = z.object({
   maxLines: z.number().int().min(1).max(4), minFontSize: z.number().finite().min(8).max(384), lineGap: z.number().finite().min(0).max(128), align: z.enum(["left", "center", "right"]),
   widthMode: z.enum(["fixed", "fit_content"]).optional(),
 });
+const vectorBase = {
+  schema: z.enum(["editkin.motion-vector/v1", "editkin.motion-vector-stage/v1"]),
+  heightPixels: z.number().finite().min(1).max(4096),
+  revealFrames: z.number().int().min(1).max(600),
+};
+const shapeCoordinate = z.number().finite().min(-16_384).max(16_384);
+const motionVectorShapeCommandSchema = z.discriminatedUnion("type", [
+  z.strictObject({ type: z.enum(["M", "L"]), x: shapeCoordinate, y: shapeCoordinate }),
+  z.strictObject({ type: z.literal("C"), x1: shapeCoordinate, y1: shapeCoordinate, x2: shapeCoordinate, y2: shapeCoordinate, x: shapeCoordinate, y: shapeCoordinate }),
+  z.strictObject({ type: z.literal("Z") }),
+]);
+export const motionVectorV2Schema = z.discriminatedUnion("kind", [
+  continuityVectorSchema,
+  z.strictObject({ schema: z.literal("editkin.motion-vector-shape/v1"), kind: z.literal("shape"), heightPixels: z.number().finite().min(1).max(4096),
+    revealFrames: z.number().int().min(1).max(600), revealFrom: z.enum(["left", "right", "top", "bottom"]).optional(),
+    commands: z.array(motionVectorShapeCommandSchema).min(2).max(4096) }),
+  z.strictObject({ ...vectorBase, schema: z.enum(["editkin.motion-vector/v1", "editkin.motion-vector-stage/v1", "editkin.motion-vector-annotation/v1"]), kind: z.literal("rule") }),
+  z.strictObject({ ...vectorBase, kind: z.enum(["panel", "ellipse"]) }),
+  z.strictObject({ ...vectorBase, kind: z.literal("step_progress"), steps: z.number().int().min(1).max(12),
+    activeStep: z.number().int().min(0).max(12), gapPixels: z.number().finite().min(0).max(128) }),
+  z.strictObject({ ...vectorBase, kind: z.literal("dot_grid"), spacingPixels: z.number().finite().min(8).max(512),
+    dotRadiusPixels: z.number().finite().min(.25).max(32) }),
+  z.strictObject({ ...vectorBase, kind: z.literal("line_grid"), spacingPixels: z.number().finite().min(8).max(512),
+    lineWidthPixels: z.number().finite().min(.25).max(8), majorEvery: z.number().int().min(2).max(12) }),
+  z.strictObject({ ...vectorBase, kind: z.literal("connection_field"), seed: z.number().int().min(0).max(0xffffffff),
+    points: z.number().int().min(8).max(64), dotRadiusPixels: z.number().finite().min(.5).max(12),
+    lineWidthPixels: z.number().finite().min(.5).max(8), burstFrames: z.number().int().min(1).max(180),
+    gatherStartFrame: z.number().int().nonnegative().max(1800), gatherFrames: z.number().int().min(1).max(180),
+    connectStartFrame: z.number().int().nonnegative().max(1800), connectFrames: z.number().int().min(1).max(180),
+    groupColors: z.tuple([z.string().regex(/^#[0-9a-f]{6}$/i), z.string().regex(/^#[0-9a-f]{6}$/i), z.string().regex(/^#[0-9a-f]{6}$/i)]).optional() }),
+]);
 // A variant is an explicit style contract, not a second command language.
 // Reject unknown nested fields instead of silently discarding expressions.
 const variantEasingSchema = z.discriminatedUnion("type", [
@@ -311,6 +358,7 @@ const variantEasingSchema = z.discriminatedUnion("type", [
 ]);
 const variantPhaseSchema = motionV2PhaseSchema.extend({ easing: variantEasingSchema }).strict();
 export const motionPresetOverridesSchema = z.strictObject({
+  compositeLayer: z.enum(["background", "foreground"]).optional(),
   name: z.string().trim().min(1).max(160).optional(),
   x: z.number().finite().min(0).max(1).optional(),
   y: z.number().finite().min(0).max(1).optional(),
@@ -331,6 +379,11 @@ export const motionPresetOverridesSchema = z.strictObject({
     exit: variantPhaseSchema,
   }).strict().optional(),
   layoutV2: layoutV2Schema.extend({ safeArea: layoutV2Schema.shape.safeArea.strict() }).strict().optional(),
+  vectorV2: motionVectorV2Schema.optional(),
+  // A paint variant is declared before source compilation, never attached to
+  // an authenticated scene afterwards. The resolved graphic validates the pair.
+  visualStyle: z.literal("native_paint").optional(),
+  paintV1: motionPaintDescriptorSchema.optional(),
 });
 export const motionPresetVariantSchema = z.strictObject({
   schema: z.literal("editkin.motion-preset-variant/v1"),
@@ -344,17 +397,27 @@ export const motionPresetVariantSchema = z.strictObject({
 export type MotionPresetVariant = z.infer<typeof motionPresetVariantSchema>;
 
 const motionGraphicBaseSchema = z.object({
+  compositeLayer: z.enum(["background", "foreground"]).optional(),
   schema: z.enum(["hao.motion-composition/v1", "hao.motion-composition/v2"]), id: z.string(), presetId: z.string().optional(), name: z.string(), kind: z.enum(["title", "card", "tag", "counter"]),
   text: z.string(), timelineStart: z.number(), duration: z.number(), x: z.number(), y: z.number(), width: z.number(), fontSize: z.number(),
   fontFamily: z.string().optional(), fontWeight: z.number().optional(), letterSpacing: z.number().optional(), outlineWidth: z.number().optional(), shadowDepth: z.number().optional(), cornerRadius: z.number().optional(),
   textColor: z.string(), backgroundColor: z.string(), accentColor: z.string(), animation: z.enum(["fade", "slide_up", "pop", "spring_soft"]),
-  visualStyle: z.enum(["solid_panel", "holo_scan_cyan", "holo_grid_lime", "target_lock_red", "spectral_wire_violet", "depth_glass_blue", "telemetry_beam_amber", "neon_extrude_white", "quantum_label_magenta"]).optional(),
+  visualStyle: z.enum(["native_paint", "solid_panel", "holo_scan_cyan", "holo_grid_lime", "target_lock_red", "spectral_wire_violet", "depth_glass_blue", "telemetry_beam_amber", "neon_extrude_white", "quantum_label_magenta"]).optional(),
+  paintV1: motionPaintDescriptorSchema.optional(),
   trackId: z.string().optional(), trackingMode: z.enum(["anchor", "surface"]).optional(), offsetX: z.number(), offsetY: z.number(),
-  motionV2: motionV2Schema.optional(), layoutV2: layoutV2Schema.optional(),
+  motionV2: motionV2Schema.optional(), layoutV2: layoutV2Schema.optional(), vectorV2: motionVectorV2Schema.optional(),
   templateOwner: templateElementOwnerSchema.optional(),
 });
-const motionGraphicSchema = motionGraphicBaseSchema.superRefine((graphic, context) => {
-  if (graphic.schema === "hao.motion-composition/v1" && (graphic.motionV2 !== undefined || graphic.layoutV2 !== undefined)) {
+export const motionGraphicSchema = motionGraphicBaseSchema.superRefine((graphic, context) => {
+  try { assertMotionPaintContract(graphic); }
+  catch (error) { context.addIssue({ code: "custom", message: error instanceof Error ? error.message : String(error), path: ["paintV1"] }); }
+  if (graphic.compositeLayer === "background" && (graphic.schema !== "hao.motion-composition/v2" || !graphic.vectorV2 || graphic.text || graphic.trackId)) {
+    context.addIssue({ code: "custom", message: "背景合成只接受無文字／追蹤的 v2 原生向量", path: ["compositeLayer"] });
+  }
+  if (graphic.compositeLayer === "background" && graphic.vectorV2?.schema !== "editkin.motion-vector-stage/v1") {
+    context.addIssue({ code: "custom", message: "背景合成需要 stage 向量版本，避免舊程式忽略合成位置", path: ["vectorV2", "schema"] });
+  }
+  if (graphic.schema === "hao.motion-composition/v1" && (graphic.motionV2 !== undefined || graphic.layoutV2 !== undefined || graphic.vectorV2 !== undefined)) {
     context.addIssue({ code: "custom", message: "v1 不可攜帶 v2 motion/layout 參數", path: ["schema"] });
   }
   if (graphic.schema === "hao.motion-composition/v2" && (!graphic.motionV2 || !graphic.layoutV2)) {
@@ -371,13 +434,15 @@ const directorStateSchema = z.object({
 });
 const compositionSchema = z.object({
   schema: z.literal("editkin.composition/v1"), id: z.string(), name: z.string(), width: z.number(), height: z.number(), fps: z.number(), duration: z.number(),
+  referenceMotionInstances: z.never().optional(),
   tracks: z.array(z.object({
     id: z.string(), name: z.string(), kind: z.enum(["video", "audio", "caption"]), locked: z.boolean(), muted: z.boolean(), clips: z.array(clipSchema),
   })),
-  captions: z.array(captionSchema), captionStyle: captionStyleSchema, motionTracks: z.array(motionTrackSchema), motionGraphics: z.array(motionGraphicSchema),
+  captions: z.array(captionSchema), captionStyle: captionStyleSchema, motionTracks: z.array(motionTrackSchema), motionGraphics: z.array(motionGraphicSchema), motionScenes: z.array(motionScene2dSchema).max(16).optional(),
   director: directorStateSchema,
   colorManagement: z.object({ mode: z.enum(["rec709", "aces2"]), workingSpace: z.literal("ACEScct"), outputTransform: z.enum(["rec709_sdr", "p3d65_sdr", "rec2100_hlg_1000", "rec2100_pq_1000"]), configId: z.literal("studio-config-v4.0.0_aces-v2.0_ocio-v2.5") }).optional(),
   scene25d: scene25dSchema.optional(),
+  scene3d: mesh3dSceneSchema.optional(),
   particleSimulation: particleSimulationSchema.optional(),
   updatedAt: z.string(),
 });
@@ -402,14 +467,23 @@ const aestheticReviewSchema = z.object({
   status: z.enum(["REVIEW", "BLOCKED", "PASSED"]), score: z.number().min(0).max(100), ratings: z.record(z.string(), z.number().min(1).max(5)),
   machineBlockers: z.array(z.string()), completedAt: z.string().optional(),
   benchmarkReview: aestheticBenchmarkReviewSchema.optional(),
+  reviewer: z.enum(["human", "agent"]).optional(),
 });
 export const aestheticSystemSchema = z.object({
   schema: z.literal("editkin.aesthetic-system/v1"), standardId: z.literal("editkin-community-aesthetic-standard"), standardVersion: z.string(),
   sourceSha256: z.string().regex(/^[a-f0-9]{64}$/i), format: z.enum(["shorts", "longform"]), domain: z.string(), primaryFamily: z.string(), primaryLabel: z.string(),
   supportFamilies: z.array(z.string()).max(4), avoid: z.array(z.string()).max(16), sharedDnaSha256: z.string().regex(/^[a-f0-9]{64}$/i),
   dimensions: z.array(z.object({ id: z.string(), labelZh: z.string(), question: z.string(), weight: z.number().positive() })).length(10),
-  scoreContract: z.object({ passScore: z.number(), blockBelow: z.number(), minimumDimensionRating: z.number(), humanReviewRequired: z.literal(true) }),
+  scoreContract: z.object({ passScore: z.number(), blockBelow: z.number(), minimumDimensionRating: z.number(), humanReviewRequired: z.boolean() }),
+  reviewPolicy: reviewPolicySchema.optional(),
   review: aestheticReviewSchema,
+}).superRefine((system, context) => {
+  if (!system.scoreContract.humanReviewRequired && system.reviewPolicy?.mode !== "agent_reference_comparison") {
+    context.addIssue({ code: "custom", path: ["reviewPolicy"], message: "Agent visual review requires explicit creator authorization" });
+  }
+  if (system.scoreContract.humanReviewRequired && system.reviewPolicy?.mode === "agent_reference_comparison") {
+    context.addIssue({ code: "custom", path: ["scoreContract"], message: "Explicit agent review policy cannot keep a contradictory human-only completion gate" });
+  }
 });
 
 const templateCreativeSnapshotSchema = z.strictObject({
@@ -419,9 +493,11 @@ const templateCreativeSnapshotSchema = z.strictObject({
   effectPresetIds: z.array(z.string()),
   transitionIn: creativeTransitionSchema.nullable(),
   transitionOut: creativeTransitionSchema.nullable(),
+  floatingFrame: floatingVideoFrameSchema.nullable().optional(),
+  transform: transformSchema.optional(),
 });
 const templateApplicationSnapshotSchema = z.strictObject({
-  editorialProfile: z.enum(["auto", "gaming", "food", "travel", "podcast_on_camera", "podcast_no_face"]),
+  editorialProfile: z.enum(["auto", "gaming", "food", "travel", "music_mv", "podcast_on_camera", "podcast_no_face"]),
   aestheticSystem: aestheticSystemSchema.nullable(),
   captionStyle: captionStyleSchema,
   clips: z.array(templateCreativeSnapshotSchema).min(1),
@@ -435,28 +511,52 @@ const templateApplicationSchema = z.strictObject({
   createdAt: z.string(),
   before: templateApplicationSnapshotSchema,
   applied: templateApplicationSnapshotSchema,
+  generatedClips: z.array(z.strictObject({ clipId: z.string().min(1), trackId: z.string().min(1) })).max(32).optional(),
+}).superRefine((application, context) => {
+  const originals = new Set(application.before.clips.map(clip => clip.clipId));
+  const seen = new Set<string>();
+  for (const owned of application.generatedClips ?? []) {
+    if (originals.has(owned.clipId) || seen.has(owned.clipId)) context.addIssue({ code: "custom", message: "模板生成片段不能指向原始片段或重複身分" });
+    seen.add(owned.clipId);
+  }
 });
 
-export const projectSchema: z.ZodType<EditProject> = z.object({
-  schemaVersion: z.literal(8), revision: z.number().int().nonnegative(), id: z.string(), name: z.string(), width: z.number(), height: z.number(), fps: z.number(),
-  editorialProfile: z.enum(["auto", "gaming", "food", "travel", "podcast_on_camera", "podcast_no_face"]),
+const projectFields = {
+  revision: z.number().int().nonnegative(), id: z.string(), name: z.string(), width: z.number(), height: z.number(), fps: z.number(),
+  editorialProfile: z.enum(["auto", "gaming", "food", "travel", "music_mv", "podcast_on_camera", "podcast_no_face"]),
   aestheticSystem: aestheticSystemSchema.optional(),
   colorManagement: z.object({ mode: z.enum(["rec709", "aces2"]), workingSpace: z.literal("ACEScct"), outputTransform: z.enum(["rec709_sdr", "p3d65_sdr", "rec2100_hlg_1000", "rec2100_pq_1000"]), configId: z.literal("studio-config-v4.0.0_aces-v2.0_ocio-v2.5") }).optional(),
   scene25d: scene25dSchema.optional(),
+  scene3d: mesh3dSceneSchema.optional(),
   particleSimulation: particleSimulationSchema.optional(),
   assets: z.array(assetSchema),
   compositions: z.array(compositionSchema),
   tracks: z.array(z.object({
     id: z.string(), name: z.string(), kind: z.enum(["video", "audio", "caption"]), locked: z.boolean(), muted: z.boolean(), clips: z.array(clipSchema),
   })),
-  captions: z.array(captionSchema), captionStyle: captionStyleSchema, motionTracks: z.array(motionTrackSchema), motionGraphics: z.array(motionGraphicSchema), director: directorStateSchema,
+  captions: z.array(captionSchema), captionStyle: captionStyleSchema, motionTracks: z.array(motionTrackSchema), motionGraphics: z.array(motionGraphicSchema), motionScenes: z.array(motionScene2dSchema).max(16).optional(), director: directorStateSchema,
   templateApplication: templateApplicationSchema.optional(), updatedAt: z.string(),
+};
+export const projectSchema: z.ZodType<EditProject> = z.discriminatedUnion("schemaVersion", [
+  z.object({ ...projectFields, schemaVersion: z.literal(9), referenceMotionInstances: z.never().optional() }),
+  z.object({ ...projectFields, schemaVersion: z.literal(10), referenceMotionInstances: z.array(referenceMotionInstanceSchema).max(32).optional() }),
+]).superRefine((project, ctx) => {
+  try {
+    assertReferenceMotionInstances(project);
+    assertMotionScenes2D(project);
+    for (const composition of project.compositions) assertMotionScenes2D(composition);
+  } catch (error) { ctx.addIssue({ code: "custom", message: error instanceof Error ? error.message : String(error) }); }
 });
 
 export const editorCommandSchema: z.ZodType<EditorCommand> = z.lazy(() => z.discriminatedUnion("type", [
   z.object({ type: z.literal("import_asset"), asset: assetSchema }),
   z.object({ type: z.literal("delete_asset"), assetId: z.string() }),
   z.object({ type: z.literal("add_clip"), clip: clipSchema }),
+  z.strictObject({ type: z.literal("replace_clip_source"),
+    clipId: z.string().min(1).max(160).refine(value => value === value.trim() && !/[\u0000\r\n]/.test(value)),
+    expectedAssetId: z.string().min(1).max(160).refine(value => value === value.trim() && !/[\u0000\r\n]/.test(value)),
+    assetId: z.string().min(1).max(160).refine(value => value === value.trim() && !/[\u0000\r\n]/.test(value)),
+    sourceStart: z.number().finite().nonnegative() }),
   z.object({ type: z.literal("add_track"), track: z.object({ id: z.string(), name: z.string(), kind: z.enum(["video", "audio", "caption"]), locked: z.boolean(), muted: z.boolean(), clips: z.array(clipSchema) }) }),
   z.object({ type: z.literal("precompose_clips"), compositionId: z.string(), assetId: z.string(), replacementClipId: z.string(), targetTrackId: z.string(), name: z.string(), clipIds: z.array(z.string()).min(1) }),
   z.object({ type: z.literal("delete_track"), trackId: z.string() }),
@@ -478,6 +578,7 @@ export const editorCommandSchema: z.ZodType<EditorCommand> = z.lazy(() => z.disc
     segmentIds: z.array(z.string()).min(1),
   }),
   z.object({ type: z.literal("update_clip_transform"), clipId: z.string(), patch: transformSchema.partial() }),
+  z.strictObject({ type: z.literal("set_mesh_3d_scene"), scene: mesh3dSceneSchema.optional() }),
   z.object({ type: z.literal("configure_scene_25d"), enabled: z.boolean() }),
   z.object({ type: z.literal("set_scene_25d_settings"), settings: scene25dSchema }),
   z.object({ type: z.literal("update_clip_transform_3d"), clipId: z.string(), patch: transform3dSchema.partial() }),
@@ -514,10 +615,19 @@ export const editorCommandSchema: z.ZodType<EditorCommand> = z.lazy(() => z.disc
   z.object({ type: z.literal("add_motion_track"), track: motionTrackSchema }),
   z.object({ type: z.literal("delete_motion_track"), trackId: z.string() }),
   z.object({ type: z.literal("set_motion_track_point"), trackId: z.string(), point: motionTrackPointSchema }),
+  z.strictObject({ type: z.literal("add_motion_scene"), scene: motionScene2dSchema }),
+  z.strictObject({ type: z.literal("update_motion_scene"), sceneId: z.string(), scene: motionScene2dSchema }),
+  z.strictObject({ type: z.literal("revise_motion_scene_graphics"), expectedRevision: z.number().int().nonnegative(), expectedScene: motionScene2dSchema,
+    expectedGraphics: z.array(motionGraphicSchema).min(1).max(32), graphics: z.array(motionGraphicSchema).min(1).max(32) }),
+  z.strictObject({ type: z.literal("revise_original_motion_scene_graphic"), sceneId: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,79}$/i),
+    expectedGraphic: motionGraphicSchema, graphic: motionGraphicSchema }),
+  z.strictObject({ type: z.literal("delete_motion_scene"), sceneId: z.string() }),
   z.object({ type: z.literal("add_motion_graphic"), graphic: motionGraphicSchema }),
-  z.object({ type: z.literal("update_motion_graphic"), graphicId: z.string(), patch: motionGraphicBaseSchema.omit({ schema: true, id: true }).partial() }),
+  z.object({ type: z.literal("update_motion_graphic"), graphicId: z.string(), patch: motionGraphicBaseSchema.omit({ id: true }).partial() }),
   z.object({ type: z.literal("delete_motion_graphic"), graphicId: z.string() }),
+  z.strictObject({ type: z.literal("reorder_motion_graphics"), graphicIds: z.array(z.string().min(1).max(160)).min(1).max(128).refine(ids => new Set(ids).size === ids.length, "Motion graphic reorder identities must be unique") }),
   z.object({ type: z.literal("set_asset_derivatives"), assetId: z.string(), derivatives: derivativesSchema.optional() }),
+  z.strictObject({ type: z.literal("relink_asset_source"), assetId: z.string().min(1), sourceUri: z.string().trim().min(1).max(1024), expectedSourceSha256: z.string().regex(/^[a-f0-9]{64}$/) }),
   z.object({ type: z.literal("set_asset_color_interpretation"), assetId: z.string(), interpretation: z.enum(["auto", "rec709", "linear_rec709", "srgb", "hlg", "pq", "acescct", "apple_log", "arri_logc3", "arri_logc4", "bmd_film_gen5", "canon_log2", "canon_log3", "dji_dlog", "panasonic_vlog", "red_log3g10", "sony_slog3_cine", "log_unresolved"]) }),
   z.object({ type: z.literal("set_asset_alpha_mode"), assetId: z.string(), alphaMode: z.enum(["auto", "opaque", "straight", "premultiplied"]) }),
   z.object({ type: z.literal("set_project_color_management"), patch: z.object({ mode: z.enum(["rec709", "aces2"]), outputTransform: z.enum(["rec709_sdr", "p3d65_sdr", "rec2100_hlg_1000", "rec2100_pq_1000"]) }).partial() }),
@@ -532,12 +642,14 @@ export const editorCommandSchema: z.ZodType<EditorCommand> = z.lazy(() => z.disc
   z.object({ type: z.literal("update_director_marker"), markerId: z.string(), patch: directorMarkerSchema.pick({ time: true, title: true, note: true, kind: true, status: true }).partial() }),
   z.object({ type: z.literal("delete_director_marker"), markerId: z.string() }),
   z.object({ type: z.literal("set_director_review_state"), reviewState: z.enum(["draft", "reviewing", "changes_requested", "ready_for_hao_review"]) }),
-  z.object({ type: z.literal("set_editorial_profile"), profile: z.enum(["auto", "gaming", "food", "travel", "podcast_on_camera", "podcast_no_face"]) }),
+  z.object({ type: z.literal("set_editorial_profile"), profile: z.enum(["auto", "gaming", "food", "travel", "music_mv", "podcast_on_camera", "podcast_no_face"]) }),
   z.object({ type: z.literal("set_aesthetic_system"), aestheticSystem: aestheticSystemSchema }),
   z.object({ type: z.literal("set_aesthetic_review"), review: aestheticReviewSchema }),
   z.object({ type: z.literal("set_project_resolution"), width: z.number().int().positive(), height: z.number().int().positive() }),
   z.object({ type: z.literal("set_template_application"), application: templateApplicationSchema }),
   z.object({ type: z.literal("clear_template_application") }),
+  z.strictObject({ type: z.literal("upsert_reference_motion_instance"), instance: referenceMotionInstanceSchema, expectedInstanceRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional() }),
+  z.strictObject({ type: z.literal("remove_reference_motion_instance"), id: z.string().min(1).max(160), expectedInstanceRevision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER) }),
   z.object({ type: z.literal("rename_project"), name: z.string() }),
   z.object({ type: z.literal("batch"), commands: z.array(editorCommandSchema) }),
 ]));

@@ -2,12 +2,10 @@ import { randomUUID } from "node:crypto";
 import { access, lstat, mkdir, open, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { migrateProject, validateProject } from "../domain/editGraph";
-import { projectSchema } from "../domain/schema";
 import type { EditProject } from "../domain/types";
-import { resolveAestheticSystem } from "./editkinAesthetic";
-import { dehydrateAutoRotoFramePreviews } from "../domain/autoRotoPreviewProjection";
 import { readBoundedFile } from "../shared/boundedFile";
+import { parseProject, PROJECT_MAX_BYTES } from "./projectCodec";
+export { parseProject, PROJECT_MAX_BYTES } from "./projectCodec";
 
 export class ProjectRevisionConflictError extends Error {
   constructor(expected: number, actual: number) {
@@ -16,20 +14,12 @@ export class ProjectRevisionConflictError extends Error {
   }
 }
 
-export function parseProject(input: unknown): EditProject {
-  const project = dehydrateAutoRotoFramePreviews(validateProject(projectSchema.parse(migrateProject(input))));
-  project.aestheticSystem ??= resolveAestheticSystem(project.editorialProfile, project.width > project.height ? "longform" : "shorts");
-  return validateProject(project);
-}
-
 function previousPath(path: string): string { return `${path}.previous`; }
 function lockPath(path: string): string { return `${path}.lock`; }
 
 async function exists(path: string): Promise<boolean> {
   try { await access(path); return true; } catch { return false; }
 }
-
-export const PROJECT_MAX_BYTES = 64 * 1024 * 1024;
 
 /** Reads a user-selected project file, refusing one larger than `maxBytes` before it is buffered. */
 export async function readProjectText(path: string, maxBytes = PROJECT_MAX_BYTES): Promise<string> {
@@ -140,7 +130,7 @@ export async function writeProjectFileAtomic(
   path: string,
   project: EditProject,
   expectedRevision: number | null = project.revision,
-  options: { createOnly?: boolean } = {},
+  options: { createOnly?: boolean; beforeCommit?: () => Promise<void> } = {},
 ): Promise<EditProject> {
   const valid = parseProject(project);
   const release = await acquireProjectLock(path);
@@ -166,9 +156,15 @@ export async function writeProjectFileAtomic(
       updatedAt: new Date().toISOString(),
     };
     await writeSynced(temporary, `${JSON.stringify(saved, null, 2)}\n`);
-    if (await exists(path)) {
-      let primaryValid = false;
+    const primaryExists = await exists(path);
+    let primaryValid = false;
+    if (primaryExists) {
       try { primaryValid = Boolean(await readCandidate(path)); } catch { /* preserve corrupt bytes separately */ }
+    }
+    // Read external authority under the actual project lease after staging and
+    // revision validation, immediately before starting the commit's renames.
+    await options.beforeCommit?.();
+    if (primaryExists) {
       if (primaryValid) {
         await rm(backup, { force: true });
         await rename(path, backup);

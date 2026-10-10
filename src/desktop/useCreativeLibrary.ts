@@ -8,20 +8,28 @@ import type { EditkinWorkflowProfile } from "../plugins/skillPack";
 import type { ProjectSession } from "../application/projectSession";
 import { acceptProjectTask } from "../application/projectTask";
 import {useMediaPreviewRepair} from "./useMediaPreviewRepair";
+import type { TimelineImportPlacement } from "../ui/internalAssetPointerDrag";
 
 interface DesktopMediaLibraryOptions {
   api?: HaoDesktopApi;
   projectSession: ProjectSession;
-  onPicked: (items: PickedMedia[], options?: { backgroundMusic?: boolean }) => void;
+  onPicked: (items: PickedMedia[], options?: { backgroundMusic?: boolean; placement?: TimelineImportPlacement }) => boolean | void;
   onPrepared: (items: PrepareMediaResult[], isCurrent?: () => boolean) => void;
   onStatus: (message: string) => void;
   onCommands: (commands: EditorCommand[], message: string) => void;
 }
 export interface MediaImportState {phase:"idle"|"preparing"|"failed"|"partial";total:number;completed:number;failed:number;message:string;sessionId?:number;timelineCommitted?:boolean;}
-interface FailedPendingImport {items:PickedMedia[];backgroundMusic:boolean;isCurrent:()=>boolean;}
+interface FailedPendingImport {items:PickedMedia[];backgroundMusic:boolean;isCurrent:()=>boolean;placement?:TimelineImportPlacement;}
 interface FailedCommittedCreative {picked:PickedMedia;isCurrent:()=>boolean;}
 
 let provisionalCreativeSequence = 0;
+
+function captureImportPlacement(value:TimelineImportPlacement|undefined):TimelineImportPlacement|undefined{
+  if(!value)return;
+  if(!value.trackId.trim()||value.trackId!==value.trackId.trim()||!['video','audio'].includes(value.trackKind)
+    ||!Number.isFinite(value.timelineStart)||value.timelineStart<0)throw Error("時間軸拖放位置無效，素材尚未加入。");
+  return Object.freeze({trackId:value.trackId,trackKind:value.trackKind,timelineStart:value.timelineStart});
+}
 
 /**
  * Build only from the metadata returned by listCreativeLibrary.  Visual media
@@ -150,7 +158,7 @@ export function useCreativeLibrary({ api, projectSession, onPicked, onPrepared, 
     return api.previewCreativeAsset(assetId, mode);
   }, [api]);
 
-  async function prepareAndCommit(items:PickedMedia[],backgroundMusic:boolean,isCurrent:()=>boolean){
+  async function prepareAndCommit(items:PickedMedia[],backgroundMusic:boolean,isCurrent:()=>boolean,placement?:TimelineImportPlacement){
     if(!api||!items.length||!isCurrent())return;
     const sessionId=projectSession.getSnapshot().sessionId;
     const ready:Array<{picked:PickedMedia;prepared:PrepareMediaResult}|undefined>=new Array(items.length),failed:PickedMedia[]=[];
@@ -164,20 +172,35 @@ export function useCreativeLibrary({ api, projectSession, onPicked, onPrepared, 
     await Promise.all(Array.from({length:Math.min(2,items.length)},worker));
     if(!isCurrent())return;
     const valid=ready.filter((item):item is NonNullable<typeof item>=>Boolean(item));
-    failedPendingImport.current=failed.length?{items:failed,backgroundMusic,isCurrent}:undefined;
-    if(valid.length){onPicked(valid.map(item=>item.picked),{backgroundMusic});applyCurrentPrepared(valid.map(item=>item.prepared),valid.map(item=>item.picked));}
+    if(placement&&failed.length){
+      failedPendingImport.current={items,backgroundMusic,isCurrent,placement};
+      const message=`${failed.length} 份預覽準備失敗；整批 ${items.length} 份尚未加入時間軸，重試會保留原落點與檔案順序。${errors[0]?` ${errors[0]}`:""}`;
+      setImportState({phase:"failed",total:items.length,completed,failed:failed.length,message,sessionId,timelineCommitted:false});onStatus(message);return;
+    }
+    failedPendingImport.current=failed.length?{items:failed,backgroundMusic,isCurrent,placement}:undefined;
+    if(valid.length){
+      if(onPicked(valid.map(item=>item.picked),{backgroundMusic,...(placement?{placement}: {})})===false){
+        failedPendingImport.current={items,backgroundMusic,isCurrent,placement};
+        const message="時間軸拒絕這個落點，素材尚未加入；調整軌道後可重試原落點。";
+        setImportState({phase:"failed",total:items.length,completed,failed:items.length,message,sessionId,timelineCommitted:false});onStatus(message);return;
+      }
+      applyCurrentPrepared(valid.map(item=>item.prepared),valid.map(item=>item.picked));
+    }
     const message=failed.length?`已加入 ${valid.length} 份；${failed.length} 份預覽準備失敗，尚未加入時間軸。可重試失敗項目。${errors[0]?` ${errors[0]}`:""}`:`已加入 ${valid.length} 份素材，預覽已準備完成。`;
     setImportState({phase:failed.length?(valid.length?"partial":"failed"):"idle",total:items.length,completed,failed:failed.length,message,sessionId});onStatus(message);
   }
-  async function importWith(pick:()=>Promise<PickedMedia[]>,backgroundMusic=false){
+  async function importWith(pick:()=>Promise<PickedMedia[]>,backgroundMusic=false,placement?:TimelineImportPlacement){
     if(!api||mediaImportPending.current)return;mediaImportPending.current=true;
     const task=projectSession.beginTask(),sessionId=projectSession.getSnapshot().sessionId;
-    try{const picked=await pick();if(!task.isSessionCurrent()||!picked.length)return;failedPendingImport.current=undefined;await prepareAndCommit(picked,backgroundMusic,task.isSessionCurrent);}
+    try{const capturedPlacement=captureImportPlacement(placement);const picked=await pick();if(!task.isSessionCurrent()||!picked.length)return;failedPendingImport.current=undefined;await prepareAndCommit(picked,backgroundMusic,task.isSessionCurrent,capturedPlacement);}
     catch(error){if(task.isSessionCurrent()){const message=`匯入未完成：${error instanceof Error?error.message:String(error)}`;setImportState({phase:"failed",total:0,completed:0,failed:0,message,sessionId});onStatus(message);}}
     finally{mediaImportPending.current=false;}
   }
   const importDesktopMedia=()=>importWith(()=>api!.pickMedia());
-  const importDesktopPaths=(paths:string[])=>paths.length?importWith(()=>api!.importMediaPaths(paths)):Promise.resolve();
+  const importDesktopPaths=(paths:string[],placement?:TimelineImportPlacement)=>{
+    const capturedPaths=[...paths];
+    return capturedPaths.length?importWith(()=>api!.importMediaPaths(capturedPaths),false,placement):Promise.resolve();
+  };
 
   async function prepareCommittedCreative(items:PickedMedia[],backgroundMusic:boolean,isCurrent:()=>boolean){
     if(!api||!items.length||!isCurrent())return;
@@ -220,7 +243,7 @@ export function useCreativeLibrary({ api, projectSession, onPicked, onPrepared, 
       if(provisional){
         failedCommittedCreative.current.delete(provisional.asset.id);
         const backgroundMusic=assetId.startsWith("music:");
-        onPicked([provisional],{backgroundMusic});
+        if(onPicked([provisional],{backgroundMusic})===false){const message="時間軸未接受這份內建素材，尚未加入。";setImportState({phase:"failed",total:1,completed:0,failed:1,message,sessionId,timelineCommitted:false});onStatus(message);return;}
         const message="內建素材已立即放入時間軸；來源驗證、代理檔與縮圖正在背景處理。";
         setImportState({phase:"preparing",total:1,completed:0,failed:0,message,sessionId,timelineCommitted:true});onStatus(message);
         queueCreativePreparation([provisional],backgroundMusic,task.isSessionCurrent);
@@ -230,7 +253,7 @@ export function useCreativeLibrary({ api, projectSession, onPicked, onPrepared, 
       if(!task.isSessionCurrent())return;
       failedCommittedCreative.current.delete(picked.asset.id);
       const backgroundMusic=assetId.startsWith("music:");
-      onPicked([picked],{backgroundMusic});
+      if(onPicked([picked],{backgroundMusic})===false){const message="時間軸未接受這份內建素材，尚未加入。";setImportState({phase:"failed",total:1,completed:0,failed:1,message,sessionId,timelineCommitted:false});onStatus(message);return;}
       const message="內建素材已立即加入時間軸；代理檔與縮圖會在背景最佳化。";
       setImportState({phase:"preparing",total:1,completed:0,failed:0,message,sessionId,timelineCommitted:true});onStatus(message);
       queueCreativePreparation([picked],backgroundMusic,task.isSessionCurrent);
@@ -242,7 +265,7 @@ export function useCreativeLibrary({ api, projectSession, onPicked, onPrepared, 
     const committed=[...failedCommittedCreative.current.values()].filter(item=>item.isCurrent());
     if((!pending||!pending.isCurrent())&&!committed.length||mediaImportPending.current)return;
     mediaImportPending.current=true;try{
-      if(pending?.isCurrent())await prepareAndCommit(pending.items,pending.backgroundMusic,pending.isCurrent);
+      if(pending?.isCurrent())await prepareAndCommit(pending.items,pending.backgroundMusic,pending.isCurrent,pending.placement);
       if(committed.length){const isCurrent=()=>committed.every(item=>item.isCurrent());await prepareCommittedCreative(committed.map(item=>item.picked),false,isCurrent);}
     }catch(error){const current=pending?.isCurrent()||committed.some(item=>item.isCurrent());if(current){const message=`重試匯入未完成：${error instanceof Error?error.message:String(error)}`;setImportState({phase:"failed",total:0,completed:0,failed:0,message,sessionId:projectSession.getSnapshot().sessionId});onStatus(message);}}finally{mediaImportPending.current=false;}
   };

@@ -14,18 +14,24 @@ import type { NativeAudioTransportState } from "../desktop/useNativeAudioPreview
 import { useNativeEffectPreview } from "../desktop/useNativeEffectPreview";
 import { useRemoteAgentLaunch } from "../desktop/useRemoteAgentLaunch";
 import type { EditorCommand } from "../domain/commands";
-import { animatedClipState } from "../domain/editGraph";
+import { animatedClipState, findClip } from "../domain/editGraph";
 import { createClipMask, resolveMaskPath } from "../domain/masks";
 import type { EditorHistory } from "../domain/history";
 import { DEFAULT_COLOR_MANAGEMENT } from "../domain/types";
 import { motionClipPresetCommands } from "../motion/motionClipPresets";
 import { floatingFrameSceneCommands } from "../motion/floatingFrameScenes";
+import { prepareReferenceMotionTemplateInstance, prepareReferenceMotionTemplateRevision } from "../application/referenceMotionTemplateInstances";
+import { prepareReferenceMotionTemplateReuse } from "../application/referenceMotionTemplateReuse";
 import type { CaptionCue, ClipLayout, EditProject, MotionGraphicKind, MotionGraphicPresetSeed, MotionTrack, NormalizedRect, TimelineClip } from "../domain/types";
 import { makeId } from "../lib/format";
 import type { EditorTheme } from "./theme";
 import { Toolbar } from "./Toolbar";
 import { WorkspaceControls } from "./WorkspaceControls";
 import { OperationStatus } from "./OperationStatus";
+import { ProjectDownloadNotice } from "./ProjectDownloadNotice";
+import { SavedReferenceMotionInstances, runReferenceMotionUiPreparation, type ReferenceMotionUiPreparationOptions } from "./SavedReferenceMotionInstances";
+import { SavedOriginalMotionScenes } from "./SavedOriginalMotionScenes";
+import { prepareOriginalSceneGraphicRevision } from "../application/originalSceneGraphicRevision";
 import { MediaImportStatus } from "./MediaImportStatus";
 import { WorkspaceResizeHandle } from "./WorkspaceResizeHandle";
 import { useWorkspaceLayout } from "./workspaceLayout";
@@ -33,9 +39,12 @@ import { autoRotoRuntimeStatusFromReceipt, initialAutoRotoRuntimeStatus } from "
 import { runAutoRotoAction } from "../application/runAutoRotoAction";
 import { acceptProjectTask } from "../application/projectTask";
 import { PROJECT_FORMATS, projectFormatLabel } from "../application/projectFormats";
+import { planTimelineClipMove } from "../application/timelinePlacement";
+import { resolveTimelineImportPlacement } from "./internalAssetPointerDrag";
 import type { ProjectTask } from "../application/projectSession";
 import "./layoutHardening.css";
 import "./projectFormatControl.css";
+import "./mediaImportStatus.css";
 
 import { AgentConnectModal, AutoEditDialog, AgentPanel, BatchAutoEditPanel, BeginnerGuide, ColorWorkspace, DirectorConsole, EditingProfilePicker, FirstProjectStart, Inspector, MediaBin, MobileConnectModal, Preview, Timeline, WorkspaceDropImport, BEGINNER_GUIDE_KEY } from "./editorShellLazy";
 import type { EditorShellProps, TrackingMode } from "./editorShellTypes";
@@ -52,24 +61,66 @@ export function EditorShell(props: EditorShellProps) {
   const autoEditTarget = useRef<{ task: ProjectTask; clipId: string } | undefined>(undefined);
   const [autoRotoBusy, setAutoRotoBusy] = useState(false);
   const autoRotoBusyRef = useRef(false);
+  const [referenceTemplateBusy, setReferenceTemplateBusy] = useState(false);
+  const referenceTemplateOperation = useRef<AbortController | undefined>(undefined);
+  const referenceTemplateMounted = useRef(true);
+  useEffect(() => {
+    referenceTemplateMounted.current = true;
+    return () => { referenceTemplateMounted.current = false; referenceTemplateOperation.current?.abort(); };
+  }, []);
   const [autoRotoRuntimeStatus, setAutoRotoRuntimeStatus] = useState(() => initialAutoRotoRuntimeStatus(window.haoDesktop?.analyzeAutoRoto));
   const [beginnerGuideOpened, setBeginnerGuideOpened] = useState(() => window.localStorage.getItem(BEGINNER_GUIDE_KEY) !== "done");
   const workspace = useWorkspaceLayout();
   const {
     history, project, duration, theme, setTheme, isDesktop, playhead, setPlayhead, seekRevision, onPlaybackClock, playing, setPlaying,
+    playbackRate, setPlaybackRate, togglePlayback, pausePlayback, shuttlePlayback, frameStepPlayback,
     selectedClipId, setSelectedClipId, selectedCaptionId, setSelectedCaptionId, selectedClip,
     selectedClipAtPlayhead, selectedCaption, transitionNeighbors, selectedMotionTracks, activeLayers,
-    activeAudioLayers, runtimeUrls, status, setStatus, trackingMode, setTrackingMode, trackingSelection,
+    activeAudioLayers, runtimeUrls, missingMedia, relinkBrowserMedia, projectDownload, cancelProjectDownload, status, setStatus, trackingMode, setTrackingMode, trackingSelection,
     setTrackingSelection, trackingBusy, recovery, desktopActions, automatic, creativeLibrary, batchAutoEdit, mobile,
     newProject, openProject, saveProject, undoEdit, redoEdit, renderVideo, renderOpenExrSequence, renderAlphaMaster, importFiles,
     acceptTrackingSelection, startPodcastDirector, submitAgentInstruction, runCommand, updateAnimatedClipProperty,
     addMotionGraphic, addCaption, addTrack, addAssetToTimeline, makeSelectedPictureInPicture, precomposeSelected, applyShortFormTemplate, applyLongFormTemplate, addLowerThird, clearTemplateApplication, splitSelected, deleteSelected,
   } = props;
+  const clipSourceTask = props.projectSession.beginTask(project);
+  const clipSourceSessionId = props.projectSession.getSnapshot().sessionId;
+  const moveTimelineClip = (clipId: string, timelineStart?: number, trackId?: string) => {
+    try {
+      const currentProject = props.projectSession.getSnapshot().history.present;
+      const currentClip = findClip(currentProject, clipId);
+      const placement = planTimelineClipMove(currentProject, clipId, trackId ?? currentClip.trackId,
+        timelineStart ?? currentClip.timelineStart, makeId);
+      return runCommand(placement.command, placement.newLayer
+        ? "已移到指定影格並新增圖層；原片段保留，一次復原即可還原。"
+        : "已移到指定影格，可復原。");
+    } catch (error) { setStatus(error instanceof Error ? error.message : "無法移動片段。"); return false; }
+  };
+  useEffect(() => { referenceTemplateOperation.current?.abort(); }, [selectedClipId]);
+  const cancelReferenceTemplate = () => {
+    if (!referenceTemplateOperation.current) return;
+    referenceTemplateOperation.current.abort();
+    setStatus("正在取消模板準備；現有圖層未變更。");
+  };
+  const prepareReferenceInstance = (prepare: ReferenceMotionUiPreparationOptions["prepare"]) => {
+    if (referenceTemplateOperation.current) return;
+    pausePlayback();
+    const controller = new AbortController(); referenceTemplateOperation.current = controller;
+    setReferenceTemplateBusy(true); setStatus("正在核對實體字型並重新編譯 Motion 模板；完成後一次套用。");
+    void runReferenceMotionUiPreparation({ project, session: props.projectSession, controller, prepare,
+      action: "Motion 模板準備", isMounted: () => referenceTemplateMounted.current, onStatus: setStatus, onCommand: runCommand,
+    }).finally(() => {
+      if (referenceTemplateOperation.current === controller) {
+        referenceTemplateOperation.current = undefined;
+        if (referenceTemplateMounted.current) setReferenceTemplateBusy(false);
+      }
+    });
+  };
   // The browser build has no local Whisper/FFmpeg/Rust engines; say so up front instead of failing after a click.
   const engineUnavailableReason = isDesktop ? undefined : "網頁版沒有本機 Whisper／FFmpeg 引擎，這項功能需要桌面版。";
   const selectedAsset = selectedClip ? project.assets.find((asset) => asset.id === selectedClip.assetId) : undefined;
   const hasUserMedia = project.assets.some((asset) => asset.id !== "asset-demo");
-  const showWelcome = !hasUserMedia && !demoWorkspaceOpened;
+  const hasAuthoredGraph = project.motionGraphics.length > 0 || (project.motionScenes?.length ?? 0) > 0 || project.captions.length > 0;
+  const showWelcome = !hasUserMedia && !hasAuthoredGraph && !demoWorkspaceOpened;
   const [nativePreviewBounds, setNativePreviewBounds] = useState<NativePreviewBounds>();
   const [audioTransport, setAudioTransport] = useState<NativeAudioTransportState>();
   const latestSeekRevision = useRef(seekRevision);
@@ -93,7 +144,7 @@ export function EditorShell(props: EditorShellProps) {
   const gpuPreview = useResidentGpuPreview(
     project,
     playhead,
-    isDesktop && !showWelcome && !trackingMode,
+    isDesktop && !showWelcome && !trackingMode && playbackRate === 1,
     nativePreviewBounds,
     { playing, duration, seekRevision, audio: audioTransport, onClock: publishPlaybackClock, onEnded: finishPlayback },
   );
@@ -106,7 +157,7 @@ export function EditorShell(props: EditorShellProps) {
   const remoteAgentLaunch = useRemoteAgentLaunch(window.haoDesktop);
   const workspaceColumns = useMemo(() => [
     workspace.layout.mediaVisible && !directorConsoleOpened ? `${workspace.layout.mediaWidth}px 8px` : "",
-    "minmax(0,1fr)",
+    "minmax(360px,1fr)",
     directorConsoleOpened ? "8px minmax(340px,440px)" : workspace.layout.inspectorVisible ? `8px ${workspace.layout.inspectorWidth}px` : "",
   ].filter(Boolean).join(" "), [directorConsoleOpened, workspace.layout.inspectorVisible, workspace.layout.inspectorWidth, workspace.layout.mediaVisible, workspace.layout.mediaWidth]);
   const shellStyle = {
@@ -114,9 +165,15 @@ export function EditorShell(props: EditorShellProps) {
   } as CSSProperties;
   const importState=creativeLibrary.importState;
   const importActive=Boolean(importState&&importState.phase!=="idle"&&importState.sessionId===props.projectSession.getSnapshot().sessionId);
+  const relinkActive = !showWelcome && !isDesktop && missingMedia.length > 0;
   const closeBeginnerGuide = () => {
     window.localStorage.setItem(BEGINNER_GUIDE_KEY, "done");
     setBeginnerGuideOpened(false);
+  };
+  const openAgentConnect = (returnToRemote = false) => {
+    closeBeginnerGuide();
+    setReturnToRemoteAfterAgent(returnToRemote);
+    setAgentConnectOpened(true);
   };
   const shortcutsBlocked = beginnerGuideOpened || colorWorkspaceOpened || (directorConsoleOpened && showWelcome) || batchAutoEdit.show || mobile.showConnect || agentConnectOpened || autoEditOpened;
   const closeAgentConnect = () => {
@@ -126,6 +183,11 @@ export function EditorShell(props: EditorShellProps) {
     void mobile.open();
   };
   const openAutoEdit = () => {
+    if (project.editorialProfile === "music_mv") {
+      openAgentConnect();
+      setStatus("動畫 MV 會先規劃歌曲樂段與原創插畫分層，再交給 Editkin 建立可編輯鏡頭。");
+      return;
+    }
     if (automatic.semantic.busy) return;
     if (!selectedClip) return setStatus("請先選一段要粗剪的影片或聲音。");
     autoEditTarget.current = { task: props.projectSession.beginTask(project), clipId: selectedClip.id };
@@ -174,10 +236,16 @@ export function EditorShell(props: EditorShellProps) {
   };
 
   return (
-    <main className="app-shell" data-import-active={importActive} data-shortcuts-blocked={shortcutsBlocked} data-workspace-mode={showWelcome ? "welcome" : "editor"} data-text-size={workspace.layout.textSize} style={shellStyle}>
+    <main className="app-shell" data-import-active={importActive} data-workspace-notice={importActive || relinkActive} data-shortcuts-blocked={shortcutsBlocked} data-workspace-mode={showWelcome ? "welcome" : "editor"} data-text-size={workspace.layout.textSize} style={shellStyle}>
       <Suspense fallback={null}><WorkspaceDropImport
-        onBrowserFiles={(files) => void importFiles(files)}
-        onDesktopPaths={isDesktop ? (paths) => void creativeLibrary.importDesktopPaths(paths) : undefined}
+        onBrowserFiles={(files, point) => {
+          try { void importFiles(files, point ? resolveTimelineImportPlacement(point, document) : undefined); }
+          catch (error) { setStatus(error instanceof Error ? error.message : "這個位置無法匯入素材。"); }
+        }}
+        onDesktopPaths={isDesktop ? (paths, point) => {
+          try { void creativeLibrary.importDesktopPaths(paths, point ? resolveTimelineImportPlacement(point, document) : undefined); }
+          catch (error) { setStatus(error instanceof Error ? error.message : "這個位置無法匯入素材。"); }
+        } : undefined}
         onStatus={setStatus}
       /></Suspense>
       <Toolbar
@@ -200,8 +268,9 @@ export function EditorShell(props: EditorShellProps) {
         onExport={renderVideo}
         onExportOpenExrSequence={() => void renderOpenExrSequence()}
         onExportAlphaMaster={() => void renderAlphaMaster()}
-        onOpenAgentConnect={() => { setReturnToRemoteAfterAgent(false); setAgentConnectOpened(true); }}
+        onOpenAgentConnect={() => openAgentConnect()}
         onAutoEdit={openAutoEdit}
+        autoEditLabel={project.editorialProfile === "music_mv" ? "製作 Music MV" : undefined}
         autoEditBusy={automatic.semantic.busy}
         autoEditUnavailableReason={engineUnavailableReason}
         onMobileRemote={window.haoDesktop?.startMobileRemote ? () => void mobile.open() : undefined}
@@ -212,18 +281,24 @@ export function EditorShell(props: EditorShellProps) {
         onHelp={() => setBeginnerGuideOpened(true)}
         workspaceControls={<WorkspaceControls layout={workspace.layout} onPreset={workspace.choosePreset} onPatch={workspace.patch} onReset={workspace.reset} />}
       />
-      {importActive&&importState?<MediaImportStatus state={importState} onRetry={()=>void creativeLibrary.retryFailedImports()}/>:null}
+      {(importActive || relinkActive) && <div className="workspace-notices">
+        {importActive&&importState?<MediaImportStatus state={importState} onRetry={()=>void creativeLibrary.retryFailedImports()}/>:null}
+        {relinkActive && <section className="media-import-status" data-testid="missing-media-relink" aria-label="缺失素材重新連結">
+          <div><strong>專案已開啟，請重新連結素材</strong><span>逐一選取原檔；瀏覽器重開後需再次選檔。</span></div>
+          {missingMedia.map(asset => <button key={asset.id} type="button" className="secondary-action" data-testid={`relink-media-${asset.id}`} onClick={() => void relinkBrowserMedia(asset.id)} disabled={Boolean(asset.imageSequence)} title={asset.imageSequence ? "OpenEXR 序列需要桌面版" : `為 ${asset.name} 選取原始檔案`}>{asset.name} · 重新連結</button>)}
+        </section>}
+      </div>}
       {showWelcome ? <Suspense fallback={<section className="first-project-loading" aria-label="正在準備開始畫面" />}><FirstProjectStart
         isDesktop={isDesktop}
         onImport={importFiles}
         onDesktopImport={isDesktop ? () => void creativeLibrary.importDesktopMedia() : undefined}
-        onOpenProject={isDesktop ? () => void openProject() : undefined}
+        onOpenProject={() => void openProject()}
         onExploreDemo={() => setDemoWorkspaceOpened(true)}
         onHelp={() => setBeginnerGuideOpened(true)}
-        onConnectAgent={isDesktop ? () => setAgentConnectOpened(true) : undefined}
+        onConnectAgent={isDesktop ? () => openAgentConnect() : undefined}
       /></Suspense> : <>
       <section className="workspace-grid" style={{ gridTemplateColumns: workspaceColumns }} data-testid="modular-workspace">
-        {!hasUserMedia && <div className="demo-workspace-banner" data-testid="demo-workspace-banner"><b>示範模式</b><span>{isDesktop ? "先熟悉介面；加入自己的影片後才會啟用自動剪輯與輸出" : "先熟悉介面；加入自己的影片後可手動剪輯並下載專案檔。自動剪輯與影片輸出需要桌面版"}</span></div>}
+        {!hasUserMedia && !hasAuthoredGraph && <div className="demo-workspace-banner" data-testid="demo-workspace-banner"><b>示範模式</b><span>{isDesktop ? "先熟悉介面；加入自己的影片後才會啟用自動剪輯與輸出" : "先熟悉介面；加入自己的影片後可手動剪輯並下載專案檔。自動剪輯與影片輸出需要桌面版"}</span></div>}
         {workspace.layout.mediaVisible && !directorConsoleOpened && <><Suspense fallback={<aside className="panel media-bin" aria-label="正在載入素材面板" />}><MediaBin
           assets={project.assets}
           runtimeUrls={runtimeUrls}
@@ -249,7 +324,10 @@ export function EditorShell(props: EditorShellProps) {
           onAddAssetAsPictureInPicture={(assetId) => addAssetToTimeline(assetId, "pip")}
           onAssetDragStart={setDraggingAssetId}
           onAssetDragEnd={() => setDraggingAssetId(undefined)}
-          onApplyShortTemplate={(templateId) => void applyShortFormTemplate(templateId)}
+          onApplyShortTemplate={(templateId, content) => void applyShortFormTemplate(templateId, content)}
+          templateSourceAssetId={[...project.tracks.filter(track => track.kind === "video").flatMap(track => track.clips)].sort((a, b) => a.timelineStart - b.timelineStart)[0]?.assetId}
+          templateFps={project.fps}
+          templateCanvasFormat={project.width > project.height ? "long" : "short"}
           onApplyLongTemplate={(templateId) => void applyLongFormTemplate(templateId)}
           onAddLowerThird={addLowerThird}
           motionGraphics={project.motionGraphics}
@@ -293,11 +371,18 @@ export function EditorShell(props: EditorShellProps) {
             project={project}
             gpuPreviewUrl={gpuPreview.frameUrl}
             nativeGpuPreview={gpuPreview.nativeSurfaceActive}
+            gpuPreviewFullComposition={gpuPreview.fullComposition}
+            onGpuPreviewImagePresented={gpuPreview.onImagePresented}
+            onGpuPreviewImageRejected={gpuPreview.onImageRejected}
+            bakedMotionGraphicIds={gpuPreview.bakedMotionGraphicIds}
+            bakedCaptionIds={gpuPreview.bakedCaptionIds}
             gpuPreviewAdmission={gpuPreview.admission}
             gpuPreviewFallbackReason={gpuPreview.fallbackReason}
             gpuPreviewAdmissionDiagnostic={gpuPreview.admissionDiagnostic}
             autonomousGpuPlayback={gpuPreview.autonomousPlayback}
             nativeGpuPlaybackPreparing={gpuPreview.nativePlaybackPreparing}
+            nativeGpuPresentedFrame={gpuPreview.presentedTimelineFrame}
+            nativeGpuFrameUpdating={gpuPreview.nativeFrameUpdating}
             seekRevision={seekRevision}
             onPlaybackClock={publishPlaybackClock}
             onAudioTransportChange={updateAudioTransport}
@@ -309,6 +394,12 @@ export function EditorShell(props: EditorShellProps) {
             trackingSelection={trackingSelection}
             onTrackingSelectionChange={(rect) => void acceptTrackingSelection(rect)}
             playing={playing}
+            playbackRate={playbackRate}
+            onPlaybackRateChange={setPlaybackRate}
+            onTogglePlayback={togglePlayback}
+            onPausePlayback={pausePlayback}
+            onShuttle={(direction) => shuttlePlayback(direction, direction === 1)}
+            onFrameStep={frameStepPlayback}
             onPlayingChange={setPlaying}
             onPlayheadChange={(time) => setPlayhead(Math.max(0, Math.min(duration, time)))}
           /></Suspense>
@@ -319,7 +410,9 @@ export function EditorShell(props: EditorShellProps) {
             onChange={(profile) => runCommand({ type: "batch", commands: [
               { type: "set_editorial_profile", profile },
               { type: "set_aesthetic_system", aestheticSystem: resolveAestheticSystem(profile, project.width > project.height ? "longform" : "shorts") },
-            ] }, "已套用剪輯類型與匿名美感標準；自動剪輯、批量與 AI 都會沿用。")}
+            ] }, profile === "music_mv"
+              ? "動畫 MV 已選取；按「製作 Music MV」連接 Video Autopilot，先核對歌曲並準備原創角色與場景插畫。"
+              : "已套用剪輯類型與匿名美感標準；自動剪輯、批量與 AI 都會沿用。")}
             onStartSpeakerDirector={startPodcastDirector}
             unavailableReason={engineUnavailableReason}
           /></Suspense>
@@ -334,13 +427,22 @@ export function EditorShell(props: EditorShellProps) {
             onSceneSplit={() => void automatic.scenes.run()}
             sceneSplitBusy={automatic.scenes.busy}
             onSemanticAutoEdit={openAutoEdit}
+            musicMvMode={project.editorialProfile === "music_mv"}
             unavailableReason={engineUnavailableReason}
             semanticAutoEditBusy={automatic.semantic.busy}
             semanticAutoEditStage={automatic.semantic.stage}
-            onOpenAgentConnect={isDesktop ? () => setAgentConnectOpened(true) : undefined}
+            onOpenAgentConnect={isDesktop ? () => openAgentConnect() : undefined}
           /></Suspense>}
         </div>
         {workspace.layout.inspectorVisible && !directorConsoleOpened && <><WorkspaceResizeHandle axis="horizontal" label="調整屬性面板寬度" onDelta={(delta) => workspace.resize("inspector", delta)} /><Suspense fallback={<aside className="inspector inspector-empty"><small>正在載入調整面板…</small></aside>}><Inspector
+          captionProject={project}
+          onCaptionCommand={command => runCommand(command, "已修正字幕句尾時間，可復原。 ")}
+          onCaptionSelect={captionId => { const cue = project.captions.find(item => item.id === captionId); if (!cue) return; pausePlayback(); setSelectedClipId(undefined); setSelectedCaptionId(captionId); setPlayhead(cue.start); }}
+          mesh3dProject={project}
+          originalMotionScenesControl={<SavedOriginalMotionScenes project={project} sessionId={clipSourceSessionId} busy={referenceTemplateBusy}
+            onCancel={cancelReferenceTemplate} onRevise={input => prepareReferenceInstance((prepareText, signal) =>
+              prepareOriginalSceneGraphicRevision(project, input, { prepareText, signal }))} />}
+          onMesh3dCommand={command => runCommand(command, "已更新可編輯 3D 場景，可復原。 ")}
           projectFps={project.fps}
           playhead={playhead}
           pluginRegistry={creativeLibrary.plugins}
@@ -351,12 +453,19 @@ export function EditorShell(props: EditorShellProps) {
           canTransitionIn={transitionNeighbors.before}
           canTransitionOut={transitionNeighbors.after}
           asset={selectedAsset}
+          sceneAssets={project.assets}
           previewSource={selectedAsset ? runtimeUrls[`${selectedAsset.id}:thumbnail`] ?? (selectedAsset.kind === "image" ? runtimeUrls[selectedAsset.id] : undefined) : undefined}
           onMove={(timelineStart) => {
-            if (selectedClip && Number.isFinite(timelineStart)) runCommand({ type: "move_clip", clipId: selectedClip.id, timelineStart }, "已更新片段位置。");
+            if (selectedClip) return moveTimelineClip(selectedClip.id, timelineStart);
           }}
           onTrackChange={(trackId) => {
-            if (selectedClip) runCommand({ type: "move_clip_to_track", clipId: selectedClip.id, trackId, timelineStart: selectedClip.timelineStart }, "已把片段移到新軌道。");
+            if (selectedClip) return moveTimelineClip(selectedClip.id, undefined, trackId);
+          }}
+          clipSourceSessionId={clipSourceSessionId}
+          onReplaceClipSource={command => {
+            if (!clipSourceTask.isCurrent()) return setStatus("專案已變更，請重新選擇要替換的影片。");
+            if (selectedClip?.id !== command.clipId) return setStatus("請重新選擇要替換的片段。");
+            runCommand(command, "已替換影片並保留片段時間與動態，可復原。請檢查構圖、字幕和聲音。");
           }}
           onVolumeChange={(volume) => {
             if (selectedClip && Number.isFinite(volume)) runCommand({ type: "set_clip_volume", clipId: selectedClip.id, volume }, "已更新片段音量。");
@@ -378,18 +487,27 @@ export function EditorShell(props: EditorShellProps) {
             if (selectedClip) runCommand({ type: "set_clip_floating_frame", clipId: selectedClip.id, frame }, frame ? "已套用可編輯浮空影片框。" : "已移除浮空影片框。");
           }}
           portraitCanvas={project.height > project.width}
-          onApplyFloatingScene={(preset) => {
+          onApplyFloatingScene={(preset, sources) => {
             if (!selectedClip) return;
             try {
-              runCommand({ type: "batch", commands: floatingFrameSceneCommands(project, selectedClip.id, preset) }, "已建立三層可編輯直式浮空框舞台，可復原。");
+              runCommand({ type: "batch", commands: floatingFrameSceneCommands(project, selectedClip.id, preset, sources) }, "已建立三層可編輯直式浮空框舞台，可復原。");
             } catch (error) { setStatus(error instanceof Error ? error.message : "浮空框舞台套用失敗"); }
           }}
           onApplyClipMotionPreset={(preset) => {
             if (!selectedClip) return;
             try {
-              runCommand({ type: "batch", commands: motionClipPresetCommands(selectedClip, project.fps, preset) }, "已套用逐格 Motion 動畫，可復原。");
+              runCommand({ type: "batch", commands: motionClipPresetCommands(selectedClip, project.fps, preset, { projectWidth: project.width, projectHeight: project.height }) }, "已套用逐格 Motion 動畫，可復原。");
             } catch (error) { setStatus(error instanceof Error ? error.message : "Motion 動畫套用失敗"); }
           }}
+          onApplyReferenceMotionTemplate={referenceTemplateBusy ? undefined : (input) => {
+            if (!selectedClip || referenceTemplateOperation.current) return;
+            const captured = { ...structuredClone(input), clipId: selectedClip.id,
+              startFrame: Math.round(selectedClip.timelineStart * project.fps), durationFrames: Math.round(selectedClip.duration * project.fps),
+              evidenceRefs: ["manual:motion-template-input"] };
+            prepareReferenceInstance((prepareText, signal) => prepareReferenceMotionTemplateInstance(project, captured, makeId, { prepareText, signal }));
+          }}
+          referenceMotionTemplateBusy={referenceTemplateBusy}
+          onCancelReferenceMotionTemplate={cancelReferenceTemplate}
           particleSimulation={project.particleSimulation}
           onParticleSimulationToggle={(enabled) => runCommand({ type: "configure_particle_simulation", enabled }, enabled ? "已啟用原生 GPU 粒子 VFX；預覽與輸出會使用同一個 fixed-seed 模擬。" : "已移除粒子 VFX。")}
           onParticleSimulationChange={(settings) => runCommand({ type: "set_particle_simulation_settings", settings }, "已更新粒子 VFX。")}
@@ -404,7 +522,7 @@ export function EditorShell(props: EditorShellProps) {
           }}
           onColorChange={(patch) => updateAnimatedClipProperty("color", patch)}
           onCreativeChange={(patch) => {
-            if (selectedClip) runCommand({ type: "set_clip_creative", clipId: selectedClip.id, patch }, "已套用 Hao Creator Pack，預覽與輸出會使用同一設定。");
+            if (selectedClip) runCommand({ type: "set_clip_creative", clipId: selectedClip.id, patch }, "已套用 Editkin Creator Pack，預覽與輸出會使用同一設定。");
           }}
           onNativeEffectAdd={(instance) => {
             if (selectedClip) runCommand({ type: "add_native_effect", clipId: selectedClip.id, instance }, "已加入原生 GPU 動態模糊；預覽與輸出共用 shutter sampling。 ");
@@ -454,8 +572,35 @@ export function EditorShell(props: EditorShellProps) {
           }}
           onDeleteMotionTrack={(trackId) => runCommand({ type: "delete_motion_track", trackId }, "已移除追蹤資料；已綁定的圖卡會保留為靜態圖卡。")}
           onAddMotionGraphic={addMotionGraphic}
+          onAddGeometryMotion={() => {
+            const task = props.projectSession.beginTask(project);
+            const startFrame = Math.round((selectedClip?.timelineStart ?? playhead) * project.fps);
+            const durationFrames = Math.min(1800, Math.round((selectedClip?.duration ?? 3) * project.fps));
+            const width = Math.min(4096, project.width * .72), height = Math.min(4096, project.height * .14);
+            const radius = Math.floor(Math.min(height * .18, width * .18) * 2) / 2, eventFrame = Math.max(1, Math.floor(durationFrames * .18));
+            const centerX = Math.round(width / 2), centerY = Math.round(height / 2);
+            void import("../application/nativeGeometryMotion").then(({ prepareNativeGeometryMotion }) => prepareNativeGeometryMotion(project, {
+              expectedRevision: project.revision, range: { startFrame, endFrame: startFrame + durationFrames },
+              position: { x: .14, y: .35 }, fixedEnvelope: { width, height },
+              initial: { left: centerX - radius, top: centerY - radius, right: centerX + radius, bottom: centerY + radius, cornerRadius: radius },
+              dynamics: { stiffness: 144, damping: 24, mass: 1 },
+              propertyDynamics: { left: { stiffness: 100, damping: 20, mass: 1 }, right: { stiffness: 225, damping: 30, mass: 1 } },
+              targets: [{ property: "left", frame: eventFrame, target: width * .02 }, { property: "right", frame: eventFrame, target: width * .98 },
+                { property: "top", frame: eventFrame, target: height * .16 }, { property: "bottom", frame: eventFrame, target: height * .84 },
+                { property: "cornerRadius", frame: eventFrame, target: Math.min(height * .12, radius) }],
+              purpose: "建立可編輯的圓形到柔角面板，後續依素材修改輪廓與節奏", evidenceRefs: ["manual:geometry-authoring"],
+            }, () => makeId("geometry"))).then(prepared => {
+              if (acceptProjectTask(task, setStatus, "連續輪廓建立")) runCommand({ type: "batch", commands: prepared.commands }, "已建立連續輪廓；可逐邊修改影格目標與彈性，也可復原。");
+            }).catch(error => {
+              if (acceptProjectTask(task, setStatus, "連續輪廓建立")) setStatus(error instanceof Error ? error.message : "連續輪廓建立失敗");
+            });
+          }}
           motionGraphics={project.motionGraphics}
           onUpdateMotionGraphic={(graphicId, patch) => runCommand({ type: "update_motion_graphic", graphicId, patch }, "已更新動態圖卡，預覽與輸出會同步。")}
+          managedMotionGraphicIds={[
+            ...(project.referenceMotionInstances?.flatMap(instance => instance.roles.filter(role => role.kind === "graphic").map(role => role.id)) ?? []),
+            ...(project.motionScenes?.flatMap(scene => scene.graphicIds) ?? []),
+          ]}
           onDeleteMotionGraphic={(graphicId) => runCommand({ type: "delete_motion_graphic", graphicId }, "已刪除動態圖卡，可隨時復原。")}
           onCaptionChange={(patch) => {
             if (selectedCaption) runCommand({ type: "update_caption", captionId: selectedCaption.id, patch }, "已更新字幕。");
@@ -525,15 +670,11 @@ export function EditorShell(props: EditorShellProps) {
         runtimeUrls={runtimeUrls}
         draggingAssetId={draggingAssetId}
         onInsertAsset={(assetId, trackId, timelineStart) => addAssetToTimeline(assetId, "timeline", { trackId, timelineStart })}
-        onSeek={(time) => setPlayhead(Math.max(0, Math.min(Math.max(duration, 12), time)))}
+        onEditStart={pausePlayback}
+        onSeek={(time) => { pausePlayback(); setPlayhead(Math.max(0, Math.min(Math.max(duration, 12), time))); }}
         onSelect={(clipId) => { setSelectedCaptionId(undefined); setSelectedClipId(clipId); }}
         onSelectCaption={(captionId) => { setSelectedClipId(undefined); setSelectedCaptionId(captionId); }}
-        onMoveClip={(clipId, timelineStart, trackId) => {
-          const clip = project.tracks.flatMap((track) => track.clips).find((item) => item.id === clipId);
-          if (!clip) return;
-          if (clip.trackId === trackId) runCommand({ type: "move_clip", clipId, timelineStart }, "已移動片段，可復原。");
-          else runCommand({ type: "move_clip_to_track", clipId, trackId, timelineStart }, "已把片段移到新軌道，可復原。");
-        }}
+        onMoveClip={moveTimelineClip}
         onMoveCaption={(captionId, start) => runCommand({ type: "update_caption", captionId, patch: { start } }, "已移動字幕，可復原。")} 
         onTrimClip={(clipId, edge, seconds) => {
           const clip = project.tracks.flatMap((track) => track.clips).find((item) => item.id === clipId);
@@ -557,14 +698,27 @@ export function EditorShell(props: EditorShellProps) {
         onDelete={deleteSelected}
       /></Suspense></div>}
       </>}
-      <footer className="status-bar">
-        <span data-testid="save-state"><i className={recovery.recoveryState === "error" ? "red" : "green"} /> {recovery.dirty ? recovery.recoveryState === "saved" ? "未儲存 · Autosave 安全" : recovery.recoveryState === "error" ? "未儲存 · Autosave 失敗" : "未儲存 · Autosave…" : "所有變更已儲存"}</span>
+      <footer className="status-bar" style={{ position: "relative" }}>
+        {projectDownload && <ProjectDownloadNotice lease={projectDownload} onCancel={cancelProjectDownload} />}
+        <SavedReferenceMotionInstances project={project} session={props.projectSession} busy={referenceTemplateBusy} onCancel={cancelReferenceTemplate}
+          onReuse={request => prepareReferenceInstance(async (prepareText, signal) => {
+            const prepared = await prepareReferenceMotionTemplateReuse(project, request, makeId, { prepareText, signal });
+            return { ...prepared, status: "REVIEW_REQUIRED" as const };
+          })}
+          onRevise={(id, patch, expectedInstanceRevision) => prepareReferenceInstance((prepareText, signal) =>
+            prepareReferenceMotionTemplateRevision(project, id, patch, { expectedInstanceRevision, prepareText, signal, idFactory: makeId }))}
+          onDetach={(id, expectedInstanceRevision) => {
+            if (referenceTemplateOperation.current || !acceptProjectTask(props.projectSession.beginTask(project), setStatus, "解除模板連結")) return;
+            pausePlayback();
+            runCommand({ type: "remove_reference_motion_instance", id, expectedInstanceRevision }, "已解除模板連結並保留全部圖層，可一次復原。");
+          }} />
+        <span data-testid="save-state"><i className={recovery.recoveryState === "error" ? "red" : "green"} /> {!isDesktop ? recovery.dirty ? "未儲存 · 請下載專案 · 無 Autosave" : "專案未變更 · 瀏覽器無 Autosave" : recovery.dirty ? recovery.recoveryState === "saved" ? "未儲存 · Autosave 安全" : recovery.recoveryState === "error" ? "未儲存 · Autosave 失敗" : "未儲存 · Autosave…" : "所有變更已儲存"}</span>
         <details className="project-format-control" data-testid="project-format-control" data-project-width={project.width} data-project-height={project.height}><summary aria-label="設定專案比例"><span data-testid="project-resolution">{projectFormatLabel(project.width, project.height)}</span><small>{project.width}×{project.height} · {project.fps} fps</small></summary><div><header><strong>專案比例</strong><span>只改畫布，不破壞原素材；可再到檢查器調整裁切與位置。</span></header>{PROJECT_FORMATS.map((format) => <button type="button" key={format.id} aria-label={`切換為 ${format.ratio} ${format.label}`} title={`${format.ratio} ${format.label} · ${format.width}×${format.height}`} className={project.width === format.width && project.height === format.height ? "active" : ""} onClick={(event) => { runCommand({ type: "set_project_resolution", width: format.width, height: format.height }, `專案已切換為 ${format.ratio} ${format.label}；素材位置與裁切仍可逐片調整。`); event.currentTarget.closest("details")?.removeAttribute("open"); }}><b>{format.ratio}</b><span><strong>{format.label}</strong><small>{format.use}</small></span></button>)}</div></details>
-        <OperationStatus status={status} runtimeInfo={isDesktop ? `桌面版 · 即時預覽 · 自動儲存${mobile.remote?.active ? ` · 手機已連線${mobile.remoteStatus?.connectedCount ? ` ${mobile.remoteStatus.connectedCount}` : ""}` : ""}` : "本機編輯 · 自動儲存"} />
+        <OperationStatus status={status} runtimeInfo={isDesktop ? `桌面版 · 即時預覽 · 自動儲存${mobile.remote?.active ? ` · 手機已連線${mobile.remoteStatus?.connectedCount ? ` ${mobile.remoteStatus.connectedCount}` : ""}` : ""}` : "瀏覽器編輯 · 無自動儲存 · 請下載專案"} />
       </footer>
       {beginnerGuideOpened && <Suspense fallback={null}><BeginnerGuide onClose={closeBeginnerGuide} onChooseMedia={() => document.querySelector<HTMLElement>('[data-testid="import-media-button"]')?.click()} /></Suspense>}
       {mobile.showConnect && (
-        <Suspense fallback={null}><MobileConnectModal remote={mobile.remote} status={mobile.remoteStatus} networkSummary={mobile.networkSummary} agentLaunch={remoteAgentLaunch.state} onStartAgent={remoteAgentLaunch.start} onCancelAgent={remoteAgentLaunch.cancel} onClose={() => mobile.setShowConnect(false)} onStart={(confirmed) => void mobile.start(confirmed)} onStop={() => void mobile.stop()} onRevoke={(deviceId) => void mobile.revoke(deviceId)} onOpenAgentConnect={() => { mobile.setShowConnect(false); setReturnToRemoteAfterAgent(true); setAgentConnectOpened(true); }} /></Suspense>
+        <Suspense fallback={null}><MobileConnectModal remote={mobile.remote} status={mobile.remoteStatus} networkSummary={mobile.networkSummary} agentLaunch={remoteAgentLaunch.state} onStartAgent={remoteAgentLaunch.start} onCancelAgent={remoteAgentLaunch.cancel} onClose={() => mobile.setShowConnect(false)} onStart={(confirmed) => void mobile.start(confirmed)} onStop={() => void mobile.stop()} onRevoke={(deviceId) => void mobile.revoke(deviceId)} onOpenAgentConnect={() => { mobile.setShowConnect(false); openAgentConnect(true); }} /></Suspense>
       )}
       {batchAutoEdit.show && batchAutoEdit.session && (
         <Suspense fallback={null}>
@@ -582,7 +736,7 @@ export function EditorShell(props: EditorShellProps) {
       {directorConsoleOpened && showWelcome && (
         <Suspense fallback={null}><DirectorConsole project={project} playhead={playhead} currentArtifact={props.currentAestheticArtifact} onSeek={(time) => setPlayhead(Math.max(0, Math.min(Math.max(duration, 12), time)))} onCommand={runCommand} onClose={() => setDirectorConsoleOpened(false)} /></Suspense>
       )}
-      {agentConnectOpened && <Suspense fallback={null}><AgentConnectModal onClose={closeAgentConnect} onConnect={desktopActions.connectAgent} /></Suspense>}
+      {agentConnectOpened && <Suspense fallback={null}><AgentConnectModal onClose={closeAgentConnect} onConnect={desktopActions.connectAgent} musicMvMode={project.editorialProfile === "music_mv"} /></Suspense>}
       {autoEditOpened && <Suspense fallback={null}><AutoEditDialog onClose={() => setAutoEditOpened(false)} onStart={(policy) => {
         setAutoEditOpened(false);
         const target = autoEditTarget.current;

@@ -1,0 +1,9 @@
+.project-media-search { display: grid; gap: 9px; padding: 12px; margin-top: 12px; min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--ink); }
+.project-media-search label { display: grid; gap: 4px; min-width: 0; font-size: 12px; font-weight: 650; }
+.project-media-search input, .project-media-search select { width: 100%; min-width: 0; max-width: 100%; height: 34px; padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); color: var(--ink); font-size: 12px; }
+.project-media-search-selects { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 8px; }
+.project-media-search-summary { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; }
+.project-media-search-summary button { min-height: 30px; padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); color: var(--ink); cursor: pointer; font-size: 12px; }
+.project-media-search-summary button:disabled { opacity: .5; cursor: default; }
+.project-media-search p { margin: 0; overflow-wrap: anywhere; font-size: 12px; }
+.project-media-search :is(input,select,button):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

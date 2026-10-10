@@ -13,6 +13,7 @@ interface AgentPanelProps {
   onSceneSplit?: () => void;
   sceneSplitBusy?: boolean;
   onSemanticAutoEdit?: () => void;
+  musicMvMode?: boolean;
   semanticAutoEditBusy?: boolean;
   semanticAutoEditStage?: SemanticAutoEditStage;
   onOpenAgentConnect?: () => void;
@@ -21,7 +22,7 @@ interface AgentPanelProps {
   hasMedia: boolean;
 }
 
-export function AgentPanel({ status, onSubmit, onSmartCut, smartCutBusy = false, onAutomaticCaptions, automaticCaptionsBusy = false, onSceneSplit, sceneSplitBusy = false, onSemanticAutoEdit, semanticAutoEditBusy = false, semanticAutoEditStage, onOpenAgentConnect, unavailableReason, hasMedia }: AgentPanelProps) {
+export function AgentPanel({ status, onSubmit, onSmartCut, smartCutBusy = false, onAutomaticCaptions, automaticCaptionsBusy = false, onSceneSplit, sceneSplitBusy = false, onSemanticAutoEdit, musicMvMode = false, semanticAutoEditBusy = false, semanticAutoEditStage, onOpenAgentConnect, unavailableReason, hasMedia }: AgentPanelProps) {
   const [instruction, setInstruction] = useState("");
   const [captionMode, setCaptionMode] = useState<"original" | "bilingual-en">("original");
   const submit = () => {
@@ -34,16 +35,16 @@ export function AgentPanel({ status, onSubmit, onSmartCut, smartCutBusy = false,
       <div className="agent-lead">
         <div className="agent-orb" aria-hidden="true"><span>2</span>✦</div>
         <div className="agent-copy">
-          <div><strong>讓 Editkin 自動剪</strong><span>完成後每一段都還能改</span></div>
+          <div><strong>{musicMvMode ? "製作 Music MV" : "讓 Editkin 自動剪"}</strong><span>完成後每一段都還能改</span></div>
           <p data-testid="agent-status" aria-live="polite">{status}</p>
         </div>
       </div>
       <div className="agent-primary-workbench">
-        {onSemanticAutoEdit && <button type="button" className="semantic-edit-button auto-complete-button" onClick={onSemanticAutoEdit} disabled={semanticAutoEditBusy || !hasMedia || Boolean(unavailableReason)} title={unavailableReason} data-testid="semantic-edit-panel-button" data-stage={semanticAutoEditStage?.step} data-beginner-action="一鍵自動完成"><b>✦</b><span><strong>{semanticAutoEditStage?.title ?? (hasMedia ? "一鍵自動完成" : "請先加入你的影片")}</strong><small>{unavailableReason ?? semanticAutoEditStage?.detail ?? "分析畫面與語音，自動處理停頓、場景、字幕、配樂、調色、轉場與適合的效果"}</small></span><i>{semanticAutoEditStage ? `${semanticAutoEditStage.step} / 4` : hasMedia ? "開始 →" : "先做第 1 步"}</i></button>}
+        {onSemanticAutoEdit && <button type="button" className="semantic-edit-button auto-complete-button" onClick={onSemanticAutoEdit} disabled={semanticAutoEditBusy || (!hasMedia && !musicMvMode) || Boolean(unavailableReason)} title={unavailableReason} data-testid="semantic-edit-panel-button" data-stage={musicMvMode ? undefined : semanticAutoEditStage?.step} data-beginner-action={musicMvMode ? "製作 Music MV" : "一鍵自動完成"}><b>✦</b><span><strong>{musicMvMode ? "製作插畫動畫 MV" : semanticAutoEditStage?.title ?? (hasMedia ? "一鍵自動完成" : "請先加入你的影片")}</strong><small>{unavailableReason ?? (musicMvMode ? "AI 規劃樂段與原創角色／場景，Editkin 製作可編輯分層動畫與動態文字" : semanticAutoEditStage?.detail ?? "分析畫面與語音，自動處理停頓、場景、字幕、配樂、調色、轉場與適合的效果")}</small></span><i>{musicMvMode ? "連接 AI →" : semanticAutoEditStage ? `${semanticAutoEditStage.step} / 4` : hasMedia ? "開始 →" : "先做第 1 步"}</i></button>}
         <details className="agent-panel-disclosure" data-testid="agent-panel-disclosure">
           <summary>自訂修改與更多功能</summary>
           <div className="agent-panel-disclosure-body">
-            <div className="auto-edit-how" data-testid="auto-edit-how"><strong>操作順序</strong><span className={hasMedia ? "done" : "current"}>1 加入影片</span><span>2 選片型</span><span>3 按下自動剪輯</span><i>本機原生 · 0 AI 額度</i></div>
+            <div className="auto-edit-how" data-testid="auto-edit-how"><strong>操作順序</strong><span className={hasMedia ? "done" : "current"}>{musicMvMode ? "1 加入歌曲；插畫可由 AI 規劃製作" : "1 加入影片"}</span><span>2 選片型</span><span>{musicMvMode ? "3 連接 AI 製作動畫 MV" : "3 按下自動剪輯"}</span><i>{musicMvMode ? "AI 規劃 · Editkin 本機執行" : "本機原生 · 0 AI 額度"}</i></div>
             <div className="agent-input-row">
               <span className="agent-input-icon" aria-hidden="true">✦</span>
               <input

@@ -2,9 +2,9 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, rm, rmdir, writeFile } from "node:fs/promises";
 import { readBoundedFile } from "../shared/boundedFile";
 import { isAbsolute, join, resolve } from "node:path";
-import { spawn } from "node:child_process";
 import type { EditProject, MediaAsset, TimelineClip } from "../domain/types";
-import { probeMedia, resolveMediaPath } from "../render/mediaProcess";
+import { probeMedia, resolveMediaPath, runProcess } from "../render/mediaProcess";
+import { assertRenderActive } from "../render/renderLifetime";
 
 export const NATIVE_AUDIO_PREVIEW_SAMPLE_RATE = 48_000;
 export const NATIVE_AUDIO_PREVIEW_CHANNELS = 2;
@@ -176,26 +176,7 @@ export function buildNativeAudioPreviewDecoderArgs(
 }
 
 async function runFfmpeg(executable: string, args: string[], timeoutMs: number): Promise<void> {
-  await new Promise<void>((resolvePromise, reject) => {
-    const child = spawn(executable, args, { windowsHide: true, stdio: ["ignore", "ignore", "pipe"] });
-    let stderr = "";
-    let settled = false;
-    child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk: string) => { stderr = `${stderr}${chunk}`.slice(-4_000); });
-    const finish = (error?: Error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      if (error) reject(error);
-      else resolvePromise();
-    };
-    const timer = setTimeout(() => {
-      child.kill();
-      finish(new Error("原生音訊來源解碼逾時"));
-    }, timeoutMs);
-    child.once("error", (error) => finish(error));
-    child.once("exit", (code) => finish(code === 0 ? undefined : new Error(stderr.trim() || `FFmpeg audio source decode exit ${code}`)));
-  });
+  await runProcess(executable, args, timeoutMs);
 }
 
 async function cleanupSession(managedPaths: string[], sessionRoot: string): Promise<void> {
@@ -235,6 +216,7 @@ export async function stageNativeAudioPreview(
     const durationFrames = Math.max(1, Math.round(duration * NATIVE_AUDIO_PREVIEW_SAMPLE_RATE));
     const sourcePcm: NativeAudioPreviewSourceReceipt[] = [];
     for (const [index, item] of clips.entries()) {
+      assertRenderActive();
       const outputPath = join(sessionRoot, `source-${String(index).padStart(2, "0")}.f32le`);
       managedPaths.push(outputPath);
       await runFfmpeg(options.ffmpegPath, buildNativeAudioPreviewDecoderArgs(item, outputPath), options.timeoutMs ?? 45_000);
@@ -273,6 +255,7 @@ export async function stageNativeAudioPreview(
     };
     const manifestContent = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8");
     managedPaths.push(manifestPath);
+    assertRenderActive();
     await writeFile(manifestPath, manifestContent);
     const sourceIds = [...new Set(clips.map((item) => item.asset.id))].sort();
     const audioFingerprintSha256 = createHash("sha256").update(JSON.stringify({
@@ -283,6 +266,7 @@ export async function stageNativeAudioPreview(
       duration,
       decoderSources: sourcePcm.map(({ path: _path, ...source }) => source),
     })).digest("hex");
+    assertRenderActive();
     return {
       schema: "editkin.native-audio-preview-stage/v2",
       status: "GREEN",

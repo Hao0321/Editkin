@@ -55,6 +55,14 @@ if (window.__TAURI_INTERNALS__) {
     },
     previewCreativeAsset: async (assetId, mode = "media") => convertFileSrc(await invoke<string>("preview_creative_asset", { assetId, mode })),
     readColorAsset: (relativePath) => invoke("read_color_asset", { relativePath }),
+    readMesh3dFont: async (weight) => new Uint8Array(await invoke<ArrayBuffer>("read_mesh_3d_font", { weight })),
+    readBundledFontFace: async (faceId) => {
+      const bytes = await invoke<ArrayBuffer>("read_bundled_font_face", { faceId });
+      if (!(bytes instanceof ArrayBuffer) || bytes.byteLength === 0 || bytes.byteLength > 16 * 1024 * 1024) {
+        throw new Error("Bundled font IPC did not return bounded binary bytes");
+      }
+      return new Uint8Array(bytes);
+    },
     listInstalledPlugins: () => invoke("list_installed_plugins"),
     getWorkflowProfile: () => invoke("get_workflow_profile"),
     saveWorkflowProfile: (profile) => invoke("save_workflow_profile", { profile }),

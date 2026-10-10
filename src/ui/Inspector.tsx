@@ -1,4 +1,6 @@
-import { lazy, Suspense, useRef, useState } from "react";
+import { CaptionDelivery } from "./CaptionDelivery";
+import { ClipAudioGain } from "./ClipAudioGain";
+import { lazy, Suspense, useRef, useState, type ReactNode } from "react";
 import { useNativeWheelScroll } from "./wheelScroll";
 import { cssFontFamily, resolveBundledFontFace } from "../typography/fontFaces";
 import { LOOK_PRESETS, TEXT_STYLE_PRESETS, TRANSITION_PRESETS } from "../creative/corePack";
@@ -7,12 +9,15 @@ import { initializeStudioCreativeAssets, STUDIO_MOTION_ASSETS } from "../creativ
 import type { PluginRegistrySummary } from "../desktop/types";
 import type { CaptionCue, CaptionStyle, ChromaKeySettings, ClipCreativeState, ClipExpressionProperty, ClipLayout, ClipMask, ClipLayerState, ColorAdjustments, FloatingVideoFrame, HaoExpressionSource, KeyframeEasing, MaskShapeKind, MediaAsset, MotionGraphic, MotionGraphicKind, MotionGraphicPresetSeed, MotionTrack, NativeEffectInstance, NormalizedRect, ParticleSimulationSettings, Scene25dSettings, TimelineClip, TimelineTrack, Transform2D, Transform3D } from "../domain/types";
 import type { MotionClipPresetId } from "../motion/motionClipPresets";
+import type { ManualReferenceMotionTemplate } from "./ReferenceMotionTemplateControls";
 import type { FloatingFrameScenePresetId } from "../motion/floatingFrameScenes";
 import { formatTime } from "../lib/format";
 import { createTransformMotionBlurInstance, isTransformMotionBlurInstance } from "../domain/transformMotionBlur";
 import { LayerExpressionPanel } from "./LayerExpressionPanel";
 import { CaptionPresetGallery, CreativePresetGallery } from "./PresetPreviewGallery";
+import Mesh3dControls from "./Mesh3dControls";
 import { Scene25dLightControls } from "./Scene25dLightControls";
+import { ClipSourceReplacementControls } from "./ClipSourceReplacementControls";
 import type { AutoRotoRuntimeStatus } from "./autoRotoRuntimeStatus";
 import "./inspectorDiscovery.css";
 import "./captionEditor.css";
@@ -38,6 +43,12 @@ export const CLIP_TOOL_ITEMS = [
 export const CLIP_TOOLS_DEFAULT_OPEN = false;
 
 interface InspectorProps {
+  captionProject?: import("../domain/types").EditProject;
+  onCaptionCommand?: (command: import("../domain/commands").EditorCommand) => void;
+  onCaptionSelect?: (captionId: string) => void;
+  originalMotionScenesControl?: ReactNode;
+  mesh3dProject?: import("../domain/types").EditProject;
+  onMesh3dCommand?: (command: import("../domain/commands").EditorCommand) => void;
   projectFps: number;
   playhead: number;
   clip?: TimelineClip;
@@ -50,6 +61,8 @@ interface InspectorProps {
   canTransitionOut: boolean;
   onMove: (time: number) => void;
   onTrackChange: (trackId: string) => void;
+  onReplaceClipSource?: (command: Extract<import("../domain/commandTypes").EditorCommand, { type: "replace_clip_source" }>) => void;
+  clipSourceSessionId?: number;
   onVolumeChange: (volume: number) => void;
   onTrimStart: () => void;
   onTrimEnd: () => void;
@@ -59,9 +72,13 @@ interface InspectorProps {
   onScene25dChange: (settings: Scene25dSettings) => void;
   onTransform3dChange: (patch: Partial<Transform3D>) => void;
   onSetFloatingFrame?: (frame?: FloatingVideoFrame) => void;
-  onApplyFloatingScene?: (preset: FloatingFrameScenePresetId) => void;
+  onApplyFloatingScene?: (preset: FloatingFrameScenePresetId, sources?: import("../motion/floatingFrameScenes").FloatingFrameSceneBindings) => void;
+  sceneAssets?: readonly MediaAsset[];
   portraitCanvas?: boolean;
   onApplyClipMotionPreset?: (preset: MotionClipPresetId) => void;
+  onApplyReferenceMotionTemplate?: (input: ManualReferenceMotionTemplate) => void;
+  referenceMotionTemplateBusy?: boolean;
+  onCancelReferenceMotionTemplate?: () => void;
   particleSimulation?: ParticleSimulationSettings;
   onParticleSimulationToggle: (enabled: boolean) => void;
   onParticleSimulationChange: (settings: ParticleSimulationSettings) => void;
@@ -85,7 +102,9 @@ interface InspectorProps {
   onCorrectMotionTrack: (trackId: string) => void;
   onDeleteMotionTrack: (trackId: string) => void;
   onAddMotionGraphic: (kind: MotionGraphicKind, trackId?: string, seed?: MotionGraphicPresetSeed) => void;
+  onAddGeometryMotion?: () => void;
   motionGraphics: MotionGraphic[];
+  managedMotionGraphicIds?: readonly string[];
   onUpdateMotionGraphic: (graphicId: string, patch: Partial<Omit<MotionGraphic, "schema" | "id">>) => void;
   onDeleteMotionGraphic: (graphicId: string) => void;
   onCaptionChange: (patch: Partial<Pick<CaptionCue, "text" | "start" | "duration">> & { translation?: CaptionCue["translation"] | null }) => void;
@@ -108,7 +127,7 @@ interface InspectorProps {
   pluginRegistry?: PluginRegistrySummary;
 }
 
-export function Inspector({ playhead, projectFps, clip, asset, previewSource, caption, captionStyle, tracks, canTransitionIn, canTransitionOut, onMove, onTrackChange, onVolumeChange, onTrimStart, onTrimEnd, onTransformChange, scene25d, onScene25dToggle, onScene25dChange, onTransform3dChange, onSetFloatingFrame, onApplyFloatingScene, portraitCanvas, onApplyClipMotionPreset, particleSimulation, onParticleSimulationToggle, onParticleSimulationChange, onLayerChange, onExpressionChange, onMediaFrameApply, onColorChange, onCreativeChange, onNativeEffectAdd, onNativeEffectUpdate, onNativeEffectReorder, onNativeEffectRemove, onAddKeyframe, onKeyframeEasingChange, onDeleteKeyframe, motionTracks, trackingBusy, trackingSelectionActive, trackingSelection, onBeginMotionTrack, onCorrectMotionTrack, onDeleteMotionTrack, onAddMotionGraphic, motionGraphics, onUpdateMotionGraphic, onDeleteMotionGraphic, onCaptionChange, onCaptionStyleChange, onCaptionStylePatch, onOpenColorWorkspace, onAddCaption, onMakePictureInPicture, onAddMask, onUpdateMask, onDeleteMask, onBindMaskTrack, onSetMaskKeyframe, onFreezeMask, onAutoRotoMask, onQuickAutoRoto, onChromaKeyChange, autoRotoBusy, autoRotoRuntimeStatus, pluginRegistry }: InspectorProps) {
+export function Inspector({ captionProject, onCaptionCommand, onCaptionSelect, originalMotionScenesControl, mesh3dProject, onMesh3dCommand, playhead, projectFps, clip, asset, previewSource, caption, captionStyle, tracks, canTransitionIn, canTransitionOut, onMove, onTrackChange, onReplaceClipSource, clipSourceSessionId, onVolumeChange, onTrimStart, onTrimEnd, onTransformChange, scene25d, onScene25dToggle, onScene25dChange, onTransform3dChange, onSetFloatingFrame, onApplyFloatingScene, sceneAssets, portraitCanvas, onApplyClipMotionPreset, onApplyReferenceMotionTemplate, referenceMotionTemplateBusy, onCancelReferenceMotionTemplate, particleSimulation, onParticleSimulationToggle, onParticleSimulationChange, onLayerChange, onExpressionChange, onMediaFrameApply, onColorChange, onCreativeChange, onNativeEffectAdd, onNativeEffectUpdate, onNativeEffectReorder, onNativeEffectRemove, onAddKeyframe, onKeyframeEasingChange, onDeleteKeyframe, motionTracks, trackingBusy, trackingSelectionActive, trackingSelection, onBeginMotionTrack, onCorrectMotionTrack, onDeleteMotionTrack, onAddMotionGraphic, onAddGeometryMotion, motionGraphics, managedMotionGraphicIds, onUpdateMotionGraphic, onDeleteMotionGraphic, onCaptionChange, onCaptionStyleChange, onCaptionStylePatch, onOpenColorWorkspace, onAddCaption, onMakePictureInPicture, onAddMask, onUpdateMask, onDeleteMask, onBindMaskTrack, onSetMaskKeyframe, onFreezeMask, onAutoRotoMask, onQuickAutoRoto, onChromaKeyChange, autoRotoBusy, autoRotoRuntimeStatus, pluginRegistry }: InspectorProps) {
   initializeStudioCreativeAssets();
   const wave2 = initializeWave2Registry();
   const [motionStudioOpened, setMotionStudioOpened] = useState(false);
@@ -128,6 +147,9 @@ export function Inspector({ playhead, projectFps, clip, asset, previewSource, ca
         </div>
         <span className="live-pill">即時預覽</span>
       </div>
+      {captionProject && onCaptionCommand && onCaptionSelect && <CaptionDelivery project={captionProject} onCommand={onCaptionCommand} onSelect={onCaptionSelect} />}
+      {mesh3dProject && onMesh3dCommand && <Mesh3dControls project={mesh3dProject} clipId={clip?.id} onCommand={onMesh3dCommand}/>}
+      {originalMotionScenesControl}
       {caption ? (
         <div className="inspector-body" data-testid="caption-inspector">
           <div className="selected-card">
@@ -186,6 +208,9 @@ export function Inspector({ playhead, projectFps, clip, asset, previewSource, ca
             <div className="selected-icon">▶</div>
             <div><strong>{asset.name}</strong><span>影片片段 · {formatTime(clip.duration)}</span></div>
           </div>
+          {asset.kind === "video" && mesh3dProject && onReplaceClipSource && clipSourceSessionId !== undefined && <ClipSourceReplacementControls
+            key={`${clipSourceSessionId}:${clip.id}:${asset.id}`} project={mesh3dProject} sessionId={clipSourceSessionId}
+            clipId={clip.id} expectedAssetId={asset.id} onReplace={onReplaceClipSource} />}
           <details className="inspector-section professional-engine-tools" data-testid="professional-engine-tools" open={engineToolsOpened} onToggle={(event) => setEngineToolsOpened(event.currentTarget.open)}>
             <summary>進階特效 <small>2.5D 場景、景深與粒子模擬</small></summary>
             <div className="professional-engine-tools-body">
@@ -360,7 +385,7 @@ export function Inspector({ playhead, projectFps, clip, asset, previewSource, ca
               <div className="tool-surface-heading"><strong>快速調整</strong><span>先處理最常用的操作</span></div>
               <span className="quick-adjust-label">播放到想保留的位置，再按下面其中一個</span>
               <div className="clip-trim-actions"><button type="button" onClick={onTrimStart} data-testid="trim-start-button">保留後面</button><button type="button" onClick={onTrimEnd} data-testid="trim-end-button">保留前面</button></div>
-              <label className="large-slider">音量 <input type="range" min="0" max="200" step="5" value={Math.round(clip.volume * 100)} onChange={(event) => onVolumeChange(Number(event.target.value) / 100)} /><b>{Math.round(clip.volume * 100)}%</b></label>
+              <ClipAudioGain key={`quick-${clip.id}`} clipId={clip.id} volume={clip.volume} onVolumeChange={onVolumeChange} compact disabled={asset.kind === "image" || Boolean(tracks.find(track => track.id === clip.trackId)?.locked)} />
               {asset.kind !== "audio" && <button type="button" className="primary-tool-action" onClick={onOpenColorWorkspace}>◒ 打開調色工作區</button>}
             </>}
             {clipTool === "text" && <>
@@ -423,9 +448,7 @@ export function Inspector({ playhead, projectFps, clip, asset, previewSource, ca
           <label className="field-label">放在哪一層
             <select value={clip.trackId} onChange={(event) => onTrackChange(event.target.value)}>{tracks.filter((track) => track.kind === (asset.kind === "audio" ? "audio" : "video")).map((track) => <option key={track.id} value={track.id}>{track.name}</option>)}</select>
           </label>
-          <label className="field-label">音量
-            <div className="number-field"><input type="number" min="0" max="200" step="5" value={Math.round(clip.volume * 100)} onChange={(event) => onVolumeChange(Number(event.target.value) / 100)} data-testid="clip-volume-input" /><span>%</span></div>
-          </label>
+          <ClipAudioGain key={`advanced-${clip.id}`} clipId={clip.id} volume={clip.volume} onVolumeChange={onVolumeChange} disabled={asset.kind === "image" || Boolean(tracks.find(track => track.id === clip.trackId)?.locked)} />
           <section className="creative-controls visually-hidden" aria-label="一鍵風格">
             <label className="visually-hidden">影片風格<select value={clip.creative?.lookPresetId ?? ""} onChange={(event) => onCreativeChange({ lookPresetId: event.target.value || null })} data-testid="look-preset-select"><option value="">原始自然</option>{LOOK_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}</select></label>
             <div className="transition-grid">
@@ -458,7 +481,7 @@ export function Inspector({ playhead, projectFps, clip, asset, previewSource, ca
           </details>
           <details className="inspector-section" data-testid="motion-section" onToggle={(event) => { if (event.currentTarget.open) setMotionStudioOpened(true); }}>
             <summary>Editkin Motion <small>{motionTracks.length ? `${motionTracks.length} 組追蹤` : "字卡、動畫與追蹤"}</small></summary>
-            {motionStudioOpened && <Suspense fallback={<small>正在載入 Editkin Motion…</small>}><MotionStudio {...{ asset, clip, onSetFloatingFrame, onApplyFloatingScene, portraitCanvas, onApplyClipMotionPreset, motionTracks, trackingBusy, trackingSelectionActive, trackingSelection, onBeginMotionTrack, onCorrectMotionTrack, onDeleteMotionTrack, onAddMotionGraphic, motionGraphics, onUpdateMotionGraphic, onDeleteMotionGraphic }} wave2Presets={wave2.motionPresets} /></Suspense>}
+            {motionStudioOpened && <Suspense fallback={<small>正在載入 Editkin Motion…</small>}><MotionStudio {...{ asset, clip, onSetFloatingFrame, onApplyFloatingScene, sceneAssets, portraitCanvas, projectFps, onApplyClipMotionPreset, onApplyReferenceMotionTemplate, referenceMotionTemplateBusy, onCancelReferenceMotionTemplate, motionTracks, trackingBusy, trackingSelectionActive, trackingSelection, onBeginMotionTrack, onCorrectMotionTrack, onDeleteMotionTrack, onAddMotionGraphic, onAddGeometryMotion, motionGraphics, managedMotionGraphicIds, onUpdateMotionGraphic, onDeleteMotionGraphic }} wave2Presets={wave2.motionPresets} /></Suspense>}
           </details>
           <div className="metric-grid">
             <div><span>素材起點</span><strong>{formatTime(clip.sourceStart)}</strong></div>

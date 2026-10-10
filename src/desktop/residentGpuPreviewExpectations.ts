@@ -1,5 +1,6 @@
 import type { EngineNode } from "../render/engineGraph";
 import type { GpuEngineVideoPreviewGraph, GpuRenderGraph } from "../render/gpuCompositor";
+import { sampleNativeFloatingVideoFrame, type NativeFloatingVideoFrameSpec } from "../render/nativeFloatingVideoFrame";
 
 type GpuEngineVideoLayerLoadResult = import("./types").GpuEngineVideoLayerLoadResult;
 
@@ -23,6 +24,8 @@ export interface ExpectedEngineVideoLayer {
   matteMode: "alpha" | "alpha_inverted" | "luma" | "luma_inverted" | undefined;
   precompositionNodeIds: string[];
   nestedGraphIds: string[];
+  floatingFrame?: NativeFloatingVideoFrameSpec;
+  floatingNodeId?: string;
 }
 
 export interface ExpectedEngineVideoController {
@@ -67,6 +70,16 @@ function expectedEngineVideoAdjustmentTopology(graph: GpuEngineVideoPreviewGraph
   const output = byId.get(graph.outputNode);
   if (!output || output.kind !== "output" || output.inputs.length !== 1) return undefined;
   let root = output.inputs[0];
+  const display = byId.get(root);
+  if (display?.kind === "color" && ["editkin-ocio-aces2-linear-rec709-to-rec709-sdr/v1",
+    "editkin-ocio-aces2-linear-rec709-to-rec2100-pq-1000/v1"].includes(String(display.processor))) {
+    // The global display transform wraps the completed composition. It is not
+    // a video branch grade or an adjustment layer; preserve its validation in
+    // the scene-linear present contract and traverse its one authored input.
+    if (!display.enabled || display.inputs.length !== 1 || display.inputSpace !== "linear_rec709"
+      || display.workingSpace !== "ACEScct") return undefined;
+    root = display.inputs[0];
+  }
   const outerToInner: ExpectedEngineVideoAdjustment[] = [];
   for (;;) {
     let current = byId.get(root);
@@ -126,7 +139,7 @@ function extractExpectedEngineVideoLayers(graph: GpuEngineVideoPreviewGraph["gra
     const kind = byId.get(branchTail.id)?.kind;
     if (kind === "particle_emitter") { if (overlayPhase > 1) return []; overlayPhase = 1; particleCount += 1; continue; }
     if (kind === "caption") { if (overlayPhase > 2) return []; overlayPhase = 2; captionCount += 1; continue; }
-    if (kind === "motion_graphic") { overlayPhase = 3; motionGraphicCount += 1; continue; }
+    if (kind === "motion_graphic" || kind === "native_motion_paint") { overlayPhase = 3; motionGraphicCount += 1; continue; }
     if (overlayPhase > 0) return [];
     videoBranchTails.push(branchTail.id);
   }
@@ -136,6 +149,10 @@ function extractExpectedEngineVideoLayers(graph: GpuEngineVideoPreviewGraph["gra
     let transform: EngineNode | undefined;
     let grade: EngineNode | undefined;
     let motionBlur: EngineNode | undefined;
+    let floatingFrame: NativeFloatingVideoFrameSpec | undefined;
+    let floatingNodeId: string | undefined;
+    let unknownNode = false;
+    const outerColors: EngineNode[] = [];
     let effectKind: 0 | 1 | 2 = 0;
     let shaderEffectExpected = false;
     const precompositionNodeIds: string[] = [];
@@ -145,7 +162,26 @@ function extractExpectedEngineVideoLayers(graph: GpuEngineVideoPreviewGraph["gra
       if (visited.has(current.id) || current.inputs.length !== 1) return undefined;
       visited.add(current.id);
       if (current.kind === "transform2d" || current.kind === "transform3d") transform = current;
-      if (current.kind === "color") grade = current;
+      if (current.kind === "floating_video_frame_2d") {
+        if (floatingFrame || !transform || transform.kind !== "transform2d" || transform.inputs[0] !== current.id
+          || outerColors.some(node => node.id !== "display:aces2" || node.processor !== "editkin-ocio-aces2-linear-rec709-to-rec709-sdr/v1")) return undefined;
+        const spec = current.spec as NativeFloatingVideoFrameSpec | undefined;
+        const sourceGrade = byId.get(current.inputs[0]);
+        const source = sourceGrade?.inputs.length === 1 ? byId.get(sourceGrade.inputs[0]) : undefined;
+        if (!spec || spec.schema !== "editkin.native-floating-video-frame/v1"
+          || spec.frame?.schema !== "editkin.floating-video-frame/v2"
+          || spec.canvasWidth !== graph.width || spec.canvasHeight !== graph.height
+          || spec.timebase?.numerator !== graph.timebase.numerator || spec.timebase.denominator !== graph.timebase.denominator
+          || sourceGrade?.kind !== "color" || sourceGrade.processor !== "editkin-rec709-to-linear-rec709-primary/v2"
+          || sourceGrade.inputSpace !== "rec709" || sourceGrade.workingSpace !== "linear_rec709"
+          || source?.kind !== "source" || source.mediaKind !== "video") return undefined;
+        const timeline = source.timeline as NativeFloatingVideoFrameSpec["timeline"] | undefined;
+        if (!timeline || timeline.timelineStartFrame !== spec.timeline?.timelineStartFrame
+          || timeline.sourceStartFrame !== spec.timeline.sourceStartFrame || timeline.durationFrames !== spec.timeline.durationFrames) return undefined;
+        try { sampleNativeFloatingVideoFrame(spec, spec.timeline.timelineStartFrame); } catch { return undefined; }
+        floatingFrame = spec; floatingNodeId = current.id;
+      }
+      if (current.kind === "color") { grade = current; if (!floatingFrame) outerColors.push(current); }
       if (current.kind === "effect") {
         effectKind = engineVisualKind(current.pluginId);
         shaderEffectExpected = typeof current.pluginId === "string" && !current.pluginId.startsWith("editkin.builtin.");
@@ -158,8 +194,10 @@ function extractExpectedEngineVideoLayers(graph: GpuEngineVideoPreviewGraph["gra
         if (typeof current.nestedGraphId !== "string") return undefined;
         precompositionNodeIds.push(current.id); nestedGraphIds.push(current.nestedGraphId);
       }
+      if (!["transform2d", "transform3d", "floating_video_frame_2d", "color", "effect", "motion_blur", "precomposition"].includes(current.kind)) unknownNode = true;
       current = byId.get(current.inputs[0]);
     }
+    if (floatingFrame && (unknownNode || motionBlur || effectKind !== 0 || shaderEffectExpected || precompositionNodeIds.length)) return undefined;
     const composite = branchTails.find((candidate) => candidate.id === branchTail);
     return current && transform && grade && composite && typeof current.assetId === "string"
       ? { sourceNodeId: current.id, assetId: current.assetId, source: current, transform, transformNodeId: transform.id,
@@ -169,7 +207,7 @@ function extractExpectedEngineVideoLayers(graph: GpuEngineVideoPreviewGraph["gra
         parentLayerIndex: undefined, parentControllerIndex: undefined, parentDepth: 0,
         effectKind, shaderEffectExpected, motionBlur, grade, blendMode: composite.blendMode, compositeOpacity: composite.compositeOpacity,
         matteLayerIndex: composite.matteInput ? videoBranchTails.indexOf(composite.matteInput) : undefined, matteMode: composite.matteMode,
-        precompositionNodeIds, nestedGraphIds }
+        precompositionNodeIds, nestedGraphIds, ...(floatingFrame ? { floatingFrame, floatingNodeId } : {}) }
       : undefined;
   }).filter((layer): layer is ExpectedEngineVideoLayer => Boolean(layer));
   if (layers.length !== videoBranchTails.length
@@ -193,7 +231,7 @@ function extractExpectedEngineVideoControllers(graph: GpuEngineVideoPreviewGraph
   return controllers.length <= 8 ? controllers : [];
 }
 
-function expectedEngineVideoTopology(graph: GpuEngineVideoPreviewGraph["graph"]): { layers: ExpectedEngineVideoLayer[]; controllers: ExpectedEngineVideoController[] } {
+export function expectedEngineVideoTopology(graph: GpuEngineVideoPreviewGraph["graph"]): { layers: ExpectedEngineVideoLayer[]; controllers: ExpectedEngineVideoController[] } {
   const layers = extractExpectedEngineVideoLayers(graph);
   const controllers = extractExpectedEngineVideoControllers(graph);
   if (!layers.length) return { layers: [], controllers: [] };
@@ -205,8 +243,9 @@ function expectedEngineVideoTopology(graph: GpuEngineVideoPreviewGraph["graph"])
   for (const target of targets) {
     const parentId = target.owner.parentTransformNodeId;
     if (!parentId) continue;
-    const parent = byTransform.get(parentId);
-    if (!parent || parent === target) return { layers: [], controllers: [] };
+      const parent = byTransform.get(parentId);
+      if (!parent || parent === target) return { layers: [], controllers: [] };
+      if ("floatingFrame" in parent.owner && parent.owner.floatingFrame) return { layers: [], controllers: [] };
     target.owner.parentLayerIndex = parent.kind === "layer" ? parent.index : undefined;
     target.owner.parentControllerIndex = parent.kind === "controller" ? parent.index : undefined;
     const parentTimeline = parent.owner.source.timeline as { timelineStartFrame: number; durationFrames: number } | undefined;
@@ -253,4 +292,8 @@ export function expectedEngineVideoParticles(graph: GpuEngineVideoPreviewGraph["
 
 export function expectedEngineVideoMotionGraphics(graph: GpuEngineVideoPreviewGraph["graph"]): EngineNode[] {
   return graph.nodes.filter((node) => node.kind === "motion_graphic");
+}
+
+export function expectedEngineVideoNativeMotionPaints(graph: GpuEngineVideoPreviewGraph["graph"]): EngineNode[] {
+  return graph.nodes.filter((node) => node.kind === "native_motion_paint");
 }

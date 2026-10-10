@@ -1,4 +1,6 @@
 use super::model::*;
+use super::motion_paint::MAX_SEGMENTS;
+use super::motion_paint_track::{NativeMotionPaintBudget, PreparedNativeMotionPaintTrack};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 fn finite(values: &[f32]) -> bool {
@@ -135,6 +137,12 @@ fn validate_operation(node: &EngineNode) -> Result<(), String> {
                 }
                 previous_frame = Some(keyframe.frame);
             }
+        }
+        NodeOperation::FloatingVideoFrame2d { spec } => {
+            if !node.enabled || node.inputs.len() != 1 {
+                return Err(format!("node {} floating video requires one enabled source branch", node.id));
+            }
+            spec.validate()?;
         }
         NodeOperation::Transform3d {
             position,
@@ -388,6 +396,13 @@ fn validate_operation(node: &EngineNode) -> Result<(), String> {
                 || !(1..=9).contains(alignment)
             {
                 return Err(format!("node {} has invalid caption", node.id));
+            }
+        }
+        NodeOperation::NativeMotionPaint { graphic_id, .. } => {
+            if graphic_id.trim().is_empty() || graphic_id.len() > 128
+                || !node.enabled || !node.inputs.is_empty()
+            {
+                return Err(format!("node {} has invalid native motion paint identity, enablement or inputs", node.id));
             }
         }
         NodeOperation::MotionGraphic {
@@ -761,8 +776,28 @@ pub fn compile_graph(graph: EngineGraph) -> Result<CompiledGraph, String> {
     if !ids.contains(graph.output_node.as_str()) {
         return Err("output node is missing".into());
     }
+    let mut native_paint_budget = NativeMotionPaintBudget::default();
+    let mut native_paint_graphic_ids = BTreeSet::new();
+    let legacy_motion_graphic_ids = graph.nodes.iter().filter_map(|node| {
+        match &node.operation {
+            NodeOperation::MotionGraphic { graphic_id, .. } => Some(graphic_id.as_str()),
+            _ => None,
+        }
+    }).collect::<BTreeSet<_>>();
     for node in &graph.nodes {
         validate_operation(node)?;
+        if let NodeOperation::NativeMotionPaint { graphic_id, track } = &node.operation {
+            if graph.working_format != PixelFormat::Rgba16Float {
+                return Err("native motion paint requires Rgba16Float graph working format".into());
+            }
+            if legacy_motion_graphic_ids.contains(graphic_id.as_str()) {
+                return Err("render graph cannot mix v1 and native paint for the same graphic ID".into());
+            }
+            if !native_paint_graphic_ids.insert(graphic_id.as_str()) {
+                return Err("render graph contains duplicate native paint graphic IDs".into());
+            }
+            native_paint_budget.include(track.validate_structure(graph.width, graph.height)?)?;
+        }
     }
     let order = topological_order(&graph.nodes)?;
     let by_id = graph
@@ -770,11 +805,112 @@ pub fn compile_graph(graph: EngineGraph) -> Result<CompiledGraph, String> {
         .iter()
         .map(|node| (node.id.as_str(), node))
         .collect::<BTreeMap<_, _>>();
+    let floating_nodes = graph.nodes.iter().filter(|node| matches!(node.operation, NodeOperation::FloatingVideoFrame2d { .. })).collect::<Vec<_>>();
+    if floating_nodes.len() > super::floating_video_frame::MAX_FLOATING_NODES {
+        return Err("shared floating video node count exceeds bounded resource contract".into());
+    }
+    if !floating_nodes.is_empty() {
+        // A finalized floating parent includes its media entrance/exit opacity.
+        // That opacity must not leak into a child's authored affine transform.
+        for candidate in &graph.nodes {
+            if let NodeOperation::Transform2d { parent: Some(parent), .. } = &candidate.operation {
+                let mut pending = vec![parent.as_str()];
+                let mut visited = BTreeSet::new();
+                while let Some(id) = pending.pop() {
+                    if !visited.insert(id) { continue; }
+                    let ancestor = by_id.get(id).ok_or("floating affine parent references missing graph node")?;
+                    if matches!(ancestor.operation, NodeOperation::FloatingVideoFrame2d { .. }) {
+                        return Err("floating video media cannot be used as an affine parent until media-phase inheritance is separated".into());
+                    }
+                    pending.extend(ancestor.inputs.iter().map(String::as_str));
+                    if let NodeOperation::Transform2d { parent: Some(next), .. } = &ancestor.operation {
+                        pending.push(next.as_str());
+                    }
+                }
+            }
+        }
+        if graph.nodes.iter().any(|node| matches!(node.operation,
+            NodeOperation::Transform3d { .. } | NodeOperation::Camera { .. } | NodeOperation::Light { .. }
+            | NodeOperation::Mask { .. } | NodeOperation::AutoRoto { .. } | NodeOperation::MotionBlur { .. }
+            | NodeOperation::DepthOfField { .. } | NodeOperation::Precomposition { .. } | NodeOperation::Effect { .. }
+            | NodeOperation::ParticleEmitter { .. } | NodeOperation::Adjustment { .. }))
+            || graph.nodes.iter().any(|node| matches!(&node.operation, NodeOperation::Composite { matte_input: Some(_), .. })) {
+            return Err("shared floating video does not admit depth, matte, effect, temporal or nested execution".into());
+        }
+        for node in floating_nodes {
+            let NodeOperation::FloatingVideoFrame2d { spec } = &node.operation else { unreachable!() };
+            if spec.canvas_width != graph.width || spec.canvas_height != graph.height || spec.timebase != graph.timebase {
+                return Err("floating video descriptor canvas or rational clock differs from actual graph".into());
+            }
+            let mut current = node.inputs[0].as_str(); let mut branch = BTreeSet::new(); let mut color_count = 0;
+            loop {
+                if !branch.insert(current) { return Err("floating video source branch is cyclic".into()); }
+                let input = by_id.get(current).ok_or("floating video references missing actual source branch")?;
+                if !input.enabled { return Err("floating video source branch cannot be disabled".into()); }
+                match &input.operation {
+                    NodeOperation::Color { processor, input_space, working_space, output_space, .. } => {
+                        color_count += 1;
+                        if color_count != 1 || input.inputs.len() != 1 || input_space != "rec709"
+                            || working_space != "linear_rec709" || output_space != "linear_rec709"
+                            || processor != "editkin-rec709-to-linear-rec709-primary/v2" {
+                            return Err("floating video must assemble after exactly one Rec709 source colour boundary".into());
+                        }
+                        current = input.inputs[0].as_str();
+                    }
+                    NodeOperation::Source { media_kind, input_color_space, timeline, .. } => {
+                        if color_count != 1 || media_kind != "video" || !input.inputs.is_empty()
+                            || input_color_space.as_deref() != Some("rec709") || timeline.as_ref() != Some(&spec.timeline) {
+                            return Err("floating video descriptor does not match its actual typed video/source timeline".into());
+                        }
+                        break;
+                    }
+                    _ => return Err("floating video source ordering must be source then colour then assembly then affine".into()),
+                }
+            }
+            let mut reachable = BTreeSet::new(); let mut pending = vec![graph.output_node.as_str()];
+            while let Some(id) = pending.pop() {
+                if !reachable.insert(id) { continue; }
+                let input = by_id.get(id).ok_or("floating output references missing graph node")?;
+                if input.enabled { pending.extend(input.inputs.iter().map(String::as_str)); }
+            }
+            if !reachable.contains(node.id.as_str()) {
+                return Err("floating video node does not contribute to the actual enabled output".into());
+            }
+        }
+    }
     if !matches!(
         by_id[graph.output_node.as_str()].operation,
         NodeOperation::Output { .. }
     ) {
         return Err("output_node must reference an output operation".into());
+    }
+    if !native_paint_graphic_ids.is_empty() {
+        // Native paint may only be advertised when it contributes to an enabled
+        // output dependency path, including explicit matte and parent references.
+        let mut reachable = BTreeSet::new();
+        let mut pending = vec![graph.output_node.as_str()];
+        while let Some(id) = pending.pop() {
+            let node = by_id[id];
+            if !node.enabled || !reachable.insert(id) { continue; }
+            pending.extend(node.inputs.iter().map(String::as_str));
+            match &node.operation {
+                NodeOperation::Transform2d { parent: Some(parent), .. }
+                | NodeOperation::Transform3d { parent: Some(parent), .. } => pending.push(parent.as_str()),
+                NodeOperation::Composite { matte_input: Some(matte), .. } => pending.push(matte.as_str()),
+                _ => {}
+            }
+        }
+        let mut edges = 0_usize;
+        for node in &graph.nodes {
+            if let NodeOperation::NativeMotionPaint { track, .. } = &node.operation {
+                if !reachable.contains(node.id.as_str()) {
+                    return Err(format!("native paint node {} does not contribute to the enabled graph output", node.id));
+                }
+                let prepared = PreparedNativeMotionPaintTrack::prepare(track, graph.width, graph.height)?;
+                edges = edges.checked_add(prepared.edge_count()).ok_or("native paint flattened edge count overflow")?;
+                if edges > MAX_SEGMENTS { return Err("shared native paint flattened edge budget exceeded".into()); }
+            }
+        }
     }
     if let Some(audio) = &graph.audio {
         validate_audio(audio)?;
@@ -794,6 +930,11 @@ pub fn compile_graph(graph: EngineGraph) -> Result<CompiledGraph, String> {
             NodeOperation::Mask { .. } => "pixel_matte",
             NodeOperation::Caption { .. } => "caption_rendering",
             NodeOperation::MotionGraphic { .. } => "motion_graphics",
+            NodeOperation::NativeMotionPaint { .. } => {
+                features.insert("motion_graphics");
+                "native_motion_paint"
+            },
+            NodeOperation::FloatingVideoFrame2d { .. } => "floating_video_frame_2d",
             NodeOperation::Precomposition { .. } => "precomposition",
             NodeOperation::Adjustment { .. } => "adjustment_layers",
             _ => "core_compositing",

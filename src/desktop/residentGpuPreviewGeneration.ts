@@ -1,5 +1,6 @@
 import type { GpuPreviewApi, GpuPreviewOwner } from "./gpuPreviewApiTypes";
 import { ResidentGpuPlayback, type PausedNativeFrame } from "./residentGpuPlayback";
+import { ImmutableDecodedPngFrameHolder } from "./immutableDecodedPngFrame";
 
 export class RetiredGpuPreview extends Error {
   constructor() { super("GPU preview generation retired"); this.name = "RetiredGpuPreview"; }
@@ -15,6 +16,7 @@ export class ResidentGpuPreviewGeneration<Frame> {
   readonly loadedImageStructureRef = ref<string | undefined>(undefined);
   readonly loadedVideoStructureRef = ref<string | undefined>(undefined);
   readonly loadedEngineVideoStructureRef = ref<string | undefined>(undefined);
+  readonly engineVideoTargetModeRef = ref<"native" | "offscreen" | undefined>(undefined);
   readonly surfaceBoundsKeyRef = ref<string | undefined>(undefined);
   readonly surfaceColorSpaceRef = ref<"srgb" | "rec2100_pq_1000" | undefined>(undefined);
   readonly surfaceBoundRef = ref(false);
@@ -27,6 +29,7 @@ export class ResidentGpuPreviewGeneration<Frame> {
   private owner?: Promise<GpuPreviewOwner>;
   private client?: Promise<GpuPreviewApi>;
   private closing?: Promise<void>;
+  pngFrames?: ImmutableDecodedPngFrameHolder;
 
   constructor(private readonly createOwner: (() => Promise<GpuPreviewOwner>) | undefined,
     private readonly cleanupError: (error: unknown) => void = error => console.warn("Editkin GPU owner cleanup failed", error)) {}
@@ -66,6 +69,7 @@ export class ResidentGpuPreviewGeneration<Frame> {
   dispose(): void {
     if (!this.active) return;
     this.active = false; this.tokenRef.current++; this.pendingRef.current = undefined;
+    this.pngFrames?.dispose(); this.pngFrames = undefined;
     this.playback.invalidate();
     void this.close().catch(this.cleanupError);
   }

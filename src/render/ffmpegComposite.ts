@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { assertRenderActive } from "./renderLifetime";
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
@@ -22,7 +23,7 @@ import {
   transitionScaleExpression,
   transitionXExpression,
 } from "./creativeFilters";
-import { buildAssFilter, writeAssContent } from "./captionAss";
+import { buildAssFilter, writeAssContent, type MotionAssOptions } from "./captionAss";
 import { buildClipMaskAlphaFilters } from "./maskFilters";
 import { materializeNativeEffectSegments, projectAfterNativeEffectMaterialization, type NativeEffectRenderReceipt } from "../plugins/nativeEffectRender";
 import { buildAces2DisplayVideoRenderRequest, containsSceneLinearMedia, type NativeAces2OutputTransform } from "./aces2SdrVideo";
@@ -51,7 +52,9 @@ import { whiteBalanceAssetWithMetadata } from "./sourceLinearWhiteBalance";
 import { assertStaticSourceWhiteBalance } from "./linearWhiteBalanceSupport";
 import { compositeFrameClock } from "./compositeFrameClock";
 import { floatingFrameBackdropLavfi, floatingFrameFfmpegFilters } from "../motion/floatingVideoFrame";
+import { assertMediaAssetDisplayGeometry } from "./mediaDisplayGeometry";
 import { pixelMatteSamplingFilters } from "./pixelMatteSampling";
+import { animatedGeometryCanvas, fixedAnimatedAffineFilters } from "./animatedGeometryCanvas";
 
 export function encoderArgs(encoder: VideoEncoder): string[] {
   if (encoder === "prores_ks") return highBitDepthAlphaEncoderArgs();
@@ -81,6 +84,7 @@ export async function chooseEncoder(ffmpegPath: string, preferGpu: boolean, time
     ], Math.min(timeoutMs, 20_000));
     return hardwareEncoder;
   } catch {
+    assertRenderActive();
     return hdr ? "libx265" : "libx264";
   }
 }
@@ -130,8 +134,19 @@ function compositorVideoFilters(input: CompositeInput, outputLabel: string, plan
     primaries: input.probe.colorPrimaries, transfer: input.probe.colorTransfer,
     matrix: input.probe.colorMatrix, range: input.probe.colorRange,
   }) : input.asset;
+  const rawFloatingSource = Boolean(clip.floatingFrame);
+  const floatingV2Context = clip.floatingFrame?.schema === "editkin.floating-video-frame/v2" ? {
+    ...assertMediaAssetDisplayGeometry(input.asset, input.probe),
+    durationFrames: Math.round(clip.duration * plan.fps),
+  } : undefined;
+  if (!clip.floatingFrame && input.asset.displayAspectRatio !== undefined) {
+    // New ordinary/template layouts use an explicit upright physical DAR too.
+    // Verify the actual current file before its square-pixel canvas conversion.
+    assertMediaAssetDisplayGeometry(input.asset, input.probe);
+  }
   const sourceColorPlan = compositorSourceColorPlan(sourceAsset, plan.width, plan.height, pixels.rgba, pixels.grayMaximum,
-    project.colorManagement ?? DEFAULT_COLOR_MANAGEMENT, colorRoot, clip.color.exposure, clip.color);
+    project.colorManagement ?? DEFAULT_COLOR_MANAGEMENT, colorRoot, clip.color.exposure, clip.color,
+    rawFloatingSource ? "raw-source" : "canvas-contain");
   const exposure = !sourceColorPlan.exposureConsumed && clip.color.exposure !== 0 ? primaryExposureFilter(clip.color.exposure) : undefined;
   const effects = effectFilters(clip);
   const pixelMatte = pixelMatteOperation(input.alphaPlan);
@@ -147,6 +162,7 @@ function compositorVideoFilters(input: CompositeInput, outputLabel: string, plan
   // position/color keyframes force a needless full-frame geometry round trip.
   const scaleNeeded = composed.scale !== "1" || transitionScaleExpression(clip) !== "1";
   const rotationNeeded = composed.rotation !== "0";
+  const fixedAffineFilters = fixedAnimatedAffineFilters(project, clip, plan.width, plan.height);
   const layoutFilters = clip.layout ? [
     `crop=${Math.max(2, Math.round(plan.width * clip.layout.crop.width))}:${Math.max(2, Math.round(plan.height * clip.layout.crop.height))}:${Math.max(0, Math.round(plan.width * clip.layout.crop.x))}:${Math.max(0, Math.round(plan.height * clip.layout.crop.y))}`,
     `scale=${Math.max(2, Math.round(plan.width * clip.layout.viewport.width))}:${Math.max(2, Math.round(plan.height * clip.layout.viewport.height))}:flags=lanczos`,
@@ -161,8 +177,8 @@ function compositorVideoFilters(input: CompositeInput, outputLabel: string, plan
     ...(eqNeeded ? [`eq=brightness='${brightness}':contrast='${contrast}':saturation='${saturation}':eval=frame`] : []),
     ...(hueNeeded ? [`hue=h='${hue}'`] : []),
     ...effects,
-    ...(clip.floatingFrame ? floatingFrameFfmpegFilters(clip.floatingFrame, plan.width, plan.height, plan.fps) : []),
-    ...alphaAwareGeometry([
+    ...(clip.floatingFrame ? floatingFrameFfmpegFilters(clip.floatingFrame, plan.width, plan.height, plan.fps, floatingV2Context) : []),
+    ...alphaAwareGeometry(fixedAffineFilters ?? [
       ...(scaleNeeded ? [`scale='iw*(${scale})':'ih*(${scale})':eval=frame`] : []),
       ...(rotationNeeded ? [rotateWithUnclippedBounds(rotation)] : []),
     ]),
@@ -171,10 +187,15 @@ function compositorVideoFilters(input: CompositeInput, outputLabel: string, plan
   const filters = [
     `[${input.inputIndex}:v]${sourceColorPlan.filters.join(",")}`,
     ...(input.alphaPlan.keyer ? [chromaKeyFfmpegFilter(input.alphaPlan.keyer, preserveHighBitDepthAlpha ? "high16" : "compatibility8")].filter((filter): filter is string => Boolean(filter)) : []),
-    `pad=${plan.width}:${plan.height}:(ow-iw)/2:(oh-ih)/2:color=black@0`,
-    "setsar=1",
+    ...(!rawFloatingSource ? [
+      `pad=${plan.width}:${plan.height}:(ow-iw)/2:(oh-ih)/2:color=black@0`,
+      "setsar=1",
+    ] : []),
     `fps=${compositeFrameClock(plan.fps).rate}`,
-    `trim=duration=${finite(clip.duration)}`,
+    floatingV2Context ? `trim=end_frame=${floatingV2Context.durationFrames}` : `trim=duration=${finite(clip.duration)}`,
+    // v2 expressions use local output N/on only after project-fps conversion,
+    // trim and PTS rebasing. v1 and ordinary source chains remain unchanged.
+    ...(floatingV2Context ? [compositeFrameClock(plan.fps).timestampFilters] : []),
     `format=${pixels.rgba}`,
   ];
   const opacityNeeded = composedOpacity.opacity !== "1" || transitionOpacityExpression(clip) !== "1";
@@ -246,7 +267,7 @@ function overlayPositionedFilter(baseLabel: string, inputLabel: string, outputLa
   // the same center. Static geometry continues to use actual negotiated w/h.
   const localScale = trackMatteSource ? composed.scale : `(${composed.scale})*(${transitionScaleExpression(clip, transitionTime)})`;
   let extentWidth = "w", extentHeight = "h";
-  if (/\b(?:t|T|n|N)\b/.test(localScale)) {
+  if (/\b(?:t|T|n|N)\b/.test(localScale) && (trackMatteSource || !animatedGeometryCanvas(project, clip, plan.width, plan.height))) {
     const baseWidth = !trackMatteSource && clip.layout ? Math.max(2, Math.round(plan.width * clip.layout.viewport.width)) : plan.width;
     const baseHeight = !trackMatteSource && clip.layout ? Math.max(2, Math.round(plan.height * clip.layout.viewport.height)) : plan.height;
     const scaledWidth = `max(1,trunc(${baseWidth}*(${localScale})))`;
@@ -330,6 +351,8 @@ export async function renderComposite(
   autoRotoCacheRoot?: string,
   preserveHighBitDepthAlpha = false,
   nativeAudioPath?: string,
+  assBundledFaces = false,
+  motionAss: Pick<MotionAssOptions, "physicalLayouts" | "requirePhysicalGlyphs" | "aggregateBudget"> = {},
 ): Promise<void> {
   for (const segment of videoSegments(plan)) assertStaticSourceWhiteBalance(segment.clip, project.assets.find(asset => asset.id === segment.clip.assetId));
   const pixels = compositePixelContract(preserveHighBitDepthAlpha);
@@ -410,7 +433,12 @@ export async function renderComposite(
     nextIndex += 1;
   }
 
-  const filters: string[] = [`[0:v]fps=${compositeFrameClock(plan.fps).rate},format=${pixels.rgba}[composite0]`];
+  // Background vectors are authored project data. Draw them before video,
+  // rather than applying a full-canvas panel over the final media composite.
+  const backgroundGraphics = project.motionGraphics.filter(graphic => graphic.compositeLayer === "background");
+  const backgroundAssPath = backgroundGraphics.length ? `${output}.${randomUUID()}.background.ass` : undefined;
+  const backgroundFilter = backgroundAssPath ? `,${buildAssFilter(backgroundAssPath, fontRoot)}` : "";
+  const filters: string[] = [`[0:v]fps=${compositeFrameClock(plan.fps).rate},format=${pixels.rgba}${backgroundFilter}[composite0]`];
   let compositeIndex = 0;
   for (const segment of videoSegments(plan)) {
     if (segment.clip.layer?.role === "controller") continue;
@@ -511,12 +539,24 @@ export async function renderComposite(
       filters.push(`[voicemix]atrim=duration=${finite(plan.duration)},asetpts=PTS-STARTPTS[aout]`);
     }
   }
+  const graph = filters.join(";");
+  // Compound animation expressions can exceed Windows' command-line limit.
+  // Use one owned UTF-8 graph file instead of truncating the authored scene.
+  const graphPath = graph.length > 10_000 ? `${output}.${randomUUID()}.ffgraph` : undefined;
+  // Owner-only: these per-render files can sit next to an output in a shared directory.
+  if (graphPath) await writeFile(graphPath, graph, { encoding: "utf8", flag: "wx", mode: 0o600 });
   args.push(
-    "-filter_complex", filters.join(";"), "-map", "[vout]", "-map", "[aout]",
+    ...(graphPath ? ["-filter_complex_script", graphPath] : ["-filter_complex", graph]), "-map", "[vout]", "-map", "[aout]",
     ...encoderArgs(encoder), "-pix_fmt", pixelFormat,
     ...outputColorMetadataArgs(encoder, !preserveHighBitDepthAlpha && project.colorManagement?.mode === "aces2" ? project.colorManagement.outputTransform : "rec709_sdr"),
     "-c:a", preserveHighBitDepthAlpha ? "pcm_s24le" : "aac", ...(preserveHighBitDepthAlpha ? [] : ["-b:a", "192k"]), "-ar", "48000", "-ac", "2",
     "-t", finite(plan.duration), "-video_track_timescale", "90000", "-movflags", "+faststart", output,
   );
-  await runProcess(ffmpegPath, args, timeoutMs);
+  try {
+    if (backgroundAssPath) await writeFile(backgroundAssPath, writeAssContent(project, project.captionStyle, { ...motionAss, bundledFaces: assBundledFaces, compositeLayer: "background" }), { encoding: "utf8", flag: "wx", mode: 0o600 });
+    await runProcess(ffmpegPath, args, timeoutMs);
+  } finally {
+    if (graphPath) await rm(graphPath, { force: true });
+    if (backgroundAssPath) await rm(backgroundAssPath, { force: true });
+  }
 }

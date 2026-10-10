@@ -8,6 +8,8 @@ import {
   type ExpectedEngineVideoLayer,
 } from "./residentGpuPreviewExpectations";
 import { sameF32 } from "./residentGpuPreviewReceipts";
+import { sampleNativeFloatingVideoFrame } from "../render/nativeFloatingVideoFrame";
+import { nativeFloatingVisualMatches } from "../render/nativeFloatingVideoFrameReceipt";
 import type {
   GpuEngineVideoAdjustmentReceipt,
   GpuEngineVideoControllerReceipt,
@@ -103,8 +105,10 @@ function sampledExpectedTransform(expected: ExpectedEngineVideoTransformOwner, t
   };
   const keyframes = (expected.transform.keyframes as Array<Record<string, unknown>> | undefined) ?? [];
   if (!keyframes.length) return base;
-  const timeline = expected.source.timeline as { timelineStartFrame: number } | undefined;
-  const localFrame = Math.max(0, timelineFrame - (timeline?.timelineStartFrame ?? 0));
+  const timeline = expected.source.timeline as { timelineStartFrame: number; durationFrames?: number } | undefined;
+  const floatingOutside = "floatingFrame" in expected && Boolean(expected.floatingFrame) && timeline
+    && (timelineFrame < timeline.timelineStartFrame || timelineFrame >= timeline.timelineStartFrame + Number(timeline.durationFrames));
+  const localFrame = floatingOutside ? 0 : Math.max(0, timelineFrame - (timeline?.timelineStartFrame ?? 0));
   const points = [{ frame: 0, ...base, easing: "linear" }, ...keyframes.map((keyframe) => ({
     frame: Number(keyframe.frame), x: Number(keyframe.x), y: Number(keyframe.y), scaleX: Number(keyframe.scaleX),
     rotationRadians: Number(keyframe.rotationRadians), opacity: Number(keyframe.opacity), easing: String(keyframe.easing),
@@ -149,9 +153,17 @@ export function engineVisualMatches(
   motionSamplesRequired = false,
 ): boolean {
   const grade = expected.grade.grade as Record<string, unknown> | undefined;
-  const projective = expected.transform.kind === "transform3d";
-  const transform = projective ? { x: 0, y: 0, scaleX: 1, rotationRadians: 0, opacity: 1 }
+  const sceneProjective = expected.transform.kind === "transform3d";
+  const transform = sceneProjective ? { x: 0, y: 0, scaleX: 1, rotationRadians: 0, opacity: 1 }
     : sampledExpectedComposedTransform(expected, layers, controllers, timelineFrame);
+  let floatingOpacity = 1;
+  if (expected.floatingFrame) {
+    const range = expected.floatingFrame.timeline;
+    const sampleFrame = timelineFrame >= range.timelineStartFrame && timelineFrame < range.timelineStartFrame + range.durationFrames
+      ? timelineFrame : range.timelineStartFrame;
+    try { floatingOpacity = sampleNativeFloatingVideoFrame(expected.floatingFrame, sampleFrame).opacity; }
+    catch { return false; }
+  }
   const motionBlur = expected.motionBlur;
   const shutterAngle = Number(motionBlur?.shutterAngle ?? 0);
   const sampleCount = Number(motionBlur?.samples ?? 0);
@@ -176,7 +188,9 @@ export function engineVisualMatches(
   return visual.effectKind === expected.effectKind
     && (expected.shaderEffectExpected ? visual.shaderOpCount >= 1 && visual.shaderOpCount <= 16 : visual.shaderOpCount === 0)
     && visual.sourceWidth === graph.width && visual.sourceHeight === graph.height
-    && (projective
+    && (expected.floatingFrame
+      ? nativeFloatingVisualMatches(graph, timelineFrame, expected, visual)
+      : sceneProjective
       ? visual.projectiveEnabled > .5
         && [visual.projectiveH0, visual.projectiveH1, visual.projectiveH2, visual.projectiveH3, visual.projectiveH4, visual.projectiveH5, visual.projectiveH6, visual.projectiveH7,
           visual.shadeR, visual.shadeG, visual.shadeB].every(Number.isFinite)
@@ -186,7 +200,7 @@ export function engineVisualMatches(
     && sameF32(visual.translateY, transform.y)
     && sameF32(visual.scale, transform.scaleX)
     && sameF32(visual.rotation, transform.rotationRadians)
-    && sameF32(visual.opacity, transform.opacity)
+    && sameF32(visual.opacity, transform.opacity * floatingOpacity)
     && Boolean(grade)
     && sameF32(visual.brightness, grade?.brightness)
     && sameF32(visual.contrast, grade?.contrast)

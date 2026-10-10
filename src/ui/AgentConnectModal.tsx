@@ -6,11 +6,12 @@ import "./agentConnectModal.css";
 interface AgentConnectModalProps {
   onClose: () => void;
   onConnect: (target: AgentTarget) => Promise<AgentSetupResult | undefined>;
+  musicMvMode?: boolean;
 }
 
 const AGENT_NAME: Record<AgentTarget, string> = { codex: "Codex", claude: "Claude Code" };
 
-export function AgentConnectModal({ onClose, onConnect }: AgentConnectModalProps) {
+export function AgentConnectModal({ onClose, onConnect, musicMvMode = false }: AgentConnectModalProps) {
   const [busyTarget, setBusyTarget] = useState<AgentTarget>();
   const [result, setResult] = useState<AgentSetupResult>();
   const [copied, setCopied] = useState(false);
@@ -33,7 +34,7 @@ export function AgentConnectModal({ onClose, onConnect }: AgentConnectModalProps
   };
 
   const copyStarterPrompt = async () => {
-    const prompt = result?.starterPrompt ?? EDITKIN_AGENT_STARTER_PROMPT;
+    const prompt = musicMvMode ? `${result?.starterPrompt ?? EDITKIN_AGENT_STARTER_PROMPT}\n本次請製作原創插畫動畫 Music MV：遵循 video-autopilot 的 music-video-motion 流程；先取得有使用權的歌曲，核對 beat/phrase，準備原創角色透明圖層及背景插畫，依 intro/verse/chorus 等樂段規劃分鏡、角色動勢與畫面內文字；用 Editkin 的 prepare_illustrated_music_video_draft 編出可編輯分層命令，再綁定 v4 計畫 audit、apply、render，逐鏡檢查美術與效能。缺插畫時先安排生成／匯入，不得拿實拍歌詞卡代替。歌詞必須有可核對來源；沒有時只用經 brief 核對的標題文字。` : result?.starterPrompt ?? EDITKIN_AGENT_STARTER_PROMPT;
     try {
       await navigator.clipboard.writeText(prompt);
       setCopied(true);
@@ -64,7 +65,7 @@ export function AgentConnectModal({ onClose, onConnect }: AgentConnectModalProps
 
         {!busyTarget && !result && <>
           <span className="agent-connect-kicker">EDITKIN × YOUR AI</span>
-          <h2 id="agent-connect-title">連上你已經在用的 AI</h2>
+          <h2 id="agent-connect-title">{musicMvMode ? "連接 AI 製作 Music MV" : "連上你已經在用的 AI"}</h2>
           <p className="agent-connect-lead">不用申請 API key，也不會讀取或保存登入資料。Editkin 只把本機剪輯工具接進你自己的 Codex／Claude Code session。</p>
           <div className="agent-choice-grid">
             <button type="button" onClick={() => void connect("codex")} data-testid="connect-codex-button">
@@ -97,7 +98,7 @@ export function AgentConnectModal({ onClose, onConnect }: AgentConnectModalProps
               <li><b>1</b><span>重新開啟 {AGENT_NAME[result.target ?? "codex"]}，或建立新 session</span></li>
               <li><b>2</b><span>貼上下面這句，AI 就會自己啟動完整流程</span></li>
             </ol>
-            <div className="agent-starter-prompt">{result.starterPrompt ?? EDITKIN_AGENT_STARTER_PROMPT}</div>
+            <div className="agent-starter-prompt">{musicMvMode ? `${result.starterPrompt ?? EDITKIN_AGENT_STARTER_PROMPT}\n本次請製作原創插畫動畫 Music MV：遵循 video-autopilot 的 music-video-motion 流程；核對歌曲節拍／樂段，準備原創角色透明圖層和背景插畫，使用 prepare_illustrated_music_video_draft 編出可編輯分層命令，再走 v4 audit、apply、render 及美術／效能審片。缺插畫先生成／匯入，不能以實拍歌詞卡代替；無可靠歌詞來源就只用標題文字。` : result.starterPrompt ?? EDITKIN_AGENT_STARTER_PROMPT}</div>
             <button type="button" className="agent-primary-action" onClick={() => void copyStarterPrompt()} data-testid="copy-agent-starter-prompt">{copied ? "✓ 開工指令已複製" : "複製開工指令"}</button>
             {copyFailed && <small className="agent-copy-failed">系統不允許自動複製，請在上方文字框手動選取。</small>}
           </>}

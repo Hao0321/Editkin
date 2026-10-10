@@ -6,6 +6,9 @@ import { ProjectRevisionConflictError, readProjectFile, writeProjectFileAtomic }
 import { applyCommand, type EditorCommand } from "../domain/commands";
 import { createEmptyProject, summarizeProject } from "../domain/editGraph";
 import type { EditProject } from "../domain/types";
+import { readBoundedFile } from "../shared/boundedFile";
+import { sha256Canonical, type AutopilotProjectAuditIdentity } from "../application/autopilotInvocationIdentity";
+import { sealPersistentOriginalMotionCommit, verifyOriginalMotionCommitAuthority, type OriginalMotionCommitAuthorityKey } from "../application/originalMotionCommitAuthority";
 
 export class WorkspaceBoundaryError extends Error {
   constructor(message: string) {
@@ -74,7 +77,8 @@ export async function readProject(projectPath: string): Promise<EditProject> {
   return readProjectFile(await resolveProjectPath(projectPath));
 }
 
-export async function writeProject(projectPath: string, project: EditProject, expectedRevision: number | null = project.revision): Promise<EditProject> {
+export async function writeProject(projectPath: string, project: EditProject, expectedRevision: number | null = project.revision,
+  options: { beforeCommit?: () => Promise<void> } = {}): Promise<EditProject> {
   const path = await resolveProjectPath(projectPath);
   // A desktop process has a different working directory and no MCP workspace.
   // Bind local files while this process still knows their workspace; retain
@@ -95,7 +99,7 @@ export async function writeProject(projectPath: string, project: EditProject, ex
       asset.imageSequence.previewUri = await resolveWorkspaceMediaPath(asset.imageSequence.previewUri);
     }
   }
-  return writeProjectFileAtomic(path, persisted, expectedRevision);
+  return writeProjectFileAtomic(path, persisted, expectedRevision, options);
 }
 
 export async function createProjectFile(
@@ -104,6 +108,8 @@ export async function createProjectFile(
   width: number,
   height: number,
   fps: number,
+  initialCommands: EditorCommand[] = [],
+  beforeCommit?: () => Promise<void>,
 ): Promise<EditProject> {
   const project = createEmptyProject(name, {
     id: `project-${Date.now()}`,
@@ -111,7 +117,7 @@ export async function createProjectFile(
     height,
     fps,
   });
-  return writeProject(projectPath, project, null);
+  return writeProject(projectPath, initialCommands.length ? applyCommand(project, { type: "batch", commands: initialCommands }) : project, null, { beforeCommit });
 }
 
 export async function applyProjectCommands(
@@ -119,6 +125,13 @@ export async function applyProjectCommands(
   commands: EditorCommand[],
   expectedRevision?: number,
 ): Promise<EditProject> {
+  const rejectUnverifiedRelink = (command: EditorCommand): void => {
+    if (command.type === "revise_motion_scene_graphics") throw new WorkspaceBoundaryError("ORIGINAL_SCENE_MANUAL_PREPARATION_REQUIRED: manual scene content editing cannot be submitted through raw automation; use actual versioned source-bound canonical v4 for automatic owner changes");
+    if (command.type === "revise_original_motion_scene_graphic") throw new WorkspaceBoundaryError("ORIGINAL_SOURCE_OWNER_AUTHORITY_REQUIRED: canonical source owner revisions require independent audited source compilation");
+    if (command.type === "relink_asset_source") throw new WorkspaceBoundaryError("Use prepare_media_source_relink/apply_media_source_relink; raw commands cannot verify relocated media bytes");
+    if (command.type === "batch") command.commands.forEach(rejectUnverifiedRelink);
+  };
+  commands.forEach(rejectUnverifiedRelink);
   let project = await readProject(projectPath);
   if (expectedRevision !== undefined && project.revision !== expectedRevision) {
     throw new ProjectRevisionConflictError(expectedRevision, project.revision);
@@ -155,14 +168,37 @@ export async function writePendingAutopilotReceipt(projectPath: string, receipt:
   return { receiptId, pendingPath };
 }
 
-export async function commitAutopilotReceipt(pendingPath: string, receipt: Record<string, unknown>): Promise<string> {
+export async function commitAutopilotReceipt(pendingPath: string, receipt: Record<string, unknown>, originalCommitKey?: OriginalMotionCommitAuthorityKey): Promise<string> {
   await assertCanonicalWorkspaceBoundary(pendingPath);
   if (!pendingPath.endsWith(".pending.json")) throw new WorkspaceBoundaryError("receipt 必須是 pending 狀態");
   const committedPath = pendingPath.replace(/\.pending\.json$/, ".committed.json");
   const preparedPath = pendingPath.replace(/\.pending\.json$/, ".prepared.json");
+  const committed = { ...receipt, state: "committed" };
+  if (receipt.originalMotionBinding && !originalCommitKey) throw new Error("Original Motion commit requires its pre-apply prepared signing authority");
+  const authenticated = receipt.originalMotionBinding ? await sealPersistentOriginalMotionCommit(committed, originalCommitKey!) : committed;
   await rename(pendingPath, preparedPath);
-  await writeJsonAtomic(committedPath, { ...receipt, state: "committed" });
+  await writeJsonAtomic(committedPath, authenticated);
   return basename(committedPath);
+}
+
+/** Only owned committed files may reach the original render verifier. */
+export async function readAuthenticatedOriginalMotionReceipt(projectPath: string, identity: AutopilotProjectAuditIdentity, planSha256: string): Promise<Record<string, unknown>> {
+  if (!/^[a-f0-9]{64}$/.test(planSha256)) throw new Error("Original render plan SHA is invalid");
+  const { directory, projectBase } = await evidenceDirectory(projectPath, ".editkin-receipts");
+  const canonicalDirectory = await realpath(directory);
+  const names = (await readdir(directory, { withFileTypes: true })).filter(entry => entry.isFile() && entry.name.startsWith(`${projectBase}.`) && entry.name.endsWith(".committed.json"))
+    .map(entry => entry.name).sort().reverse().slice(0, 512);
+  for (const name of names) {
+    const bytes = await readBoundedFile(resolve(directory, name), 1024 * 1024);
+    let receipt: Record<string, unknown>;
+    try { receipt = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch { continue; }
+    if (receipt.planSha256 !== planSha256 || !receipt.originalMotionBinding) continue;
+    const authenticated = await verifyOriginalMotionCommitAuthority(receipt);
+    if (sha256Canonical(authenticated.projectIdentityAfter) !== sha256Canonical(identity)) throw new Error("Original render committed project is stale");
+    if (await realpath(directory) !== canonicalDirectory) throw new Error("Original receipt directory changed during read");
+    return authenticated;
+  }
+  throw new Error("No authenticated original committed receipt for the saved project");
 }
 
 export interface AutopilotExecutionAttribution {

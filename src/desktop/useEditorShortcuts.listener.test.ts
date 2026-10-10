@@ -5,10 +5,12 @@ vi.mock("react", () => ({ useEffect: (effect: () => (() => void)) => { effects.c
 import { useEditorShortcuts, type EditorShortcutAction } from "./useEditorShortcuts";
 
 class Target extends EventTarget {
-  constructor(readonly kind: "none" | "text" | "button" = "none", readonly isContentEditable = false) { super(); }
+  constructor(readonly kind: "none" | "text" | "button" | "timeline" | "transport" = "none", readonly isContentEditable = false) { super(); }
   closest(selector: string) {
     if (this.kind === "text" && selector.includes("input")) return this;
-    if (this.kind === "button" && selector === "button") return this;
+    if ((this.kind === "button" || this.kind === "timeline" || this.kind === "transport") && selector === "button") return this;
+    if (this.kind === "timeline" && selector === ".timeline-clip") return this;
+    if (this.kind === "transport" && selector === ".playback-controls") return this;
     return null;
   }
 }
@@ -27,7 +29,7 @@ beforeEach(() => {
   vi.stubGlobal("window", host);
   vi.stubGlobal("HTMLElement", Target);
   vi.stubGlobal("document", { querySelector: () => modal ? {} : null });
-  handlers = Object.fromEntries(["save", "save-as", "undo", "redo", "delete", "split", "play", "frame-back", "frame-forward", "second-back", "second-forward"].map(name => [name, vi.fn()])) as typeof handlers;
+  handlers = Object.fromEntries(["save", "save-as", "undo", "redo", "delete", "split", "play", "pause", "shuttle-back", "shuttle-forward", "frame-back", "frame-forward", "second-back", "second-forward"].map(name => [name, vi.fn()])) as typeof handlers;
   useEditorShortcuts(handlers);
 });
 afterEach(() => { effects.cleanup?.(); vi.unstubAllGlobals(); });
@@ -46,7 +48,7 @@ describe("one global editing shortcut owner", () => {
 
   it("does not steal typing or native text undo", () => {
     for (const target of [new Target("text"), new Target("none", true)]) {
-      for (const key of [" ", "b", "Delete", "Backspace", "ArrowLeft"]) expect(press(key, {}, target).defaultPrevented).toBe(false);
+      for (const key of [" ", "j", "k", "l", "b", "Delete", "Backspace", "ArrowLeft"]) expect(press(key, {}, target).defaultPrevented).toBe(false);
       expect(press("z", { ctrlKey: true }, target).defaultPrevented).toBe(false);
     }
     expect(Object.values(handlers).every(handler => handler.mock.calls.length === 0)).toBe(true);
@@ -65,11 +67,30 @@ describe("one global editing shortcut owner", () => {
 
   it("blocks background edits and saving while a guide/modal is active", () => {
     modal = true;
-    for (const key of ["s", "z", " ", "b", "Delete"]) press(key, { ctrlKey: key === "s" || key === "z" });
+    for (const key of ["s", "z", " ", "j", "k", "l", "b", "Delete"]) press(key, { ctrlKey: key === "s" || key === "z" });
     expect(Object.values(handlers).every(handler => handler.mock.calls.length === 0)).toBe(true);
     modal = false;
     press("s", { ctrlKey: true });
     expect(handlers.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("plays after a timeline drag while keeping clip arrow nudges local", () => {
+    const clip = new Target("timeline");
+    expect(press(" ", {}, clip).defaultPrevented).toBe(true);
+    expect(handlers.play).toHaveBeenCalledTimes(1);
+    expect(press("ArrowLeft", {}, clip).defaultPrevented).toBe(false);
+    expect(handlers["frame-back"]).not.toHaveBeenCalled();
+  });
+
+  it("shuttles and pauses after toolbar focus without native key double dispatch", () => {
+    const target = new Target("button");
+    for (const [key, action] of [["j", "shuttle-back"], ["k", "pause"], ["l", "shuttle-forward"]] as const) {
+      expect(press(key, {}, target).defaultPrevented).toBe(true);
+      expect(handlers[action]).toHaveBeenCalledTimes(1);
+    }
+    expect(handlers.play).not.toHaveBeenCalled();
+    expect(press("ArrowRight", {}, new Target("transport")).defaultPrevented).toBe(true);
+    expect(handlers["frame-forward"]).toHaveBeenCalledTimes(1);
   });
 
   it("ignores consumed, composing and repeated events and removes the listener", () => {

@@ -34,4 +34,17 @@ describe("bounded timeline DOM and visible actions", () => {
     expect(html).toContain('data-testid="timeline-snap-guide" hidden=""');
     expect(html).toContain("分 : 秒 : 幀");
   });
+  it("publishes the actual viewport frame scale and guarded lane identities for drop routing", () => {
+    const value = props();
+    value.project.fps = 60;
+    value.project.tracks[0]!.locked = true;
+    const html = renderToStaticMarkup(<Timeline {...value} />);
+    expect(html).toContain('data-timeline-viewport="true"');
+    expect(html).toContain('data-timeline-pixels-per-second="80"');
+    expect(html).toContain('data-timeline-fps="60"');
+    expect(html).toContain(`data-track-id="${value.project.tracks[0]!.id}" data-track-kind="video" data-track-locked="true"`);
+    expect(html).toContain('data-drop-zone="blocked"');
+    expect(html).toContain('data-testid="timeline-asset-drop-preview" hidden=""');
+    // Static markup proves routing metadata only; it does not observe live rects or pointer capture.
+  });
 });

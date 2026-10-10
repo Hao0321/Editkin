@@ -8,12 +8,14 @@ export interface TimelineProps {
   selectedCaptionId?: string;
   runtimeUrls: Record<string, string>;
   draggingAssetId?: string;
-  onInsertAsset?: (assetId: string, trackId: string, timelineStart: number) => void;
+  onInsertAsset?: (assetId: string, trackId: string, timelineStart: number) => boolean | void;
+  /** Actual editor passes pause ownership here; standalone read-only fixtures may omit it. */
+  onEditStart?: () => void;
   onSeek: (time: number) => void;
   onSelect: (clipId: string) => void;
   onSelectCaption: (captionId: string) => void;
-  onMoveClip: (clipId: string, timelineStart: number, trackId: string) => void;
-  onMoveCaption: (captionId: string, start: number) => void;
+  onMoveClip: (clipId: string, timelineStart: number, trackId: string) => boolean | void;
+  onMoveCaption: (captionId: string, start: number) => boolean | void;
   onAddCaption: () => void;
   onAddTrack: (kind: "video" | "audio") => void;
   onRenameTrack: (trackId: string, name: string) => void;
@@ -51,6 +53,7 @@ export interface DragSession {
   targetStart: number;
   duration: number;
   originClientX: number;
+  originClientY: number;
   currentClientX: number;
   currentClientY: number;
   originScrollLeft: number;

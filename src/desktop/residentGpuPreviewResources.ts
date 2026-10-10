@@ -10,11 +10,12 @@ export function engineVideoResourcePlanMatches(
   const temporalNodes = graph.nodes.filter((node) => node.kind === "motion_blur" && node.sourceSampling === "decoded_temporal");
   const temporalSampleCount = temporalNodes.length === 1 ? Number(temporalNodes[0].samples) : 0;
   const sceneLinearAces2 = graph.nodes.some((node) => node.kind === "color"
-    && node.processor === "editkin-ocio-aces2-linear-rec709-to-rec709-sdr/v1");
+    && (node.processor === "editkin-ocio-aces2-linear-rec709-to-rec709-sdr/v1" || node.processor === "editkin-ocio-aces2-linear-rec709-to-rec2100-pq-1000/v1"));
+  const nativePaintCount = graph.nodes.filter(node => node.kind === "native_motion_paint").length;
   const sceneDepthAttachmentCount = graph.nodes.some((node) => node.kind === "camera") ? 1 : 0;
   const depthOfFieldPassCount = graph.nodes.some((node) => node.kind === "depth_of_field") ? 1 : 0;
   const expected = estimateGpuEngineVideoResources(graph.width, graph.height, graph.cacheBudgetMb, videoLayerCount, overlayCount,
-    adjustmentCount, matteCount, particleCount, temporalSampleCount, sceneLinearAces2 ? 8 : 4, sceneDepthAttachmentCount, depthOfFieldPassCount);
+    adjustmentCount, matteCount, particleCount, temporalSampleCount, sceneLinearAces2 ? 8 : 4, sceneDepthAttachmentCount, depthOfFieldPassCount, nativePaintCount);
   return Boolean(expected)
     && plan.schema === expected!.schema && plan.width === graph.width && plan.height === graph.height
     && plan.videoLayerCount === videoLayerCount && plan.overlayCount === overlayCount && plan.particleCount === particleCount
@@ -23,6 +24,8 @@ export function engineVideoResourcePlanMatches(
     && plan.temporalSampleCount === expected!.temporalSampleCount && plan.temporalResidentRingSlots === expected!.temporalResidentRingSlots
     && plan.temporalResidentBytes === expected!.temporalResidentBytes && plan.compositorWorkingBytes === expected!.compositorWorkingBytes
     && plan.overlayBytes === expected!.overlayBytes && plan.particleSnapshotCapacityPerEmitter === expected!.particleSnapshotCapacityPerEmitter
+    && (plan.nativePaintCount ?? 0) === nativePaintCount && (plan.nativePaintCpuBytes ?? 0) === expected!.nativePaintCpuBytes
+    && (plan.nativePaintStagingBytes ?? 0) === expected!.nativePaintStagingBytes && (plan.nativePaintGeometryBytes ?? 0) === expected!.nativePaintGeometryBytes
     && plan.particleSnapshotBytes === expected!.particleSnapshotBytes && plan.adjustmentWorkingBytes === expected!.adjustmentWorkingBytes
     && plan.sceneDepthAttachmentCount === expected!.sceneDepthAttachmentCount && plan.sceneDepthBytes === expected!.sceneDepthBytes
     && plan.depthOfFieldPassCount === expected!.depthOfFieldPassCount && plan.depthOfFieldAdditionalWorkingBytes === 0

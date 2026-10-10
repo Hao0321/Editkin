@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nudgeTimelineTime, timelineFrameLabel, resolveTimelineDrag, resolveTimelineDropTarget, resolveTimelineTrim, timelineAutoScrollDelta, timelineTimeAtPointer } from "./timelineInteraction";
+import { nudgeTimelineTime, timelineFrameLabel, resolveTimelineDrag, resolveTimelineDropTarget, resolveTimelineTrim, timelineAutoScrollDelta, timelineTimeAtPointer, visibleTimelineDropLanes } from "./timelineInteraction";
 
 describe("timeline direct manipulation", () => {
   it("coalesces pointer and scroll deltas onto the project frame grid", () => {
@@ -48,7 +48,7 @@ describe("timeline direct manipulation", () => {
       originStart: 0,
       duration: 1,
       originClientX: 10,
-      currentClientX: 12,
+      currentClientX: 11,
       originScrollLeft: 0,
       currentScrollLeft: 0,
       pixelsPerSecond: 80,
@@ -62,6 +62,41 @@ describe("timeline direct manipulation", () => {
     expect(timelineAutoScrollDelta(105, 100, 900)).toBeLessThan(0);
     expect(timelineAutoScrollDelta(895, 100, 900)).toBeGreaterThan(0);
     expect(timelineAutoScrollDelta(500, 100, 900)).toBe(0);
+  });
+
+  it("keeps horizontal edge traversal independent of display refresh rate", () => {
+    const expected = -(1 - 10 / 52) * 360;
+    for (const refreshRate of [24, 60, 144]) {
+      let distance = 0;
+      for (let frame = 0; frame < refreshRate; frame += 1) {
+        distance += timelineAutoScrollDelta(110, 100, 900, 1000 / refreshRate);
+      }
+      expect(distance).toBeCloseTo(expected, 8);
+    }
+    expect(timelineAutoScrollDelta(890, 100, 900, 20))
+      .toBeCloseTo(-timelineAutoScrollDelta(110, 100, 900, 20), 8);
+  });
+
+  it("bounds horizontal velocity and stalled frames without forcing pixel jumps", () => {
+    expect(timelineAutoScrollDelta(100, 100, 900, 10)).toBe(-3.6);
+    expect(timelineAutoScrollDelta(100, 100, 900, 50)).toBe(-18);
+    expect(timelineAutoScrollDelta(100, 100, 900, 2000)).toBe(-18);
+    expect(Math.abs(timelineAutoScrollDelta(151.9, 100, 900, 1000 / 144))).toBeLessThan(1);
+    expect(timelineAutoScrollDelta(100.001, 100, 102, 10)).toBeCloseTo(-3.5964, 8);
+    expect(timelineAutoScrollDelta(101, 100, 102, 10)).toBe(0);
+  });
+
+  it("stops horizontal traversal outside content or on invalid geometry and time", () => {
+    for (const x of [99, 900, 950, NaN, Infinity]) {
+      expect(timelineAutoScrollDelta(x, 100, 900, 16)).toBe(0);
+    }
+    for (const elapsed of [0, -1, NaN, Infinity]) {
+      expect(timelineAutoScrollDelta(110, 100, 900, elapsed)).toBe(0);
+    }
+    expect(timelineAutoScrollDelta(100, 100, 100, 16)).toBe(0);
+    expect(timelineAutoScrollDelta(100, 900, 100, 16)).toBe(0);
+    expect(timelineAutoScrollDelta(100, NaN, 900, 16)).toBe(0);
+    expect(timelineAutoScrollDelta(100, 0, Infinity, 16)).toBe(0);
   });
 
   it("accepts only the content rectangle of an unlocked compatible lane", () => {
@@ -128,5 +163,87 @@ describe("timeline direct manipulation", () => {
   it("skips a closer magnet that would overlap another clip", () => {
     const result = resolveTimelineDrag({ originStart: 0, duration: 2, originClientX: 0, currentClientX: 156, originScrollLeft: 0, currentScrollLeft: 0, pixelsPerSecond: 80, fps: 30, snapCandidates: [1.9666666666666666, 2], isStartAllowed: start => start >= 2 });
     expect(result).toMatchObject({ start: 2, snappedTo: 2 });
+  });
+
+  it("activates an actual 30fps frame below the former three-pixel threshold", () => {
+    const result = resolveTimelineDrag({ originStart: 1, duration: 2, originClientX: 100, currentClientX: 100 + 80 / 30,
+      originScrollLeft: 0, currentScrollLeft: 0, pixelsPerSecond: 80, fps: 30, snapCandidates: [1] });
+    expect(result.start).toBe(31 / 30);
+    expect(result.moved).toBe(true);
+    expect(result.snappedTo).toBeUndefined();
+  });
+
+  it("activates an actual 60fps frame below the former three-pixel threshold", () => {
+    const result = resolveTimelineDrag({ originStart: 1, duration: 2, originClientX: 100, currentClientX: 100 + 80 / 60,
+      originScrollLeft: 0, currentScrollLeft: 0, pixelsPerSecond: 80, fps: 60, snapCandidates: [1] });
+    expect(result.start).toBe(61 / 60);
+    expect(result.moved).toBe(true);
+    expect(result.snappedTo).toBeUndefined();
+  });
+
+  it("activates one fractional-fps frame with current scroll included", () => {
+    const fps = 30000 / 1001, origin = 30 / fps;
+    const result = resolveTimelineDrag({ originStart: origin, duration: 2, originClientX: 100, currentClientX: 100,
+      originScrollLeft: 10, currentScrollLeft: 10 + 80 / fps, pixelsPerSecond: 80, fps, snapCandidates: [origin] });
+    expect(result.start).toBe(31 / fps);
+    expect(result.moved).toBe(true);
+  });
+
+  it("keeps stationary and same-frame pointer jitter free of magnets", () => {
+    const common = { originStart: 1, duration: 2, originClientX: 100, originScrollLeft: 0, currentScrollLeft: 0,
+      pixelsPerSecond: 80, fps: 30, snapCandidates: [1 + 1 / 30, 3 + 1 / 30] };
+    expect(resolveTimelineDrag({ ...common, currentClientX: 100 })).toMatchObject({ start: 1, moved: false });
+    const jitter = resolveTimelineDrag({ ...common, currentClientX: 101 });
+    expect(jitter).toMatchObject({ start: 1, moved: false });
+    expect(jitter.snappedTo).toBeUndefined();
+  });
+
+  it("does not let an origin magnet undo a half-frame crossing", () => {
+    const result = resolveTimelineDrag({ originStart: 1, duration: 2, originClientX: 100, currentClientX: 101.6,
+      originScrollLeft: 0, currentScrollLeft: 0, pixelsPerSecond: 80, fps: 30, snapCandidates: [1] });
+    expect(result).toMatchObject({ start: 31 / 30, moved: true });
+    expect(result.snappedTo).toBeUndefined();
+  });
+
+  it("returns to a no-change result when the final pointer returns to its origin", () => {
+    const common = { originStart: 1, duration: 2, originClientX: 100, originScrollLeft: 0, currentScrollLeft: 0,
+      pixelsPerSecond: 80, fps: 30, magnetEnabled: false };
+    expect(resolveTimelineDrag({ ...common, currentClientX: 180 }).moved).toBe(true);
+    expect(resolveTimelineDrag({ ...common, currentClientX: 100 })).toMatchObject({ start: 1, moved: false });
+  });
+
+  it("clips real lane rectangles to the viewport and excludes labels, ruler and hidden rows", () => {
+    const lanes = visibleTimelineDropLanes([
+      { trackId: "hidden", trackKind: "video" as const, locked: false, left: -400, right: 1800, top: 40, bottom: 150 },
+      { trackId: "partly-visible", trackKind: "video" as const, locked: false, left: -400, right: 1800, top: 140, bottom: 204 },
+      { trackId: "locked", trackKind: "video" as const, locked: true, left: -400, right: 1800, top: 204, bottom: 256 },
+      { trackId: "audio", trackKind: "audio" as const, locked: false, left: -400, right: 1800, top: 256, bottom: 308 },
+    ], { left: 288, right: 1100, top: 152, bottom: 300 });
+    expect(lanes.map(lane => lane.trackId)).toEqual(["partly-visible", "locked", "audio"]);
+    expect(lanes[0]).toMatchObject({ left: 288, right: 1100, top: 152, bottom: 204 });
+    expect(resolveTimelineDropTarget(400, 170, "video", lanes)?.trackId).toBe("partly-visible");
+    expect(resolveTimelineDropTarget(200, 170, "video", lanes)).toBeUndefined();
+    expect(resolveTimelineDropTarget(400, 150, "video", lanes)).toBeUndefined();
+    expect(resolveTimelineDropTarget(400, 220, "video", lanes)).toBeUndefined();
+    expect(resolveTimelineDropTarget(400, 275, "video", lanes)).toBeUndefined();
+    expect(resolveTimelineDropTarget(1100, 170, "video", lanes)).toBeUndefined();
+    expect(resolveTimelineDropTarget(400, 300, "audio", lanes)).toBeUndefined();
+  });
+
+  it("uses newly measured lane positions after vertical scroll or resize", () => {
+    const viewport = { left: 288, right: 1100, top: 152, bottom: 300 };
+    const lane = { trackId: "video", trackKind: "video" as const, locked: false, left: 288, right: 1500, top: 204, bottom: 256 };
+    expect(resolveTimelineDropTarget(400, 220, "video", visibleTimelineDropLanes([lane], viewport))?.trackId).toBe("video");
+    const current = visibleTimelineDropLanes([{ ...lane, top: 152, bottom: 204 }], { ...viewport, right: 700 });
+    expect(resolveTimelineDropTarget(400, 220, "video", current)).toBeUndefined();
+    expect(resolveTimelineDropTarget(400, 170, "video", current)?.trackId).toBe("video");
+    expect(resolveTimelineDropTarget(800, 170, "video", current)).toBeUndefined();
+  });
+
+  it("accepts a one-frame trim at low zoom while leaving same-frame jitter unchanged", () => {
+    const common = { edge: "start" as const, originStart: 1, duration: 2, originClientX: 100,
+      pixelsPerSecond: 80, fps: 60, snapCandidates: [1, 1 + 1 / 60] };
+    expect(resolveTimelineTrim({ ...common, currentClientX: 100 + 80 / 60 })).toMatchObject({ trimSeconds: 1 / 60, moved: true });
+    expect(resolveTimelineTrim({ ...common, currentClientX: 100.5 })).toMatchObject({ trimSeconds: 0, moved: false });
   });
 });

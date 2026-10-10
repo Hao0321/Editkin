@@ -31,6 +31,7 @@ function fixture() {
     api: api as unknown as HaoDesktopApi, session, loadOpenedProject,
     setStatus: status, setRuntimeUrls: vi.fn(), setSelectedClipId: vi.fn(),
     setSelectedCaptionId: vi.fn(), setPlayhead: vi.fn(), setPlaying: vi.fn(),
+    setPlaybackRate: vi.fn(),
     setTrackingMode: vi.fn(), setTrackingSelection: vi.fn(),
   });
   const edit = (name: string) => session.setHistory(state => dispatchCommand(state, { type: "rename_project", name }));

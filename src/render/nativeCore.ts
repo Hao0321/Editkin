@@ -1,5 +1,8 @@
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { spawn } from "node:child_process";
+import { access, mkdtemp, rm, rmdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readBoundedFile } from "../shared/boundedFile";
+import type { NativePaintScene, PaintPose } from "../motion/nativeGlyphPaint";
+import { runProcess } from "./mediaProcess";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { EditProject } from "../domain/types";
@@ -185,26 +188,46 @@ export interface NativeAutoRotoReceipt {
   frozen: true;
 }
 
-function run(executable: string, args: string[], timeoutMs = 30_000): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    const timer = setTimeout(() => { child.kill(); reject(new Error("hao-core 執行逾時")); }, timeoutMs);
-    child.stdout.on("data", (chunk) => { stdout += String(chunk); });
-    child.stderr.on("data", (chunk) => { stderr = `${stderr}${String(chunk)}`.slice(-8_000); });
-    child.on("error", (error) => { clearTimeout(timer); reject(error); });
-    child.on("exit", (code) => {
-      clearTimeout(timer);
-      if (code === 0) resolve(stdout.trim());
-      else reject(new Error(stderr.trim() || `hao-core exit ${code}`));
-    });
-  });
+async function run(executable: string, args: string[], timeoutMs = 30_000): Promise<string> {
+  // Graph/planner JSON must never become the runner's default diagnostic tail.
+  return (await runProcess(executable, args, timeoutMs, { completeStdoutMaxChars: 16 * 1024 * 1024 })).stdout.trim();
 }
 
 export async function nativeCoreAvailable(executable?: string): Promise<boolean> {
   if (!executable) return false;
   try { await access(executable); return true; } catch { return false; }
+}
+
+/** Common native pixel transport. Callers must compile glyphs from current
+ * physical font bytes; serialized contours do not carry font authority.
+ * This is a frame primitive, not a project render or an alternate v4 route. */
+export async function renderNativeMotionPaintFrame(scene: NativePaintScene, poses: readonly PaintPose[], executable: string): Promise<{
+  width: number; height: number; rgba: Uint8Array; rgbaSha256: string;
+}> {
+  if (!Number.isSafeInteger(scene.width) || !Number.isSafeInteger(scene.height) || scene.width < 1 || scene.height < 1
+    || scene.width > 8192 || scene.height > 8192 || scene.width * scene.height > 8_294_400 || scene.background[3] !== 0) {
+    throw new Error("Native paint requires bounded dimensions and a transparent overlay");
+  }
+  const workspace = await mkdtemp(join(tmpdir(), "editkin-native-paint-"));
+  const input = join(workspace, "request.json"), output = join(workspace, "frame.rgba");
+  try {
+    const payload = JSON.stringify({ schema: "editkin.native-motion-paint-frame/v1", scene, poses, outputPath: output });
+    if (Buffer.byteLength(payload, "utf8") > 4_194_304) throw new Error("Native paint request exceeds 4 MiB");
+    await writeFile(input, payload, "utf8");
+    const receipt = JSON.parse(await run(executable, ["engine-motion-paint-frame", input]));
+    const bytes = scene.width * scene.height * 4;
+    if (receipt.schema !== "editkin.native-motion-paint-frame/v1" || receipt.width !== scene.width || receipt.height !== scene.height
+      || receipt.bytes !== bytes || receipt.encoding !== "straight-srgb-rgba8" || receipt.interpolation !== "scene-linear-premultiplied") {
+      throw new Error("Native paint receipt does not match the requested pixels");
+    }
+    const rgba = await readBoundedFile(output, bytes), rgbaSha256 = createHash("sha256").update(rgba).digest("hex");
+    if (rgba.length !== bytes || rgbaSha256 !== receipt.rgbaSha256) throw new Error("Native paint bytes differ from native receipt");
+    return { width: scene.width, height: scene.height, rgba, rgbaSha256 };
+  } finally {
+    // Retire only these two generated files; never recursively delete a
+    // supplied path or an unknown file that appeared in this directory.
+    await rm(input, { force: true }); await rm(output, { force: true }); await rmdir(workspace);
+  }
 }
 
 export async function createNativePlan(project: EditProject, executable: string): Promise<NativePlan> {

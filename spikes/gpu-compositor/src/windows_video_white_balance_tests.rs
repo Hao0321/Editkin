@@ -24,7 +24,7 @@ fn rgba_texture(compositor: &GpuCompositor, pixel: [u8; 4]) -> wgpu::Texture {
     texture
 }
 fn layer(source: &wgpu::Texture, style: VideoVisualStyle) -> VideoSurfaceLayer<'_> {
-    VideoSurfaceLayer { source, temporal_sources: None, source_width: W, source_height: H, style, matte: None }
+    VideoSurfaceLayer { source, temporal_sources: None, source_width: W, source_height: H, style, matte: None, display_referred: false }
 }
 fn pixel(path: &Path) -> [u8; 4] { image::open(path).unwrap().to_rgba8().get_pixel(W / 2, H / 2).0 }
 fn close(actual: [u8; 4], expected: [u8; 4], tolerance: u8, label: &str) {

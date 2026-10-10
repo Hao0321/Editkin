@@ -36,7 +36,24 @@ function verifyFace(bytes,face,font) {
   return data;
 }
 export function generated(manifest) {
-  return {index:JSON.stringify(manifest.fonts.map(f=>[f.family,f.id,f.faces.map(face=>face.weight)]))+'\n',css:manifest.fonts.flatMap(f=>f.faces.map(face=>`@font-face{font-family:"${face.family}";src:url("/fonts/${f.file}") format("truetype");font-style:normal;font-weight:${face.weight};font-display:swap;}`)).join('\n')+'\n'};
+  // Preview aliases must resolve to the same validated static bytes as ASS;
+  // the original variable face is provenance, not this physical alias.
+  return {index:JSON.stringify(manifest.fonts.map(f=>[f.family,f.id,f.faces.map(face=>face.weight)]))+'\n',css:manifest.fonts.flatMap(f=>f.faces.map(face=>`@font-face{font-family:"${face.family}";src:url("/fonts/${face.file}") format("truetype");font-style:normal;font-weight:${face.weight};font-display:swap;}`)).join('\n')+'\n'};
+}
+// Independently bind each CSS request to the physical manifest face. Merely
+// regenerating a matching CSS file cannot validate a variable-source alias.
+function verifyPreviewFontAliases(css,manifest) {
+  const rows=css.trimEnd().split('\n'),expected=manifest.fonts.flatMap(font=>font.faces);
+  assert.equal(rows.length,expected.length,'Preview font alias count mismatch');
+  const seen=new Set();
+  for(const row of rows){
+    const match=/^@font-face\{font-family:"([^"]+)";src:url\("\/fonts\/([^"]+)"\) format\("truetype"\);font-style:normal;font-weight:(\d+);font-display:swap;\}$/.exec(row);
+    assert(match,'Malformed preview font alias');
+    const [,family,file,weight]=match,face=expected.find(item=>item.family===family);
+    assert(face&&!seen.has(family),'Unknown or duplicate preview font alias');seen.add(family);
+    assert.equal(file,face.file,'Preview must request the validated static export face');
+    assert.equal(Number(weight),face.weight,'Preview font alias weight mismatch');
+  }
 }
 const args=process.argv.slice(2),root=resolve(args.find(a=>!a.startsWith('--'))??'public/fonts');
 const generatedArg=args.find(a=>a.startsWith('--generated-dir='));const generatedDir=resolve(generatedArg?.split('=').slice(1).join('=')??'src/generated');
@@ -61,6 +78,7 @@ const provenance=await readFile(add(manifest.staticFaceProvenance.file));assert.
 assert.deepEqual(p.families,manifest.fonts.map(f=>({id:f.id,sourceSha256:f.sha256,licenseSha256:f.licenseSha256,axes:sourceAxes.get(f.id),weights:f.faces.map(face=>face.weight)})),'Provenance axes/source/weight mapping differs');
 closedWorld(files,expected);assert.equal(faces.length,43);
 const products=generated(manifest);
+verifyPreviewFontAliases(products.css,manifest);
 const metrics=await deriveFontEmMetrics(root);
 if(args.includes('--write-generated')||args.includes('--refresh-generated')){assert(generatedArg,'Explicit generated-dir required for writes');await mkdir(generatedDir,{recursive:true});const options=args.includes('--refresh-generated')?undefined:{flag:'wx'};await writeFile(resolve(generatedDir,'fontFaceIndex.json'),products.index,options);await writeFile(resolve(generatedDir,'fontFaces.css'),products.css,options);await writeFile(resolve(generatedDir,'fontEmMetrics.json'),JSON.stringify(metrics)+'\n',options);}
 assert.equal(await readFile(resolve(generatedDir,'fontFaceIndex.json'),'utf8'),products.index,'Generated index differs');assert.equal(await readFile(resolve(generatedDir,'fontFaces.css'),'utf8'),products.css,'Generated CSS differs');
@@ -76,6 +94,9 @@ if(args.includes('--self-test')){
   assert.throws(()=>add(manifest.fonts[0].faces[0].file));negatives++;
   assert.throws(()=>assert.equal(products.index+' ',products.index));negatives++;
   assert.throws(()=>assert.equal(products.css.replace('weight:100','weight:101'),products.css));negatives++;
+  const firstFont=manifest.fonts[0],firstFace=firstFont.faces[0];
+  assert.throws(()=>verifyPreviewFontAliases(products.css.replace(`/fonts/${firstFace.file}`,`/fonts/${firstFont.file}`),manifest),/validated static export face/);negatives++;
+  assert.throws(()=>verifyPreviewFontAliases(products.css.replace(firstFace.family,'Unknown Font Alias'),manifest),/Unknown or duplicate/);negatives++;
   const badMetrics=structuredClone(metrics);badMetrics.faces[0].assAscender++;assert.throws(()=>verifyFontEmMetrics(JSON.stringify(badMetrics)+'\n',metrics));negatives++;
 }
 console.log(JSON.stringify({status:'VERIFIED_FONT_ASSET_CONTRACT_ONLY',root,fontCount:manifest.fonts.length,faceCount:faces.length,files:files.length,negatives}));

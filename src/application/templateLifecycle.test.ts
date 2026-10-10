@@ -18,6 +18,29 @@ function ids() {
 }
 
 describe("template application lifecycle", () => {
+  it("replaces three-source gallery templates and restores geometry without deleting user-added clips", () => {
+    const source = createDemoProject(); source.width = 1080; source.height = 1920;
+    const original = source.assets[0];
+    source.assets.push({ ...original, id: "source-two" }, { ...original, id: "source-three" });
+    const content = { title: "我的三個角度", sources: { rearRight: { assetId: "source-two", sourceStart: 0 }, front: { assetId: "source-three", sourceStart: 0 } } };
+    const makeId = ids();
+    const applied = parseProject(JSON.parse(JSON.stringify(applyCommand(source, buildShortFormTemplateCommand(source, "spatial_gallery", makeId, content)))));
+    expect(applied.templateApplication?.generatedClips).toHaveLength(2);
+    expect(applied.tracks.flatMap(track => track.clips)).toHaveLength(3);
+    expect(new Set(applied.tracks.flatMap(track => track.clips).map(clip => clip.assetId)).size).toBe(3);
+    const replaced = applyCommand(applied, buildShortFormTemplateCommand(applied, "spatial_gallery", makeId, { ...content, title: "替換後的標題" }));
+    expect(replaced.tracks.flatMap(track => track.clips)).toHaveLength(3);
+    expect(replaced.motionGraphics.map(graphic => graphic.text)).toEqual(["替換後的標題"]);
+    expect(replaced.captions).toEqual(source.captions);
+    const track = replaced.tracks.find(row => row.id === replaced.templateApplication!.generatedClips![0].trackId)!;
+    const userClip = { ...structuredClone(source.tracks[0].clips[0]), id: "user-added", trackId: track.id, timelineStart: 15, duration: 1 };
+    const withUser = applyCommand(replaced, { type: "add_clip", clip: userClip });
+    const restored = applyCommand(withUser, { type: "clear_template_application" });
+    expect(restored.tracks.flatMap(row => row.clips).map(clip => clip.id)).toEqual([source.tracks[0].clips[0].id, "user-added"]);
+    expect(restored.tracks[0].clips[0].floatingFrame).toEqual(source.tracks[0].clips[0].floatingFrame);
+    expect(restored.motionGraphics).toEqual(source.motionGraphics);
+    expect(() => buildShortFormTemplateCommand(source, "spatial_gallery", ids(), { ...content, sources: { rearRight: content.sources.front, front: content.sources.front } })).toThrow(/三個不同/);
+  });
   it("uses explicit ownership and never treats user copy or ID prefixes as ownership", () => {
     const source = createDemoProject();
     source.captions.push({ id: "template-caption-user", text: "真人字幕", start: 0, duration: 1 });
@@ -70,8 +93,8 @@ describe("template application lifecycle", () => {
     const makeId = ids();
     const first = applyCommand(source, buildShortFormTemplateCommand(source, "bold_hook", makeId));
     const second = applyCommand(first, buildLongFormTemplateCommand(first, "interview_story", makeId));
-    expect(second.motionGraphics.filter(isTemplateGeneratedGraphic)).toHaveLength(4);
-    expect(second.captions.filter(isTemplateGeneratedCaption)).toHaveLength(1);
+    expect(second.motionGraphics.filter(isTemplateGeneratedGraphic)).toHaveLength(0);
+    expect(second.captions.filter(isTemplateGeneratedCaption)).toHaveLength(0);
     expect(second.director.markers.filter(isTemplateGeneratedMarker)).toHaveLength(3);
     expect(second.templateApplication).toMatchObject({ templateId: "interview_story", format: "long" });
     const cleared = applyCommand(second, { type: "clear_template_application" });

@@ -6,13 +6,17 @@ Everything below was derived from the source, configuration, and docs in this ch
 
 ---
 
+## Current contribution baseline — 2026-10-05
+
+Read `docs/DEVELOPMENT_STATUS.md` before implementing a feature. PR #77 and `feat/latest-agent-engine-20261001` contain the current source integration. Extend existing original Motion, painted revision, media/typography and v4 workflow modules instead of creating a second execution pipeline. A complete accepted journey still requires current output and platform evidence; the maintainer ledger remains 3/37. This source update does not certify an installed native runtime or an official installer.
+
 ## 1. What this project is
 
 Editkin (`package.json` name `editkin`, product name "Editkin", version `0.15.0`, author Hao0321 Studio) is a **local-first, AI-native video editor** with an editable timeline.
 
 Core concepts:
 
-- **EditGraph**: the single source of truth for a project (`EditProject`, `src/domain/types.ts`). Current `schemaVersion` is **8**; versions 1–7 are upgraded by `migrateProject` in `src/domain/editGraph.ts`.
+- **EditGraph**: the single source of truth for a project (`EditProject`, `src/domain/types.ts`). Current `schemaVersion` is **9 or 10** (new projects start at 9); legacy versions migrate through `migrateProject` in `src/domain/editGraph.ts`. Version 10 preserves the current painted-media authoring contract.
 - **EditorCommand**: every mutation is a structured command (`src/domain/commandTypes.ts`). The UI, the MCP server, agents, and plugins all go through the same command path.
 - **MCP server** (`npm run mcp`, `src/mcp/server.ts`): lets an external agent inspect media, prepare/audit/apply an editable "v4 plan", and render, using the same commands as the UI. The agent makes editorial decisions; Editkin is the engine.
 - **Video Autopilot Kit** (external repo `Hao0321/video-autopilot-kit`) supplies agent-side editing rules. It is optional and not vendored here; `EDITKIN_VIDEO_AUTOPILOT_SKILL` points at its `codex-skill/video-autopilot/SKILL.md`. `video-autopilot-skill-integration.json` declares `sourcePolicy: "community-optional-skills"` with no dependencies.
@@ -22,6 +26,12 @@ Core concepts:
 This repository is the **community source edition**. It contains neutral default presets, a neutral Wave 2 registry, a tiny community knowledge example, synthetic FFmpeg `lavfi` demo MP4s, and five pinned SIL OFL fonts. It does **not** contain the maintainer's private creative packs, music, personal Skills, model weights, signing credentials, or prebuilt media runtimes (FFmpeg, whisper.cpp, ONNX Runtime). The owner visual grant is absent and its claims fail closed. License: GPL-3.0-or-later (fonts carry their own OFL 1.1 notices; the ACES config carries its upstream license). Official branding and release signing stay with the maintainer (`TRADEMARKS.md`).
 
 ---
+
+## Current mesh and agent workflow scope
+
+Video Autopilot workflow revision 6 uses the v4 material → audit → apply → render → policy-bound visual review → outcome chain. An authorized agent review is recorded as agent_review and never as a human approval.
+
+Optional scene3d data uses the shared CPU triangle/z-buffer executor with physical Noto Sans TC 700/900 font faces. This is bounded opaque Rec.709 geometry, not GPU PBR or complete 3D feature parity. The three rejected mesh recipes remain DESIGN_REWORK: UI creation is withdrawn, MCP discovery is empty, and prepare rejects before project IO. Existing research scenes remain editable. See docs/mesh3d-scenes.md.
 
 ## 2. Tech stack
 
@@ -35,7 +45,7 @@ This repository is the **community source edition**. It contains neutral default
 | Native | Rust: `native/hao-core` (frame/timebase alignment, render scheduling, CPU reference executor, auto-roto, effect plugin runner), `spikes/gpu-compositor`, `native/shared/owned_process`, `native/effect-sdk` (C ABI headers `editkin_effect_plugin_v1.h`/`v2.h`), `native/effect-test-plugin` |
 | Runtime | Node `>=22.13` (CI pins 22.23.2). ESM (`"type": "module"`). `node:sqlite` is used in `projectFiles.ts`, so use a Node that provides it |
 
-Runtime dependencies are deliberately tiny: `react`, `react-dom`, `zod`, `qrcode`, `@tauri-apps/api`, and the two MCP packages. Do not add dependencies for trivial functionality.
+Runtime dependencies are deliberately tiny: `react`, `react-dom`, `zod`, `qrcode`, `@tauri-apps/api`, the two MCP packages, `three` (mesh geometry), and `opentype.js` (font outlines). Do not add dependencies for trivial functionality.
 
 ---
 
@@ -137,7 +147,7 @@ Note that `src/mcp` reaches `src/application` freely, and `src/application` is t
 
 ## 6. Core invariants
 
-1. **All project mutation goes through `EditorCommand` → `applyCommand`** (`src/domain/commands.ts`). `applyCommand` is pure: try the fast path (`applyFastCommand`), otherwise `cloneProject` → `commandInternal` → normalize (creative transitions, motion references, layer state) → `touch` (monotonic `updatedAt`) → `validateProject` (plus aesthetic revalidation). Never mutate an `EditProject` in place from UI, MCP, or plugin code.
+1. **All project mutation goes through `EditorCommand` → `applyCommand`** (`src/domain/commands.ts`). `applyCommand` is pure: try the fast path (`applyFastCommand`), otherwise `cloneProject` → `commandInternal` → normalize (creative transitions, motion references; optional clip `layer`/`expressions` keep their authored omission) → `touch` (monotonic `updatedAt`) → `validateProject` (plus aesthetic revalidation). Never mutate an `EditProject` in place from UI, MCP, or plugin code.
 2. **Adding a command touches several places**, keep them in sync: the union in `commandTypes.ts`; the implementation in `commands.ts` / `timelineCommands.ts` / `fastCommands.ts`; the agent-visible zod contract `editorCommandSchema` in `src/mcp/schemas.ts`; the persisted-project schema in `src/domain/schema.ts` if state shape changes; `agent.ts` if natural-language compilation is affected; plugin allowlists in `src/plugins` if plugins may use it. `fastCommands.ts` must keep the same validation semantics as the normal path and must preserve reference equality for untouched project branches (asserted in `history.test.ts`).
 3. **Time is frame-aligned.** Use `alignTime(value, fps)` (`Math.round(value * fps) / fps`). The Rust `hao-core` planner and the TypeScript planner (`src/render/planner.ts`, `nativeCore.ts`) must produce equivalent frame boundaries on the frozen corpus; the TS planner is the fallback on unsupported platforms. If you change trim/split/segment logic, inspect both.
 4. **History semantics** (`src/domain/history.ts`): `dispatchCommand` keeps the last 100 `past` snapshots and appends to `journal`; the UI uses `dispatchCommandSafely`, which returns the original state plus an error message on failure (the mounted editor state must survive an invalid command). Undo/redo must never roll back the on-disk `revision`.

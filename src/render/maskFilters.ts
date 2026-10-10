@@ -131,7 +131,11 @@ export function buildClipMaskAlphaFilters(plan: ClipAlphaPlan, input: MaskAlphaF
     const source = operation.source === "vector" ? seeds[vectorIndex++] : pixelMatteLabel!;
     const plane = `${outputLabel}op${index}`;
     const sigma = maskOperationFeatherSigma(operation, width, height);
-    filters.push(`[${source}]geq=lum='${pixelMaximum}*(${operationExpression(operation, width, height, pixelMaximum)})'${sigma > .1 ? `,gblur=sigma=${n(sigma)}` : ""}[${plane}]`);
+    // An authored static vector does not depend on footage alpha or time.
+    // Rasterize it once, then repeat its plane at the clip's fixed frame rate.
+    // The protected, changing source alpha is still multiplied on every frame.
+    const staticVector = operation.source === "vector" && operation.samples.length === 0;
+    filters.push(`[${source}]${staticVector ? "trim=end_frame=1," : ""}geq=lum='${pixelMaximum}*(${operationExpression(operation, width, height, pixelMaximum)})'${sigma > .1 ? `,gblur=sigma=${n(sigma)}` : ""}${staticVector ? ",loop=loop=-1:size=1:start=0,setpts=N/FRAME_RATE/TB" : ""}[${plane}]`);
     if (index === 0) accumulated = plane;
     else {
       const next = `${outputLabel}stack${index}`;

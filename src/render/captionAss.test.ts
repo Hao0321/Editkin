@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createDemoProject } from "../domain/demo";
 import { masterAudioFilter, writeAssContent } from "./ffmpeg";
 import { findMotionGraphicPreset } from "../creative/motionGraphicPresets";
-import { createMotionGraphic } from "../motion/composition";
+import { createMotionGraphic, legacyMotionGraphicSeed } from "../motion/composition";
 import { motionGraphicV2LayoutReceipt } from "../motion/compositionV2";
 import { buildAssFilter } from "./captionAss";
 
@@ -21,7 +21,7 @@ describe("ASS caption output", () => {
   });
   it("preserves v1 fade timing while honoring graphic and translated-text alpha", () => {
     const project=createDemoProject();
-    const graphic=createMotionGraphic("legacy","title","走走",0,3);
+    const graphic=createMotionGraphic("legacy","title","走走",0,3,undefined,legacyMotionGraphicSeed("title"));
     graphic.textColor="#FFFFFF33";graphic.backgroundColor="#11223380";graphic.accentColor="#44556640";
     project.motionGraphics=[graphic];
     project.captions=[{id:"bilingual",start:0,duration:3,text:"原文",translation:{text:"Translation",language:"en"}}];
@@ -39,7 +39,7 @@ describe("ASS caption output", () => {
     graphic.backgroundColor="#00000000";graphic.textColor="#FFFFFF33";graphic.accentColor="#11223380";
     project.motionGraphics=[graphic];
     const ass=writeAssContent(project,project.captionStyle);
-    expect(ass).toContain("\\1c&H000000&\\1a&HFF&");
+    expect(ass).not.toContain("\\1c&H000000&\\1a&HFF&");
     expect(ass).toContain("\\1c&HFFFFFF&\\1a&HCC&");
     expect(ass).toContain("\\3c&H332211&\\3a&H7F&");
     expect(ass).toContain("\\4c&H332211&\\4a&H7F&");
@@ -49,7 +49,7 @@ describe("ASS caption output", () => {
     const project = createDemoProject();
     project.captionStyle.backgroundColor = "#000000";
     project.captions = [{id:"speech",text:"白字黑底",start:0,duration:3}];
-    project.motionGraphics = [createMotionGraphic("card","card","卡片",0,3),createMotionGraphic("motion","title","主標",0,3,undefined,findMotionGraphicPreset("v2-word-cascade").seed)];
+    project.motionGraphics = [createMotionGraphic("card","card","卡片",0,3,undefined,legacyMotionGraphicSeed("card")),createMotionGraphic("motion","title","主標",0,3,undefined,findMotionGraphicPreset("v2-word-cascade").seed)];
     const ass=writeAssContent(project,project.captionStyle);
     const lines=ass.split("\n");
     expect(lines.find(line=>line.startsWith("Style: Default,"))?.split(",")[15]).toBe("3");
@@ -70,7 +70,9 @@ describe("ASS caption output", () => {
     const project = createDemoProject();
     project.captionStyle.backgroundColor = backgroundColor;
     const ass = writeAssContent(project, project.captionStyle);
-    expect(ass).toContain(`,${borderStyle},${project.captionStyle.outlineWidth},${project.captionStyle.shadow},${project.captionStyle.alignment},40,40,${project.captionStyle.marginV},1`);
+    const fields = ass.split("\n").find(line => line.startsWith("Style: Default,"))!.split(",");
+    expect(fields[15]).toBe(String(borderStyle));
+    expect(Number(fields[16])).toBe(borderStyle === 3 ? 8 : project.captionStyle.outlineWidth);
   });
 
   it("uses the requested translucent background as the actual libass box color", () => {
@@ -82,6 +84,17 @@ describe("ASS caption output", () => {
     expect(fields[5]).toBe("&H4C000000");
     expect(fields[6]).toBe("&H4C000000");
     expect(fields[15]).toBe("3");
+  });
+
+  it("keeps a translucent subtitle box visible when text outline is disabled", () => {
+    const project = createDemoProject();
+    project.captionStyle.backgroundColor = "#000000B8";
+    project.captionStyle.outlineWidth = 0;
+    const styleLine = writeAssContent(project, project.captionStyle).split("\n").find(line => line.startsWith("Style: Default,"))!;
+    const fields = styleLine.split(",");
+    expect(fields[15]).toBe("3");
+    expect(Number(fields[16])).toBeGreaterThan(0);
+    expect(fields[5]).toBe("&H47000000");
   });
 
   it("delegates Unicode wrapping to libass without shrinking or changing editable text", () => {
@@ -110,7 +123,7 @@ describe("ASS caption output", () => {
     project.captionStyle.translationFontSize = 32;
     project.captionStyle.translationColor = "#FF66CC";
     const ass = writeAssContent(project, project.captionStyle);
-    expect(ass).toContain(",3,4,1,2,40,40,72,1");
+    expect(ass).toContain(",3,8,1,2,40,40,72,1");
     expect(ass).toContain("大家好\\N{\\fnEditkinFace bebas-neue 400\\fs32");
     expect(ass).toContain("Hello everyone");
     expect(ass).toContain("\\1c&HCC66FF&\\1a&H00&");
@@ -152,6 +165,18 @@ describe("ASS caption output", () => {
     expect(ass).toContain("TWO");
     expect(ass).toContain("THREE");
     expect(ass).not.toContain("\\fad(180,140)");
+  });
+
+  it("keeps transparent scene typography free of a residual panel border", () => {
+    const project = createDemoProject();
+    const graphic = createMotionGraphic("scene-word", "title", "SPARK", 0, 1, undefined,
+      findMotionGraphicPreset("mv_illustrated_word").seed);
+    project.motionGraphics.push(graphic);
+    const ass = writeAssContent(project, project.captionStyle);
+    expect(ass).toContain("MotionCompositionV2Receipt: scene-word,");
+    expect(ass).toContain("}S");
+    expect(ass).toContain("}P");
+    expect(ass).not.toContain("\\p1\\bord0\\shad0");
   });
 });
 

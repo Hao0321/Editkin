@@ -82,6 +82,7 @@ describe("native effect preview labels", () => {
       project={project}
       nativeGpuPreview
       gpuPreviewAdmission="engine-video-native"
+      bakedCaptionIds={["native-caption"]}
       playing={false}
       onPlayingChange={() => undefined}
       onPlayheadChange={() => undefined}

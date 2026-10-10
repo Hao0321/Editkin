@@ -62,6 +62,17 @@ async function decodedFixture(name: string, masks: ClipMask[], sourceAlpha: (x: 
 }
 
 describe("formal compositor per-operation feather isolation", () => {
+  it("reuses a static feathered plane while preserving changing source alpha frame by frame", () => {
+    const project = createDemoProject(), clip = project.tracks[0].clips[0];
+    const mask = rectangle("cached-static"); mask.feather = .1; clip.masks = [mask];
+    const graph = buildClipMaskAlphaFilters(compileClipAlphaPlan(project, clip), { sourceAlphaLabel: "0:v", outputLabel: "alpha", width, height }).join(";");
+    const frames = Buffer.concat([Buffer.alloc(width * height, 0), Buffer.alloc(width * height, 128), Buffer.alloc(width * height, 255)]);
+    const child = spawnSync(ff, ["-v", "error", "-f", "rawvideo", "-pixel_format", "gray", "-video_size", `${width}x${height}`, "-framerate", "30", "-i", "pipe:0",
+      "-filter_complex", graph, "-map", "[alpha]", "-frames:v", "3", "-pix_fmt", "gray", "-f", "rawvideo", "-"], { input: frames, windowsHide: true, timeout: 30000, maxBuffer: 1024 * 1024 });
+    expect(child.status, child.stderr?.toString()).toBe(0); expect(child.stdout.length).toBe(frames.length);
+    for (const [frame, value] of [0, 128, 255].entries()) expect(child.stdout[frame * width * height + 16 * width + 32]).toBe(value);
+  });
+
   it("keeps the existing source-alpha discontinuity under a feathered full-frame mask", async () => {
     const mask = rectangle("full-soft"); mask.feather = .15;
     const { samples, root } = await decodedFixture("source-alpha", [mask], x => x < 32 ? 0 : 128);

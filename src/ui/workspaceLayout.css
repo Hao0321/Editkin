@@ -30,3 +30,15 @@
 .project-menu .workspace-controls fieldset input { flex: 0 0 17px; }
 .project-menu .workspace-text-size { grid-template-columns: minmax(0, 1fr) minmax(0, 140px); }
 .project-menu .workspace-text-size select { min-width: 0; max-width: 100%; }
+
+/* Keep preview controls reachable when saved side panels exceed the window. */
+.workspace-grid { overflow-x: auto; overflow-y: hidden; }
+/* The native window still has its 1080px minimum. A smaller web viewport can
+   scroll the same workspace instead of clipping its editing controls. */
+@media (max-width: 1079px) {
+  html { min-width: 0; overflow: auto; }
+  body, #root { overflow: visible; }
+  /* The inline grid retains an 8px divider column. Hiding its element moves
+     the preview into that column through grid auto-placement. Keep the slot. */
+  .workspace-grid > .workspace-resizer.horizontal { display: grid; }
+}

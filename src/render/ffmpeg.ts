@@ -1,12 +1,15 @@
 import { createHash } from "node:crypto";
+import { materializeMesh3dProject, renderMesh3dVideo } from "./mesh3dRender";
 import { collectRenderArtifactIdentity } from "./renderArtifactIdentity";
 import { renderReviewContentJson } from "../shared/renderReviewContent";
+import { assertRenderActive, publishRenderOutput, withRenderLifetime } from "./renderLifetime";
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import type { ClipMask, EditProject, MediaAsset, OpenExrImageSequence, TimelineClip, TrackMatteMode } from "../domain/types";
+import { assertMotionPaintContract } from "../domain/motionPaint";
 import { acesOutputFilter, inputNormalizationFilters, primaryExposureFilter, primaryToneFilters } from "../color/primaryGrade";
 import { DEFAULT_COLOR_MANAGEMENT } from "../domain/types";
 import { projectFromComposition, validateProject } from "../domain/editGraph";
@@ -24,11 +27,15 @@ import {
 } from "./creativeFilters";
 import { buildAssFilter, writeAssContent } from "./captionAss";
 import { resolveAssFontRoot } from "./fontRoot";
+import { prepareMotionNativePaintForRender, prepareMotionPhysicalLayouts } from "./motionPhysicalGlyphLayouts";
+import { AssMotionBudget } from "./assMotionBudget";
 import { materializeNativeEffectSegments, projectAfterNativeEffectMaterialization, type NativeEffectRenderReceipt } from "../plugins/nativeEffectRender";
 import { buildAces2DisplayVideoRenderRequest, containsSceneLinearMedia, type NativeAces2OutputTransform } from "./aces2SdrVideo";
 import { buildGpuEngineVideoPreviewGraph, type GpuEngineVideoPreviewGraph } from "./gpuCompositor";
+import { prepareNativeFloatingVideoFrames } from "./nativeFloatingVideoFrame";
+import { assertMediaAssetDisplayGeometry } from "./mediaDisplayGeometry";
 import type { ResidentSceneLinearVideoSequenceReceipt } from "./residentSceneLinearVideoSequence";
-import { renderResidentSceneLinearAces2VideoProject } from "./residentSceneLinearVideoProject";
+import { renderResidentSceneLinearAces2VideoProject, residentVideoCoversFormalDuration } from "./residentSceneLinearVideoProject";
 import { verifyFrozenRotoMatte } from "./autoRotoMatteIntegrity";
 import {
   colorExpression,
@@ -80,16 +87,24 @@ async function renderAudioBed(
   output: string,
   ffmpegPath: string,
   timeoutMs: number,
+  ffprobePath = "ffprobe",
 ): Promise<void> {
   const args = ["-y", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-t", finite(plan.duration), "-i", "anullsrc=r=48000:cl=stereo"];
   const filters = [`[0:a]atrim=duration=${finite(plan.duration)},asetpts=PTS-STARTPTS[abase]`];
   const voiceLabels = ["[abase]"];
   const musicLabels: string[] = [];
+  const audioStreams = new Map<string, boolean>();
   let inputIndex = 1;
   let audioIndex = 0;
   for (const item of plan.audioClips) {
     const asset = project.assets.find((candidate) => candidate.id === item.clip.assetId);
     if (!asset) throw new Error(`找不到音訊素材：${item.clip.assetId}`);
+    let hasAudio = audioStreams.get(item.assetPath);
+    if (hasAudio === undefined) {
+      hasAudio = (await probeMedia(item.assetPath, ffprobePath)).hasAudio;
+      audioStreams.set(item.assetPath, hasAudio);
+    }
+    if (!hasAudio) continue;
     args.push("-ss", finite(item.clip.sourceStart), "-t", finite(item.clip.duration), "-i", item.assetPath);
     const label = `aclip${audioIndex}`;
     const music = asset.role === "background-music";
@@ -176,12 +191,14 @@ async function renderSceneLinearAces2DisplayProject(
       || receipt.deviceCreationCount !== 1 || receipt.audioIncluded !== false) {
       throw new Error("原生 ACES 2 SDR 影格序列 receipt 不完整或與請求不一致。");
     }
-    await renderAudioBed(project, plan, audioPath, ffmpegPath, timeoutMs);
+    await renderAudioBed(project, plan, audioPath, ffmpegPath, timeoutMs, ffprobePath);
     let assPath: string | undefined;
     const assFonts = await resolveAssFontRoot(options.fontRoot, project);
+    const physicalLayouts = await prepareMotionPhysicalLayouts(project, options.fontRoot);
+    const aggregateBudget = new AssMotionBudget();
     if (!hdr && (project.captions.length > 0 || project.motionGraphics.length > 0)) {
       assPath = join(workspace, "captions.ass");
-      await writeFile(assPath, writeAssContent(project, project.captionStyle, assFonts), "utf8");
+      await writeFile(assPath, writeAssContent(project, project.captionStyle, { ...assFonts, physicalLayouts, requirePhysicalGlyphs: true, aggregateBudget }), "utf8");
     }
     const videoFilter = hdr
       ? "format=gbrp16le,zscale=matrix=2020_ncl:range=limited,format=yuv420p10le"
@@ -212,8 +229,7 @@ async function renderSceneLinearAces2DisplayProject(
       || Math.abs(outputProbe.duration - plan.duration) > Math.max(.15, 2 / project.fps)) {
       throw new Error(`原生 ACES 2 display 輸出 QA 失敗：duration=${outputProbe.duration}, pix_fmt=${outputProbe.pixelFormat ?? "unknown"}, primaries=${outputProbe.colorPrimaries ?? "unknown"}, transfer=${outputProbe.colorTransfer ?? "unknown"}, matrix=${outputProbe.colorMatrix ?? "unknown"}`);
     }
-    await rm(requested, { force: true });
-    await rename(temporaryOutput, requested);
+    await publishRenderOutput(temporaryOutput, requested);
     const version = await runProcess(ffmpegPath, ["-version"], 10_000);
     return {
       outputPath: requested,
@@ -236,27 +252,63 @@ async function renderResolvedProject(project: EditProject, outputPath: string, o
   const preserveHighBitDepthAlpha = alphaIntermediate || alphaDelivery;
   if (alphaDelivery) assertHighBitDepthAlphaDeliveryProject(project, outputPath);
   const hasMotionCompositionV2 = project.motionGraphics.some((graphic) => graphic.schema === "hao.motion-composition/v2");
+  const hasNativeMotionPaint = project.motionGraphics.some((graphic) => graphic.paintV1 || graphic.visualStyle === "native_paint");
+  const allV2HaveNativePaint = hasMotionCompositionV2 && project.motionGraphics
+    .filter((graphic) => graphic.schema === "hao.motion-composition/v2")
+    .every((graphic) => Boolean(graphic.paintV1) && graphic.visualStyle === "native_paint");
+  if (hasNativeMotionPaint) for (const graphic of project.motionGraphics) assertMotionPaintContract(graphic);
+  const nativePaintResidentRoute = allV2HaveNativePaint && !preserveHighBitDepthAlpha && !containsSceneLinearMedia(project)
+    && project.colorManagement?.mode === "aces2" && project.colorManagement.outputTransform === "rec709_sdr" && !isHdrOutput(project);
   const hasFloatingVideoFrame = project.tracks.some(track => track.clips.some(clip => clip.floatingFrame));
-  if (hasMotionCompositionV2 && (preserveHighBitDepthAlpha || containsSceneLinearMedia(project) || project.colorManagement?.mode === "aces2" || isHdrOutput(project))) {
+  const nativeFloatingResidentRoute = hasFloatingVideoFrame && !preserveHighBitDepthAlpha && !containsSceneLinearMedia(project)
+    && project.colorManagement?.mode === "aces2" && project.colorManagement.outputTransform === "rec709_sdr" && !isHdrOutput(project);
+  if (hasNativeMotionPaint && !nativePaintResidentRoute) {
+    throw new Error("Native paint 正式輸出要求全部 v2 都是 paintV1 實體文字或已支援靜態向量、完整 resident video 與 ACES2 rec709_sdr；alpha、HDR、普通 v2 或其他輸出不可降級。");
+  }
+  if (hasMotionCompositionV2 && !nativePaintResidentRoute && (preserveHighBitDepthAlpha || containsSceneLinearMedia(project) || project.colorManagement?.mode === "aces2" || isHdrOutput(project))) {
     throw new Error("motion-composition/v2 本輪只支援一般 Rec.709 正式輸出；預合成 alpha、ACES 2 與 HDR 必須等待共享原生／scene-linear evaluator，禁止 silently downgrade。");
   }
   const ffmpegPath = options.ffmpegPath ?? "ffmpeg";
   const ffprobePath = options.ffprobePath ?? "ffprobe";
   const timeoutMs = options.timeoutMs ?? 15 * 60_000;
   const plan = buildRenderPlan(project, (uri) => resolveMediaPath(uri, options.assetBase));
+  if ((nativePaintResidentRoute || nativeFloatingResidentRoute) && !residentVideoCoversFormalDuration(project, Math.round(plan.duration * project.fps))) {
+    throw new Error("Native paint resident 正式輸出目前不接受 video coverage 空檔；請補齊底層影片。");
+  }
   const sceneLinear = containsSceneLinearMedia(project);
   const alphaCapability = alphaDelivery
     ? await probeHighBitDepthAlphaCapability(ffmpegPath, ffprobePath, timeoutMs)
     : undefined;
   let residentAcesPreview: GpuEngineVideoPreviewGraph | undefined;
   if (!sceneLinear && project.colorManagement?.mode === "aces2" && project.colorManagement.outputTransform === "rec709_sdr") {
+    if ((nativePaintResidentRoute || nativeFloatingResidentRoute) && !options.gpuCompositorPath) throw new Error("Native paint／浮框正式輸出缺少原生 GPU compositor runtime。");
     const nativeProject = structuredClone(project);
     for (const asset of nativeProject.assets.filter((candidate) => candidate.kind === "video" && !candidate.compositionId)) {
       asset.uri = resolveMediaPath(asset.uri, options.assetBase);
       if (asset.derivatives?.proxyUri) asset.derivatives.proxyUri = resolveMediaPath(asset.derivatives.proxyUri, options.assetBase);
       if (asset.derivatives?.overlayProxyUri) asset.derivatives.overlayProxyUri = resolveMediaPath(asset.derivatives.overlayProxyUri, options.assetBase);
     }
-    residentAcesPreview = buildGpuEngineVideoPreviewGraph(nativeProject, 0);
+    const nativeMotionPaint = nativePaintResidentRoute
+      ? await prepareMotionNativePaintForRender(nativeProject, options.fontRoot) : undefined;
+    if (nativeFloatingResidentRoute) {
+      const floatingAssetIds = new Set(nativeProject.tracks.flatMap(track => track.clips)
+        .filter(clip => clip.floatingFrame).map(clip => clip.assetId));
+      for (const asset of nativeProject.assets.filter(asset => floatingAssetIds.has(asset.id))) {
+        const actualProbe = await probeMedia(asset.uri, ffprobePath);
+        assertMediaAssetDisplayGeometry(asset, actualProbe);
+        const rotation = actualProbe.displayRotationDegrees ?? 0;
+        if (rotation % 360 !== 0 || actualProbe.sampleAspectRatio !== 1
+          || actualProbe.encodedWidth !== asset.width || actualProbe.encodedHeight !== asset.height
+          || [actualProbe.colorPrimaries, actualProbe.colorTransfer, actualProbe.colorMatrix].some(value => value !== undefined && value !== "bt709")) {
+          throw new Error("Native 浮框目前要求真 probe 已知方形像素、無展示旋轉與 Rec.709 原片；方向或色彩不能從保存的 DAR 推測。");
+        }
+      }
+    }
+    const nativeFloatingVideoFrames = nativeFloatingResidentRoute ? prepareNativeFloatingVideoFrames(nativeProject) : undefined;
+    residentAcesPreview = buildGpuEngineVideoPreviewGraph(nativeProject, 0, nativeMotionPaint, nativeFloatingVideoFrames);
+    if ((nativePaintResidentRoute || nativeFloatingResidentRoute) && !residentAcesPreview) {
+      throw new Error("Native paint 正式輸出未通過共同 resident graph／資源／video coverage admission；不可改走 ASS 或純色輸出。");
+    }
   }
   // This perspective/alpha graph runs on the CPU. On the measured Windows
   // 1080×1920 three-plane path, x264 avoids the NVENC probe and transfer cost.
@@ -271,7 +323,10 @@ async function renderResolvedProject(project: EditProject, outputPath: string, o
   }
   if (residentAcesPreview && !preserveHighBitDepthAlpha) {
     return renderResidentSceneLinearAces2VideoProject(project, residentAcesPreview, outputPath, plan, options, encoder, timeoutMs, {
-      runProcess, renderAudioBed, probeMedia, encoderArgs, finite,
+      runProcess,
+      renderAudioBed: (audioProject, audioPlan, audioOutput, audioFfmpegPath, audioTimeoutMs) =>
+        renderAudioBed(audioProject, audioPlan, audioOutput, audioFfmpegPath, audioTimeoutMs, ffprobePath),
+      probeMedia, encoderArgs, finite,
     });
   }
   let planner = hasFloatingVideoFrame ? "editkin-floating-video-frame-ffmpeg/v1" : hasMotionCompositionV2 ? "typescript-motion-composition-v2-ass-frame-receipt/v2" : "typescript-fallback";
@@ -319,12 +374,16 @@ async function renderResolvedProject(project: EditProject, outputPath: string, o
     if (nativeEffects) planner = `${planner}+${nativeEffects.clips.some((clip) => clip.executionMode === "resident-gpu-shader-sequence/v1") ? "gpu-effect-sequence/v1" : "native-effect-sequence/v1"}`;
     const postMaterializationProject = projectAfterNativeEffectMaterialization(project, nativeEffects);
     const assFonts = await resolveAssFontRoot(options.fontRoot, postMaterializationProject);
+    const physicalLayouts = await prepareMotionPhysicalLayouts(postMaterializationProject, options.fontRoot);
+    // Both ASS outputs belong to this render. Separate line buffers share one
+    // actual work/event/UTF-8 counter, including dynamic background paths.
+    const aggregateBudget = new AssMotionBudget();
     let assPath: string | undefined;
     if (postMaterializationProject.captions.length > 0 || postMaterializationProject.motionGraphics.length > 0) {
       assPath = join(workspace, "captions.ass");
-      await writeFile(assPath, writeAssContent(postMaterializationProject, postMaterializationProject.captionStyle, assFonts), "utf8");
+      await writeFile(assPath, writeAssContent(postMaterializationProject, postMaterializationProject.captionStyle, { ...assFonts, physicalLayouts, requirePhysicalGlyphs: true, aggregateBudget }), "utf8");
     }
-    await renderComposite(ffmpegPath, ffprobePath, temporaryOutput, postMaterializationProject, plan, assPath, encoder, timeoutMs, assFonts.fontRoot, options.colorRoot, options.assetBase, options.autoRotoCacheRoot, preserveHighBitDepthAlpha, nativeAudio?.outputPath);
+    await renderComposite(ffmpegPath, ffprobePath, temporaryOutput, postMaterializationProject, plan, assPath, encoder, timeoutMs, assFonts.fontRoot, options.colorRoot, options.assetBase, options.autoRotoCacheRoot, preserveHighBitDepthAlpha, nativeAudio?.outputPath, assFonts.bundledFaces, { physicalLayouts, requirePhysicalGlyphs: true, aggregateBudget });
     const outputProbe = await probeMedia(temporaryOutput, ffprobePath);
     if (!outputProbe.hasVideo || !outputProbe.hasAudio || Math.abs(outputProbe.duration - plan.duration) > Math.max(0.15, 2 / project.fps)) {
       throw new Error(`輸出 QA 失敗：duration=${outputProbe.duration}, expected=${plan.duration}`);
@@ -333,8 +392,7 @@ async function renderResolvedProject(project: EditProject, outputPath: string, o
     const alphaDeliveryReceipt = alphaDelivery
       ? await buildHighBitDepthAlphaDeliveryReceipt(temporaryOutput, outputProbe, alphaCapability!)
       : undefined;
-    await rm(requested, { force: true });
-    await rename(temporaryOutput, requested);
+    await publishRenderOutput(temporaryOutput, requested);
     const { stdout } = await runProcess(ffmpegPath, ["-version"], 10_000);
     return { outputPath: requested, duration: outputProbe.duration, encoder, planner: alphaDelivery ? `${planner}+prores4444-alpha-delivery/v1` : planner, ffmpegVersion: stdout.split(/\r?\n/)[0] ?? "unknown", nativeEffects, nativeAudio: nativeAudio?.receipt, alphaDelivery: alphaDeliveryReceipt };
   } finally {
@@ -380,6 +438,11 @@ function withMaterializedCompositions(project: EditProject, paths: ReadonlyMap<s
 }
 
 export async function renderProject(project: EditProject, outputPath: string, options: RenderOptions = {}): Promise<RenderResult> {
+  return withRenderLifetime(options, () => renderProjectWithinLifetime(project, outputPath, options));
+}
+
+async function renderProjectWithinLifetime(project: EditProject, outputPath: string, options: RenderOptions): Promise<RenderResult> {
+  assertRenderActive();
   const snapshot = structuredClone(project);
   const projectContentSha256 = createHash("sha256").update(renderReviewContentJson(snapshot)).digest("hex");
   const result = await renderProjectContent(snapshot, outputPath, options);
@@ -391,7 +454,17 @@ export async function renderProject(project: EditProject, outputPath: string, op
 }
 
 async function renderProjectContent(project: EditProject, outputPath: string, options: RenderOptions): Promise<RenderResult> {
+  assertRenderActive();
   validateProject(project);
+  if (project.scene3d?.enabled) {
+    const workspace = await mkdtemp(join(tmpdir(), "editkin-mesh3d-"));
+    try {
+      const path = join(workspace, "mesh-scene.mp4");
+      const receipt = await renderMesh3dVideo(project, path, options);
+      const result = await renderResolvedProject(materializeMesh3dProject(project, path, receipt.durationSeconds), outputPath, { ...options, preferGpu: false });
+      return { ...result, planner: `${result.planner}+shared-cpu-triangle-zbuffer/v1`, mesh3dPipeline: receipt };
+    } finally { await rm(workspace, { recursive: true, force: true }); }
+  }
   if (options.deliveryProfile === HIGH_BIT_DEPTH_ALPHA_PROFILE) assertHighBitDepthAlphaDeliveryProject(project, outputPath);
   if (project.compositions.length === 0) return renderResolvedProject(project, outputPath, options);
   const workspace = await mkdtemp(join(tmpdir(), "editkin-precomp-"));
@@ -399,6 +472,7 @@ async function renderProjectContent(project: EditProject, outputPath: string, op
   try {
     const compositions = new Map(project.compositions.map((composition) => [composition.id, composition] as const));
     for (const compositionId of compositionMaterializationOrder(project)) {
+      assertRenderActive();
       const composition = compositions.get(compositionId)!;
       const nested = projectFromComposition(project, composition);
       const resolvedNested = withMaterializedCompositions(nested, materialized);

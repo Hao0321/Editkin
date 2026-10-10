@@ -4,6 +4,8 @@ import type { EditProject, MotionGraphic, NormalizedPoint, TimelineClip } from "
 import { particleSimulationEmitters } from "../domain/types";
 import { isTransformMotionBlurInstance, transformMotionBlurParameters } from "../domain/transformMotionBlur";
 import { scene25dCameraNode, scene25dDepthOfFieldNode, scene25dLightNodes } from "./scene25dDepthOfFieldNode";
+import { nativeMotionPaintTrack, type PreparedNativeMotionPaint } from "../motion/nativeMotionPaint";
+import { nativeFloatingVideoFrameSpec, type PreparedNativeFloatingVideoFrames } from "./nativeFloatingVideoFrame";
 
 export type EnginePixelFormat = "rgba8" | "rgba16_float" | "rgba32_float" | "alpha8" | "alpha16";
 export type EngineStage = "decode" | "analysis" | "geometry" | "matte" | "color" | "effect" | "composite" | "simulation" | "audio" | "output";
@@ -58,6 +60,10 @@ export interface NativeCompiledGraph {
 export interface EngineGraphBuildOptions {
   /** Explicit current SDR video-preview contract; default/1 retains legacy wire semantics. */
   rec709PrimaryVersion?: 1 | 2;
+  /** Private actual glyph preparation; a cloned/deserialized handle is rejected. */
+  nativeMotionPaint?: PreparedNativeMotionPaint;
+  /** Explicit factory-owned flat floating assembly, never inferred for an old runtime. */
+  nativeFloatingVideoFrames?: PreparedNativeFloatingVideoFrames;
 }
 
 function currentSdrVideoProfileEligible(project: EditProject, clips: TimelineClip[]): boolean {
@@ -74,7 +80,7 @@ function currentSdrVideoProfileEligible(project: EditProject, clips: TimelineCli
   });
 }
 
-function timebaseForFps(fps: number): { numerator: number; denominator: number } {
+export function timebaseForFps(fps: number): { numerator: number; denominator: number } {
   if (!Number.isFinite(fps) || fps <= 0 || fps > 240) throw new Error("專案 FPS 無法轉為 rational timebase");
   const ntsc = [
     { fps: 24_000 / 1_001, numerator: 1_001, denominator: 24_000 },
@@ -184,7 +190,7 @@ function colorSpaces(project: EditProject, clip: TimelineClip, currentRec709 = f
   const wb = hasPhysicalWhiteBalance(clip);
   if (project.colorManagement?.mode === "aces2") {
     if (input === "linear_rec709") return { input, working: "linear_rec709", output: "linear_rec709", processor: wb ? "editkin-linear-primary/v2" : "editkin-linear-primary/v1" };
-    return { input, working: "linear_rec709", output: "linear_rec709", processor: wb ? "editkin-rec709-to-linear-rec709-primary/v2" : "editkin-srgb-to-linear-rec709-primary/v1" };
+    return { input, working: "linear_rec709", output: "linear_rec709", processor: wb || currentRec709 ? "editkin-rec709-to-linear-rec709-primary/v2" : "editkin-srgb-to-linear-rec709-primary/v1" };
   }
   if (input === "linear_rec709") {
     return { input, working: "linear_rec709", output: "linear_rec709", processor: wb ? "editkin-linear-primary/v2" : "editkin-linear-primary/v1" };
@@ -198,7 +204,8 @@ function requiresFloatWorkingFormat(project: EditProject): boolean {
     && track.clips.some((clip) => assetById.get(clip.assetId)?.color?.interpretation === "linear_rec709"));
 }
 
-function clipNodes(project: EditProject, clip: TimelineClip, currentRec709 = false): { nodes: EngineNode[]; tail: string } {
+function clipNodes(project: EditProject, clip: TimelineClip, currentRec709 = false,
+  nativeFloatingVideoFrames?: PreparedNativeFloatingVideoFrames): { nodes: EngineNode[]; tail: string } {
   const clipId = safeId(clip.id);
   const asset = project.assets.find((candidate) => candidate.id === clip.assetId);
   const source = `source:${clipId}`;
@@ -233,11 +240,15 @@ function clipNodes(project: EditProject, clip: TimelineClip, currentRec709 = fal
       parent: clip.layer?.parentClipId ? `transform:${safeId(clip.layer.parentClipId)}` : undefined,
     };
   if (scene25d && !clip.transform3d) throw new Error(`2.5D 平面 ${clip.id} 缺少 transform3d`);
-  const nodes: EngineNode[] = [sourceNode, transformNode];
+  if (clip.floatingFrame && !nativeFloatingVideoFrames) throw new Error("Native floating requires explicit factory-owned preparation; no old runtime promotion");
+  const nativeFloating = clip.floatingFrame && nativeFloatingVideoFrames
+    ? nativeFloatingVideoFrameSpec(project, nativeFloatingVideoFrames, clip.id) : undefined;
+  const nodes: EngineNode[] = nativeFloating ? [sourceNode] : [sourceNode, transformNode];
   let tail = transform;
   if (controller) return { nodes, tail };
-  const spaces = colorSpaces(project, clip, currentRec709);
-  nodes.push({ id: color, inputs: [tail], enabled: true, kind: "color", processor: spaces.processor, inputSpace: spaces.input, workingSpace: spaces.working, outputSpace: spaces.output, grade: projectedGrade(clip, currentRec709) });
+  const physicalRec709 = currentRec709 || Boolean(nativeFloating);
+  const spaces = colorSpaces(project, clip, physicalRec709);
+  nodes.push({ id: color, inputs: [nativeFloating ? source : tail], enabled: true, kind: "color", processor: spaces.processor, inputSpace: spaces.input, workingSpace: spaces.working, outputSpace: spaces.output, grade: projectedGrade(clip, physicalRec709) });
   tail = color;
   for (const effectId of clip.creative?.effectPresetIds ?? []) {
     const effect = `effect:${clipId}:${safeId(effectId)}`;
@@ -245,6 +256,12 @@ function clipNodes(project: EditProject, clip: TimelineClip, currentRec709 = fal
     tail = effect;
   }
   tail = appendNativeEffectNodes(clip, clipId, nodes, tail);
+  if (nativeFloating) {
+    const floating = `floating-frame:${clipId}`;
+    nodes.push({ id: floating, inputs: [tail], enabled: true, kind: "floating_video_frame_2d", spec: nativeFloating });
+    nodes.push({ ...transformNode, inputs: [floating] });
+    tail = transform;
+  }
   for (const mask of clip.masks ?? []) {
     if (!mask.enabled || !mask.matteSequence?.frozen || mask.matteSequence.stale) continue;
     const maskNode = `mask:${clipId}:${safeId(mask.id)}`;
@@ -382,8 +399,13 @@ export function motionGraphicTracking(project: EditProject, graphic: MotionGraph
   return { trackId: track.id, samples };
 }
 
-function motionGraphicNode(project: EditProject, index: number): EngineNode {
+function motionGraphicNode(project: EditProject, index: number, options: EngineGraphBuildOptions): EngineNode {
   const graphic = project.motionGraphics[index];
+  if (graphic.paintV1 || graphic.visualStyle === "native_paint") {
+    if (!options.nativeMotionPaint) throw new Error(`Native paint ${graphic.id} requires actual physical preparation; no v1 downgrade`);
+    return { id: `motion-graphic:${safeId(graphic.id)}`, inputs: [], enabled: true, kind: "native_motion_paint",
+      graphicId: graphic.id, track: nativeMotionPaintTrack(project, options.nativeMotionPaint, graphic.id) };
+  }
   if (graphic.schema !== "hao.motion-composition/v1") throw new Error(`原生 GPU graph 尚未支援 ${graphic.schema}：${graphic.id}；禁止降級成 v1 動畫`);
   return {
     id: `motion-graphic:${safeId(graphic.id)}`, inputs: [], enabled: true, kind: "motion_graphic",
@@ -457,7 +479,7 @@ function appendParticleSimulation(project: EditProject, nodes: EngineNode[], cur
 }
 
 export function buildEngineRenderGraph(project: EditProject, options: EngineGraphBuildOptions = {}): EngineRenderGraph {
-  if (project.tracks.some(track => track.clips.some(clip => clip.floatingFrame))) {
+  if (project.tracks.some(track => track.clips.some(clip => clip.floatingFrame)) && !options.nativeFloatingVideoFrames) {
     throw new Error("浮空影片框尚未進入原生 EngineGraph；請使用 Editkin 的正式 FFmpeg 合成路徑");
   }
   if (options.rec709PrimaryVersion !== undefined && ![1, 2].includes(options.rec709PrimaryVersion)) throw new Error("Unsupported Rec.709 primary processor version");
@@ -473,7 +495,7 @@ export function buildEngineRenderGraph(project: EditProject, options: EngineGrap
   const currentRec709 = options.rec709PrimaryVersion === 2 && currentSdrVideoProfileEligible(project, visibleClips);
   const contentTails = new Map<string, string>();
   for (const clip of visibleClips.filter((candidate) => candidate.layer?.role !== "adjustment")) {
-    const built = clipNodes(project, clip, currentRec709);
+    const built = clipNodes(project, clip, currentRec709, options.nativeFloatingVideoFrames);
     nodes.push(...built.nodes);
     if ((clip.layer?.role ?? "content") === "content") contentTails.set(clip.id, built.tail);
   }
@@ -524,10 +546,22 @@ export function buildEngineRenderGraph(project: EditProject, options: EngineGrap
     nodes.push(node);
     compositeTail = appendComposite(nodes, compositeTail, node.id, ++compositeIndex);
   }
+  const displayMotionNodes: EngineNode[] = [];
+  let displayMotionSuffix = false;
   for (let index = 0; index < project.motionGraphics.length; index += 1) {
-    const node = motionGraphicNode(project, index);
+    const node = motionGraphicNode(project, index, options);
     nodes.push(node);
-    compositeTail = appendComposite(nodes, compositeTail, node.id, ++compositeIndex);
+    if (project.motionGraphics[index].paintV1?.schema === "editkin.motion-paint/v2") {
+      if (project.colorManagement?.mode !== "aces2" || project.colorManagement.outputTransform !== "rec709_sdr"
+        || project.scene3d?.enabled || project.scene25d?.enabled) {
+        throw new Error("Display native paint requires the explicit flat ACES2 Rec.709 SDR boundary");
+      }
+      displayMotionSuffix = true;
+      displayMotionNodes.push(node);
+    } else {
+      if (displayMotionSuffix) throw new Error("Scene or legacy Motion cannot follow the final display paint suffix; reorder explicitly");
+      compositeTail = appendComposite(nodes, compositeTail, node.id, ++compositeIndex);
+    }
   }
   const depthOfFieldNode = scene25dDepthOfFieldNode(project, compositeTail, frameAt);
   if (depthOfFieldNode) {
@@ -548,6 +582,11 @@ export function buildEngineRenderGraph(project: EditProject, options: EngineGrap
       grade: { brightness: 0, contrast: 1, saturation: 1, hue: 0, exposure: 0, temperature: 0, tint: 0, pivot: .5, shadows: 0, highlights: 0, blacks: 0, whites: 0 },
     });
     compositeTail = "display:aces2";
+  }
+  // Display artwork owns a distinct, literal graph boundary. Do not silently
+  // reinterpret the old scene branch or reorder interleaved authored graphics.
+  for (const node of displayMotionNodes) {
+    compositeTail = appendComposite(nodes, compositeTail, node.id, ++compositeIndex);
   }
   const workingFormat: EnginePixelFormat = requiresFloatWorkingFormat(project) || project.colorManagement?.mode === "aces2" ? "rgba32_float" : "rgba16_float";
   nodes.push({ id: "output:main", inputs: [compositeTail], enabled: true, kind: "output", format: workingFormat });

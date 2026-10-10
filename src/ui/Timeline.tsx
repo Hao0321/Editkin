@@ -1,21 +1,29 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { TimelineClip, TimelineTrack } from "../domain/types";
 import { formatTime } from "../lib/format";
-import { TIMELINE_MAGNET_THRESHOLD_PX, alignTimelineTime, nudgeTimelineTime, resolveTimelineDrag, resolveTimelineDropTarget, resolveTimelineTrim, timelineAutoScrollDelta, timelineFrameLabel, timelineTimeAtPointer } from "./timelineInteraction";
+import { TIMELINE_DRAG_THRESHOLD_PX, TIMELINE_MAGNET_THRESHOLD_PX, alignTimelineTime, nudgeTimelineTime, resolveTimelineDrag, resolveTimelineDropTarget, resolveTimelineTrim, timelineAutoScrollDelta, timelineTrackAutoScrollDelta, timelineFrameLabel, timelineTimeAtPointer, visibleTimelineDropLanes } from "./timelineInteraction";
 import { EDITKIN_ASSET_DRAG_TYPE, resolveTimelineAssetDrop, timelineAssetDuration } from "./timelineAssetDrop";
+import { INTERNAL_ASSET_POINTER_DRAG_EVENT, isInternalAssetPointerDragDetail, type InternalAssetPointerDragDetail } from "./internalAssetPointerDrag";
 import { buildTimelineSnapIndex, queryTimelineSnapTimes } from "./timelineSnapping";
 import { buildTimelineIntervalIndex, queryTimelineIntervalIndex, timelineRulerStep } from "./timelineViewport";
 import { retainTimelineSelection } from "./timelineViewport";
+import { cancelTimelinePointerEdits, createDeferredTimelineSelectionReveal, resolveTimelineSelectionReveal, timelineSelectionRevealKey } from "./timelineSelectionReveal";
 import { scrollViewportByWheel } from "./wheelScroll";
 import { libraryWheelDeltaPixels } from "./creativeLibraryPreview";
 import { TrackOptions } from "./TrackOptions";
-import { DRAG_HELP, LOCKED_HELP, MAX_PIXELS_PER_SECOND, MIN_PIXELS_PER_SECOND, TIMELINE_LABEL_WIDTH as LABEL_WIDTH, type DragKind, type DragSession, type ScrubSession, type TimelineProps, type TrimSession } from "./timelineContract";
+import { DRAG_HELP, LOCKED_HELP, MAX_PIXELS_PER_SECOND, MIN_PIXELS_PER_SECOND, TIMELINE_LABEL_WIDTH as LABEL_WIDTH, type CachedDragLane, type DragKind, type DragSession, type ScrubSession, type TimelineProps, type TrimSession } from "./timelineContract";
 import "./timelineDirectManipulation.css";
 
-export function Timeline({ project, duration, playhead, selectedClipId, selectedCaptionId, runtimeUrls, draggingAssetId, onInsertAsset, onSeek, onSelect, onSelectCaption, onMoveClip, onMoveCaption, onTrimClip, onTrimCaption, onAddCaption, onAddTrack, onRenameTrack, onToggleTrackLock, onDeleteTrack, onMakePictureInPicture, onPrecompose, onToggleMute, onSplit, onDelete }: TimelineProps) {
+export function Timeline({ project, duration, playhead, selectedClipId, selectedCaptionId, runtimeUrls, draggingAssetId, onInsertAsset, onEditStart, onSeek, onSelect, onSelectCaption, onMoveClip, onMoveCaption, onTrimClip, onTrimCaption, onAddCaption, onAddTrack, onRenameTrack, onToggleTrackLock, onDeleteTrack, onMakePictureInPicture, onPrecompose, onToggleMute, onSplit, onDelete }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragSession | undefined>(undefined);
   const dragFrameRef = useRef<number | undefined>(undefined);
+  const dragLastFrameRef = useRef<number | undefined>(undefined);
+  const assetPointerRef = useRef<InternalAssetPointerDragDetail | undefined>(undefined);
+  const assetPointerFrameRef = useRef<number | undefined>(undefined);
+  const assetPointerLastFrameRef = useRef<number | undefined>(undefined);
+  const assetPointerHandlerRef = useRef<(detail: InternalAssetPointerDragDetail) => void>(() => {});
+  const assetPointerFlushRef = useRef<(autoScroll: boolean, elapsedMs?: number) => ReturnType<typeof assetDropAtPoint>>(() => undefined);
   const scrubRef = useRef<ScrubSession | undefined>(undefined);
   const scrubFrameRef = useRef<number | undefined>(undefined);
   const trimRef = useRef<TrimSession | undefined>(undefined);
@@ -23,9 +31,15 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
   const scrollFrameRef = useRef<number | undefined>(undefined);
   const latestScrollLeftRef = useRef(0);
   const suppressClickRef = useRef<string | undefined>(undefined);
+  const committedDragRevealRef = useRef<{
+    projectId: string; clipId: string; sourceKey: string | undefined;
+    trackId: string; allowNewLayer: boolean; fps: number; startFrame: number; durationFrames: number;
+  } | undefined>(undefined);
   const guideRef = useRef<HTMLDivElement>(null);
   const assetDropPreviewRef = useRef<HTMLDivElement>(null);
   const positionRef = useRef<HTMLOutputElement>(null);
+  const [selectionReveal] = useState(createDeferredTimelineSelectionReveal);
+  const [selectionRevealRevision, setSelectionRevealRevision] = useState(0);
   const [snapEnabled, setSnapEnabled] = useState(() => {
     try { return localStorage.getItem("editkin.timeline.snap") !== "off"; } catch { return true; }
   });
@@ -49,6 +63,8 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
     }
     return undefined;
   }, [project.tracks, selectedClipId]);
+  const selectionRevealKey = timelineSelectionRevealKey(selectedClipId, pinnedClip?.trackId,
+    pinnedClip?.clip.timelineStart, pinnedClip?.clip.duration, project.fps);
   const pinnedCaption = useMemo(() => project.captions.find(caption => caption.id === selectedCaptionId), [project.captions, selectedCaptionId]);
   // A captured drag target must survive virtualization while edge-scrolling.
   const visibleClips = useMemo(() => new Map(project.tracks.map((track) => [track.id, track.kind === "caption" ? [] : retainTimelineSelection(queryTimelineIntervalIndex(clipIndexes.get(track.id)!, visibleStart, visibleEnd), pinnedClip?.trackId === track.id ? pinnedClip.clip : undefined, clipIndexes.get(track.id)!)])), [clipIndexes, project.tracks, visibleEnd, visibleStart, pinnedClip]);
@@ -100,31 +116,68 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
     return () => observer.disconnect();
   }, []);
 
+  const pointerEditing = () => Boolean(dragRef.current || trimRef.current || assetPointerRef.current || scrubRef.current);
+  const flushDeferredSelectionReveal = () => {
+    if (selectionReveal.resume(pointerEditing())) setSelectionRevealRevision(revision => revision + 1);
+  };
+
   useEffect(() => {
-    if (!selectedClipId) return;
-    const node = scrollRef.current;
-    const clip = project.tracks.flatMap(track => track.clips).find(item => item.id === selectedClipId);
-    if (!node || !clip) return;
-    const contentWidth = Math.max(1, node.clientWidth - LABEL_WIDTH);
-    const clipStart = clip.timelineStart * pixelsPerSecond;
-    const focusWidth = Math.min(Math.max(12, clip.duration * pixelsPerSecond), 160);
-    const padding = 24;
-    if (clipStart < node.scrollLeft + padding) {
-      node.scrollLeft = Math.max(0, clipStart - padding);
-    } else if (clipStart + focusWidth > node.scrollLeft + contentWidth - padding) {
-      node.scrollLeft = Math.max(0, clipStart + focusWidth - contentWidth + padding);
+    if (!selectionRevealKey || !pinnedClip) { committedDragRevealRef.current = undefined; selectionReveal.clear(); return; }
+    // Pointer owners retain their exact scroll geometry; release/cancel flushes once.
+    if (pointerEditing()) { selectionReveal.defer(); return; }
+    const committedDrag = committedDragRevealRef.current;
+    if (committedDrag) {
+      const sameClip = project.id === committedDrag.projectId && selectedClipId === committedDrag.clipId;
+      const committedPlacement = sameClip && project.fps === committedDrag.fps
+        && Math.round(pinnedClip.clip.timelineStart * project.fps) === committedDrag.startFrame
+        && Math.round(pinnedClip.clip.duration * project.fps) === committedDrag.durationFrames
+        && (pinnedClip.trackId === committedDrag.trackId || committedDrag.allowNewLayer);
+      if (sameClip && selectionRevealKey === committedDrag.sourceKey) {
+        // Controlled props may still contain the selected source after acceptance.
+        selectionReveal.clear();
+        return;
+      }
+      committedDragRevealRef.current = undefined;
+      // A collision may append an offscreen layer; reveal its actual row after commit.
+      if (committedPlacement && pinnedClip.trackId === committedDrag.trackId) { selectionReveal.clear(); return; }
     }
-  }, [selectedClipId]);
+    selectionReveal.clear();
+    const node = scrollRef.current;
+    if (!node) return;
+    const lane = [...node.querySelectorAll<HTMLElement>(".track-lane[data-track-id]")]
+      .find(item => item.dataset.trackId === pinnedClip.trackId);
+    const button = lane && [...lane.querySelectorAll<HTMLButtonElement>(".timeline-clip")]
+      .find(item => item.dataset.testid === `timeline-clip-${pinnedClip.clip.id}`);
+    if (!button?.isConnected || !node.contains(button)) return;
+    const box = node.getBoundingClientRect(), clip = button.getBoundingClientRect();
+    const next = resolveTimelineSelectionReveal({ viewportLeft: box.left + node.clientLeft, viewportTop: box.top + node.clientTop,
+      clientWidth: node.clientWidth, clientHeight: node.clientHeight, labelWidth: LABEL_WIDTH,
+      rulerBottom: node.querySelector<HTMLElement>(".ruler-row")?.getBoundingClientRect().bottom ?? box.top + node.clientTop,
+      scrollLeft: node.scrollLeft, scrollTop: node.scrollTop, scrollWidth: node.scrollWidth, scrollHeight: node.scrollHeight, clip });
+    if (!next) return;
+    if (node.scrollLeft !== next.scrollLeft) node.scrollLeft = next.scrollLeft;
+    if (node.scrollTop !== next.scrollTop) node.scrollTop = next.scrollTop;
+  }, [project.id, selectionRevealKey, selectionRevealRevision]);
 
   useEffect(() => () => {
     if (dragFrameRef.current !== undefined) cancelAnimationFrame(dragFrameRef.current);
     if (scrubFrameRef.current !== undefined) cancelAnimationFrame(scrubFrameRef.current);
     if (trimFrameRef.current !== undefined) cancelAnimationFrame(trimFrameRef.current);
     if (scrollFrameRef.current !== undefined) cancelAnimationFrame(scrollFrameRef.current);
+    if (assetPointerFrameRef.current !== undefined) cancelAnimationFrame(assetPointerFrameRef.current);
+    dragLastFrameRef.current = undefined;
+    assetPointerLastFrameRef.current = undefined;
+    assetPointerRef.current = undefined;
   }, []);
 
-  const fit = () => setPixelsPerSecond(Math.max(MIN_PIXELS_PER_SECOND, Math.min(MAX_PIXELS_PER_SECOND, (viewportWidth - LABEL_WIDTH - 24) / visualDuration)));
+  const fit = () => {
+    if (pointerEditing()) return;
+    setPixelsPerSecond(Math.max(MIN_PIXELS_PER_SECOND, Math.min(MAX_PIXELS_PER_SECOND, (viewportWidth - LABEL_WIDTH - 24) / visualDuration)));
+  };
   const zoom = (factor: number, anchorClientX?: number) => {
+    // Captured gestures use one pixel/time clock until release. Changing scale
+    // midway mixes the old grab offset with a new clock and jumps the clip.
+    if (pointerEditing()) return;
     const node = scrollRef.current;
     if (!node) return;
     const rect = node.getBoundingClientRect();
@@ -144,26 +197,63 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
   };
 
   const clearAssetDropVisual = () => {
-    if (assetDropPreviewRef.current) assetDropPreviewRef.current.hidden = true;
+    if (assetDropPreviewRef.current) {
+      assetDropPreviewRef.current.hidden = true;
+      delete assetDropPreviewRef.current.dataset.newLayer;
+    }
     if (scrollRef.current?.dataset.dropState?.startsWith("asset-")) delete scrollRef.current.dataset.dropState;
     showEditPosition();
   };
 
-  useEffect(() => { if (!draggingAssetId) clearAssetDropVisual(); }, [draggingAssetId]);
+  useEffect(() => {
+    if (!draggingAssetId && !assetPointerRef.current && scrollRef.current?.dataset.dropState !== "asset-rejected") clearAssetDropVisual();
+  }, [draggingAssetId]);
 
-  const assetDropAt = (event: ReactDragEvent<HTMLDivElement>) => {
-    if (!draggingAsset || !onInsertAsset) return undefined;
-    const lane = event.currentTarget;
-    const trackId = lane.dataset.trackId;
-    const track = project.tracks.find((item) => item.id === trackId);
-    if (!track || track.locked || track.kind !== (draggingAsset.kind === "audio" ? "audio" : "video")) return undefined;
-    const rawTime = Math.max(0, (event.clientX - lane.getBoundingClientRect().left) / pixelsPerSecond);
-    const assetDuration = timelineAssetDuration(draggingAsset, project.fps);
+  const showDropRejection = (asset = false) => {
+    if (scrollRef.current) scrollRef.current.dataset.dropState = asset ? "asset-rejected" : "rejected";
+    if (positionRef.current) {
+      positionRef.current.hidden = false;
+      positionRef.current.textContent = asset ? "素材未加入；請選擇有效的軌道與位置" : "未套用拖移；位置保持不變";
+    }
+  };
+
+  function assetDropAtPoint(assetId: string, clientX: number, clientY: number, altKey: boolean) {
+    const node = scrollRef.current, asset = project.assets.find(item => item.id === assetId);
+    if (!node || !asset || !onInsertAsset) return undefined;
+    const lane = resolveTimelineDropTarget(clientX, clientY, asset.kind === "audio" ? "audio" : "video", currentDropLanes());
+    const track = project.tracks.find(item => item.id === lane?.trackId);
+    if (!lane || !track || track.locked || track.kind !== lane.trackKind) return undefined;
+    const rawTime = Math.max(0, (clientX - node.getBoundingClientRect().left - node.clientLeft - LABEL_WIDTH + node.scrollLeft) / pixelsPerSecond);
+    const assetDuration = timelineAssetDuration(asset, project.fps);
     const margin = TIMELINE_MAGNET_THRESHOLD_PX / pixelsPerSecond + 1 / project.fps;
     const occupied = queryTimelineIntervalIndex(clipIndexes.get(track.id)!, Math.max(0, rawTime - margin), rawTime + assetDuration + margin);
     const preliminary = alignTimelineTime(rawTime, project.fps);
-    const candidates = queryTimelineSnapTimes(snapIndex, `asset:${draggingAsset.id}`, [preliminary, preliminary + assetDuration], pixelsPerSecond, project.fps, playhead);
-    return { trackId: track.id, result: resolveTimelineAssetDrop({ rawTime, duration: assetDuration, fps: project.fps, pixelsPerSecond, snapCandidates: candidates, occupied, magnetEnabled: snapEnabled && !event.altKey }) };
+    const candidates = queryTimelineSnapTimes(snapIndex, `asset:${asset.id}`, [preliminary, preliminary + assetDuration], pixelsPerSecond, project.fps, playhead);
+    return { trackId: track.id, lane: lane.element, result: resolveTimelineAssetDrop({ rawTime, duration: assetDuration,
+      fps: project.fps, pixelsPerSecond, snapCandidates: candidates, occupied, magnetEnabled: snapEnabled && !altKey, collisionPolicy: "new-layer" }) };
+  }
+
+  const showAssetDrop = (placement: ReturnType<typeof assetDropAtPoint>) => {
+    const node = scrollRef.current, ghost = assetDropPreviewRef.current;
+    if (node) node.dataset.dropState = !placement ? "asset-incompatible" : placement.result.allowed
+      ? placement.result.newLayer ? "asset-new-layer" : "asset-valid" : "asset-rejected";
+    if (!node || !ghost || !placement) { if (ghost) ghost.hidden = true; showEditPosition(); return; }
+    const { result, lane } = placement, nodeRect = node.getBoundingClientRect(), laneRect = lane.getBoundingClientRect();
+    ghost.hidden = false;
+    ghost.style.left = `${LABEL_WIDTH + result.start * pixelsPerSecond}px`;
+    ghost.style.top = `${laneRect.top - nodeRect.top - node.clientTop + node.scrollTop + 5}px`;
+    ghost.style.width = `${Math.max(12, result.duration * pixelsPerSecond)}px`;
+    ghost.style.height = `${Math.max(12, lane.clientHeight - 10)}px`;
+    ghost.dataset.timelineStart = String(result.start);
+    ghost.dataset.targetTrackId = placement.trackId;
+    ghost.dataset.allowed = String(result.allowed);
+    ghost.dataset.newLayer = String(result.newLayer);
+    ghost.dataset.snapTime = result.snappedTo === undefined ? "" : String(result.snappedTo);
+    showEditPosition(result.start, result.allowed ? result.snappedTo : undefined);
+  };
+
+  const assetDropAt = (event: ReactDragEvent<HTMLDivElement>) => {
+    return draggingAssetId ? assetDropAtPoint(draggingAssetId, event.clientX, event.clientY, event.altKey) : undefined;
   };
 
   const previewAssetDrop = (event: ReactDragEvent<HTMLDivElement>) => {
@@ -172,20 +262,7 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
     event.stopPropagation();
     const placement = assetDropAt(event);
     event.dataTransfer.dropEffect = placement?.result.allowed ? "copy" : "none";
-    if (scrollRef.current) scrollRef.current.dataset.dropState = !placement ? "asset-incompatible" : placement.result.allowed ? "asset-valid" : "asset-overlap";
-    const ghost = assetDropPreviewRef.current;
-    if (!ghost || !placement) { if (ghost) ghost.hidden = true; showEditPosition(); return; }
-    const { result } = placement;
-    ghost.hidden = false;
-    ghost.style.left = `${LABEL_WIDTH + result.start * pixelsPerSecond}px`;
-    ghost.style.top = `${event.currentTarget.offsetTop + 5}px`;
-    ghost.style.width = `${Math.max(12, result.duration * pixelsPerSecond)}px`;
-    ghost.style.height = `${Math.max(12, event.currentTarget.clientHeight - 10)}px`;
-    ghost.dataset.timelineStart = String(result.start);
-    ghost.dataset.targetTrackId = placement.trackId;
-    ghost.dataset.allowed = String(result.allowed);
-    ghost.dataset.snapTime = result.snappedTo === undefined ? "" : String(result.snappedTo);
-    showEditPosition(result.start, result.allowed ? result.snappedTo : undefined);
+    showAssetDrop(placement);
   };
 
   const leaveAssetDrop = (event: ReactDragEvent<HTMLDivElement>) => {
@@ -199,8 +276,9 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
     event.stopPropagation();
     const placement = assetDropAt(event);
     clearAssetDropVisual();
-    if (event.dataTransfer.getData(EDITKIN_ASSET_DRAG_TYPE) !== draggingAssetId || !placement?.result.allowed) return;
-    onInsertAsset?.(draggingAssetId, placement.trackId, placement.result.start);
+    if (event.dataTransfer.getData(EDITKIN_ASSET_DRAG_TYPE) !== draggingAssetId || !placement?.result.allowed) { showDropRejection(true); return; }
+    onEditStart?.();
+    if (onInsertAsset?.(draggingAssetId, placement.trackId, placement.result.start) === false) showDropRejection(true);
   };
 
   const handleWheel = (event: WheelEvent) => {
@@ -232,9 +310,150 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
     });
   };
 
+  const currentDropLanes = (): CachedDragLane[] => {
+    const node = scrollRef.current;
+    if (!node) return [];
+    const rect = node.getBoundingClientRect(), left = rect.left + node.clientLeft, top = rect.top + node.clientTop;
+    const ruler = node.querySelector<HTMLElement>(".ruler-row")?.getBoundingClientRect();
+    const viewport = { left: left + LABEL_WIDTH, right: left + node.clientWidth,
+      top: Math.max(top, ruler?.bottom ?? top), bottom: top + node.clientHeight };
+    const lanes = [...node.querySelectorAll<HTMLElement>(".track-lane[data-track-id]")].map(lane => {
+      const box = lane.getBoundingClientRect();
+      return { element: lane, trackId: lane.dataset.trackId ?? "", trackKind: lane.dataset.trackKind as TimelineTrack["kind"],
+        locked: lane.dataset.trackLocked === "true", left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+    });
+    return visibleTimelineDropLanes(lanes, viewport);
+  };
+
+  const trackContentAtPoint = (clientX: number, clientY: number) => {
+    const node = scrollRef.current;
+    if (!node || ![clientX, clientY].every(Number.isFinite)) return undefined;
+    const rect = node.getBoundingClientRect(), left = rect.left + node.clientLeft, top = rect.top + node.clientTop;
+    // Labels, the sticky ruler and actual scrollbars are never edge targets.
+    const ruler = node.querySelector<HTMLElement>(".ruler-row")?.getBoundingClientRect();
+    const content = { left: left + LABEL_WIDTH, right: left + node.clientWidth,
+      top: Math.max(top, ruler?.bottom ?? top), bottom: top + node.clientHeight };
+    return clientX >= content.left && clientX < content.right && clientY >= content.top && clientY < content.bottom
+      ? content : undefined;
+  };
+
+  const scrollTrackStack = (clientX: number, clientY: number, elapsedMs: number): boolean => {
+    const node = scrollRef.current, content = trackContentAtPoint(clientX, clientY);
+    if (!node || !content || !Number.isFinite(elapsedMs)) return false;
+    const delta = timelineTrackAutoScrollDelta(clientY, content.top, content.bottom, elapsedMs);
+    if (!delta) return false;
+    const before = node.scrollTop;
+    node.scrollTop = Math.max(0, Math.min(Math.max(0, node.scrollHeight - node.clientHeight), before + delta));
+    return node.scrollTop !== before;
+  };
+
+  function scheduleAssetPointer() {
+    if (assetPointerFrameRef.current !== undefined) return;
+    assetPointerLastFrameRef.current ??= performance.now();
+    assetPointerFrameRef.current = requestAnimationFrame(timestamp => {
+      assetPointerFrameRef.current = undefined;
+      const elapsedMs = Math.max(0, timestamp - (assetPointerLastFrameRef.current ?? timestamp));
+      assetPointerLastFrameRef.current = timestamp;
+      assetPointerFlushRef.current(true, elapsedMs);
+      if (assetPointerFrameRef.current === undefined) assetPointerLastFrameRef.current = undefined;
+    });
+  }
+
+  assetPointerFlushRef.current = (allowAutoScroll, elapsedMs = 0) => {
+    const session = assetPointerRef.current, node = scrollRef.current;
+    if (!session || !node || !session.moved) return undefined;
+    if (!session.sourceElement.isConnected || !session.scopeElement.contains(session.sourceElement)
+      || session.scopeElement !== node.closest(".app-shell")) {
+      assetPointerRef.current = undefined;
+      assetPointerLastFrameRef.current = undefined;
+      clearAssetDropVisual();
+      flushDeferredSelectionReveal();
+      return undefined;
+    }
+    let placement = assetDropAtPoint(session.assetId, session.clientX, session.clientY, session.altKey);
+    const content = trackContentAtPoint(session.clientX, session.clientY);
+    if (allowAutoScroll && content) {
+      // Traversal is allowed past a locked/wrong-kind lane; drop admission stays
+      // strict and is recalculated from the newly visible live lane geometry.
+      let scrolled = scrollTrackStack(session.clientX, session.clientY, elapsedMs);
+      if (scrolled) placement = assetDropAtPoint(session.assetId, session.clientX, session.clientY, session.altKey);
+      const delta = timelineAutoScrollDelta(session.clientX, content.left, content.right, elapsedMs);
+      if (delta) {
+        const before = node.scrollLeft;
+        node.scrollLeft = Math.max(0, before + delta);
+        if (node.scrollLeft !== before) {
+          placement = assetDropAtPoint(session.assetId, session.clientX, session.clientY, session.altKey);
+          scrolled = true;
+        }
+      }
+      if (scrolled) scheduleAssetPointer();
+    }
+    showAssetDrop(placement);
+    return placement;
+  };
+
+  assetPointerHandlerRef.current = (detail) => {
+    const scope = scrollRef.current?.closest(".app-shell");
+    if (!scope || detail.scopeElement !== scope) return;
+    const previous = assetPointerRef.current;
+    if (detail.phase === "start") {
+      if (!onInsertAsset || dragRef.current || trimRef.current || scrubRef.current
+        || !project.assets.some(asset => asset.id === detail.assetId)) return;
+      onEditStart?.();
+      committedDragRevealRef.current = undefined;
+      if (assetPointerFrameRef.current !== undefined) cancelAnimationFrame(assetPointerFrameRef.current);
+      assetPointerFrameRef.current = undefined;
+      assetPointerLastFrameRef.current = undefined;
+      clearAssetDropVisual();
+      assetPointerRef.current = detail;
+      return;
+    }
+    if (!previous || previous.sessionId !== detail.sessionId || previous.pointerId !== detail.pointerId
+      || previous.assetId !== detail.assetId || previous.sourceElement !== detail.sourceElement) return;
+    if (detail.phase === "cancel") {
+      if (assetPointerFrameRef.current !== undefined) cancelAnimationFrame(assetPointerFrameRef.current);
+      assetPointerFrameRef.current = undefined;
+      assetPointerLastFrameRef.current = undefined;
+      assetPointerRef.current = undefined;
+      clearAssetDropVisual();
+      flushDeferredSelectionReveal();
+      return;
+    }
+    assetPointerRef.current = detail;
+    if (detail.phase === "move") { if (detail.moved) scheduleAssetPointer(); return; }
+    if (assetPointerFrameRef.current !== undefined) cancelAnimationFrame(assetPointerFrameRef.current);
+    assetPointerFrameRef.current = undefined;
+    assetPointerLastFrameRef.current = undefined;
+    // Release uses current live geometry and current project, not a prior RAF's candidate.
+    const placement = assetPointerFlushRef.current(false);
+    assetPointerRef.current = undefined;
+    clearAssetDropVisual();
+    flushDeferredSelectionReveal();
+    if (!detail.moved) return;
+    if (!placement?.result.allowed) { showDropRejection(true); return; }
+    if (onInsertAsset?.(detail.assetId, placement.trackId, placement.result.start) === false) showDropRejection(true);
+  };
+
+  useEffect(() => {
+    const document = scrollRef.current?.ownerDocument;
+    if (!document) return;
+    const handle = (event: Event) => {
+      const detail: unknown = (event as CustomEvent<unknown>).detail;
+      if (isInternalAssetPointerDragDetail(detail)) assetPointerHandlerRef.current(detail);
+    };
+    document.addEventListener(INTERNAL_ASSET_POINTER_DRAG_EVENT, handle);
+    return () => {
+      document.removeEventListener(INTERNAL_ASSET_POINTER_DRAG_EVENT, handle);
+      if (assetPointerFrameRef.current !== undefined) cancelAnimationFrame(assetPointerFrameRef.current);
+      assetPointerFrameRef.current = undefined;
+      assetPointerLastFrameRef.current = undefined;
+      assetPointerRef.current = undefined;
+    };
+  }, []);
+
   const compatibleLaneAtPointer = (session: DragSession): HTMLElement | undefined => {
-    const target = resolveTimelineDropTarget(session.currentClientX, session.currentClientY, session.trackKind, session.lanes);
-    return target ? session.lanes.find((lane) => lane.trackId === target.trackId)?.element : undefined;
+    session.lanes = currentDropLanes();
+    return resolveTimelineDropTarget(session.currentClientX, session.currentClientY, session.trackKind, session.lanes)?.element;
   };
 
   const snapCandidatesFor = (session: Pick<DragSession, "kind" | "id">, edges: number[]) =>
@@ -242,23 +461,45 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
 
   function scheduleDrag() {
     if (dragFrameRef.current !== undefined) return;
-    dragFrameRef.current = requestAnimationFrame(() => flushDrag());
+    dragLastFrameRef.current ??= performance.now();
+    dragFrameRef.current = requestAnimationFrame(timestamp => {
+      const elapsedMs = Math.max(0, timestamp - (dragLastFrameRef.current ?? timestamp));
+      dragLastFrameRef.current = timestamp;
+      flushDrag(true, elapsedMs);
+      if (dragFrameRef.current === undefined) dragLastFrameRef.current = undefined;
+    });
   }
 
-  function flushDrag(allowAutoScroll = true) {
+  function flushDrag(allowAutoScroll = true, elapsedMs = 0) {
     dragFrameRef.current = undefined;
     const session = dragRef.current;
     const node = scrollRef.current;
     if (!session || !node) return;
-    const targetLane = compatibleLaneAtPointer(session);
+    if (!session.element.isConnected || !node.contains(session.element)) {
+      abortDragSession(session);
+      return;
+    }
+    let targetLane = compatibleLaneAtPointer(session);
     session.canDrop = Boolean(targetLane);
-    if (allowAutoScroll && session.canDrop) {
-      const rect = node.getBoundingClientRect();
-      const delta = timelineAutoScrollDelta(session.currentClientX, rect.left + LABEL_WIDTH, rect.right);
+    const content = trackContentAtPoint(session.currentClientX, session.currentClientY);
+    const canScroll = allowAutoScroll && content && (session.moved || Math.hypot(session.currentClientX - session.originClientX,
+      session.currentClientY - session.originClientY) >= TIMELINE_DRAG_THRESHOLD_PX);
+    if (canScroll
+      && scrollTrackStack(session.currentClientX, session.currentClientY, elapsedMs)) {
+      targetLane = compatibleLaneAtPointer(session);
+      session.canDrop = Boolean(targetLane);
+      scheduleDrag();
+    }
+    if (canScroll && content) {
+      const delta = timelineAutoScrollDelta(session.currentClientX, content.left, content.right, elapsedMs);
       if (delta) {
         const before = node.scrollLeft;
         node.scrollLeft = Math.max(0, node.scrollLeft + delta);
-        if (node.scrollLeft !== before) scheduleDrag();
+        if (node.scrollLeft !== before) {
+          scheduleDrag();
+          targetLane = compatibleLaneAtPointer(session);
+          session.canDrop = Boolean(targetLane);
+        }
       }
     }
     const targetTrackId = targetLane?.dataset.trackId ?? session.originTrackId;
@@ -267,22 +508,23 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
       ? queryTimelineIntervalIndex(clipIndexes.get(targetTrackId)!, preliminary.start - 12 / pixelsPerSecond, preliminary.start + session.duration + 12 / pixelsPerSecond).filter(clip => clip.id !== session.id)
       : [];
     const isStartAllowed = (start: number) => occupied.every(clip => start + session.duration <= clip.timelineStart + 1e-6 || start >= clip.timelineStart + clip.duration - 1e-6);
-    const resolved = resolveTimelineDrag({ originStart: session.originStart, duration: session.duration, originClientX: session.originClientX, currentClientX: session.currentClientX, originScrollLeft: session.originScrollLeft, currentScrollLeft: node.scrollLeft, pixelsPerSecond, fps: project.fps, snapCandidates: snapCandidatesFor(session, [preliminary.start, preliminary.start + session.duration]), magnetEnabled: snapEnabled && !session.altKey, isStartAllowed });
-    session.canDrop &&= isStartAllowed(resolved.start);
-    session.targetStart = session.canDrop ? resolved.start : session.originStart;
-    session.targetTrackId = session.canDrop ? targetTrackId : session.originTrackId;
-    session.moved ||= resolved.moved || targetTrackId !== session.originTrackId;
+    const resolved = resolveTimelineDrag({ originStart: session.originStart, duration: session.duration, originClientX: session.originClientX, currentClientX: session.currentClientX, originScrollLeft: session.originScrollLeft, currentScrollLeft: node.scrollLeft, pixelsPerSecond, fps: project.fps, snapCandidates: snapCandidatesFor(session, [preliminary.start, preliminary.start + session.duration]), magnetEnabled: snapEnabled && !session.altKey });
+    const newLayer = session.kind === "clip" && session.canDrop && !isStartAllowed(resolved.start);
+    session.targetStart = resolved.start;
+    session.targetTrackId = targetTrackId;
+    session.moved ||= resolved.moved || targetTrackId !== session.originTrackId
+      || Math.hypot(session.currentClientX - session.originClientX, session.currentClientY - session.originClientY) >= TIMELINE_DRAG_THRESHOLD_PX;
     const targetLaneTop = targetLane?.getBoundingClientRect().top ?? session.sourceLaneTop;
-    session.element.style.transform = session.canDrop
-      ? `translate3d(${(resolved.start - session.originStart) * pixelsPerSecond}px, ${targetLaneTop - session.sourceLaneTop}px, 0)`
-      : "translate3d(0, 0, 0)";
+    const sourceLaneTop = session.element.closest(".track-lane")?.getBoundingClientRect().top ?? session.sourceLaneTop;
+    session.element.style.transform = `translate3d(${(resolved.start - session.originStart) * pixelsPerSecond}px, ${targetLane ? targetLaneTop - sourceLaneTop : session.currentClientY - session.originClientY + session.sourceLaneTop - sourceLaneTop}px, 0)`;
     session.element.dataset.timelineStart = String(session.targetStart);
     session.element.dataset.targetTrackId = targetTrackId;
     session.element.classList.toggle("is-dragging", session.moved);
     session.element.classList.toggle("is-snapped", session.canDrop && resolved.snappedTo !== undefined);
     session.element.classList.toggle("is-invalid-drop", session.moved && !session.canDrop);
+    session.element.classList.toggle("is-new-layer-drop", session.moved && newLayer);
     showEditPosition(session.moved && session.canDrop ? resolved.start : undefined, session.moved && session.canDrop ? resolved.snappedTo : undefined);
-    node.dataset.dropState = session.canDrop ? "valid" : targetLane ? "overlap" : "invalid";
+    node.dataset.dropState = session.canDrop ? newLayer ? "new-layer" : "valid" : "invalid";
     if (session.activeDropLane !== targetLane) {
       session.activeDropLane?.classList.remove("is-drop-target");
       targetLane?.classList.add("is-drop-target");
@@ -291,15 +533,18 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
   }
 
   const beginItemDrag = (event: ReactPointerEvent<HTMLButtonElement>, item: { kind: DragKind; id: string; trackId: string; trackKind: TimelineTrack["kind"]; start: number; duration: number; locked: boolean }) => {
-    if (event.button !== 0 || item.locked) return;
+    if (event.button !== 0 || item.locked || pointerEditing()) return;
+    suppressClickRef.current = undefined;
+    committedDragRevealRef.current = undefined;
+    event.preventDefault();
+    onEditStart?.();
     event.stopPropagation();
+    // Preserve keyboard focus without the browser scrolling the grabbed clip.
+    event.currentTarget.focus?.({ preventScroll: true });
     if (item.kind === "clip") onSelect(item.id); else onSelectCaption(item.id);
     event.currentTarget.setPointerCapture(event.pointerId);
-    const lanes = [...document.querySelectorAll<HTMLElement>(".track-lane[data-track-id]")].map((lane) => {
-      const rect = lane.getBoundingClientRect();
-      return { element: lane, trackId: lane.dataset.trackId ?? "", trackKind: (lane.dataset.trackKind ?? "video") as TimelineTrack["kind"], locked: lane.dataset.trackLocked === "true", left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
-    });
-    dragRef.current = { kind: item.kind, id: item.id, trackKind: item.trackKind, originTrackId: item.trackId, targetTrackId: item.trackId, originStart: item.start, targetStart: item.start, duration: item.duration, originClientX: event.clientX, currentClientX: event.clientX, currentClientY: event.clientY, originScrollLeft: scrollRef.current?.scrollLeft ?? 0, pointerId: event.pointerId, altKey: event.altKey, moved: false, canDrop: true, element: event.currentTarget, sourceLaneTop: event.currentTarget.closest(".track-lane")?.getBoundingClientRect().top ?? event.currentTarget.getBoundingClientRect().top, lanes };
+    dragLastFrameRef.current = undefined;
+    dragRef.current = { kind: item.kind, id: item.id, trackKind: item.trackKind, originTrackId: item.trackId, targetTrackId: item.trackId, originStart: item.start, targetStart: item.start, duration: item.duration, originClientX: event.clientX, originClientY: event.clientY, currentClientX: event.clientX, currentClientY: event.clientY, originScrollLeft: scrollRef.current?.scrollLeft ?? 0, pointerId: event.pointerId, altKey: event.altKey, moved: false, canDrop: true, element: event.currentTarget, sourceLaneTop: event.currentTarget.closest(".track-lane")?.getBoundingClientRect().top ?? event.currentTarget.getBoundingClientRect().top, lanes: currentDropLanes() };
   };
 
   const moveItemDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -315,7 +560,7 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
   const clearDragVisual = (session: DragSession) => {
     showEditPosition();
     session.element.style.removeProperty("transform");
-    session.element.classList.remove("is-dragging", "is-snapped", "is-invalid-drop");
+    session.element.classList.remove("is-dragging", "is-snapped", "is-invalid-drop", "is-new-layer-drop");
     session.element.dataset.timelineStart = String(session.originStart);
     delete session.element.dataset.targetTrackId;
     const node = scrollRef.current;
@@ -323,6 +568,15 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
     session.activeDropLane?.classList.remove("is-drop-target");
     session.activeDropLane = undefined;
   };
+
+  function abortDragSession(session: DragSession) {
+    if (dragFrameRef.current !== undefined) cancelAnimationFrame(dragFrameRef.current);
+    dragFrameRef.current = undefined;
+    dragLastFrameRef.current = undefined;
+    if (dragRef.current === session) dragRef.current = undefined;
+    clearDragVisual(session);
+    flushDeferredSelectionReveal();
+  }
 
   const endItemDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
     const session = dragRef.current;
@@ -332,14 +586,37 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
     session.altKey = event.altKey;
     if (dragFrameRef.current !== undefined) cancelAnimationFrame(dragFrameRef.current);
     flushDrag(false);
+    if (dragRef.current !== session) return;
     dragRef.current = undefined;
     if (dragFrameRef.current !== undefined) cancelAnimationFrame(dragFrameRef.current);
     dragFrameRef.current = undefined;
+    dragLastFrameRef.current = undefined;
+    const newLayer = session.element.classList.contains("is-new-layer-drop");
     clearDragVisual(session);
-    if (!session.moved || !session.canDrop) return;
+    // Pointer capture can deliver a click to the source even after an invalid
+    // drop. It must not seek back to the source or undo the chosen viewport.
+    if (session.moved) suppressClickRef.current = `${session.kind}:${session.id}`;
+    const frameChanged = Math.round(session.targetStart * project.fps) !== Math.round(session.originStart * project.fps);
+    if (!session.moved || !session.canDrop || (!frameChanged && session.targetTrackId === session.originTrackId)) {
+      flushDeferredSelectionReveal();
+      return;
+    }
     suppressClickRef.current = `${session.kind}:${session.id}`;
-    if (session.kind === "clip") onMoveClip(session.id, session.targetStart, session.targetTrackId);
-    else onMoveCaption(session.id, session.targetStart);
+    if (session.kind === "clip") {
+      committedDragRevealRef.current = { projectId: project.id, clipId: session.id, sourceKey: selectionRevealKey,
+        trackId: session.targetTrackId, allowNewLayer: newLayer, fps: project.fps,
+        startFrame: Math.round(session.targetStart * project.fps), durationFrames: Math.round(session.duration * project.fps) };
+      // The accepted drag already chose its viewport. Do not reveal its old source.
+      selectionReveal.clear();
+    } else flushDeferredSelectionReveal();
+    const accepted = session.kind === "clip" ? onMoveClip(session.id, session.targetStart, session.targetTrackId)
+      : onMoveCaption(session.id, session.targetStart);
+    if (accepted === false) {
+      committedDragRevealRef.current = undefined;
+      selectionReveal.defer();
+      flushDeferredSelectionReveal();
+      showDropRejection();
+    }
   };
 
   const cancelItemDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -347,8 +624,11 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
     if (!session || session.pointerId !== event.pointerId) return;
     if (dragFrameRef.current !== undefined) cancelAnimationFrame(dragFrameRef.current);
     dragFrameRef.current = undefined;
+    dragLastFrameRef.current = undefined;
     dragRef.current = undefined;
+    suppressClickRef.current = `${session.kind}:${session.id}`;
     clearDragVisual(session);
+    flushDeferredSelectionReveal();
   };
 
   const clearTrimVisual = (session: TrimSession) => {
@@ -394,11 +674,14 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
   };
 
   const beginTrim = (event: ReactPointerEvent<HTMLElement>, item: { kind: DragKind; id: string; start: number; duration: number; locked: boolean }, edge: "start" | "end") => {
-    if (event.button !== 0 || item.locked) return;
+    if (event.button !== 0 || item.locked || pointerEditing()) return;
+    suppressClickRef.current = undefined;
     event.preventDefault();
     event.stopPropagation();
     const element = event.currentTarget.closest<HTMLButtonElement>(".timeline-clip");
     if (!element) return;
+    committedDragRevealRef.current = undefined;
+    onEditStart?.();
     if (item.kind === "clip") onSelect(item.id); else onSelectCaption(item.id);
     event.currentTarget.setPointerCapture(event.pointerId);
     trimRef.current = {
@@ -441,6 +724,7 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
     flushTrim();
     trimRef.current = undefined;
     clearTrimVisual(session);
+    flushDeferredSelectionReveal();
     if (!session.moved || session.trimSeconds <= 0) return;
     suppressClickRef.current = `${session.kind}:${session.id}`;
     if (session.kind === "clip") onTrimClip(session.id, session.edge, session.trimSeconds);
@@ -455,6 +739,7 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
     trimFrameRef.current = undefined;
     trimRef.current = undefined;
     clearTrimVisual(session);
+    flushDeferredSelectionReveal();
   };
 
   const trimHandles = (item: { kind: DragKind; id: string; start: number; duration: number; locked: boolean }) => item.locked ? null : <>
@@ -470,6 +755,7 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
       event.stopPropagation();
       return;
     }
+    committedDragRevealRef.current = undefined;
     event.stopPropagation();
     if (kind === "clip") onSelect(id); else onSelectCaption(id);
     onSeek(alignTimelineTime(start, project.fps));
@@ -477,10 +763,12 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
 
   const nudgeItem = (event: ReactKeyboardEvent<HTMLButtonElement>, kind: DragKind, id: string, trackId: string, start: number) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    committedDragRevealRef.current = undefined;
     event.preventDefault();
     event.stopPropagation();
     const frames = event.shiftKey ? 10 : 1;
     if (project.tracks.find(track => track.id === trackId)?.locked) return;
+    onEditStart?.();
     const next = nudgeTimelineTime(start, event.key === "ArrowLeft" ? -frames : frames, project.fps);
     if (kind === "clip") onMoveClip(id, next, trackId); else onMoveCaption(id, next);
   };
@@ -498,7 +786,9 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
   };
 
   const beginScrub = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || pointerEditing()) return;
+    committedDragRevealRef.current = undefined;
+    onEditStart?.();
     event.currentTarget.setPointerCapture(event.pointerId);
     event.currentTarget.classList.add("is-scrubbing");
     scrubRef.current = { pointerId: event.pointerId, currentClientX: event.clientX, element: event.currentTarget };
@@ -520,6 +810,7 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
     flushScrub();
     scrubRef.current = undefined;
     session.element.classList.remove("is-scrubbing");
+    flushDeferredSelectionReveal();
   };
 
   const cancelScrub = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -529,6 +820,7 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
     scrubFrameRef.current = undefined;
     scrubRef.current = undefined;
     session.element.classList.remove("is-scrubbing");
+    flushDeferredSelectionReveal();
   };
 
   const seekFromClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -555,14 +847,11 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
     if (event.key !== "Escape" || (!dragRef.current && !trimRef.current)) return;
     event.preventDefault();
     event.stopPropagation();
-    if (dragFrameRef.current !== undefined) cancelAnimationFrame(dragFrameRef.current);
-    if (trimFrameRef.current !== undefined) cancelAnimationFrame(trimFrameRef.current);
-    dragFrameRef.current = trimFrameRef.current = undefined;
-    const session = dragRef.current ?? trimRef.current!;
+    const session = cancelTimelinePointerEdits({ dragRef, trimRef, dragFrameRef, trimFrameRef,
+      cancelFrame: cancelAnimationFrame, clearDrag: clearDragVisual, clearTrim: clearTrimVisual });
+    if (!session) return;
     suppressClickRef.current = `${session.kind}:${session.id}`;
-    if (dragRef.current) clearDragVisual(dragRef.current);
-    if (trimRef.current) clearTrimVisual(trimRef.current);
-    dragRef.current = trimRef.current = undefined;
+    flushDeferredSelectionReveal();
   };
 
   return <section className="timeline-shell" aria-label="時間軸" onKeyDown={cancelActiveEdit}>
@@ -592,7 +881,7 @@ export function Timeline({ project, duration, playhead, selectedClipId, selected
         </details>
       </div>
     </div>
-    <div className="timeline-scroll" ref={scrollRef} onScroll={handleScroll} data-testid="timeline-scroll" tabIndex={0} aria-label="時間軸；Shift 加滾輪水平捲動，Ctrl 加滾輪縮放">
+    <div className="timeline-scroll" ref={scrollRef} onScroll={handleScroll} data-testid="timeline-scroll" data-timeline-viewport="true" data-pixels-per-second={pixelsPerSecond} data-fps={project.fps} data-timeline-pixels-per-second={pixelsPerSecond} data-timeline-fps={project.fps} tabIndex={0} aria-label="時間軸；Shift 加滾輪水平捲動，Ctrl 加滾輪縮放">
       <div className="timeline-canvas" style={{ width: LABEL_WIDTH + timelineWidth }}>
         <div className="timeline-row ruler-row">
           <div className="track-label ruler-label"><span title={`${project.fps} fps · 分:秒:幀（非丟幀）`}>{timelineFrameLabel(playhead, project.fps)}<small>分 : 秒 : 幀</small></span></div>

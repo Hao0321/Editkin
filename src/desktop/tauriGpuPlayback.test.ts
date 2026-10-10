@@ -14,7 +14,7 @@ describe("native playback bridge",()=>{
     const start=deferred<NativeGpuPlaybackEvent>(),consumer=deferred<void>();
     ipc.invoke.mockImplementation(async name=>name==="start_gpu_preview_playback"?start.promise:{acknowledged:true});
     const receive=vi.fn(()=>consumer.promise);const api=createTauriGpuPreviewApi(owner);
-    expect(Object.keys(api)).toHaveLength(23);
+    expect(Object.keys(api)).toHaveLength(26);
     const result=api.startGpuPreviewPlayback!(session,{startFrame:0,endFrame:90},receive);
     startChannel().onmessage(event({sequence:1,presentedFrames:1}));await flush();expect(receive).not.toHaveBeenCalled();
     start.resolve(event());await flush();expect(receive).toHaveBeenCalledTimes(1);

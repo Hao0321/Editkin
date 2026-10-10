@@ -1,11 +1,16 @@
+import type { MotionScene2D } from "./motionScene2d";
+import type { ReferenceMotionTemplateInstance } from "./referenceMotionInstance";
+import type { Mesh3dScene } from "../motion/mesh3dScene";
+import type { SpringGeometryTrack } from "./motionContinuity";
+import type { MotionPaintDescriptor } from "./motionPaint";
 export * from "./visualTypes";
 import type {
   CaptionCue, CaptionStyle, ClipLayerState, ColorAdjustments, ColorManagementSettings, CreativeTransition, MediaAsset, MotionTrack,
-  ParticleSimulationSettings, Scene25dSettings, TemplateElementOwner, TimelineTrack, Transform2D, Transform3D,
+  FloatingVideoFrame, ParticleSimulationSettings, Scene25dSettings, TemplateElementOwner, TimelineTrack, Transform2D, Transform3D,
 } from "./visualTypes";
 
 
-export type EditorialProfileId = "auto" | "gaming" | "food" | "travel" | "podcast_on_camera" | "podcast_no_face";
+export type EditorialProfileId = "auto" | "gaming" | "food" | "travel" | "music_mv" | "podcast_on_camera" | "podcast_no_face";
 
 export type AestheticReviewStatus = "REVIEW" | "BLOCKED" | "PASSED";
 export type AestheticBenchmarkAxis = "mrbeast_information_energy" | "yingshi_hurricane_cinematic_craft";
@@ -34,7 +39,10 @@ export interface AestheticReview {
   machineBlockers: string[];
   completedAt?: string;
   benchmarkReview?: AestheticBenchmarkReview;
+  reviewer?: "human" | "agent";
 }
+
+export type AestheticReviewPolicy = { mode: "human"; authorization?: string } | { mode: "agent_reference_comparison"; authorization: string };
 
 export interface AestheticSystem {
   schema: "editkin.aesthetic-system/v1";
@@ -49,7 +57,8 @@ export interface AestheticSystem {
   avoid: string[];
   sharedDnaSha256: string;
   dimensions: AestheticDimension[];
-  scoreContract: { passScore: number; blockBelow: number; minimumDimensionRating: number; humanReviewRequired: true };
+  scoreContract: { passScore: number; blockBelow: number; minimumDimensionRating: number; humanReviewRequired: boolean };
+  reviewPolicy?: AestheticReviewPolicy;
   review: AestheticReview;
 }
 
@@ -57,6 +66,7 @@ export type MotionGraphicKind = "title" | "card" | "tag" | "counter";
 export type MotionGraphicAnimation = "fade" | "slide_up" | "pop" | "spring_soft";
 export type MotionGraphicTrackingMode = "anchor" | "surface";
 export type MotionGraphicVisualStyle =
+  | "native_paint"
   | "solid_panel"
   | "holo_scan_cyan"
   | "holo_grid_lime"
@@ -69,6 +79,7 @@ export type MotionGraphicVisualStyle =
 export type MotionCompositionSchema = "hao.motion-composition/v1" | "hao.motion-composition/v2";
 export type MotionGraphicV2SequenceUnit = "all" | "word" | "character";
 export type MotionGraphicV2SequenceOrder = "forward" | "reverse" | "center_out";
+export type MotionGraphicV2ScaleOrigin = "top_left" | "center";
 
 export type MotionGraphicV2Easing =
   | { type: "linear" }
@@ -85,6 +96,15 @@ export interface MotionGraphicV2Phase {
   scale: number;
   opacity: number;
   easing: MotionGraphicV2Easing;
+  /** Optional Motion Language pose. Omitted means zero, and the frame receipt
+   * stays byte-identical to the four-field historical pose. */
+  /** Gaussian blur radius in project pixels: a focus-pull entrance / exit. */
+  blurPixels?: number;
+  /** Rotation about each segment's own center, clockwise degrees. */
+  rotationDegrees?: number;
+  /** Extra horizontal offset of the outermost unit, scaled by its distance
+   * from the text center: letters converge (entrance) or fan out (exit). */
+  spreadPixels?: number;
 }
 
 export interface MotionGraphicV2Motion {
@@ -93,6 +113,14 @@ export interface MotionGraphicV2Motion {
     order: MotionGraphicV2SequenceOrder;
     exitOrder: MotionGraphicV2SequenceOrder;
     staggerFrames: number;
+    /** Omitted follows entrance spacing; zero exits the complete sentence together. */
+    exitStaggerFrames?: number;
+    /** Omitted keeps the historical top-left pivot; "center" scales each segment
+     * about its own box center by compensating translation in the evaluator. */
+    scaleOrigin?: MotionGraphicV2ScaleOrigin;
+    /** Scale reached at the end of the readable hold (linear slow push from 1).
+     * Requires a centered scale origin. Omitted keeps a static hold. */
+    holdScale?: number;
   };
   entrance: MotionGraphicV2Phase;
   exit: MotionGraphicV2Phase;
@@ -107,6 +135,35 @@ export interface MotionGraphicV2Layout {
   /** Omitted preserves the authored fixed-width slot in existing projects. */
   widthMode?: "fixed" | "fit_content";
 }
+
+/** Editkin-authored geometric layers; no HTML, CSS animation or component payload. */
+export type MotionVectorV2 = ({
+  schema: "editkin.motion-vector/v1" | "editkin.motion-vector-stage/v1";
+  heightPixels: number;
+  revealFrames: number;
+} & (
+  | { kind: "rule" | "panel" | "ellipse" }
+  | { kind: "step_progress"; steps: number; activeStep: number; gapPixels: number }
+  | { kind: "dot_grid"; spacingPixels: number; dotRadiusPixels: number }
+  | { kind: "line_grid"; spacingPixels: number; lineWidthPixels: number; majorEvery: number }
+  | { kind: "connection_field"; seed: number; points: number; dotRadiusPixels: number; lineWidthPixels: number;
+      burstFrames: number; gatherStartFrame: number; gatherFrames: number; connectStartFrame: number; connectFrames: number;
+      groupColors?: [string, string, string] }
+)) | {
+  /** Explicit topmost ink, not a panel or a background. Old parsers reject
+   * this version instead of silently putting a crossout under its glyphs. */
+  schema: "editkin.motion-vector-annotation/v1"; kind: "rule"; heightPixels: number; revealFrames: number;
+} | { schema: "editkin.motion-vector-continuity/v1"; kind: "spring_panel"; heightPixels: number; revealFrames: 1; geometry: SpringGeometryTrack }
+  /** Authored flat shape (Original Elements): non-zero filled contours in box
+   * pixels, filled with backgroundColor. Strokes arrive pre-expanded to fills. */
+  | { schema: "editkin.motion-vector-shape/v1"; kind: "shape"; heightPixels: number; revealFrames: number;
+      /** Wipe reveal side when revealFrames > 1: the shape is uncovered from this edge. */
+      revealFrom?: "left" | "right" | "top" | "bottom"; commands: MotionVectorShapeCommand[] };
+
+export type MotionVectorShapeCommand =
+  | { type: "M" | "L"; x: number; y: number }
+  | { type: "C"; x1: number; y1: number; x2: number; y2: number; x: number; y: number }
+  | { type: "Z" };
 
 export interface MotionGraphic {
   schema: MotionCompositionSchema;
@@ -132,6 +189,9 @@ export interface MotionGraphic {
   accentColor: string;
   /** Procedural renderer material. Text remains project data and is never baked into the preset. */
   visualStyle?: MotionGraphicVisualStyle;
+  /** Versioned glyph ink. The field is retained for saved-project compatibility; its descriptor
+   * discriminator explicitly distinguishes scene v1 from display v2. */
+  paintV1?: MotionPaintDescriptor;
   animation: MotionGraphicAnimation;
   trackId?: string;
   trackingMode?: MotionGraphicTrackingMode;
@@ -139,6 +199,9 @@ export interface MotionGraphic {
   offsetY: number;
   motionV2?: MotionGraphicV2Motion;
   layoutV2?: MotionGraphicV2Layout;
+  vectorV2?: MotionVectorV2;
+  /** Authored v2 vector stage beneath video layers; omitted retains foreground. */
+  compositeLayer?: "background" | "foreground";
   templateOwner?: TemplateElementOwner;
 }
 
@@ -166,6 +229,8 @@ export interface TemplateCreativeSnapshot {
   effectPresetIds: string[];
   transitionIn: CreativeTransition | null;
   transitionOut: CreativeTransition | null;
+  floatingFrame?: FloatingVideoFrame | null;
+  transform?: Transform2D;
 }
 
 export interface TemplateApplicationSnapshot {
@@ -185,6 +250,7 @@ export interface TemplateApplicationState {
   createdAt: string;
   before: TemplateApplicationSnapshot;
   applied: TemplateApplicationSnapshot;
+  generatedClips?: { clipId: string; trackId: string }[];
 }
 
 export interface DirectorState {
@@ -207,15 +273,18 @@ export interface EditComposition {
   captionStyle: CaptionStyle;
   motionTracks: MotionTrack[];
   motionGraphics: MotionGraphic[];
+  /** Versioned foreground scene; omitted preserves legacy graphic rendering. */
+  motionScenes?: MotionScene2D[];
   director: DirectorState;
   colorManagement?: ColorManagementSettings;
   scene25d?: Scene25dSettings;
+  scene3d?: Mesh3dScene;
   particleSimulation?: ParticleSimulationSettings;
   updatedAt: string;
 }
 
 export interface EditProject {
-  schemaVersion: 8;
+  schemaVersion: 9 | 10;
   revision: number;
   id: string;
   name: string;
@@ -226,6 +295,7 @@ export interface EditProject {
   aestheticSystem?: AestheticSystem;
   colorManagement?: ColorManagementSettings;
   scene25d?: Scene25dSettings;
+  scene3d?: Mesh3dScene;
   particleSimulation?: ParticleSimulationSettings;
   assets: MediaAsset[];
   compositions: EditComposition[];
@@ -234,8 +304,12 @@ export interface EditProject {
   captionStyle: CaptionStyle;
   motionTracks: MotionTrack[];
   motionGraphics: MotionGraphic[];
+  /** Versioned foreground scene; omitted preserves legacy graphic rendering. */
+  motionScenes?: MotionScene2D[];
   director: DirectorState;
   templateApplication?: TemplateApplicationState;
+  /** Root metadata is admitted only by schema10; omission preserves schema9 projects. */
+  referenceMotionInstances?: ReferenceMotionTemplateInstance[];
   updatedAt: string;
 }
 

@@ -56,6 +56,32 @@ describe("autopilot motion tracking preparation", () => {
 });
 
 describe("autopilot template preparation", () => {
+  it("returns actual native scene commands and bound editorial events without writing to the project", async () => {
+    const project = await mocks.readProject(); project.width = 360; project.height = 640;
+    project.assets[0].duration = 3; project.tracks[0].clips[0].duration = 3;
+    const before = structuredClone(project);
+    const result = body(await mocks.handlers.get("prepare_native_reel_scene")!({ projectPath: input.projectPath, templateId: "editorial_steps",
+      startFrame: 0, durationFrames: 90, title: "看清細節", body: "一幕一個重點", progress: { steps: 3, activeStep: 1 }, evidenceRefs: ["brief:approved-copy"] }));
+    expect(result.status).toBe("REVIEW_REQUIRED");
+    expect(result.commands.filter((c: any) => c.graphic?.vectorV2)).toHaveLength(5);
+    expect(result.editorialGraphics.filter((e: any) => e.kind === "native_shape").every((e: any) => e.message === "")).toBe(true);
+    expect(mocks.applyCommands).not.toHaveBeenCalled();
+    expect(project).toEqual(before);
+  });
+  it("exposes the editorial reel's exact motion route without inserting placeholder text", async () => {
+    const result = body(await mocks.handlers.get("prepare_autopilot_template_package")!({
+      projectPath: input.projectPath, format: "short", templateId: "editorial_steps", clipIds: ["clip-1"],
+    }));
+    expect(result.suggestions).toMatchObject({
+      motionGraphicPresetId: "reel_editorial_step", motionClipPresetId: "chapter_snap",
+    });
+    expect(result.commands.map((command: any) => command.type)).toEqual(["set_clip_creative"]);
+    const motion = body(await mocks.handlers.get("prepare_clip_motion_preset")!({
+      projectPath: input.projectPath, clipId: "clip-1", presetId: "chapter_snap",
+    }));
+    expect(motion.commands.map((command: any) => command.keyframe.time)).toEqual([0, 8 / 30, 12 / 30]);
+    expect(mocks.applyCommands).not.toHaveBeenCalled();
+  });
   it("compiles the long-form look and translucent subtitle panel without canned copy or mutation", async () => {
     const result = body(await mocks.handlers.get("prepare_autopilot_template_package")!({
       projectPath: input.projectPath, format: "long", templateId: "narrative_vlog", clipIds: ["clip-1"],

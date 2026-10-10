@@ -29,7 +29,14 @@ const PRODUCT_NATIVE_ENGINE_MODULES = new Set([
   "src/application/autoRotoNativeProduct.ts",
   "src/application/autoRotoProductContract.ts",
   "src/domain/autoRotoProductReceipt.ts",
+  // Render infrastructure reached through nativeCore's runProcess since the
+  // 2026-10-05 render-cancellation change; reviewed: no research markers.
+  "src/render/mediaDisplayGeometry.ts",
+  "src/render/mediaProcess.ts",
   "src/render/nativeCore.ts",
+  "src/render/renderLifetime.ts",
+  "src/shared/boundedFile.ts",
+  "src/shared/localMediaPath.ts",
   "src/shared/utf8ByteOrder.ts",
 ]);
 const SERVICE_RESEARCH_MARKERS = [

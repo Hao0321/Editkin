@@ -1,3 +1,6 @@
+import type { MotionScene2D } from "./motionScene2d";
+import type { ReferenceMotionTemplateInstance } from "./referenceMotionInstance";
+import type { Mesh3dScene } from "../motion/mesh3dScene";
 import type { SmartCutKeepRange } from "./smartCut";
 import type {
   CaptionCue,
@@ -40,6 +43,7 @@ export type EditorCommand =
   | { type: "import_asset"; asset: MediaAsset }
   | { type: "delete_asset"; assetId: string }
   | { type: "add_clip"; clip: TimelineClip }
+  | { type: "replace_clip_source"; clipId: string; expectedAssetId: string; assetId: string; sourceStart: number }
   | { type: "add_track"; track: TimelineTrack }
   | { type: "precompose_clips"; compositionId: string; assetId: string; replacementClipId: string; targetTrackId: string; name: string; clipIds: string[] }
   | { type: "delete_track"; trackId: string }
@@ -57,6 +61,7 @@ export type EditorCommand =
   | { type: "compact_track"; trackId: string }
   | { type: "smart_cut_clip"; clipId: string; keepRanges: SmartCutKeepRange[]; segmentIds: string[] }
   | { type: "update_clip_transform"; clipId: string; patch: Partial<Transform2D> }
+  | { type: "set_mesh_3d_scene"; scene?: Mesh3dScene }
   | { type: "configure_scene_25d"; enabled: boolean }
   | { type: "set_scene_25d_settings"; settings: Scene25dSettings }
   | { type: "update_clip_transform_3d"; clipId: string; patch: Partial<Transform3D> }
@@ -85,10 +90,17 @@ export type EditorCommand =
   | { type: "add_motion_track"; track: MotionTrack }
   | { type: "delete_motion_track"; trackId: string }
   | { type: "set_motion_track_point"; trackId: string; point: MotionTrackPoint }
+  | { type: "add_motion_scene"; scene: MotionScene2D }
+  | { type: "update_motion_scene"; sceneId: string; scene: MotionScene2D }
+  | { type: "revise_motion_scene_graphics"; expectedRevision: number; expectedScene: MotionScene2D; expectedGraphics: MotionGraphic[]; graphics: MotionGraphic[] }
+  | { type: "revise_original_motion_scene_graphic"; sceneId: string; expectedGraphic: MotionGraphic; graphic: MotionGraphic }
+  | { type: "delete_motion_scene"; sceneId: string }
   | { type: "add_motion_graphic"; graphic: MotionGraphic }
-  | { type: "update_motion_graphic"; graphicId: string; patch: Partial<Omit<MotionGraphic, "schema" | "id">> }
+  | { type: "update_motion_graphic"; graphicId: string; patch: Partial<Omit<MotionGraphic, "id">> }
   | { type: "delete_motion_graphic"; graphicId: string }
+  | { type: "reorder_motion_graphics"; graphicIds: string[] }
   | { type: "set_asset_derivatives"; assetId: string; derivatives?: MediaAsset["derivatives"] }
+  | { type: "relink_asset_source"; assetId: string; sourceUri: string; expectedSourceSha256: string }
   | { type: "set_asset_color_interpretation"; assetId: string; interpretation: InputColorSpace }
   | { type: "set_asset_alpha_mode"; assetId: string; alphaMode: NonNullable<MediaAsset["alphaMode"]> }
   | { type: "set_project_color_management"; patch: Partial<Pick<ColorManagementSettings, "mode" | "outputTransform">> }
@@ -106,5 +118,7 @@ export type EditorCommand =
   | { type: "set_project_resolution"; width: number; height: number }
   | { type: "set_template_application"; application: TemplateApplicationState }
   | { type: "clear_template_application" }
+  | { type: "upsert_reference_motion_instance"; instance: ReferenceMotionTemplateInstance; expectedInstanceRevision?: number }
+  | { type: "remove_reference_motion_instance"; id: string; expectedInstanceRevision: number }
   | { type: "rename_project"; name: string }
   | { type: "batch"; commands: EditorCommand[] };

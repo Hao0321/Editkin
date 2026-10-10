@@ -10,7 +10,9 @@ body::before { display: none; }
 button, input, select, textarea { font: inherit; }
 button { color: inherit; }
 button, summary, select { -webkit-tap-highlight-color: transparent; }
-.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; clip: rect(0 0 0 0); overflow: hidden; }
+/* !important: element rules such as `.field-label select { width: 100% }` are more
+   specific and would otherwise stretch a hidden control far outside its panel. */
+.visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; border: 0 !important; clip: rect(0 0 0 0); overflow: hidden; white-space: nowrap; }
 
 .app-shell {
   position: relative;
@@ -33,6 +35,7 @@ button, summary, select { -webkit-tap-highlight-color: transparent; }
   background: var(--surface);
   box-shadow: none;
 }
+.toolbar:has(.project-menu[open]) { z-index: 85; }
 .brand-lockup { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .brand-mark {
   position: relative;
@@ -110,7 +113,7 @@ button, summary, select { -webkit-tap-highlight-color: transparent; }
 
 .workspace-grid { position: relative; display: grid; grid-template-columns: 236px minmax(520px, 1fr) 300px; grid-template-rows: minmax(0,1fr); min-height: 0; overflow: hidden; }
 .panel { min-width: 0; background: var(--surface); }
-.media-bin { display: flex; flex-direction: column; min-height: 0; padding: 20px 16px 14px; border-right: 1px solid var(--line); box-shadow: none; }
+.media-bin { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; padding: 20px 16px 14px; border-right: 1px solid var(--line); box-shadow: none; }
 .inspector { min-width: 0; padding: 20px 18px; overflow: hidden auto; border-left: 1px solid var(--line); box-shadow: none; }
 .panel-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .panel-title h2 { margin: 3px 0 0; font-size: 17px; letter-spacing: -.02em; }

@@ -4,6 +4,7 @@ import type { HaoDesktopApi } from "../src/desktop/types";
 const api: HaoDesktopApi = {
   isDesktop: true,
   pickMedia: () => ipcRenderer.invoke("hao:pick-media"),
+  importMediaPaths: (paths) => ipcRenderer.invoke("hao:import-media-paths", { paths }),
   pickBatchMedia: (editorialProfile: string) => ipcRenderer.invoke("hao:pick-batch-media", { editorialProfile }),
   getBatchSession: () => ipcRenderer.invoke("hao:get-batch-session"),
   runBatchAutoEditItem: (sessionId, jobId) => ipcRenderer.invoke("hao:run-batch-auto-edit-item", { sessionId, jobId }),
@@ -12,7 +13,22 @@ const api: HaoDesktopApi = {
   importCreativeAsset: (assetId) => ipcRenderer.invoke("hao:import-creative-asset", { assetId }),
   previewCreativeAsset: (assetId, mode = "media") => ipcRenderer.invoke("hao:preview-creative-asset", { assetId, mode }),
   readColorAsset: (relativePath) => ipcRenderer.invoke("hao:read-color-asset", { relativePath }),
+  readMesh3dFont: (weight) => ipcRenderer.invoke("hao:read-mesh-3d-font", { weight }),
+  readBundledFontFace: async (faceId) => {
+    const result: unknown = await ipcRenderer.invoke("hao:read-bundled-font-face", { faceId });
+    // isView uses the binary internal slot across realms. Copy exactly the
+    // view's bytes, including a Buffer's offset, without retaining its prototype
+    // or leaking the surrounding pooled allocation through contextBridge.
+    if (!ArrayBuffer.isView(result) || Object.prototype.toString.call(result) !== "[object Uint8Array]"
+      || result.byteLength === 0 || result.byteLength > 16 * 1024 * 1024) {
+      throw new Error("Bundled font IPC did not return bounded binary bytes");
+    }
+    return new Uint8Array(result.buffer, result.byteOffset, result.byteLength).slice();
+  },
   listInstalledPlugins: () => ipcRenderer.invoke("hao:list-installed-plugins"),
+  getWorkflowProfile: () => ipcRenderer.invoke("hao:get-workflow-profile"),
+  saveWorkflowProfile: (profile) => ipcRenderer.invoke("hao:save-workflow-profile", { profile }),
+  openPluginFolder: () => ipcRenderer.invoke("hao:open-plugin-folder"),
   compilePluginTool: (pluginId, capabilityId, targetClipId, parameters = {}) => ipcRenderer.invoke("hao:compile-plugin-tool", { pluginId, capabilityId, targetClipId, parameters }),
   openProject: () => ipcRenderer.invoke("hao:open-project"),
   saveProject: (project, currentPath, saveAs) => ipcRenderer.invoke("hao:save-project", { project, currentPath, saveAs }),

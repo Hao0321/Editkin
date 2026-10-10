@@ -9,9 +9,10 @@ export interface CanvasResolution {
   label: "9:16" | "16:9" | "1:1";
 }
 
-export function canvasResolutionForAsset(asset: Pick<MediaAsset, "kind" | "width" | "height">): CanvasResolution | undefined {
+export function canvasResolutionForAsset(asset: Pick<MediaAsset, "kind" | "width" | "height" | "displayAspectRatio">): CanvasResolution | undefined {
   if (asset.kind === "audio" || !asset.width || !asset.height || asset.width <= 0 || asset.height <= 0) return undefined;
-  const ratio = asset.width / asset.height;
+  const ratio = asset.displayAspectRatio ?? asset.width / asset.height;
+  if (!Number.isFinite(ratio) || ratio <= 0) return undefined;
   if (ratio < 0.9) return { width: 1080, height: 1920, orientation: "portrait", label: "9:16" };
   if (ratio > 1.1) return { width: 1920, height: 1080, orientation: "landscape", label: "16:9" };
   return { width: 1080, height: 1080, orientation: "square", label: "1:1" };

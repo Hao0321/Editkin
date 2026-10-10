@@ -1,0 +1,4 @@
+# fontTools version recorded in public/fonts/static-face-provenance.json.
+# The pure-Python wheel reproduces the pinned faces; scripts/install-render-fonts.py verifies every SHA-256.
+# Install with: python -m pip install --require-hashes --no-deps --only-binary :all: -r scripts/render-fonts-requirements.txt
+fonttools==4.43.0 --hash=sha256:e4bc589d8da09267c7c4ceaaaa4fc01a7908ac5b43b286ac9279afe76407c384

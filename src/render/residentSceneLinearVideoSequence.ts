@@ -9,6 +9,11 @@ import { depthOfFieldGraphKeyframes, sampleDepthOfFieldNode } from "./depthOfFie
 import { sampleScene25dCameraNode, scene25dCameraGraphKeyframes } from "./scene25dCameraAnimation";
 import { sampleScene25dLightNode, scene25dLightGraphKeyframes } from "./scene25dLightAnimation";
 import { INPUT, INPUT_V2, residentSceneLinearInputAtFrame, assertResidentSceneLinearWhiteBalanceReceipt } from "./residentSceneLinearWhiteBalance";
+import { prepareNativeMotionPaintReceiptExpectations, assertNativeMotionPaintLoadReceipt,
+  assertNativeMotionPaintFrameReceipt } from "../motion/nativeMotionPaintReceipt";
+import { assertNativeFloatingLoadReceipt, assertNativeFloatingFrameReceipt, nativeFloatRuntimeMatches } from "./nativeFloatingVideoFrameReceipt";
+import { assertBoundNativeVideoTargetIdentity, assertNativeVideoWorkerRuntime } from "./nativeVideoRuntimeReceipt";
+import { canonicalJson } from "../shared/canonicalJson";
 export { residentSceneLinearInputAtFrame, assertResidentSceneLinearWhiteBalanceReceipt } from "./residentSceneLinearWhiteBalance";
 
 export interface ResidentSceneLinearVideoSequenceReceipt {
@@ -26,8 +31,17 @@ export interface ResidentSceneLinearVideoSequenceReceipt {
   ocioVersion: "2.5.2";
   acesVersion: "2.0";
   configSha256: string;
-  productPathCpuPixelCopies: 0;
+  productPathCpuPixelCopies: number;
+  decodedVideoCpuPixelCopies: 0;
+  nativePaintCount: number;
+  nativePaintGraphicIds: readonly string[];
+  nativePaintCpuUploadBytes: number;
+  nativePaintRasterCount: number;
+  nativePaintTextureUploadCount: number;
+  nativePaintFramesWithActiveGraphics: number;
   verificationReadback: true;
+  videoTargetIdentity?: Record<string, unknown>;
+  offscreenOutput?: { nativeWindow: false; nativeSwapChain: false; outputReadbackCopiesPerFrame: 1 };
   firstFrameSha256: string;
   lastFrameSha256: string;
   resourcePlan: Record<string, unknown>;
@@ -100,6 +114,7 @@ export interface ResidentSceneLinearVideoSequenceReceipt {
 
 interface SequenceRequest {
   executable: string;
+  selectedNativeVideoRuntime?: import("../application/selectedNativeVideoRuntime").SelectedNativeVideoRuntimeIdentity;
   graph: EngineRenderGraph;
   assetBindings: Record<string, string>;
   startFrame: number;
@@ -108,6 +123,136 @@ interface SequenceRequest {
   timeoutMs: number;
   fontRoot?: string;
   pluginRoots?: string[];
+  signal?: AbortSignal;
+}
+
+type WorkerMessage = Record<string, unknown>;
+interface PendingWorkerRequest {
+  command: string;
+  resolve(message: WorkerMessage): void;
+  reject(error: Error): void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+function abortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error ? signal.reason : new Error("Resident video sequence cancelled", { cause: signal.reason });
+}
+
+/** The same lifetime is used by production export and owned worker controls. */
+export function createResidentSequenceWorker(input: {
+  executable: string;
+  args: readonly string[];
+  deadlineAt: number;
+  fontRoot?: string;
+  signal?: AbortSignal;
+}) {
+  input.signal?.throwIfAborted();
+  const remaining = () => input.deadlineAt - performance.now();
+  if (!Number.isFinite(input.deadlineAt) || remaining() <= 0) throw new Error("Resident video sequence deadline exceeded before spawn");
+  const child = spawn(input.executable, [...input.args], {
+    windowsHide: true, stdio: ["pipe", "pipe", "pipe"],
+    env: { ...process.env, ...(input.fontRoot ? { EDITKIN_FONT_ROOT: input.fontRoot } : {}) },
+  });
+  const lines = createInterface({ input: child.stdout });
+  const pending = new Map<string, PendingWorkerRequest>();
+  let sequence = 0;
+  let stderr = "";
+  let failure: Error | undefined;
+  let exited = false;
+  let hasClosed = false;
+  let readySettled = false;
+  let closing: Promise<void> | undefined;
+  let readyResolve!: (message: WorkerMessage) => void;
+  let readyReject!: (error: Error) => void;
+  const ready = new Promise<WorkerMessage>((resolvePromise, reject) => { readyResolve = resolvePromise; readyReject = reject; });
+  // A child can fail synchronously before its owner reaches await ready.
+  void ready.catch(() => undefined);
+  let closedResolve!: () => void;
+  const closed = new Promise<void>(resolvePromise => { closedResolve = resolvePromise; });
+  let readyTimer: ReturnType<typeof setTimeout>;
+  let lifetimeTimer: ReturnType<typeof setTimeout>;
+  const settleFailure = (error: Error, terminate = true) => {
+    failure ??= error;
+    clearTimeout(readyTimer);
+    clearTimeout(lifetimeTimer);
+    if (!readySettled) { readySettled = true; readyReject(failure); }
+    for (const entry of pending.values()) { clearTimeout(entry.timer); entry.reject(failure); }
+    pending.clear();
+    if (terminate && !hasClosed && !child.killed) child.kill();
+  };
+  const onAbort = () => settleFailure(abortError(input.signal!));
+  child.stderr.on("data", chunk => { stderr = `${stderr}${String(chunk)}`.slice(-100_000); });
+  child.once("error", error => settleFailure(error));
+  child.stdin.on("error", error => settleFailure(error));
+  child.once("exit", (code, signal) => {
+    exited = true;
+    settleFailure(new Error(`${basename(input.executable)} exited ${code ?? signal ?? "unknown"}: ${stderr.slice(-4_000)}`), false);
+  });
+  child.once("close", () => {
+    hasClosed = true;
+    settleFailure(new Error(`${basename(input.executable)} closed before request completed: ${stderr.slice(-4_000)}`), false);
+    closedResolve();
+  });
+  lines.on("line", line => {
+    let message: WorkerMessage;
+    try { message = JSON.parse(line) as WorkerMessage; } catch { return; }
+    if (failure) return;
+    if (message.event === "ready") {
+      if (!readySettled) { clearTimeout(readyTimer); readySettled = true; readyResolve(message); }
+      return;
+    }
+    const id = typeof message.id === "string" ? message.id : "";
+    const entry = pending.get(id);
+    if (!entry) return;
+    pending.delete(id);
+    clearTimeout(entry.timer);
+    if (message.ok === true) entry.resolve(message.result as WorkerMessage);
+    else entry.reject(new Error(`${entry.command} 失敗：${String(message.error ?? "unknown GPU error")}`));
+  });
+  readyTimer = setTimeout(() => settleFailure(new Error(`GPU compositor ready timeout: ${stderr.slice(-4_000)}`)), Math.min(remaining(), 60_000));
+  lifetimeTimer = setTimeout(() => settleFailure(new Error("Resident video sequence deadline exceeded")), remaining());
+  input.signal?.addEventListener("abort", onAbort, { once: true });
+  if (input.signal?.aborted) onAbort();
+  const request = (command: string, payload: WorkerMessage = {}): Promise<WorkerMessage> => {
+    if (failure) return Promise.reject(failure);
+    if (input.signal?.aborted) { onAbort(); return Promise.reject(failure!); }
+    if (remaining() <= 0) { settleFailure(new Error("Resident video sequence deadline exceeded")); return Promise.reject(failure!); }
+    return new Promise((resolvePromise, reject) => {
+      const id = `resident-export-${++sequence}`;
+      const timer = setTimeout(() => settleFailure(new Error(`${command} timeout: ${stderr.slice(-4_000)}`)), Math.min(remaining(), 60_000));
+      pending.set(id, { command, resolve: resolvePromise, reject, timer });
+      child.stdin.write(`${JSON.stringify({ id, command, ...payload })}\n`, error => { if (error) settleFailure(error); });
+    });
+  };
+  const close = (loadedSessionId?: string): Promise<void> => closing ??= (async () => {
+    const cleanupDeadlineAt = performance.now() + 5_000;
+    // Leave a final second to observe close after terminating a stuck native RPC.
+    const terminateTimer = setTimeout(() => settleFailure(new Error("Resident video cleanup deadline exceeded")), 4_000);
+    try {
+      if (!failure && !exited && !hasClosed) {
+        if (loadedSessionId) await request("engine_video_release", { sessionId: loadedSessionId }).catch(() => undefined);
+        if (!failure && !exited && !hasClosed) await request("surface_release").catch(() => undefined);
+        if (!failure && !exited && !hasClosed) await request("shutdown").catch(() => undefined);
+      }
+    } finally {
+      if (!child.stdin.destroyed) child.stdin.end();
+      if (!hasClosed && !child.killed) child.kill();
+      let closeTimer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([closed, new Promise<never>((_, reject) => {
+          closeTimer = setTimeout(() => reject(new Error(`Owned resident worker ${child.pid ?? "unknown"} did not close within cleanup budget`)), Math.max(0, cleanupDeadlineAt - performance.now()));
+        })]);
+      } finally {
+        clearTimeout(terminateTimer);
+        clearTimeout(closeTimer);
+        clearTimeout(readyTimer);
+        clearTimeout(lifetimeTimer);
+        input.signal?.removeEventListener("abort", onAbort);
+        lines.close();
+      }
+    }
+  })();
+  return { ready, request, close, closed, pid: child.pid };
 }
 
 const CONFIG_SHA256 = "eda5b0008a43b72b98ad540e32eb0eb83b340dde54e35bddba64ccbafac1029a";
@@ -186,57 +331,41 @@ function scene25dReceiptMatches(
 }
 
 export async function renderResidentSceneLinearVideoSequence(input: SequenceRequest): Promise<ResidentSceneLinearVideoSequenceReceipt> {
+  input.signal?.throwIfAborted();
+  if (!Number.isFinite(input.timeoutMs) || input.timeoutMs <= 0) throw new Error("正式 resident video sequence 的 timeout 無效");
+  const deadlineAt = performance.now() + input.timeoutMs;
+  const checkLifetime = () => {
+    input.signal?.throwIfAborted();
+    if (performance.now() >= deadlineAt) throw new Error("Resident video sequence deadline exceeded");
+  };
   if (!Number.isSafeInteger(input.startFrame) || input.startFrame < 0
     || !Number.isSafeInteger(input.frameCount) || input.frameCount < 1) throw new Error("正式 resident video sequence 的影格範圍無效");
   residentSceneLinearInputAtFrame(input.graph, input.startFrame);
+  const nativePaintExpected = await prepareNativeMotionPaintReceiptExpectations(input.graph);
+  checkLifetime();
   const observedInputTransforms = new Set<ResidentSceneLinearVideoSequenceReceipt["inputTransform"]>();
   await mkdir(input.outputDirectory, { recursive: true });
   const graphPath = join(input.outputDirectory, "engine-graph.json");
   const bindingsPath = join(input.outputDirectory, "asset-bindings.json");
   const effectBindingsPath = join(input.outputDirectory, "effect-bindings.json");
   const effectBindings = await resolveGpuEffectGraphBindings(input.graph, input.pluginRoots);
+  checkLifetime();
   await Promise.all([
     writeFile(graphPath, `${JSON.stringify(input.graph, null, 2)}\n`, "utf8"),
     writeFile(bindingsPath, `${JSON.stringify(input.assetBindings, null, 2)}\n`, "utf8"),
     writeFile(effectBindingsPath, `${JSON.stringify(effectBindings, null, 2)}\n`, "utf8"),
   ]);
-  const child = spawn(input.executable, ["serve"], {
-    windowsHide: true,
-    stdio: ["pipe", "pipe", "pipe"],
-    env: { ...process.env, ...(input.fontRoot ? { EDITKIN_FONT_ROOT: input.fontRoot } : {}) },
-  });
-  const lines = createInterface({ input: child.stdout });
-  const pending = new Map<string, (message: Record<string, unknown>) => void>();
-  let sequence = 0;
-  let stderr = "";
-  let readyResolve: ((message: Record<string, unknown>) => void) | undefined;
-  let readyReject: ((error: Error) => void) | undefined;
-  const ready = new Promise<Record<string, unknown>>((resolvePromise, reject) => { readyResolve = resolvePromise; readyReject = reject; });
-  child.stderr.on("data", (chunk) => { stderr = `${stderr}${String(chunk)}`.slice(-100_000); });
-  child.once("error", (error) => readyReject?.(error));
-  child.once("exit", (code) => {
-    if (code && code !== 0) readyReject?.(new Error(`${basename(input.executable)} exit ${code}: ${stderr.slice(-4_000)}`));
-  });
-  lines.on("line", (line) => {
-    let message: Record<string, unknown>;
-    try { message = JSON.parse(line) as Record<string, unknown>; } catch { return; }
-    if (message.event === "ready") { readyResolve?.(message); return; }
-    const id = typeof message.id === "string" ? message.id : "";
-    pending.get(id)?.(message);
-    pending.delete(id);
-  });
-  const request = (command: string, payload: Record<string, unknown> = {}) => new Promise<Record<string, unknown>>((resolvePromise, reject) => {
-    const id = `resident-export-${++sequence}`;
-    const timer = setTimeout(() => { pending.delete(id); reject(new Error(`${command} 逾時：${stderr.slice(-4_000)}`)); }, Math.min(input.timeoutMs, 60_000));
-    pending.set(id, (message) => {
-      clearTimeout(timer);
-      if (message.ok === true) resolvePromise(message.result as Record<string, unknown>);
-      else reject(new Error(`${command} 失敗：${String(message.error ?? "unknown GPU error")}`));
-    });
-    child.stdin.write(`${JSON.stringify({ id, command, ...payload })}\n`);
-  });
+  checkLifetime();
+  const worker = createResidentSequenceWorker({ executable: input.executable, args: ["serve"], deadlineAt,
+    fontRoot: input.fontRoot, signal: input.signal });
+  const { request } = worker;
   const sessionId = `resident-export-${process.pid}-${Date.now()}`;
   let loaded = false;
+  let productPathCpuPixelCopies = 0;
+  let nativePaintCpuUploadBytes = 0;
+  let nativePaintRasterCount = 0;
+  let nativePaintTextureUploadCount = 0;
+  let nativePaintFramesWithActiveGraphics = 0;
   let resourcePlan: Record<string, unknown> | undefined;
   let gpuEffectPrograms: ResidentSceneLinearVideoSequenceReceipt["gpuEffectPrograms"] = [];
   let effectExecutionMode: ResidentSceneLinearVideoSequenceReceipt["effectExecutionMode"] = "none";
@@ -273,18 +402,36 @@ export async function renderResidentSceneLinearVideoSequence(input: SequenceRequ
   const expectsScene25d = input.graph.nodes.some((node) => node.kind === "camera" || node.kind === "transform3d");
   const expectsDepthOfField = input.graph.nodes.some((node) => node.kind === "depth_of_field");
   try {
-    await Promise.race([ready, new Promise<never>((_, reject) => {
-      const timer = setTimeout(() => reject(new Error(`GPU compositor ready 逾時：${stderr.slice(-4_000)}`)), Math.min(input.timeoutMs, 60_000));
-      timer.unref();
-    })]);
-    const surface = await request("surface_bind", { parentHwnd: "0", x: 0, y: 0, width: 64, height: 36 });
-    if (surface.backend !== "Dx12" || surface.nativeSwapChain !== true || surface.cpuPixelReadbacks !== 0) {
-      throw new Error("正式 resident video sequence 沒有取得 DX12 零 readback 呈現表面");
+    const ready = await worker.ready;
+    if (input.selectedNativeVideoRuntime) assertNativeVideoWorkerRuntime(ready, input.selectedNativeVideoRuntime);
+    else if (input.graph.nodes.some(node => node.kind === "native_motion_paint" || node.kind === "floating_video_frame_2d")) {
+      throw new Error("Native paint／浮框正式輸出缺少 current v4 所綁定的 selected renderer identity。");
+    }
+    if (ready.offscreenVideoProtocol !== "editkin.resident-offscreen-video-target/v1"
+      || (input.graph.nodes.some(node => node.kind === "floating_video_frame_2d") && !nativeFloatRuntimeMatches(ready))) {
+      throw new Error("正式 resident video sequence 缺少匹配的無視窗 runtime 能力；不可回退隱藏 HWND。");
+    }
+    const surface = await request("offscreen_bind", { width: input.graph.width, height: input.graph.height });
+    const actualVideoTarget = assertBoundNativeVideoTargetIdentity(surface.videoTargetIdentity, ready.generation, true,
+      { width: input.graph.width, height: input.graph.height }, input.selectedNativeVideoRuntime);
+    if (surface.backend !== "Dx12" || surface.nativeSwapChain !== false || surface.nativeWindow !== false
+      || surface.offscreen !== true || surface.bound !== false || surface.visible !== false || surface.presentCount !== 0
+      || surface.renderTargetContract !== "editkin.resident-offscreen-render-target/v1" || surface.cpuPixelReadbacks !== 0) {
+      throw new Error("正式 resident video sequence 沒有取得已核對的 DX12 無視窗輸出材質");
     }
     const load = await request("engine_video_load", {
       sessionId, graphPath, bindingsPath, effectBindingsPath, timelineFrame: input.startFrame,
     });
     loaded = true;
+    assertBoundNativeVideoTargetIdentity(load.videoTargetIdentity, ready.generation, true,
+      { width: input.graph.width, height: input.graph.height }, input.selectedNativeVideoRuntime);
+    if (canonicalJson(load.videoTargetIdentity) !== canonicalJson(actualVideoTarget)) throw new Error("Resident video load target identity changed");
+    assertNativeFloatingLoadReceipt(input.graph, load);
+    const initialPaintWork = assertNativeMotionPaintLoadReceipt(nativePaintExpected, input.startFrame, load);
+    productPathCpuPixelCopies += initialPaintWork.cpuPixelCopies;
+    nativePaintCpuUploadBytes += initialPaintWork.cpuUploadBytes;
+    nativePaintRasterCount += initialPaintWork.rasterCount;
+    nativePaintTextureUploadCount = initialPaintWork.totalTextureUploadCount;
     resourcePlan = load.resourcePlan as Record<string, unknown> | undefined;
     const coverage = load.engineGraph as Record<string, unknown> | undefined;
     const gpuEffects = load.gpuEffects as { resolved?: boolean; programs?: ResidentSceneLinearVideoSequenceReceipt["gpuEffectPrograms"] } | undefined;
@@ -310,22 +457,39 @@ export async function renderResidentSceneLinearVideoSequence(input: SequenceRequ
       })}`);
     }
     for (let offset = 0; offset < input.frameCount; offset += 1) {
+      checkLifetime();
       const timelineFrame = input.startFrame + offset;
       const outputPath = join(input.outputDirectory, frameName(timelineFrame));
       const receipt = await request("engine_video_verify_frame", {
         sessionId, timelineFrame, toleranceSeconds: halfFrameToleranceSeconds(input.graph.timebase), outputPath,
       });
+      assertBoundNativeVideoTargetIdentity(receipt.videoTargetIdentity, ready.generation, true,
+        { width: input.graph.width, height: input.graph.height }, input.selectedNativeVideoRuntime);
+      if (canonicalJson(receipt.videoTargetIdentity) !== canonicalJson(actualVideoTarget)) throw new Error("Resident video frame target identity changed");
       const coverageReceipt = receipt.engineGraph as Record<string, unknown> | undefined;
       assertResidentSceneLinearWhiteBalanceReceipt(input.graph, timelineFrame, receipt);
+      assertNativeFloatingFrameReceipt(input.graph, timelineFrame, receipt);
+      const paintWork = assertNativeMotionPaintFrameReceipt(nativePaintExpected, timelineFrame, receipt);
+      const decodedVideoCpuPixelCopies = receipt.decodedVideoCpuPixelCopies
+        ?? (nativePaintExpected.nativePaintCount === 0 ? receipt.productPathCpuPixelCopies : undefined);
       observedInputTransforms.add(receipt.inputTransform as ResidentSceneLinearVideoSequenceReceipt["inputTransform"]);
       if (receipt.sceneLinearExecution !== true || receipt.workingColorSpace !== "linear_rec709" || receipt.workingFormat !== "rgba16_float"
+        || receipt.offscreen !== true || receipt.nativeSurfacePresented !== false || receipt.outputReadbackCopies !== 1
+        || (receipt.renderTarget as Record<string, unknown> | undefined)?.nativeWindow !== false
+        || (receipt.renderTarget as Record<string, unknown> | undefined)?.nativeSwapChain !== false
         || receipt.displayTransform !== DISPLAY
         || receipt.ocioVersion !== "2.5.2" || receipt.acesVersion !== "2.0" || receipt.configSha256 !== CONFIG_SHA256
-        || receipt.productPathCpuPixelCopies !== 0 || receipt.verificationReadback !== true || receipt.outputWritten !== true
+        || decodedVideoCpuPixelCopies !== 0 || receipt.productPathCpuPixelCopies !== paintWork.cpuPixelCopies
+        || receipt.verificationReadback !== true || receipt.outputWritten !== true
         || coverageReceipt?.directExecution !== true || (coverageReceipt?.blockedNodeIds as unknown[] | undefined)?.length
         || (coverageReceipt?.ignoredNodeIds as unknown[] | undefined)?.length) {
         throw new Error(`正式 resident video sequence 第 ${timelineFrame} 格 receipt 不完整`);
       }
+      productPathCpuPixelCopies += paintWork.cpuPixelCopies;
+      nativePaintCpuUploadBytes += paintWork.cpuUploadBytes;
+      nativePaintRasterCount += paintWork.rasterCount;
+      nativePaintTextureUploadCount = paintWork.totalTextureUploadCount;
+      if (paintWork.activeGraphicIds.length) nativePaintFramesWithActiveGraphics += 1;
       const nextEffectExecutionMode = receipt.effectExecutionMode as ResidentSceneLinearVideoSequenceReceipt["effectExecutionMode"];
       const nextMatteExecutionMode = receipt.matteExecutionMode as ResidentSceneLinearVideoSequenceReceipt["matteExecutionMode"];
       const nextShaderOperationCount = Number(receipt.shaderOperationCount);
@@ -446,14 +610,21 @@ export async function renderResidentSceneLinearVideoSequence(input: SequenceRequ
     }
     const firstPath = join(input.outputDirectory, frameName(input.startFrame));
     const lastPath = join(input.outputDirectory, frameName(input.startFrame + input.frameCount - 1));
+    const firstFrameSha256 = await sha256(firstPath);
+    const lastFrameSha256 = await sha256(lastPath);
+    checkLifetime();
     return {
       schema: "editkin.resident-scene-linear-video-sequence/v1", status: "GREEN",
       executor: "media-foundation-d3d11-d3d12-wgpu/v1", frameCount: input.frameCount, startFrame: input.startFrame,
       filePattern: "frame-%08d.png", displayTransform: DISPLAY, inputTransform: observedInputTransforms.has(INPUT_V2) ? INPUT_V2 : INPUT,
       ...(observedInputTransforms.has(INPUT_V2) ? { inputTransforms: [...observedInputTransforms].sort() } : {}),
       workingColorSpace: "linear_rec709", workingFormat: "rgba16_float", ocioVersion: "2.5.2", acesVersion: "2.0",
-      configSha256: CONFIG_SHA256, productPathCpuPixelCopies: 0, verificationReadback: true,
-      firstFrameSha256: await sha256(firstPath), lastFrameSha256: await sha256(lastPath), resourcePlan: resourcePlan!,
+      configSha256: CONFIG_SHA256, productPathCpuPixelCopies, decodedVideoCpuPixelCopies: 0,
+      nativePaintCount: nativePaintExpected.nativePaintCount, nativePaintGraphicIds: nativePaintExpected.graphicIds,
+      nativePaintCpuUploadBytes, nativePaintRasterCount, nativePaintTextureUploadCount, nativePaintFramesWithActiveGraphics,
+      verificationReadback: true, videoTargetIdentity: actualVideoTarget,
+      offscreenOutput: { nativeWindow: false, nativeSwapChain: false, outputReadbackCopiesPerFrame: 1 },
+      firstFrameSha256, lastFrameSha256, resourcePlan: resourcePlan!,
       gpuEffectPrograms, effectExecutionMode, shaderOperationCount, builtInEffectCount,
       temporalExecutionMode, temporalLayerCount, temporalFramesWithReceipt, temporalSampleCount,
       particleExecutionMode, framesWithActiveParticles, totalParticleEmitterPasses, maximumActiveParticleEmitterCount,
@@ -468,13 +639,6 @@ export async function renderResidentSceneLinearVideoSequence(input: SequenceRequ
       ...(scene25d ? { scene25d, scene25dLast, sceneReceiptFrames } : {}),
     };
   } finally {
-    if (loaded) await request("engine_video_release", { sessionId }).catch(() => undefined);
-    await request("surface_release").catch(() => undefined);
-    await request("shutdown").catch(() => undefined);
-    child.stdin.end();
-    lines.close();
-    child.stdout.destroy();
-    child.stderr.destroy();
-    if (!child.killed) child.kill();
+    await worker.close(loaded ? sessionId : undefined);
   }
 }

@@ -14,6 +14,13 @@ import * as presenter from "./residentGpuEngineVideoPresenter";
 import type {NativeGpuPlaybackEvent} from "./gpuPreviewApiTypes";
 import type {GpuPreviewApi,GpuPreviewOwner} from "./gpuPreviewApiTypes";
 import type {EngineRenderGraph} from "../render/engineGraph";
+import {readFile} from "node:fs/promises";
+import {resolve} from "node:path";
+import {bundledFontFaceSpec} from "../typography/bundledFontCatalog";
+import {createMotionGraphic} from "../motion/composition";
+import {findMotionGraphicPreset} from "../creative/motionGraphicPresets";
+import * as preparation from "./residentGpuGraphPreparation";
+import * as nativePaint from "../motion/nativeMotionPaint";
 const deferred=<T,>()=>{let resolve!:(value:T)=>void;const promise=new Promise<T>(yes=>{resolve=yes;});return{promise,resolve};};
 const flush=async()=>{for(let i=0;i<60;i++)await Promise.resolve();};
 function fakeOwner(id:string,delayedLoad?:Promise<unknown>):GpuPreviewOwner {
@@ -85,6 +92,7 @@ function nativeVideoFixture(prepare?:Promise<void>){
   const prepareFrame=vi.spyOn(presenter,"presentResidentEngineVideo").mockImplementation(async context=>{
     if(prepare)await prepare;
     if(context.next.token===context.tokenRef.current){context.setNativeSurfaceActive(true);context.setFallbackReason(undefined);}
+    return {motionGraphicIds:[],captionIds:[]};
   });
   const send=async(frame:number,state:NativeGpuPlaybackEvent["state"]="playing")=>{await emit({schema:"editkin.native-preview-playback/v1",owner:"native",sessionId:"native-engine-video",generation,
     state,timelineFrame:frame,timelineSeconds:frame/30,presentedFrames:0,droppedFrames:0,sequence:frame+1,clock:"native-monotonic",reason:state==="failed"?"device lost":undefined});};
@@ -112,7 +120,7 @@ describe("production GPU hook autonomous intent routing (mock native boundary)",
     expect(f.owner.desktop.startGpuPreviewPlayback).toHaveBeenLastCalledWith("native-engine-video",expect.objectContaining({startFrame:1}),expect.any(Function));
   });
   it("pause uses native's frozen frame, while an explicit seek supersedes a delayed pause result",async()=>{
-    const f=nativeVideoFixture();vi.spyOn(presenter,"validateResidentEngineVideoFrame").mockImplementation(()=>{});
+    const f=nativeVideoFixture();vi.spyOn(presenter,"validateResidentEngineVideoFrame").mockImplementation(()=>({motionGraphicIds:[],captionIds:[]}));
     f.render();await flush();const paused=deferred<any>();vi.mocked(f.owner.desktop.inspectGpuPreviewPlayback!).mockReturnValueOnce(paused.promise);
     f.state.transport!.playing=false;f.render();await flush();
     paused.resolve({generation:1,sessionId:"native-engine-video",state:"stopped",timelineFrame:12,frameReceipt:{sessionId:"native-engine-video",timelineFrame:12}});await flush();
@@ -151,5 +159,124 @@ describe("production GPU hook autonomous intent routing (mock native boundary)",
     f.state.transport!.audio={...f.state.transport!.audio,ownerId:22};f.render();await flush();
     expect(f.owner.desktop.startGpuPreviewPlayback).toHaveBeenLastCalledWith("native-engine-video",expect.objectContaining({audioGeneration:1,audioOwnerId:22}),expect.any(Function));
     expect(f.owner.desktop.startGpuPreviewPlayback).toHaveBeenCalledTimes(2);
+  });
+});
+
+function pendingPaintFixture(){
+  const f=nativeVideoFixture(),pending=deferred<Uint8Array>(),members=new Set<FontFace>();
+  const fonts={add:vi.fn((face:FontFace)=>{members.add(face);return fonts;}),delete:vi.fn((face:FontFace)=>members.delete(face)),has:(face:FontFace)=>members.has(face)};
+  class BinaryFace {family:string;weight:string;status:FontFaceLoadStatus="unloaded";
+    constructor(family:string,_bytes:ArrayBuffer,descriptor?:FontFaceDescriptors){this.family=family;this.weight=descriptor!.weight!;}
+    async load(){this.status="loaded";return this as unknown as FontFace;}}
+  vi.stubGlobal("document",{fonts});vi.stubGlobal("FontFace",BinaryFace);
+  const read=vi.fn(()=>pending.promise);Object.assign(window.haoDesktop!,{readBundledFontFace:read,
+    openGpuVideoPreviewSession:vi.fn(),decodeGpuVideoPreviewAtTime:vi.fn(),releaseGpuVideoPreviewSession:vi.fn()});
+  const graphic=createMotionGraphic("native-paint","title","AV\nO",.5,3,undefined,findMotionGraphicPreset("v2-word-cascade").seed);
+  Object.assign(graphic,{fontFamily:"Bebas Neue",fontWeight:400,fontSize:48,backgroundColor:"#00000000",shadowDepth:0,outlineWidth:0,x:.1,y:.1,width:.7,letterSpacing:0,visualStyle:"native_paint"});
+  graphic.layoutV2={...graphic.layoutV2!,minFontSize:48,maxLines:4,widthMode:"fit_content",align:"left"};
+  graphic.paintV1={schema:"editkin.motion-paint/v1",fill:{kind:"solid",color:"#175CD380"},clips:[]};
+  f.state.project.motionGraphics=[graphic];f.state.project.colorManagement={...f.state.project.colorManagement!,mode:"aces2",outputTransform:"rec709_sdr"};f.state.time=.6;
+  f.prepareFrame.mockImplementation(async context=>{context.setNativeSurfaceActive(true);return{
+    motionGraphicIds:context.next.preview.graph.nodes.filter(node=>node.kind==="native_motion_paint").map(node=>String(node.graphicId)),captionIds:[]};});
+  const acquire=vi.spyOn(preparation,"acquireResidentGpuGraphPreparation");
+  return{...f,pending,members,fonts,read,graphic,acquire};
+}
+describe("production hook paint preparation and exact baked ownership (controlled native boundary)",()=>{
+  it("starts no native fallback while fonts wait, then passes the actual typed graph and holds leases",async()=>{
+    const data=new Uint8Array(await readFile(resolve("public/fonts",bundledFontFaceSpec("EditkinFace-bebas-neue-400").fontFile))),f=pendingPaintFixture();
+    expect(f.render().bakedMotionGraphicIds).toEqual([]);await flush();expect(f.read).toHaveBeenCalledTimes(1);
+    expect(f.create).not.toHaveBeenCalled();expect(window.haoDesktop!.openGpuVideoPreviewSession).not.toHaveBeenCalled();
+    f.pending.resolve(data);await f.acquire.mock.results[0].value.ready;await flush();f.render();await flush();
+    const rendered=f.render();expect(rendered.nativeSurfaceActive).toBe(true);expect(rendered.bakedMotionGraphicIds).toEqual([f.graphic.id]);
+    expect(f.prepareFrame.mock.calls[0][0].next.preview.graph.nodes.some(node=>node.kind==="native_motion_paint")).toBe(true);
+    expect(f.owner.desktop.startGpuPreviewPlayback).not.toHaveBeenCalled();expect(f.members.size).toBe(1);
+    const nextFrame=deferred<void>();f.prepareFrame.mockImplementation(async context=>{await nextFrame.promise;
+      if(context.next.token===context.tokenRef.current)context.setNativeSurfaceActive(true);return{motionGraphicIds:[f.graphic.id],captionIds:[]};});
+    f.state.time=1;f.render();await flush();expect(f.render().nativeSurfaceActive).toBe(true);expect(f.render().bakedMotionGraphicIds).toEqual([f.graphic.id]);
+    expect(f.render()).toMatchObject({presentedTimelineFrame:18,nativeFrameUpdating:true});
+    nextFrame.resolve();await flush();expect(f.render().bakedMotionGraphicIds).toEqual([f.graphic.id]);
+    expect(f.read).toHaveBeenCalledTimes(1);expect(f.acquire).toHaveBeenCalledTimes(1);
+    f.state.project={...f.state.project,revision:f.state.project.revision+1};expect(f.render().bakedMotionGraphicIds).toEqual([]);
+  });
+  it("project replacement before font delivery cannot compile or load the retired paint graph",async()=>{
+    const data=new Uint8Array(await readFile(resolve("public/fonts",bundledFontFaceSpec("EditkinFace-bebas-neue-400").fontFile))),f=pendingPaintFixture();
+    const compile=vi.spyOn(nativePaint,"prepareNativeMotionPaint");f.render();await flush();
+    f.state.project={...f.state.project,id:"replacement",motionGraphics:[]};f.render();await flush();
+    const presentations=f.prepareFrame.mock.calls.length,acquisitions=f.create.mock.calls.length;
+    f.pending.resolve(data);await flush();
+    expect(compile).not.toHaveBeenCalled();expect(f.prepareFrame).toHaveBeenCalledTimes(presentations);expect(f.create).toHaveBeenCalledTimes(acquisitions);
+    expect(f.fonts.add).not.toHaveBeenCalled();expect(f.render().bakedMotionGraphicIds).toEqual([]);
+  });
+});
+
+describe("painted native seek retains only a validated same-owner frame (controlled native boundary)",()=>{
+  const deliverPaint=async()=>{
+    const f=pendingPaintFixture(),data=new Uint8Array(await readFile(resolve("public/fonts",bundledFontFaceSpec("EditkinFace-bebas-neue-400").fontFile)));
+    f.render();await flush();f.pending.resolve(data);await f.acquire.mock.results[0].value.ready;
+    await flush();f.render();await flush();return f;
+  };
+  it("keeps the exact presented frame and baked IDs while a different requested frame waits",async()=>{
+    const f=await deliverPaint();expect(f.render().nativeSurfaceActive).toBe(true);
+    const next=deferred<void>();f.prepareFrame.mockImplementation(async context=>{
+      await next.promise;if(context.next.token===context.tokenRef.current)context.setNativeSurfaceActive(true);
+      return{motionGraphicIds:[f.graphic.id],captionIds:[]};
+    });
+    f.state.time=1;f.render();await flush();expect(f.render()).toMatchObject({
+      nativeSurfaceActive:true,bakedMotionGraphicIds:[f.graphic.id],presentedTimelineFrame:18,nativeFrameUpdating:true,
+    });
+    next.resolve();await flush();expect(f.render()).toMatchObject({presentedTimelineFrame:30,nativeFrameUpdating:false});
+  });
+  it("records a genuinely presented intermediate frame without completing the latest seek",async()=>{
+    const f=await deliverPaint(),stale=deferred<void>(),latest=deferred<void>();
+    let actualSurfaceFrame=18;
+    f.prepareFrame.mockImplementation(async context=>{
+      await(context.next.preview.timelineFrame===120?stale.promise:latest.promise);
+      actualSurfaceFrame=context.next.preview.timelineFrame;
+      if(context.next.token===context.tokenRef.current)context.setNativeSurfaceActive(true);
+      return{motionGraphicIds:context.next.preview.timelineFrame===120?[]:[f.graphic.id],captionIds:[]};
+    });
+    f.state.time=4;f.render();await flush();f.state.time=1.2;f.render();await flush();
+    stale.resolve();await flush();expect(actualSurfaceFrame).toBe(120);
+    expect(f.render()).toMatchObject({nativeSurfaceActive:true,presentedTimelineFrame:actualSurfaceFrame,bakedMotionGraphicIds:[],nativeFrameUpdating:true});
+    latest.resolve();await flush();expect(f.render()).toMatchObject({nativeSurfaceActive:true,presentedTimelineFrame:36,nativeFrameUpdating:false});
+    expect(f.create).toHaveBeenCalledTimes(1);expect(f.read).toHaveBeenCalledTimes(1);
+  });
+  it("invalidating the actual font lease immediately hides the retained native frame",async()=>{
+    const f=await deliverPaint(),next=deferred<void>();
+    f.prepareFrame.mockImplementation(async context=>{await next.promise;return{motionGraphicIds:[f.graphic.id],captionIds:[]};});
+    f.state.time=1;f.render();await flush();f.fonts.delete([...f.members][0]);
+    expect(f.render()).toMatchObject({nativeSurfaceActive:false,bakedMotionGraphicIds:[],nativeFrameUpdating:false});
+    next.resolve();await flush();expect(f.render().nativeSurfaceActive).toBe(false);
+  });
+  it("replacement during a pending seek cannot retain or republish the old project's frame",async()=>{
+    const f=await deliverPaint(),next=deferred<void>();
+    f.prepareFrame.mockImplementation(async context=>{await next.promise;
+      if(context.next.token===context.tokenRef.current)context.setNativeSurfaceActive(true);
+      return{motionGraphicIds:[f.graphic.id],captionIds:[]};});
+    f.state.time=1;f.render();await flush();f.state.project={...f.state.project,id:"new-paint-owner",revision:f.state.project.revision+1,motionGraphics:[]};
+    f.state.enabled=false;expect(f.render()).toMatchObject({nativeSurfaceActive:false,bakedMotionGraphicIds:[],nativeFrameUpdating:false});
+    await flush();const writes=hooks.writes.length;next.resolve();await flush();
+    expect(hooks.writes).toHaveLength(writes);expect(f.owner.release).toHaveBeenCalledTimes(1);
+  });
+  it("A→B→A stays pending until the new A request is actually validated",async()=>{
+    const f=await deliverPaint(),b=deferred<void>(),a=deferred<void>();
+    f.prepareFrame.mockImplementation(async context=>{
+      await(context.next.preview.timelineFrame===120?b.promise:a.promise);
+      return{motionGraphicIds:context.next.preview.timelineFrame===120?[]:[f.graphic.id],captionIds:[]};
+    });
+    f.state.time=4;f.render();await flush();f.state.time=.6;f.render();await flush();
+    expect(f.render()).toMatchObject({presentedTimelineFrame:18,nativeFrameUpdating:true});
+    b.resolve();await flush();expect(f.render()).toMatchObject({presentedTimelineFrame:120,bakedMotionGraphicIds:[],nativeFrameUpdating:true});
+    a.resolve();await flush();expect(f.render()).toMatchObject({presentedTimelineFrame:18,bakedMotionGraphicIds:[f.graphic.id],nativeFrameUpdating:false});
+  });
+  it("a failed current presentation hides the retained surface instead of marking it current",async()=>{
+    const f=await deliverPaint();let reject!:(error:Error)=>void;
+    const failure=new Promise<void>((_resolve,no)=>{reject=no;});delete f.owner.desktop.recoverGpuDevice;
+    f.prepareFrame.mockImplementation(async()=>{await failure;return{motionGraphicIds:[f.graphic.id],captionIds:[]};});
+    f.state.time=1;f.render();await flush();expect(f.render().nativeSurfaceActive).toBe(true);
+    reject(new Error("controlled current paint presentation failure"));await flush();
+    expect(f.render()).toMatchObject({nativeSurfaceActive:false,bakedMotionGraphicIds:[],nativeFrameUpdating:false,
+      fallbackReason:"controlled current paint presentation failure"});
+    expect(f.render().presentedTimelineFrame).toBeUndefined();
   });
 });

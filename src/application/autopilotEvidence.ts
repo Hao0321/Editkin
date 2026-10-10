@@ -6,7 +6,7 @@ const boundedIdSchema = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,95}$/i);
 export const autopilotOutcomeSchema = z.strictObject({
   schema: z.literal("hao.video-autopilot.learning-event/v1"),
   planSha256: sha256Schema,
-  checkpoint: z.enum(["human_review", "D2", "D7", "D28"]),
+  checkpoint: z.enum(["human_review", "agent_review", "D2", "D7", "D28"]),
   platform: z.enum(["youtube", "youtube_shorts", "instagram_reels", "archive"]),
   artifactId: boundedIdSchema,
   selectedMemoryRuleIds: z.array(z.string().regex(/^(?:M\d{1,4}|K-[a-f0-9]{12})$/i)).max(6),
@@ -23,12 +23,20 @@ export const autopilotOutcomeSchema = z.strictObject({
     accepted: z.boolean(),
     severeError: z.boolean(),
     note: z.string().trim().max(1_000),
+    reviewer: z.enum(["human", "agent"]).optional(),
+    evidenceSha256: sha256Schema.optional(),
   }),
 }).superRefine((event, context) => {
   if (new Set(event.selectedMemoryRuleIds).size !== event.selectedMemoryRuleIds.length) {
     context.addIssue({ code: "custom", path: ["selectedMemoryRuleIds"], message: "memory rule id 不可重複" });
   }
-  if (event.checkpoint !== "human_review" && Object.keys(event.metrics).length === 0) {
+  if (event.checkpoint === "agent_review" && (event.review.reviewer !== "agent" || !event.review.evidenceSha256)) {
+    context.addIssue({ code: "custom", path: ["review"], message: "agent_review requires an agent reviewer and artifact-bound evidence receipt" });
+  }
+  if (event.checkpoint === "human_review" && event.review.reviewer === "agent") {
+    context.addIssue({ code: "custom", path: ["review", "reviewer"], message: "agent review must never be recorded as human approval" });
+  }
+  if (!["human_review", "agent_review"].includes(event.checkpoint) && Object.keys(event.metrics).length === 0) {
     context.addIssue({ code: "custom", path: ["metrics"], message: `${event.checkpoint} 必須至少提供一項平台指標` });
   }
 });
