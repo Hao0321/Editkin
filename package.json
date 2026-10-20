@@ -23,7 +23,7 @@
     "mcp": "tsx src/mcp/server.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/client": "2.3.0",
     "@modelcontextprotocol/server": "2.0.0",
     "@tauri-apps/api": "^2.11.1",
     "qrcode": "^1.5.4",
