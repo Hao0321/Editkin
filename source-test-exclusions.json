@@ -157,6 +157,326 @@
     {
       "file": "src/shared/updateVersion.test.ts",
       "prerequisite": "Bundled Node runtime fixture"
+    },
+    {
+      "file": "scripts/editkin-product-mcp-launcher.test.mjs",
+      "prerequisite": "Maintainer-local R&D evidence under .rd/ (not part of the public source)"
+    },
+    {
+      "file": "scripts/lib/macos-community-runtime.test.mjs",
+      "prerequisite": "Maintainer macOS community workflow (.github/workflows/macos-community-desktop.yml) not in the public repository"
+    },
+    {
+      "file": "scripts/material-color-bundle-build.test.ts",
+      "prerequisite": "Maintainer-local R&D evidence under .rd/ (not part of the public source)"
+    },
+    {
+      "file": "scripts/product-agent-connect-delivery-gate.test.mjs",
+      "prerequisite": "Owner product Tauri resource mapping; the public tauri.conf.json profile ships community resources"
+    },
+    {
+      "file": "src/application/clipAudioEnvelope.physical.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/application/clipMediaDerivatives.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/application/editkinAesthetic.test.ts",
+      "prerequisite": "Owner aesthetic standard with fourteen style families; the public default ships thirteen"
+    },
+    {
+      "file": "src/application/materialKeyframeExtraction.image.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/application/materialKeyframeValidation.still.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/application/mesh3dOverlayCommandsV1.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/application/motionLibraryClipsV1.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/application/motionTrackingPolicyV2.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/application/rgb8WholeGradeFileV1.test.ts",
+      "prerequisite": "Maintainer-local R&D evidence under .rd/ (not part of the public source)"
+    },
+    {
+      "file": "src/application/selectedNativeVideoRuntime.windowsPin.test.ts",
+      "prerequisite": "Maintainer-local R&D evidence under .rd/ (not part of the public source)"
+    },
+    {
+      "file": "src/application/shotGradeCodeIdentityV1.test.ts",
+      "prerequisite": "Owner creative pack outside the repository (community/hao-motion-kit)"
+    },
+    {
+      "file": "src/application/shotGradeEvidenceV1.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/application/shotGradeFramesV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/application/shotGradeRenderedFramesV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/application/templateShortRenderQa.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/application/trackSolo.physical.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/application/wholeGradeCubeExportV1.test.ts",
+      "prerequisite": "Maintainer-local R&D evidence under .rd/ (not part of the public source)"
+    },
+    {
+      "file": "src/color/acesDisplayInverse.test.ts",
+      "prerequisite": "Generated ACES 2 LUT/GPU products (public/color/aces2/luts, gitignored)"
+    },
+    {
+      "file": "src/color/acesPhoneInputV1.test.ts",
+      "prerequisite": "Generated ACES 2 LUT/GPU products (public/color/aces2/luts, gitignored)"
+    },
+    {
+      "file": "src/color/gradeLutBake.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/mcp/clipRetimeTools.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/mcp/longformModuleScheduleFileV1.test.ts",
+      "prerequisite": "Maintainer-local R&D evidence under .rd/ (not part of the public source)"
+    },
+    {
+      "file": "src/mcp/longformPlanSetToolsV1.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/mcp/proofStillToolsV1.plan.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/mcp/proofStillToolsV1.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/mcp/shotGradeToolsV1.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/modules/motionLibraryModulesV1.va.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/motion/floatingVideoFrame.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/motionLibrary/render/renderItem.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/aces16AlphaCompositeV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/aces16AlphaPlanesV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/aces16MaskedCompositionV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/aces16PrecompositionV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/acesOpaque16V1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/alphaFilters.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/boundedMaskTimelineV3.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/chunkedCompositeExportV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/chunkedSceneLinearSequenceV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/colorWindowFfmpegV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/dualStreamEncoderV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/encoderInputProgress.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/ffmpeg.nativeMotionPaint.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/ffmpegComposite.acesReconstruction.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/ffmpegComposite.gradeV2.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/ffmpegComposite.gradeV2.test.ts",
+      "prerequisite": "Generated ACES 2 LUT/GPU products (public/color/aces2/luts, gitignored)"
+    },
+    {
+      "file": "src/render/ffmpegComposite.proofStill.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/finalOutputScopesV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/fixedWindowMaskRasterV3.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/globalAudioGroupedPassV2.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/globalAudioPassV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/globalAudioPassV1.slowEncoder.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/longCompositeChunkV2.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/longRenderChunkHookV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/longRenderPublishV1.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/longRenderRouterV1.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/longRenderRunnerV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/longRenderShortInvarianceV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/motionLibraryAdditiveIdentity.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/motionStageUnderlay.test.tsx",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/referenceMotionGrowth.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/residentSceneLinearVideoStreamV2.pipeline.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/residentSceneLinearVideoStreamV3.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/rgb8CubePlanePipeV1.test.ts",
+      "prerequisite": "Maintainer-local R&D evidence under .rd/ (not part of the public source)"
+    },
+    {
+      "file": "src/render/secondaryHslV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/streamAudioMixV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/subjectStickerV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/timeRemapExportWindowPlanV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/timelineTransitionCompositeV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/timelineTransitionMatteV1.composite.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/timelineTransitionMatteV1.export.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/timelineTransitionMatteV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/timelineTransitionMixV1.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/timelineTransitionNativeCoreRoute.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/timelineTransitionVideoBoundsV2.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/render/trackMuteHidden.render.test.ts",
+      "prerequisite": "Vendored FFmpeg/FFprobe under vendor/ffmpeg (fetched by the desktop build, not committed)"
+    },
+    {
+      "file": "src/styleTemplates/uiCard/uiCard.test.ts",
+      "prerequisite": "Maintainer-local R&D evidence under .rd/ (not part of the public source)"
     }
   ]
 }

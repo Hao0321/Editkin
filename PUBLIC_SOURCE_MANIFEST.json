@@ -69,9 +69,9 @@
     },
     {
       "path": ".github/workflows/source-ci.yml",
-      "bytes": 4425,
-      "sha256": "5662f2ccac8045ba57fbb799d35a4e41fe41676fe71173a9948a57db7ba3a228",
-      "origin": "public main .github/workflows/source-ci.yml",
+      "bytes": 5543,
+      "sha256": "5f8990b1930d5fc47c3610b822328341ab434a10b8e9220bddf04f52efd4ec58",
+      "origin": "public main .github/workflows/source-ci.yml + public CI patch",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -2336,6 +2336,13 @@
       "rights": "GPL-3.0-or-later"
     },
     {
+      "path": "scripts/install-render-fonts.py",
+      "bytes": 4162,
+      "sha256": "952a37653e2f4bd931826e34af21c0428aed9656175ca8fa22aef21abbedae11",
+      "origin": "PR #77 2908d3f scripts/install-render-fonts.py (public CI) + public CI patch",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
       "path": "scripts/large-project-host-benchmark.ts",
       "bytes": 9536,
       "sha256": "3c5c2292c4f17a5d0e3e8e7b4177157625fec2d4b9c72e2b3ff643f74bd0ce4d",
@@ -3974,6 +3981,13 @@
       "rights": "GPL-3.0-or-later"
     },
     {
+      "path": "scripts/render-fonts-requirements.txt",
+      "bytes": 406,
+      "sha256": "11997907653a1c4c93612931126eebb18c37928cae350dc89b690e14e25b273a",
+      "origin": "PR #77 2908d3f scripts/render-fonts-requirements.txt (public CI)",
+      "rights": "GPL-3.0-or-later"
+    },
+    {
       "path": "scripts/render-smoke.ts",
       "bytes": 2000,
       "sha256": "2ecddbea51758a41e9de89559592339447fc0f205e7353fb96b757b2b1604ddd",
@@ -4542,9 +4556,9 @@
     },
     {
       "path": "source-test-exclusions.json",
-      "bytes": 6766,
-      "sha256": "df6acdd4b25fac05b9b21951dbbceb94f2591417d6a25463e1c44457cd0ce05e",
-      "origin": "open-source/source-test-exclusions.json",
+      "bytes": 22160,
+      "sha256": "d63a968656598557dcbddbf052279a9d63f0989a2bdc13fd07637c68333b1a68",
+      "origin": "public-edition CI overlay source-test-exclusions.json",
       "rights": "GPL-3.0-or-later"
     },
     {
@@ -28174,9 +28188,9 @@
     },
     {
       "path": "vite.config.ts",
-      "bytes": 3169,
-      "sha256": "744fe9b863a2d35febb0ed3fc29b990f76553e64faa94143debc513aace8fca0",
-      "origin": "public main vite.config.ts",
+      "bytes": 3960,
+      "sha256": "478848d8334dd4dc5f68146c5becc885faf53d0d5db1deecd73ff2b589a677e8",
+      "origin": "public-edition CI overlay vite.config.ts",
       "rights": "GPL-3.0-or-later"
     }
   ],
