@@ -26,6 +26,25 @@ jobs:
           cache: npm
       - run: npm run source:verify:self-test
       - run: npm run source:scan
+      # Physical-glyph and caption suites read the derived EditkinFace render
+      # faces, which are gitignored build products. Derive them after the scan
+      # (it reviews committed binaries only); the script verifies every pinned SHA-256.
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+      - name: Restore derived render faces
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: public/fonts/render
+          key: editkin-render-faces-${{ hashFiles('public/fonts/editkin-open-fonts.json', 'scripts/build-static-font-pack.py', 'scripts/render-fonts-requirements.txt') }}
+          enableCrossOsArchive: true
+      - name: Derive and verify render faces
+        shell: bash
+        run: |
+          if ! python scripts/install-render-fonts.py --check; then
+            python -m pip install --disable-pip-version-check --require-hashes --no-deps --only-binary :all: -r scripts/render-fonts-requirements.txt
+            python scripts/install-render-fonts.py
+          fi
       - run: npm ci
       - run: npm test
       - run: npm run build

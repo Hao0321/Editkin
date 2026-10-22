@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
+import { REPO_TMP, useTempRoots } from "../test/tempRoot.mjs";
 import { DEFAULT_COLOR, DEFAULT_TRANSFORM, type MediaAsset } from "../domain/types";
 import { createEmptyProject } from "../domain/editGraph";
 import { linearWhiteBalanceInput, whiteBalanceAssetWithMetadata } from "./sourceLinearWhiteBalance";
@@ -14,9 +15,9 @@ const app = fileURLToPath(new URL("../../", import.meta.url));
 const ffmpeg = join(app, "vendor/ffmpeg/win32-x64/ffmpeg.exe"), ffprobe = join(app, "vendor/ffmpeg/win32-x64/ffprobe.exe");
 const asset: MediaAsset = { id: "untagged", name: "Unknown interpretation", uri: "owned-fixture", kind: "video", duration: .2 };
 let workspace: string, source: string;
+const temp = useTempRoots();
 beforeAll(async () => {
-  await mkdir(join(app, ".rd/tmp"), { recursive: true });
-  workspace = await mkdtemp(join(app, ".rd/tmp/wb-input-metadata-")); source = join(workspace, "untagged.mp4");
+  workspace = await temp.create("wb-input-metadata-", { parent: REPO_TMP }); source = join(workspace, "untagged.mp4");
   const result = spawnSync(ffmpeg, ["-v", "error", "-nostdin", "-f", "lavfi", "-i", "color=c=gray:s=64x64:r=10:d=0.2",
     "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", source], { windowsHide: true, timeout: 15000 });
   expect(result.error).toBeUndefined(); expect(result.status, result.stderr.toString()).toBe(0);

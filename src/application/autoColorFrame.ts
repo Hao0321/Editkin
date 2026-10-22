@@ -5,7 +5,7 @@ import { compositorSourceColorPlan } from "../render/sourceColorFilters";
 import { assertReferenceWhiteBalanceInput, sourceLinearWhiteBalancePlan } from "../render/sourceLinearWhiteBalance";
 import { hasPrimaryToneAdjustment } from "../render/ffmpegExpressions";
 import { colorBytesSha, colorToolPaths, runColorProcess } from "./materialColorSamplingRuntime";
-import type { MaterialColorRuntime } from "./materialColorSampling";
+import type { MaterialColorRuntime, MaterialColorReceipt } from "./materialColorSampling";
 import type { MaterialIntelligencePacket } from "./materialIntelligence";
 import { sourceDisplayColorMetadata } from "./sourceDisplayMetadata";
 
@@ -39,16 +39,17 @@ export function autoColorSourceAsset(packet: MaterialIntelligencePacket, sourceP
 }
 
 /** One source-clock check for both independent FLOAT and display RGB8 decodes. */
-async function readBoundAutoColorFrame(packet: MaterialIntelligencePacket, sampleIndex: number,
-  filters: string[], pixelFormat: "rgb24" | "gbrapf32le", sourcePath: string, runtime: MaterialColorRuntime, remainingMs: number) {
-  const measured = packet.analysis.color, sample = measured?.mapping[sampleIndex];
+export async function readBoundMaterialColorFrameV1(measured: MaterialColorReceipt | undefined, sampleIndex: number,
+  filters: string[], pixelFormat: "rgb24" | "gbrapf32le" | "rgba" | "gbrap16le", sourcePath: string, runtime: MaterialColorRuntime, remainingMs: number) {
+  const sample = measured?.mapping[sampleIndex];
   if (!measured?.probe || !measured.normalization || !sample || !Number.isFinite(remainingMs) || remainingMs <= 0) throw Error("Invalid automatic colour sample/budget");
   const vf = [`select='gte(t,${measured.probe.timelineOrigin + sample.decodedSourceTime - 1e-7})'`, ...filters, "showinfo"].join(",");
-  const bytesPerPixel = pixelFormat === "rgb24" ? 3 : 16;
+  const bytesPerPixel = { rgb24: 3, gbrapf32le: 16, rgba: 4, gbrap16le: 8 }[pixelFormat];
+  if (!bytesPerPixel) throw Error("Invalid automatic colour pixel format");
   const output = await runColorProcess(colorToolPaths(runtime).ffmpeg, ["-hide_banner", "-loglevel", "info", "-nostdin", "-copyts",
     "-ss", String(sample.decodedSourceTime), "-i", sourcePath, "-map", "0:v:0", "-an", "-vf", vf,
     "-frames:v", "1", "-fps_mode", "passthrough", "-pix_fmt", pixelFormat, "-f", "rawvideo", "pipe:1"],
-  256 * 256 * bytesPerPixel, Math.min(30000, runtime.timeoutMs ?? 30000, remainingMs));
+  256 * 256 * bytesPerPixel, Math.min(30000, runtime.timeoutMs ?? 30000, remainingMs), runtime.signal);
   const tb = output.stderr.match(/config in time_base:\s*(\d+)\/(\d+)/);
   const match = output.stderr.match(/n:\s*0\s+pts:\s*(-?\d+)\s+pts_time:[^\s]+[\s\S]*?\bs:(\d+)x(\d+)/);
   if (!tb || !match) throw Error("Candidate decoded timestamp unavailable");
@@ -56,7 +57,14 @@ async function readBoundAutoColorFrame(packet: MaterialIntelligencePacket, sampl
   const decodedTime = Number(match[1]) * Number(tb[1]) / Number(tb[2]) - measured.probe.timelineOrigin;
   if (!Number.isFinite(decodedTime) || Math.abs(decodedTime - sample.decodedSourceTime) > 1e-7
     || width < 1 || height < 1 || width > 256 || height > 256 || output.stdout.length !== width * height * bytesPerPixel) throw Error("Candidate frame does not match measured source sample");
-  return { sampleId: sample.id, timeSeconds: sample.decodedRelativeTime, width, height, decodedTime, bytes: output.stdout };
+  return { sampleId: sample.id, timeSeconds: sample.decodedRelativeTime, width, height, decodedTime,
+    pts: Number(match[1]), timeBase: { numerator: Number(tb[1]), denominator: Number(tb[2]) }, bytes: output.stdout };
+}
+
+/** Legacy material envelope; decoding stays in the receipt-only shared core. */
+export async function readBoundAutoColorFrame(packet: MaterialIntelligencePacket, sampleIndex: number,
+  filters: string[], pixelFormat: "rgb24" | "gbrapf32le" | "rgba" | "gbrap16le", sourcePath: string, runtime: MaterialColorRuntime, remainingMs: number) {
+  return readBoundMaterialColorFrameV1(packet.analysis.color, sampleIndex, filters, pixelFormat, sourcePath, runtime, remainingMs);
 }
 
 export async function readAutoColorCandidateFrame(packet: MaterialIntelligencePacket, sampleIndex: number,

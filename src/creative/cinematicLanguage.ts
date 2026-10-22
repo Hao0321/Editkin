@@ -1,3 +1,5 @@
+import { compactShotSelectionStyles } from "./shotSelectionStyles";
+
 export type CinematicRecipeId =
   | "spatial_orientation"
   | "dialogue_flow"
@@ -77,6 +79,7 @@ export function compactCinematicLanguageIndex() {
   return {
     recipes: CINEMATIC_LANGUAGE_RECIPES.map(({ id, name, family, intents, beatRoles, requirements, avoidWhen, fallbackId, executionStatus, compilerTool, commandScopes, tokenContract }) => ({ id, name, family, intents, beatRoles, requirements, avoidWhen, fallbackId, executionStatus, ...(compilerTool ? { compilerTool } : {}), commandScopes, tokenContract })),
     bulletTime: BULLET_TIME_CAPABILITIES,
+    shotSelectionStyles: compactShotSelectionStyles(),
   };
 }
 

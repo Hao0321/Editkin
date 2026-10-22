@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {cp,mkdtemp,readFile,readdir,stat,writeFile,mkdir,lstat,rename} from 'node:fs/promises';
+import {cp,readFile,readdir,stat,writeFile,mkdir,lstat,rename} from 'node:fs/promises';
 import {resolve,join,dirname} from 'node:path';
 import {acquireFontSources} from './lib/font-source-acquisition.mjs';
+import {createTempRoot} from '../src/test/tempRoot.mjs';
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
-const base=await mkdtemp(resolve('.rd/font-acquisition-tests-'));
+// The fixture (a full copy of public/fonts) is removed even when a check fails; EDITKIN_TEST_EVIDENCE_ROOT keeps it.
+const fixtureRoot=await createTempRoot('font-acquisition-tests-',{parent:resolve('.rd')}),base=fixtureRoot.path;
+try{
 const active=resolve('public/fonts'),sourceManifest=JSON.parse(await readFile(join(active,'editkin-open-fonts.json'),'utf8'));
-assert.equal(sourceManifest.schemaVersion,2);assert.equal(sourceManifest.fonts.flatMap(f=>f.faces).length,43);
+assert.equal(sourceManifest.schemaVersion,2);assert.equal(sourceManifest.fonts.flatMap(f=>f.faces).length,44);
 const metadata=Object.fromEntries(['id','version','sourceRepository','sourceCommit','redistribution'].map(k=>[k,sourceManifest[k]]));
 const fonts=sourceManifest.fonts.map(f=>({...f,licenseSource:`memory:${f.id}:license`}));
 let networkCalls=0;const forbiddenFetch=async()=>{networkCalls++;throw Error('Network forbidden in test');};
@@ -17,7 +20,7 @@ await check('cli-license-pins-match-actual-OFL',async()=>{const code=await readF
 const existing=join(base,'existing-v2');await cp(active,existing,{recursive:true,errorOnExist:true,force:false});
 await writeFile(join(existing,'unmanaged-preserve.txt'),'do not remove unknown data');
 const initial=await inventory(existing);
-await check('real-v2-all43-preserved-zero-fetch',async()=>{const result=await acquireFontSources({root:existing,fonts,metadata,fetchBytes:forbiddenFetch});assert.equal(result.status,'UNCHANGED');assert.equal(result.schemaVersion,2);assert.deepEqual(await inventory(existing),initial);assert.equal(networkCalls,0);});
+await check('real-v2-all44-preserved-zero-fetch',async()=>{const result=await acquireFontSources({root:existing,fonts,metadata,fetchBytes:forbiddenFetch});assert.equal(result.status,'UNCHANGED');assert.equal(result.schemaVersion,2);assert.deepEqual(await inventory(existing),initial);assert.equal(networkCalls,0);});
 for(const [label,file] of [['source',fonts[3].file],['license',`${fonts[3].id}-OFL.txt`]])await check(`${label}-mismatch-rejects-without-repair`,async()=>{const path=join(existing,file),original=await readFile(path);const damaged=Buffer.from(original);damaged[damaged.length-1]^=1;await writeFile(path,damaged);const before=await inventory(existing);await assert.rejects(()=>acquireFontSources({root:existing,fonts,metadata,fetchBytes:forbiddenFetch}),/hash mismatch|license identity/);assert.deepEqual(await inventory(existing),before);await writeFile(path,original);});
 const one=[fonts[3]],payload=await readFile(join(active,one[0].file)),license=await readFile(join(active,`${one[0].id}-OFL.txt`));
 const localFetch=async url=>{assert([one[0].source,one[0].licenseSource].includes(url));return Buffer.from(url===one[0].source?payload:license);};
@@ -30,5 +33,6 @@ await check('target-appears-during-fetch-preserved',async()=>{const root=join(ba
 await check('replacement-lock-never-unlinked',async()=>{const root=join(base,'replacement-lock'),lockPath=join(base,'.replacement-lock-source-acquire.lock');let replaced=false;await assert.rejects(()=>acquireFontSources({root,fonts:one,metadata,bootstrap:true,fetchBytes:async url=>{if(!replaced){replaced=true;await rename(lockPath,join(base,'retained-owned-lock'));await writeFile(lockPath,'another owner',{flag:'wx'});}return localFetch(url);}}),/lock ownership changed/);assert.equal(await readFile(lockPath,'utf8'),'another owner');});
 await check('unsafe-source-path-rejected',async()=>{await assert.rejects(()=>acquireFontSources({root:join(base,'unsafe'),fonts:[{...one[0],file:'../escape.ttf'}],metadata,bootstrap:true,fetchBytes:forbiddenFetch}),/Unsafe/);});
 assert.equal(networkCalls,0);assert.deepEqual(await inventory(existing),initial);
-const report={scope:'ISOLATED_FONT_ACQUISITION_REGRESSION_NO_NETWORK_NO_PRODUCTION_WRITES',base,checks,networkCalls,realV2Faces:43,sourceManifestSha256:sha(await readFile(join(active,'editkin-open-fonts.json'))),productionSourceSha256:sha(await readFile('scripts/lib/font-source-acquisition.mjs')),limitations:['Source acquisition validates pinned derivation inputs only; physical faces require separate open-font-gate','Noncooperating filesystem mutation between final target check and rename is not an OS transactional no-replace proof'],retention:'Owned fixtures, source copies and failed stages retained; no deletion'};
+const report={scope:'ISOLATED_FONT_ACQUISITION_REGRESSION_NO_NETWORK_NO_PRODUCTION_WRITES',base,checks,networkCalls,realV2Faces:44,sourceManifestSha256:sha(await readFile(join(active,'editkin-open-fonts.json'))),productionSourceSha256:sha(await readFile('scripts/lib/font-source-acquisition.mjs')),limitations:['Source acquisition validates pinned derivation inputs only; physical faces require separate open-font-gate','Noncooperating filesystem mutation between final target check and rename is not an OS transactional no-replace proof'],retention:fixtureRoot.kept?'Owned fixtures, source copies and failed stages retained under EDITKIN_TEST_EVIDENCE_ROOT':'Owned fixture root removed after the run (link-safe); set EDITKIN_TEST_EVIDENCE_ROOT to keep it'};
 await writeFile(join(base,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+}finally{await fixtureRoot.remove();}

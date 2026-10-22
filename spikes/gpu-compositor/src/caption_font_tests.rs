@@ -19,6 +19,7 @@ fn fixture_manifest() -> FontManifest {
         ("lxgw-wenkai-mono-tc", "LXGW WenKai Mono TC", 400, 400),
         ("bebas-neue", "Bebas Neue", 400, 400),
         ("fredoka", "Fredoka", 300, 700),
+        ("lxgw-wenkai-tc", "LXGW WenKai TC", 700, 700),
     ]
     .into_iter()
     .map(|(id, family, min, max)| {
@@ -56,7 +57,7 @@ fn fixture_manifest() -> FontManifest {
 }
 
 #[test]
-fn physical_face_selection_matches_all_five_family_weight_matrices() {
+fn physical_face_selection_matches_all_six_family_weight_matrices() {
     let mut manifest = fixture_manifest();
     // Order is not an implicit tie breaker; the lower weight must win in either ordering.
     for entry in &mut manifest.fonts {
@@ -77,6 +78,7 @@ fn physical_face_selection_matches_all_five_family_weight_matrices() {
         ("LXGW WenKai Mono TC", [400; 9]),
         ("Bebas Neue", [400; 9]),
         ("Fredoka", [300, 400, 400, 650, 650, 700, 700, 700, 700]),
+        ("LXGW WenKai TC", [700; 9]),
     ];
     for (family, expected) in rows {
         for (requested, expected) in requests.into_iter().zip(expected) {
@@ -188,7 +190,7 @@ fn rejects_invalid_schema_duplicates_unsafe_paths_and_identity_conflicts() {
 }
 
 #[test]
-fn actual_pack_all_43_faces_match_bytes_static_weight_and_internal_names() {
+fn actual_pack_all_44_faces_match_bytes_static_weight_and_internal_names() {
     let manifest = public_manifest();
     validate_manifest(&manifest).unwrap();
     let mut count = 0;
@@ -206,8 +208,8 @@ fn actual_pack_all_43_faces_match_bytes_static_weight_and_internal_names() {
             count += 1;
         }
     }
-    assert_eq!(manifest.fonts.len(), 5);
-    assert_eq!(count, 43);
+    assert_eq!(manifest.fonts.len(), 6);
+    assert_eq!(count, 44);
     // Test actual data selection too; a synthetic matrix alone cannot validate the staged pack.
     for (actual, fixture) in manifest.fonts.iter().map(|entry| {
         (
@@ -291,6 +293,9 @@ fn caption_plan(family: &str, text: &str, bold: bool) -> EngineVideoCaptionPlan 
         bold,
         shadow: 0.0,
         letter_spacing: 0.0,
+        shadow_color: None,
+        shadow_blur: 0.0,
+        lines: None,
     }
 }
 

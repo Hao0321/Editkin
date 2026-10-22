@@ -1,3 +1,4 @@
+import { translateUi as uiText, useI18n } from "./i18n/interfacePreferences";
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import {
@@ -285,6 +286,7 @@ function safeHttpsUrl(value: string): string | undefined {
 }
 
 function ProposalList({ items, emptyLabel = "未列出" }: { items: string[]; emptyLabel?: string }) {
+  useI18n();
   if (items.length === 0) return <p className="remote-proposal-empty">{emptyLabel}</p>;
   return <ul className="remote-proposal-list">{items.slice(0, 8).map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul>;
 }
@@ -298,44 +300,46 @@ function RemoteProposalCard({
   state: "ready" | "expired";
   resumeAvailable: boolean;
 }) {
+  useI18n();
   const sources = proposal.sources.map((source) => ({ ...source, safeUrl: safeHttpsUrl(source.url) }));
-  return <section className={`remote-proposal-card ${state}`} aria-label="Remote 可檢查方案">
+  return <section className={`remote-proposal-card ${state}`} aria-label={uiText("Remote 可檢查方案")}>
     <header>
       <div>
-        <span className="remote-proposal-kicker">REMOTE · 可檢查研究方案</span>
+        <span className="remote-proposal-kicker">{uiText("REMOTE · 可檢查研究方案")}</span>
         <h3>{proposal.provider.displayName} · {proposal.provider.productName}</h3>
       </div>
-      <span className="remote-proposal-badge">{state === "expired" ? "已過期" : "待你檢查"}</span>
+      <span className="remote-proposal-badge">{state === "expired" ? uiText("已過期") : uiText("待你檢查")}</span>
     </header>
-    <p className="remote-proposal-truth"><b>尚未登入 · 尚未部署 · 尚未連線</b><span>{state === "expired" ? "這份方案已失效，不能核准或啟動；必須先重新研究。" : "這只是研究結果，不會自動建立資源或產生費用。"}</span></p>
+    <p className="remote-proposal-truth"><b>{uiText("尚未登入 · 尚未部署 · 尚未連線")}</b><span>{state === "expired" ? uiText("這份方案已失效，不能核准或啟動；必須先重新研究。") : uiText("這只是研究結果，不會自動建立資源或產生費用。")}</span></p>
     <dl className="remote-proposal-summary">
-      <div className="wide"><dt>Native connector</dt><dd>{proposal.connector.connectorId} · {proposal.connector.availability === "enabled" ? "已啟用" : proposal.connector.availability === "research-only-disabled" ? "研究中，尚未啟用" : "暫時方案，不支援產品使用"}</dd></div>
-      <div><dt>供應商地區</dt><dd>{proposal.provider.region}</dd></div>
-      <div><dt>連線方式</dt><dd>{proposal.transport === "https-tunnel" ? "使用者自備 HTTPS tunnel" : "使用者自備 WSS relay"}</dd></div>
-      <div className="wide"><dt>價格</dt><dd>{formatProposalPrice(proposal)}</dd></div>
-      <div><dt>免費額度</dt><dd>{proposal.freeTier}</dd></div>
-      <div><dt>配額</dt><dd>{proposal.quota}</dd></div>
-      <div className="wide"><dt>費用責任</dt><dd>由你自己的供應商帳戶承擔；Editkin 不代付。</dd></div>
-      <div className="wide"><dt>方案有效至</dt><dd>{formatCheckedAt(proposal.expiresAtMs)}</dd></div>
+      <div className="wide"><dt>Native connector</dt><dd>{proposal.connector.connectorId} · {proposal.connector.availability === "enabled" ? uiText("已啟用") : proposal.connector.availability === "research-only-disabled" ? uiText("研究中，尚未啟用") : uiText("暫時方案，不支援產品使用")}</dd></div>
+      <div><dt>{uiText("供應商地區")}</dt><dd>{proposal.provider.region}</dd></div>
+      <div><dt>{uiText("連線方式")}</dt><dd>{proposal.transport === "https-tunnel" ? uiText("使用者自備 HTTPS tunnel") : uiText("使用者自備 WSS relay")}</dd></div>
+      <div className="wide"><dt>{uiText("價格")}</dt><dd>{formatProposalPrice(proposal)}</dd></div>
+      <div><dt>{uiText("免費額度")}</dt><dd>{proposal.freeTier}</dd></div>
+      <div><dt>{uiText("配額")}</dt><dd>{proposal.quota}</dd></div>
+      <div className="wide"><dt>{uiText("費用責任")}</dt><dd>{uiText("由你自己的供應商帳戶承擔；Editkin 不代付。")}</dd></div>
+      <div className="wide"><dt>{uiText("方案有效至")}</dt><dd>{formatCheckedAt(proposal.expiresAtMs)}</dd></div>
     </dl>
     <details className="remote-proposal-details">
-      <summary>檢查權限、異動與來源</summary>
+      <summary>{uiText("檢查權限、異動與來源")}</summary>
       <div className="remote-proposal-detail-grid">
-        <section><h4>需要的權限</h4><ProposalList items={proposal.permissions} /></section>
-        <section><h4>預計異動</h4><ProposalList items={proposal.plannedMutations} /></section>
-        <section className="wide"><h4>預期公開端點</h4><p>{proposal.expectedEndpoint.description}（目前尚未建立）</p></section>
-        <section className="wide"><h4>取消／刪除後果</h4><p>{proposal.cancellationOrDeletionConsequences}</p></section>
-        <section><h4>不確定性</h4><ProposalList items={proposal.uncertainties} emptyLabel="未列出不確定性" /></section>
-        <section><h4>不支援的前置條件</h4><ProposalList items={proposal.unsupportedPrerequisites} emptyLabel="沒有已知項目" /></section>
-        <section className="wide"><h4>公開來源</h4><ul className="remote-proposal-sources">{sources.slice(0, 8).map((source, index) => <li key={`${index}-${source.label}`}><span>{source.label}</span>{source.safeUrl ? <a href={source.safeUrl} target="_blank" rel="noreferrer noopener">開啟來源</a> : <em>非 HTTPS，未提供連結</em>}<small>方案記錄時間：{formatCheckedAt(source.checkedAtMs)}</small></li>)}</ul></section>
+        <section><h4>{uiText("需要的權限")}</h4><ProposalList items={proposal.permissions} /></section>
+        <section><h4>{uiText("預計異動")}</h4><ProposalList items={proposal.plannedMutations} /></section>
+        <section className="wide"><h4>{uiText("預期公開端點")}</h4><p>{proposal.expectedEndpoint.description}{uiText("（目前尚未建立）")}</p></section>
+        <section className="wide"><h4>{uiText("取消／刪除後果")}</h4><p>{proposal.cancellationOrDeletionConsequences}</p></section>
+        <section><h4>{uiText("不確定性")}</h4><ProposalList items={proposal.uncertainties} emptyLabel={uiText("未列出不確定性")} /></section>
+        <section><h4>{uiText("不支援的前置條件")}</h4><ProposalList items={proposal.unsupportedPrerequisites} emptyLabel={uiText("沒有已知項目")} /></section>
+        <section className="wide"><h4>{uiText("公開來源")}</h4><ul className="remote-proposal-sources">{sources.slice(0, 8).map((source, index) => <li key={`${index}-${source.label}`}><span>{source.label}</span>{source.safeUrl ? <a href={source.safeUrl} target="_blank" rel="noreferrer noopener">{uiText("開啟來源")}</a> : <em>{uiText("非 HTTPS，未提供連結")}</em>}<small>{uiText("方案記錄時間：")}{formatCheckedAt(source.checkedAtMs)}</small></li>)}</ul></section>
       </div>
     </details>
-    {!proposal.approvalAvailable && state === "ready" && <p className="remote-proposal-resume"><b>目前只能研究，不能核准</b> · 此 connector 尚未同時通過 enabled 與 native attestation；Editkin 不會顯示登入或部署按鈕。</p>}
-    {resumeAvailable && state === "ready" && <small className="remote-proposal-resume">方案已安全保留，可稍後回來檢查；不會自動部署。</small>}
+    {!proposal.approvalAvailable && state === "ready" && <p className="remote-proposal-resume"><b>{uiText("目前只能研究，不能核准")}</b> {uiText("· 此 connector 尚未同時通過 enabled 與 native attestation；Editkin 不會顯示登入或部署按鈕。")}</p>}
+    {resumeAvailable && state === "ready" && <small className="remote-proposal-resume">{uiText("方案已安全保留，可稍後回來檢查；不會自動部署。")}</small>}
   </section>;
 }
 
 export function MobileConnectModal({ remote, status, networkSummary, agentLaunch, onStartAgent, onCancelAgent, onClose, onStart, onStop, onRevoke, onOpenAgentConnect, onProviderAction }: MobileConnectModalProps) {
+  useI18n();
   const [qrCode, setQrCode] = useState<string>();
   const [copied, setCopied] = useState(remote?.copied ?? false);
   const [agentTaskCopied, setAgentTaskCopied] = useState(false);
@@ -456,59 +460,37 @@ export function MobileConnectModal({ remote, status, networkSummary, agentLaunch
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) dismissRemoteAgentModal(agentLaunch, onClose); }}>
       <section className="mobile-connect-modal" role="dialog" aria-modal="true" aria-labelledby="mobile-connect-title">
-        <button type="button" className="modal-close" onClick={() => dismissRemoteAgentModal(agentLaunch, onClose)} disabled={agentLaunchBusy} aria-label={agentLaunchBusy ? "Remote AI 執行中，請先取消" : "關閉"}>×</button>
+        <button type="button" className="modal-close" onClick={() => dismissRemoteAgentModal(agentLaunch, onClose)} disabled={agentLaunchBusy} aria-label={agentLaunchBusy ? uiText("Remote AI 執行中，請先取消") : uiText("關閉")}>×</button>
         <div className="mobile-connect-copy">
           <span className="mobile-connect-kicker">EDITKIN REMOTE</span>
-          <h2 id="mobile-connect-title">{connected
-            ? "手機已綁定 Editkin"
-            : remote
-              ? "掃描 QR，連上你的電腦"
-              : proposalState === "ready"
-                ? "檢查 AI 準備的 Remote 方案"
-                : proposalState === "expired"
-                  ? "Remote 方案已過期"
-                  : "啟動前先確認連線方式"}</h2>
-          <p>{remote
-            ? connected
-              ? internet ? "手機已透過你自己的跨網路服務連線；素材與 GPU 輸出仍留在桌機。" : "手機已在同一個 Wi-Fi 連線；素材與 GPU 輸出都留在桌機。"
-              : internet ? "已使用跨網路設定，仍待真手機外網實測；供應商帳號與連線由你管理。" : "目前使用免費 LAN；手機與電腦連到同一個 Wi-Fi 即可。"
-            : "Editkin 不持有 AI 或供應商 API key。AI 只研究並建立綁定 connector 與 plan digest 的方案；所有未來供應商動作只能由 native typed connector 在你核准後執行，目前不會替你登入、部署或冒充已連線。"}</p>
+          <h2 id="mobile-connect-title">{connected ? uiText("手機已綁定 Editkin") : remote ? uiText("掃描 QR，連上你的電腦") : proposalState === "ready" ? uiText("檢查 AI 準備的 Remote 方案") : proposalState === "expired" ? uiText("Remote 方案已過期") : uiText("啟動前先確認連線方式")}</h2>
+          <p>{remote ? connected ? internet ? uiText("手機已透過你自己的跨網路服務連線；素材與 GPU 輸出仍留在桌機。") : uiText("手機已在同一個 Wi-Fi 連線；素材與 GPU 輸出都留在桌機。") : internet ? uiText("已使用跨網路設定，仍待真手機外網實測；供應商帳號與連線由你管理。") : uiText("目前使用免費 LAN；手機與電腦連到同一個 Wi-Fi 即可。") : uiText("Editkin 不持有 AI 或供應商 API key。AI 只研究並建立綁定 connector 與 plan digest 的方案；所有未來供應商動作只能由 native typed connector 在你核准後執行，目前不會替你登入、部署或冒充已連線。")}</p>
 
           {proposal && (proposalState === "ready" || proposalState === "expired") && networkSummary?.schema === "editkin.remote-network-summary/v2" && <RemoteProposalCard proposal={proposal} state={proposalState} resumeAvailable={networkSummary.resumeAvailable} />}
-          {proposalState === "invalid" && <div className="remote-proposal-invalid" role="alert"><b>方案資料不完整，已停止後續操作</b><span>Editkin 不會顯示核准或啟動按鈕。請重新產生一份符合安全格式的方案。</span></div>}
+          {proposalState === "invalid" && <div className="remote-proposal-invalid" role="alert"><b>{uiText("方案資料不完整，已停止後續操作")}</b><span>{uiText("Editkin 不會顯示核准或啟動按鈕。請重新產生一份符合安全格式的方案。")}</span></div>}
           {blockedSetupCopy && <div className="mobile-external-consent" role="status"><strong>{blockedSetupCopy.title}</strong><p>{blockedSetupCopy.detail}</p></div>}
-          {providerActionCopy && <section className={`mobile-external-consent ${providerActionCopy.valid ? "" : "invalid"}`} role={providerActionCopy.valid ? "status" : "alert"} aria-label="Remote provider 動作狀態">
+          {providerActionCopy && <section className={`mobile-external-consent ${providerActionCopy.valid ? "" : "invalid"}`} role={providerActionCopy.valid ? "status" : "alert"} aria-label={uiText("Remote provider 動作狀態")}>
             <strong>{providerActionCopy.title}</strong>
             <p>{providerActionCopy.detail}</p>
             {providerActionCopy.intent && providerActionCopy.label && onProviderAction && <button type="button" onClick={() => onProviderAction(providerActionCopy.intent!)}>{providerActionCopy.label}</button>}
           </section>}
 
-          {showAgentSetup && <section className="mobile-ai-setup" aria-label="AI 輔助跨網路方案研究">
-            <div className="mobile-agent-picker" aria-label="選擇 AI">
-              {(["codex", "claude"] as const).map((target) => <button type="button" key={target} className={selectedAgent === target ? "selected" : ""} onClick={() => chooseAgent(target)} disabled={agentLaunchBusy} aria-pressed={selectedAgent === target}><strong>{AGENT_LABEL[target]}</strong><small>{agentCheckFailed ? "無法檢查" : agentState(agentConnections?.[target])}</small></button>)}
+          {showAgentSetup && <section className="mobile-ai-setup" aria-label={uiText("AI 輔助跨網路方案研究")}>
+            <div className="mobile-agent-picker" aria-label={uiText("選擇 AI")}>
+              {(["codex", "claude"] as const).map((target) => <button type="button" key={target} className={selectedAgent === target ? "selected" : ""} onClick={() => chooseAgent(target)} disabled={agentLaunchBusy} aria-pressed={selectedAgent === target}><strong>{AGENT_LABEL[target]}</strong><small>{agentCheckFailed ? uiText("無法檢查") : agentState(agentConnections?.[target])}</small></button>)}
             </div>
             <label className="mobile-agent-consent">
               <input type="checkbox" checked={agentScopeConfirmed} onChange={(event) => setAgentScopeConfirmed(event.currentTarget.checked)} disabled={agentLaunchBusy || !selectedAgent} />
-              <span><b>允許 AI 研究 Remote 方案</b><small>AI 只可檢查狀態、讀取 closed connector 清單並建立 proposal，不可登入或操作供應商。這次最長 5 分鐘的研究會使用 Codex／Claude CLI 已登入的帳戶，可能消耗你的方案額度或 API 費用；Editkin 只檢查並立即丟棄「是否已登入」狀態，不要求、讀取或保存 key、token、cookie、密碼，也不代付費用。</small></span>
+              <span><b>{uiText("允許 AI 研究 Remote 方案")}</b><small>{uiText("AI 只可檢查狀態、讀取 closed connector 清單並建立 proposal，不可登入或操作供應商。這次最長 5 分鐘的研究會使用 Codex／Claude CLI 已登入的帳戶，可能消耗你的方案額度或 API 費用；Editkin 只檢查並立即丟棄「是否已登入」狀態，不要求、讀取或保存 key、token、cookie、密碼，也不代付費用。")}</small></span>
             </label>
-            {selectedConnection?.launcherPath && <small className="mobile-agent-launcher-path" title={selectedConnection.launcherPath}>將啟動已檢查的 CLI：{selectedConnection.launcherPath}</small>}
+            {selectedConnection?.launcherPath && <small className="mobile-agent-launcher-path" title={selectedConnection.launcherPath}>{uiText("將啟動已檢查的 CLI：")}{selectedConnection.launcherPath}</small>}
             <button type="button" className="mobile-ai-primary" onClick={() => void startAiSetup()} data-testid="ai-remote-setup" disabled={agentLaunchBusy || (Boolean(selectedAgent && selectedConnection?.directLaunchReady) && !agentScopeConfirmed)}>
-              <span aria-hidden="true">✦</span> {agentLaunchBusy ? "AI 正在產生可檢查方案…" : "讓 AI 產生可檢查方案"}
+              <span aria-hidden="true">✦</span> {agentLaunchBusy ? uiText("AI 正在產生可檢查方案…") : uiText("讓 AI 產生可檢查方案")}
             </button>
-            {agentLaunchBusy && <button type="button" className="mobile-ai-cancel" onClick={() => void cancelAiSetup()} disabled={agentLaunch.phase === "cancel_requested"}>{agentLaunch.phase === "cancel_requested" ? "正在取消並確認清理…" : "取消並清理子行程"}</button>}
-            {agentLaunchResult && <div className={`mobile-ai-result ${agentLaunchResult.status}`} role="status"><b>{agentLaunchResult.message}</b><small>Windows 內部候選 · 真手機跨網重連與 Mac 尚未驗證，不會冒充完成。</small></div>}
-            {(agentLaunchError || agentLaunchResult?.manualFallbackAvailable) && <button type="button" className="mobile-ai-fallback" onClick={() => void copyManualFallback()}>{agentTaskCopied ? "✓ 一般工作階段任務已複製" : "複製一般工作階段任務"}</button>}
-            <small>{agentLaunchError
-              ? `${agentLaunchError}；可${agentTaskCopied ? "將已複製任務貼到" : "複製任務到"}一般可見的 Codex／Claude 工作階段。這不是隔離環境：只應使用 Editkin remote-only MCP，任何其他工具呼叫都要逐次人工審核。`
-              : agentTaskCopied
-                ? `✓ 已複製 Remote 分階段任務，可貼到一般可見的 ${selectedAgent ? AGENT_LABEL[selectedAgent] : "Codex／Claude"} 工作階段；只應使用 Editkin remote-only MCP，任何其他工具呼叫都要逐次人工審核。`
-                : agentLaunchResult?.manualFallbackAvailable
-                  ? "這會在一般可見的 Codex／Claude 工作階段執行，不是隔離環境；只應使用 Editkin remote-only MCP，任何其他工具呼叫都要逐次人工審核。"
-                : selectedAgent && agentConnections?.[selectedAgent]?.directLaunchReady
-                  ? `${AGENT_LABEL[selectedAgent]} 可由 Editkin 注入 remote-only MCP；CLI 只沿用自己的既有登入，任務走 stdin 且不交給 shell。`
-                  : selectedAgent
-                    ? agentConnections?.[selectedAgent]?.launcherReason ?? "尚未通過安全啟動檢查。"
-                    : "選擇 Codex 或 Claude Code；未驗證登入與 Editkin MCP 前不會啟動。"}</small>
+            {agentLaunchBusy && <button type="button" className="mobile-ai-cancel" onClick={() => void cancelAiSetup()} disabled={agentLaunch.phase === "cancel_requested"}>{agentLaunch.phase === "cancel_requested" ? uiText("正在取消並確認清理…") : uiText("取消並清理子行程")}</button>}
+            {agentLaunchResult && <div className={`mobile-ai-result ${agentLaunchResult.status}`} role="status"><b>{agentLaunchResult.message}</b><small>{uiText("Windows 內部候選 · 真手機跨網重連與 Mac 尚未驗證，不會冒充完成。")}</small></div>}
+            {(agentLaunchError || agentLaunchResult?.manualFallbackAvailable) && <button type="button" className="mobile-ai-fallback" onClick={() => void copyManualFallback()}>{agentTaskCopied ? uiText("✓ 一般工作階段任務已複製") : uiText("複製一般工作階段任務")}</button>}
+            <small>{agentLaunchError ? uiText("{value0}；可{value1}一般可見的 Codex／Claude 工作階段。這不是隔離環境：只應使用 Editkin remote-only MCP，任何其他工具呼叫都要逐次人工審核。", { value0: agentLaunchError, value1: agentTaskCopied ? uiText("將已複製任務貼到") : uiText("複製任務到") }) : agentTaskCopied ? uiText("✓ 已複製 Remote 分階段任務，可貼到一般可見的 {value0} 工作階段；只應使用 Editkin remote-only MCP，任何其他工具呼叫都要逐次人工審核。", { value0: selectedAgent ? AGENT_LABEL[selectedAgent] : "Codex／Claude" }) : agentLaunchResult?.manualFallbackAvailable ? uiText("這會在一般可見的 Codex／Claude 工作階段執行，不是隔離環境；只應使用 Editkin remote-only MCP，任何其他工具呼叫都要逐次人工審核。") : selectedAgent && agentConnections?.[selectedAgent]?.directLaunchReady ? uiText("{value0} 可由 Editkin 注入 remote-only MCP；CLI 只沿用自己的既有登入，任務走 stdin 且不交給 shell。", { value0: AGENT_LABEL[selectedAgent] }) : selectedAgent ? agentConnections?.[selectedAgent]?.launcherReason ?? uiText("尚未通過安全啟動檢查。") : uiText("選擇 Codex 或 Claude Code；未驗證登入與 Editkin MCP 前不會啟動。")}</small>
           </section>}
 
           <div className={`mobile-quality ${qualityVerified ? "verified" : "pending"}`}>
@@ -516,27 +498,27 @@ export function MobileConnectModal({ remote, status, networkSummary, agentLaunch
           </div>
 
           {startApproval && networkSummary && !remote && <div className="mobile-external-consent">
-            <strong>{networkSummary.pendingDesktopApproval ? "AI 已準備好，等待你在桌面核准" : "外部流量尚未啟動"}</strong>
-            <p>這次會使用你的 {networkSummary.providerId} 帳戶{networkSummary.originHost ? `（${networkSummary.originHost}）` : ""}；用量與費用由你承擔。Editkin 不代付、不保存供應商密鑰。</p>
-            <button type="button" onClick={() => onStart?.(startApproval)}>{networkSummary.pendingDesktopApproval ? "核對無誤，寫入設定並啟動" : "我了解並啟動已設定的跨網路 Remote"}</button>
+            <strong>{networkSummary.pendingDesktopApproval ? uiText("AI 已準備好，等待你在桌面核准") : uiText("外部流量尚未啟動")}</strong>
+            <p>{uiText("這次會使用你的")}{networkSummary.providerId} {uiText("帳戶")}{networkSummary.originHost ? `（${networkSummary.originHost}）` : ""}{uiText("；用量與費用由你承擔。Editkin 不代付、不保存供應商密鑰。")}</p>
+            <button type="button" onClick={() => onStart?.(startApproval)}>{networkSummary.pendingDesktopApproval ? uiText("核對無誤，寫入設定並啟動") : uiText("我了解並啟動已設定的跨網路 Remote")}</button>
           </div>}
 
           {remote && <>
             <ol>
-              <li>{pairingConsumed ? "這個 QR 已被使用，不能再綁定其他手機；要新增裝置，請先暫停 Remote，再重新開啟以產生新的 QR" : "掃描右側一次性 QR Code（只能綁定一台手機）"}</li>
-              <li>{connected ? "Remote 重啟或網路暫斷後，網址可達時會自動重新連線" : "手機瀏覽器直接開啟，不需安裝或登入 Editkin 帳號"}</li>
-              <li>{connected ? "遺失手機時，可在下方單獨撤銷該裝置" : "不用輸入 IP、連接埠或配對碼"}</li>
+              <li>{pairingConsumed ? uiText("這個 QR 已被使用，不能再綁定其他手機；要新增裝置，請先暫停 Remote，再重新開啟以產生新的 QR") : uiText("掃描右側一次性 QR Code（只能綁定一台手機）")}</li>
+              <li>{connected ? uiText("Remote 重啟或網路暫斷後，網址可達時會自動重新連線") : uiText("手機瀏覽器直接開啟，不需安裝或登入 Editkin 帳號")}</li>
+              <li>{connected ? uiText("遺失手機時，可在下方單獨撤銷該裝置") : uiText("不用輸入 IP、連接埠或配對碼")}</li>
             </ol>
             {remote.warning && <div className="mobile-remote-warning">{remote.warning}</div>}
-            {(status?.devices.length ?? 0) > 0 && <div className="mobile-device-list">{status?.devices.map((device) => <span key={device.id} className={device.connected ? "online" : "offline"}><i />{device.name}<button type="button" onClick={() => onRevoke(device.id)} aria-label={`撤銷 ${device.name}`}>撤銷</button></span>)}</div>}
-            <button type="button" className="secondary-button" onClick={() => void copy()} disabled={pairingConsumed}>{copied ? "✓ 配對連結已備妥" : "複製配對連結"}</button>
-            <button type="button" className="danger-link" onClick={onStop}>暫停 Remote（保留已綁定裝置）</button>
+            {(status?.devices.length ?? 0) > 0 && <div className="mobile-device-list">{status?.devices.map((device) => <span key={device.id} className={device.connected ? "online" : "offline"}><i />{device.name}<button type="button" onClick={() => onRevoke(device.id)} aria-label={uiText("撤銷 {value0}", { value0: device.name })}>{uiText("撤銷")}</button></span>)}</div>}
+            <button type="button" className="secondary-button" onClick={() => void copy()} disabled={pairingConsumed}>{copied ? uiText("✓ 配對連結已備妥") : uiText("複製配對連結")}</button>
+            <button type="button" className="danger-link" onClick={onStop}>{uiText("暫停 Remote（保留已綁定裝置）")}</button>
           </>}
         </div>
         <div className={`mobile-connect-qr ${connected ? "connected" : ""} ${remote ? "" : "preflight"}`}>
-          {remote ? qrCode ? <img src={qrCode} alt="Editkin Remote 配對 QR Code" /> : <div className="qr-placeholder">產生安全配對碼…</div> : <div className="remote-preflight-mark"><b>1</b><span>研究方案</span><b>2</b><span>確認費用</span><b>3</b><span>桌面核准</span><b>4</b><span>實測連線</span></div>}
-          <span><i /> {remote ? connected ? `${status?.connectedCount} 台手機在線` : "等待手機掃描" : "尚未產生或傳送配對憑證"}</span>
-          <small>{remote ? connected ? `${status?.trustedCount ?? status?.devices.length ?? 0} 台已綁定 · 可隨時撤銷` : `${transportLabel} · ${internet ? "費用由你的供應商帳戶承擔" : "零雲端流量費"} · QR 10 分鐘內限用一次${internet ? "" : " · LAN 未加密"}` : "部署與外部流量都必須先取得你的確認"}</small>
+          {remote ? qrCode ? <img src={qrCode} alt={uiText("Editkin Remote 配對 QR Code")} /> : <div className="qr-placeholder">{uiText("產生安全配對碼…")}</div> : <div className="remote-preflight-mark"><b>1</b><span>{uiText("研究方案")}</span><b>2</b><span>{uiText("確認費用")}</span><b>3</b><span>{uiText("桌面核准")}</span><b>4</b><span>{uiText("實測連線")}</span></div>}
+          <span><i /> {remote ? connected ? uiText("{value0} 台手機在線", { value0: status?.connectedCount ?? 0 }) : uiText("等待手機掃描") : uiText("尚未產生或傳送配對憑證")}</span>
+          <small>{remote ? connected ? uiText("{value0} 台已綁定 · 可隨時撤銷", { value0: status?.trustedCount ?? status?.devices.length ?? 0 }) : uiText("{value0} · {value1} · QR 10 分鐘內限用一次{value2}", { value0: transportLabel, value1: internet ? uiText("費用由你的供應商帳戶承擔") : uiText("零雲端流量費"), value2: internet ? "" : uiText(" · LAN 未加密") }) : uiText("部署與外部流量都必須先取得你的確認")}</small>
         </div>
       </section>
     </div>

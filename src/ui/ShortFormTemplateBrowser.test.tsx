@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { LONG_FORM_TEMPLATES } from "../application/longFormTemplates";
 import { buildLowerThirdCommand } from "../application/lowerThirds";
 import { buildLongFormTemplateCommand } from "../application/longFormTemplates";
-import { SHORT_FORM_TEMPLATES } from "../application/shortFormTemplates";
+import { REFERENCE_MOTION_TEMPLATES } from "../motion/referenceMotionTemplates";
 import { applyCommand } from "../domain/commands";
 import { createDemoProject } from "../domain/demo";
 import ShortFormTemplateBrowser from "./ShortFormTemplateBrowser";
@@ -11,11 +11,15 @@ import ShortFormTemplateBrowser from "./ShortFormTemplateBrowser";
 describe("template browser information architecture", () => {
   it("separates short and long formats, exposes purpose categories and keeps lower thirds compact", () => {
     const html = renderToStaticMarkup(<ShortFormTemplateBrowser onApplyShort={() => {}} onApplyLong={() => {}} />);
-    expect(html).toContain(`短片 9:16 <b>${SHORT_FORM_TEMPLATES.length}</b>`);
+    expect(html).toContain(`短片 9:16 <b>${REFERENCE_MOTION_TEMPLATES.length}</b>`);
     expect(html).toContain(`長片 16:9 <b>${LONG_FORM_TEMPLATES.length}</b>`);
     expect(html).toContain("人物字幕條");
     expect(html).toContain("單位／職稱 BAR");
     expect(html).toContain("教學");
+    expect(html).toContain('aria-label="模板影片類型"');
+    expect(html).toContain('aria-label="模板視覺主題"');
+    expect(html).toContain('aria-label="模板動態編排"');
+    expect(html).not.toContain("apply-template-");
     expect(html).not.toContain(LONG_FORM_TEMPLATES[0].description);
   });
 
@@ -43,8 +47,8 @@ describe("template browser information architecture", () => {
       onDeleteDirectorMarker={() => {}} onClearTemplateApplication={() => {}}
     />);
     expect(html).toContain("已套用：Hao 教學長片");
-    expect(html).toContain("8 個圖卡／字幕／註記");
-    expect(html).toContain("模板示範字幕");
+    expect(html).toContain("3 個圖卡／字幕／註記");
+    expect(html).not.toContain("模板示範字幕");
     expect(html).toContain("節奏註記");
     expect(html).toContain("還原成片模板");
     expect(html).toContain("還原套用前的字幕樣式、調色、特效、轉場與剪輯類型");

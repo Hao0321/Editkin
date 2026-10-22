@@ -75,7 +75,7 @@ describe("source HDR precision before composition", () => {
   });
   it("does not add a transform to SDR or drop premultiplied alpha normalization", () => {
     const chain = filters({ ...source("rec709"), alphaMode: "premultiplied" });
-    expect(chain).toEqual(["scale=720:1280:force_original_aspect_ratio=decrease", "format=rgba", "unpremultiply=inplace=1"]);
+    expect(chain).toEqual(["scale=720:1280:force_original_aspect_ratio=decrease", "format=rgba", "setparams=alpha_mode=premultiplied", "unpremultiply=inplace=1"]);
   });
   it("retains the calibrated ACES resource requirement", () => {
     expect(() => compositorSourceFilters(source("hlg"), 720, 1280, "rgba", 255, { ...DEFAULT_COLOR_MANAGEMENT, mode: "aces2" })).toThrow(/色彩資源/);

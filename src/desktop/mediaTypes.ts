@@ -1,5 +1,6 @@
 import type { EditProject, EditorialProfileId, MediaAsset, MediaDerivatives, OpticalAlphaRefinementAggregate } from "../domain/types";
 import type { ProductAutoRotoRouteReceipt } from "../application/autoRotoProductContract";
+import type { ProjectFileIdentityV1 } from "../domain/projectFileIdentityV1";
 
 export interface PickedMedia {
   asset: MediaAsset;
@@ -10,6 +11,7 @@ export interface OpenProjectResult {
   canceled: boolean;
   path?: string;
   project?: EditProject;
+  fileIdentity?: ProjectFileIdentityV1 | null;
   runtimeUrls?: Record<string, string>;
 }
 
@@ -17,6 +19,7 @@ export interface SaveProjectResult {
   canceled: boolean;
   path?: string;
   project?: EditProject;
+  fileIdentity?: ProjectFileIdentityV1 | null;
 }
 
 export interface RenderProjectResult {
@@ -147,6 +150,8 @@ export type RemoteAgentLaunchStatus = RemoteAgentLaunchStatusBase & ({
 export type BatchAutoEditJobStatus = "queued" | "running" | "completed" | "failed";
 
 export interface BatchAutoEditJob {
+  /** Native runtime-only engine owner; never restored from persisted progress. */
+  operationId?: string;
   id: string;
   sourcePath: string;
   sourceName: string;
@@ -209,15 +214,20 @@ export interface AutomaticCaptionDesktopRequest {
   sourceSha256?: string;
   language?: string;
   translationTarget?: "en";
+  /** Chinese cue text defaults to Taiwan Traditional ("zh-TW") in every UI locale; "original" keeps recognizer text. */
+  script?: "zh-TW" | "original";
 }
 
 export interface AutomaticCaptionDesktopResult {
   cues: Array<{ start: number; end: number; text: string; translation?: { text: string; language: "en" } }>;
+  /** Malformed recognizer blocks that were skipped; the other cues are complete. */
+  skippedCaptionBlocks?: Array<{ block: number; reason: string; window?: number }>;
   engine: string;
   modelId: string;
   modelSha256: string;
   language: string;
   translationTarget?: "en";
+  scriptConversion?: "s2twp";
   analyzedSeconds: number;
   elapsedMs: number;
   modelDownloaded: boolean;

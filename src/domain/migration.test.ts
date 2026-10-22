@@ -11,7 +11,7 @@ describe("EditGraph migrations", () => {
     delete legacy.captions;
     delete legacy.captionStyle;
     const migrated = validateProject(migrateProject(legacy));
-    expect(migrated.schemaVersion).toBe(8);
+    expect(migrated.schemaVersion).toBe(9);
     expect(migrated.compositions).toEqual([]);
     expect(migrated.tracks[0].clips[0].id).toBe("clip-demo");
     expect(migrated.captions).toEqual([]);
@@ -29,7 +29,7 @@ describe("EditGraph migrations", () => {
     delete tracks[0].clips[0].color;
     delete tracks[0].clips[0].keyframes;
     const migrated = validateProject(migrateProject(legacy));
-    expect(migrated.schemaVersion).toBe(8);
+    expect(migrated.schemaVersion).toBe(9);
     expect(migrated.tracks[0].clips[0].color.contrast).toBe(1);
   });
 

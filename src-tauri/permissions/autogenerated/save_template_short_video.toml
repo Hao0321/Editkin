@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-template-short-video"
+description = "Enables the save_template_short_video command without any pre-configured scope."
+commands.allow = ["save_template_short_video"]
+
+[[permission]]
+identifier = "deny-save-template-short-video"
+description = "Denies the save_template_short_video command without any pre-configured scope."
+commands.deny = ["save_template_short_video"]

@@ -1,3 +1,4 @@
+import { shiftedClipAudioEnvelope } from "./clipAudioEnvelope";
 import { alignTime, animatedClipState, EditGraphError, findClip, findTrack } from "./editGraph";
 import type { CaptionCue, EditProject, TimelineClip } from "./types";
 import { sliceClipVisuals } from "./clipSlicing";
@@ -78,6 +79,7 @@ export function applySmartCutToClip(
       keyframes,
       masks: slicedMasks[index],
     };
+    if (original.audioEnvelope) segment.audioEnvelope = shiftedClipAudioEnvelope(original, range.start);
     cursor = alignTime(cursor + duration, project.fps);
     return segment;
   });

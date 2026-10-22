@@ -11,10 +11,17 @@ describe('ASS samples select the authored integer motion frame',()=>{
    expect(start).toBeLessThanOrEqual(time+1e-9);expect(end).toBeGreaterThan(time+1e-9);expect(end).toBeGreaterThan(start);
   }
  });
+ for(const fps of [24,25,29.97,30,50,59.94,60])it(`selects the authored frame at FFmpeg's truncated millisecond sample time at ${fps} fps`,()=>{
+  // vf_subtitles renders at (long long)(pts * av_q2d(timebase) * 1000); at 30 fps frame 111 arrives as 3699 ms.
+  for(let n=0;n<900;n++){
+   const now=Math.trunc(n*(1/fps)*1000),start=Math.round(parse(assMotionFrameTime(n,fps))*1000),end=Math.round(parse(assMotionFrameTime(n+1,fps))*1000);
+   expect(start,`frame ${n}`).toBeLessThanOrEqual(now);expect(end,`frame ${n}`).toBeGreaterThan(now);
+  }
+ });
  it('does not pretend centisecond events support more than 100 states per second',()=>{
   for(const fps of [0,NaN,101,120,240])expect(()=>assMotionFrameTime(0,fps)).toThrow();
   const p=createEmptyProject('high-fps',{width:1920,height:1080,fps:120});p.motionGraphics=[createMotionGraphic('g','title','TEXT',0,3,undefined,findMotionGraphicPreset('v2-word-cascade').seed)];
-  expect(()=>writeAssContent(p,p.captionStyle)).toThrow(/100 fps/);
+  expect(()=>writeAssContent(p,p.captionStyle)).toThrow(/invalid frame duration\/fps/);
  });
  it('removes the last-frame panel instead of holding the previous fade sample',()=>{
   const p=createEmptyProject('last-frame'),g=createMotionGraphic('g','title','TEXT',0,3,undefined,findMotionGraphicPreset('v2-word-cascade').seed);p.motionGraphics=[g];

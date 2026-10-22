@@ -1,3 +1,4 @@
+import { boundedMaskTimelineExpressionV3 } from "./boundedMaskTimelineV3";
 import type { ClipAlphaOperation, ClipAlphaPlan, ClipAlphaVectorOperation } from "../domain/clipAlphaPlan";
 import type { MaskPathPoint } from "../domain/types";
 
@@ -41,6 +42,7 @@ function timedExpression(operation: ClipAlphaVectorOperation, width: number, hei
   const sampleExpression = (index: number) => operation.samples[index].points
     ? shapeExpression(operation, operation.samples[index].points!, width, height)
     : "0";
+  if (operation.fixedWindowV3) return boundedMaskTimelineExpressionV3(operation.samples.map(sample => sample.time), sampleExpression, n);
   let result = sampleExpression(operation.samples.length - 1);
   for (let index = operation.samples.length - 2; index >= 0; index -= 1) {
     const boundary = (operation.samples[index].time + operation.samples[index + 1].time) / 2;
@@ -93,10 +95,15 @@ export interface MaskAlphaFilterInputs {
   sourceAlphaLabel: string;
   /** Verified, resampled and clip-local gray matte, when the plan requires it. */
   pixelMatteLabel?: string;
+  /** Owned grayscale inputs prepared only for explicit fixed-window v3 operations. */
+  vectorPlaneLabels?: ReadonlyMap<string, string>;
   outputLabel: string;
   width: number;
   height: number;
   pixelMaximum?: 255 | 65535;
+  /** Private transport offset; authored operation samples remain unchanged. */
+  localTimeOffset?: number;
+  originalDuration?: number;
 }
 
 /**
@@ -107,31 +114,45 @@ export interface MaskAlphaFilterInputs {
 export function buildClipMaskAlphaFilters(plan: ClipAlphaPlan, input: MaskAlphaFilterInputs): string[] {
   const { sourceAlphaLabel, pixelMatteLabel, outputLabel, width, height, pixelMaximum = 255 } = input;
   if (plan.operations.length === 0) return [`[${sourceAlphaLabel}]null[${outputLabel}]`];
+  const clock = (expression: string | undefined) => {
+    if (!expression || !input.localTimeOffset) return expression;
+    if (!Number.isFinite(input.localTimeOffset) || !Number.isFinite(input.originalDuration) || input.originalDuration! <= 0) throw Error("TIMELINE_TRANSITION_MASK_CLOCK_INVALID");
+    const time = `min(${String(input.originalDuration!)}\\,max(0\\,T+(${String(input.localTimeOffset)})))`;
+    return expression.replace(/\bT\b/g, time);
+  };
   const hasPixelMatte = plan.operations.some(operation => operation.source === "pixel_matte");
   if (hasPixelMatte && !pixelMatteLabel) throw new Error(`Alpha plan ${plan.clipId} 缺少逐像素 Matte input`);
   const hasFeather = plan.operations.some(operation => maskOperationFeatherSigma(operation, width, height) > .1);
   const multiply = (source: string, mask: string) => `[${source}][${mask}]blend=all_expr='A*B/${pixelMaximum}':shortest=1[${outputLabel}]`;
-  if (!hasFeather) {
+  const preparedLabel = (operation: ClipAlphaOperation) => operation.source === "vector" && operation.fixedWindowV3 ? input.vectorPlaneLabels?.get(operation.maskId) : undefined;
+  const hasPreparedVectors = plan.operations.some(operation => Boolean(preparedLabel(operation)));
+  if (!hasFeather && !hasPreparedVectors) {
     // Keep the inexpensive single-expression path for hard masks. Crucially,
     // this path has no stack blur, so source alpha cannot bleed into a hole.
-    if (!hasPixelMatte) return [`[${sourceAlphaLabel}]geq=lum='lum(X,Y)*(${combinedMaskAlphaExpression(plan, width, height)})'[${outputLabel}]`];
+    if (!hasPixelMatte) return [`[${sourceAlphaLabel}]geq=lum='lum(X,Y)*(${clock(combinedMaskAlphaExpression(plan, width, height))})'[${outputLabel}]`];
     const mask = `${outputLabel}mask`;
     return [
-      `[${pixelMatteLabel}]geq=lum='${pixelMaximum}*(${matteMaskAlphaExpression(plan, width, height, pixelMaximum)})'[${mask}]`,
+      `[${pixelMatteLabel}]geq=lum='${pixelMaximum}*(${clock(matteMaskAlphaExpression(plan, width, height, pixelMaximum))})'[${mask}]`,
       multiply(sourceAlphaLabel, mask),
     ];
   }
-  const vectors = plan.operations.filter(operation => operation.source === "vector");
+  const vectors = plan.operations.filter(operation => operation.source === "vector" && !preparedLabel(operation));
   const protectedSource = `${outputLabel}original`;
   const seeds = vectors.map((_, index) => `${outputLabel}seed${index}`);
   const filters = [`[${sourceAlphaLabel}]split=${vectors.length + 1}[${protectedSource}]${seeds.map(label => `[${label}]`).join("")}`];
   let vectorIndex = 0;
   let accumulated = "";
   for (const [index, operation] of plan.operations.entries()) {
-    const source = operation.source === "vector" ? seeds[vectorIndex++] : pixelMatteLabel!;
+    const prepared = preparedLabel(operation);
+    const source = prepared ?? (operation.source === "vector" ? seeds[vectorIndex++] : pixelMatteLabel!);
     const plane = `${outputLabel}op${index}`;
     const sigma = maskOperationFeatherSigma(operation, width, height);
-    filters.push(`[${source}]geq=lum='${pixelMaximum}*(${operationExpression(operation, width, height, pixelMaximum)})'${sigma > .1 ? `,gblur=sigma=${n(sigma)}` : ""}[${plane}]`);
+    // An authored static vector does not depend on footage alpha or time.
+    // Rasterize it once, then repeat its plane at the clip's fixed frame rate.
+    // The protected, changing source alpha is still multiplied on every frame.
+    const staticVector = !prepared && operation.source === "vector" && operation.samples.length === 0;
+    const raster = prepared ? "null" : `${staticVector ? "trim=end_frame=1," : ""}geq=lum='${pixelMaximum}*(${clock(operationExpression(operation, width, height, pixelMaximum))})'`;
+    filters.push(`[${source}]${raster}${sigma > .1 ? `,gblur=sigma=${n(sigma)}` : ""}${staticVector ? ",loop=loop=-1:size=1:start=0,setpts=N/FRAME_RATE/TB" : ""}[${plane}]`);
     if (index === 0) accumulated = plane;
     else {
       const next = `${outputLabel}stack${index}`;

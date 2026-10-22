@@ -1,3 +1,4 @@
+import { translateUi as uiText, useI18n } from "./i18n/interfacePreferences";
 import { useEffect, useId, useState } from "react";
 import { AESTHETIC_BENCHMARKS, BENCHMARK_AXES, evaluateAestheticBenchmarks, validAestheticArtifact } from "../domain/aestheticBenchmarks";
 import { scoreAestheticReview } from "../domain/aestheticReview";
@@ -93,18 +94,21 @@ export function prepareAestheticReviewDraft(draft: AestheticReviewDraft, fps: nu
 }
 
 function RatingSelect({ id, label, value, onChange }: { id: string; label: string; value?: number; onChange: (value?: number) => void }) {
-  return <label className="aesthetic-rating" htmlFor={id}><span>評分</span><select id={id} aria-label={`${label} 評分`} value={value ?? ""} onChange={event => onChange(event.target.value === "" ? undefined : Number(event.target.value))}>
-    <option value="">尚未評分</option>{[1, 2, 3, 3.5, 4, 4.5, 5].map(rating => <option key={rating} value={rating}>{rating} / 5</option>)}
+  useI18n();
+  return <label className="aesthetic-rating" htmlFor={id}><span>{uiText("評分")}</span><select id={id} aria-label={uiText("{value0} 評分", { value0: label })} value={value ?? ""} onChange={event => onChange(event.target.value === "" ? undefined : Number(event.target.value))}>
+    <option value="">{uiText("尚未評分")}</option>{[1, 2, 3, 3.5, 4, 4.5, 5].map(rating => <option key={rating} value={rating}>{rating} / 5</option>)}
   </select></label>;
 }
 
 export function AestheticReviewPanel(props: AestheticReviewPanelProps) {
+  useI18n();
   // Output changes must neither rebind evidence nor discard unsaved typing.
   // The editor keeps its original draft owner until the reviewer explicitly starts a new draft.
   return <AestheticReviewEditor key={props.system.sourceSha256} {...props} />;
 }
 
 function AestheticReviewEditor({ system, playhead, timelineFps, timelineDurationFrames, currentArtifact, onSeek, onReviewChange }: AestheticReviewPanelProps) {
+  useI18n();
   const prefix = useId();
   const [draft, setDraft] = useState(() => createAestheticReviewDraft(system, currentArtifact, timelineFps));
   const [dirty, setDirty] = useState(false);
@@ -140,18 +144,18 @@ function AestheticReviewEditor({ system, playhead, timelineFps, timelineDuration
     onReviewChange(review, message);
     setDirty(false); setNotice(message);
   };
-  return <section className="aesthetic-review-panel" data-testid="aesthetic-review-panel" aria-label="美感審查">
-    <header className="aesthetic-panel-heading"><div><h3>美感審查</h3><p>{system.primaryLabel} · 一次專心看一組，不必一次填完。</p></div><span className="aesthetic-review-state">{dirty ? "REVIEW" : effectiveReview.status}{dirty ? " · 未儲存" : " · 評分紀錄"}</span></header>
-    <p className="aesthetic-binding-note" data-testid="aesthetic-binding-note">{bound ? "已綁定目前輸出。請對照這份輸出逐項評分；時間碼會按輸出影格對齊。" : "尚未綁定可驗證的目前輸出，目前只能儲存草稿（REVIEW）。時間碼僅作草稿參考，不代表已審過目前成片。"}{outdated && " 先前輸出的逐項證據不會自動套用；原紀錄在儲存新草稿前仍保留。"}</p>
-    {ownerChanged && <div className="aesthetic-binding-note"><p>目前輸出已變更。原草稿與輸入仍保留，請先儲存，再為新輸出重新評分。</p><button type="button" disabled={dirty} onClick={() => { if (validAestheticArtifact(currentArtifact)) changeDraft(value => ({ ratings: { ...value.ratings }, artifact: structuredClone(currentArtifact), axes: {} })); }}>開始目前輸出的新評分</button></div>}
-    {outdated && <details className="aesthetic-group aesthetic-previous-review" data-testid="aesthetic-previous-review"><summary><span><b>先前輸出的證據（唯讀）</b><small>不是目前成片的認證；需要重新驗證輸出</small></span></summary><div className="aesthetic-items">{BENCHMARK_AXES.map(axis => <details className="aesthetic-criterion" key={axis}><summary><span>{AXIS_LABELS[axis]}</span></summary><div className="aesthetic-criterion-body">{AESTHETIC_BENCHMARKS[axis].map(criterion => {
+  return <section className="aesthetic-review-panel" data-testid="aesthetic-review-panel" aria-label={uiText("美感審查")}>
+    <header className="aesthetic-panel-heading"><div><h3>{uiText("美感審查")}</h3><p>{system.primaryLabel} {uiText("· 一次專心看一組，不必一次填完。")}</p></div><span className="aesthetic-review-state">{dirty ? "REVIEW" : effectiveReview.status}{dirty ? uiText(" · 未儲存") : uiText(" · 評分紀錄")}</span></header>
+    <p className="aesthetic-binding-note" data-testid="aesthetic-binding-note">{bound ? uiText("已綁定目前輸出。請對照這份輸出逐項評分；時間碼會按輸出影格對齊。") : uiText("尚未綁定可驗證的目前輸出，目前只能儲存草稿（REVIEW）。時間碼僅作草稿參考，不代表已審過目前成片。")}{outdated && uiText(" 先前輸出的逐項證據不會自動套用；原紀錄在儲存新草稿前仍保留。")}</p>
+    {ownerChanged && <div className="aesthetic-binding-note"><p>{uiText("目前輸出已變更。原草稿與輸入仍保留，請先儲存，再為新輸出重新評分。")}</p><button type="button" disabled={dirty} onClick={() => { if (validAestheticArtifact(currentArtifact)) changeDraft(value => ({ ratings: { ...value.ratings }, artifact: structuredClone(currentArtifact), axes: {} })); }}>{uiText("開始目前輸出的新評分")}</button></div>}
+    {outdated && <details className="aesthetic-group aesthetic-previous-review" data-testid="aesthetic-previous-review"><summary><span><b>{uiText("先前輸出的證據（唯讀）")}</b><small>{uiText("不是目前成片的認證；需要重新驗證輸出")}</small></span></summary><div className="aesthetic-items">{BENCHMARK_AXES.map(axis => <details className="aesthetic-criterion" key={axis}><summary><span>{AXIS_LABELS[axis]}</span></summary><div className="aesthetic-criterion-body">{AESTHETIC_BENCHMARKS[axis].map(criterion => {
       const old = system.review.benchmarkReview?.axes[axis]?.[criterion.id];
-      return old ? <article key={criterion.id}><h4>{criterion.label} · {old.rating ?? "未評"} / 5</h4>{old.evidence.map((row, index) => <p key={index}>{formatReviewTime(row.fromFrame, system.review.benchmarkReview!.artifact!.fps)}–{formatReviewTime(row.toFrame, system.review.benchmarkReview!.artifact!.fps)}：{row.observation}</p>)}</article> : null;
+      return old ? <article key={criterion.id}><h4>{criterion.label} · {old.rating ?? uiText("未評")} / 5</h4>{old.evidence.map((row, index) => <p key={index}>{formatReviewTime(row.fromFrame, system.review.benchmarkReview!.artifact!.fps)}–{formatReviewTime(row.toFrame, system.review.benchmarkReview!.artifact!.fps)}：{row.observation}</p>)}</article> : null;
     })}</div></details>)}</div></details>}
     <details className="aesthetic-group" data-testid="aesthetic-general-group">
-      <summary><span><b>一般品質</b><small>構圖、字體、色彩與整體完成度</small></span><strong>{generalComplete} / {general.length}</strong></summary>
+      <summary><span><b>{uiText("一般品質")}</b><small>{uiText("構圖、字體、色彩與整體完成度")}</small></span><strong>{generalComplete} / {general.length}</strong></summary>
       <div className="aesthetic-items">{general.map(dimension => <details className="aesthetic-criterion" key={dimension.id}>
-        <summary><span>{dimension.labelZh}</span><small>{draft.ratings[dimension.id] === undefined ? "未評" : `${draft.ratings[dimension.id]} / 5`}</small></summary>
+        <summary><span>{dimension.labelZh}</span><small>{draft.ratings[dimension.id] === undefined ? uiText("未評") : `${draft.ratings[dimension.id]} / 5`}</small></summary>
         <div className="aesthetic-criterion-body"><p>{dimension.question}</p><RatingSelect id={`${prefix}-${dimension.id}`} label={dimension.labelZh} value={draft.ratings[dimension.id]} onChange={rating => changeDraft(value => { const ratings = { ...value.ratings }; if (rating === undefined) delete ratings[dimension.id]; else ratings[dimension.id] = rating; return { ...value, ratings }; })} /></div>
       </details>)}</div>
     </details>
@@ -163,34 +167,34 @@ function AestheticReviewEditor({ system, playhead, timelineFps, timelineDuration
         <div className="aesthetic-items">{criteria.map(criterion => {
           const item = draft.axes[axis]?.[criterion.id] ?? { evidence: [] };
           return <details key={criterion.id} className="aesthetic-criterion" data-testid={`aesthetic-criterion-${criterion.id}`}>
-            <summary><span>{criterion.label}</span><small>{item.rating === undefined ? "未評" : `${item.rating} / 5`} · 證據 {item.evidence.length}</small></summary>
+            <summary><span>{criterion.label}</span><small>{item.rating === undefined ? uiText("未評") : `${item.rating} / 5`} {uiText("· 證據")}{item.evidence.length}</small></summary>
             <div className="aesthetic-criterion-body"><RatingSelect id={`${prefix}-${axis}-${criterion.id}`} label={criterion.label} value={item.rating} onChange={rating => updateItem(axis, criterion.id, previous => ({ ...previous, rating }))} />
-              <p className="aesthetic-evidence-help">記下看得見或聽得到的理由。時間碼可輸入秒數或 01:23.400；結束不包含該影格。</p>
+              <p className="aesthetic-evidence-help">{uiText("記下看得見或聽得到的理由。時間碼可輸入秒數或 01:23.400；結束不包含該影格。")}</p>
               {item.evidence.map((evidence, index) => {
                 const baseId = `${prefix}-${axis}-${criterion.id}-${index}`;
                 const start = parseReviewTime(evidence.fromTime, fps);
                 const end = parseReviewTime(evidence.toTime, fps);
                 const invalid = start === undefined || end === undefined || end <= start || end > durationFrames;
                 const editEvidence = (patch: Partial<EvidenceDraft>) => updateItem(axis, criterion.id, previous => ({ ...previous, evidence: previous.evidence.map((row, at) => at === index ? { ...row, ...patch } : row) }));
-                return <fieldset className="aesthetic-evidence" key={index}><legend>證據 {index + 1}</legend>
-                  <div className="aesthetic-time-fields"><label htmlFor={`${baseId}-from`}>開始<input id={`${baseId}-from`} aria-label={`${criterion.label} 證據 ${index + 1} 開始`} inputMode="decimal" value={evidence.fromTime} aria-invalid={invalid} onChange={event => editEvidence({ fromTime: event.target.value })} /></label><label htmlFor={`${baseId}-to`}>結束<input id={`${baseId}-to`} aria-label={`${criterion.label} 證據 ${index + 1} 結束`} inputMode="decimal" value={evidence.toTime} aria-invalid={invalid} onChange={event => editEvidence({ toTime: event.target.value })} /></label></div>
-                  <div className="aesthetic-evidence-actions"><button type="button" onClick={() => { const timing = initialEvidence(); editEvidence({ fromTime: timing.fromTime, toTime: timing.toTime }); }}>用目前播放頭</button><button type="button" disabled={start === undefined || start >= durationFrames} onClick={() => { if (start !== undefined) onSeek(start / fps); }}>跳到這裡</button><button type="button" aria-label={`移除${criterion.label}證據 ${index + 1}`} onClick={() => updateItem(axis, criterion.id, previous => ({ ...previous, evidence: previous.evidence.filter((_, at) => at !== index) }))}>移除</button></div>
-                  <label htmlFor={`${baseId}-observation`}>觀察與理由<textarea id={`${baseId}-observation`} value={evidence.observation} placeholder="例如：03 秒先露出目標，05 秒才揭曉差距，能看懂這段要解決什麼。" onChange={event => editEvidence({ observation: event.target.value })} /></label>
-                  {invalid && <p className="aesthetic-field-error">請填入片長內有效範圍，結束需晚於開始。</p>}
+                return <fieldset className="aesthetic-evidence" key={index}><legend>{uiText("證據")}{index + 1}</legend>
+                  <div className="aesthetic-time-fields"><label htmlFor={`${baseId}-from`}>{uiText("開始")}<input id={`${baseId}-from`} aria-label={uiText("{value0} 證據 {value1} 開始", { value0: criterion.label, value1: index + 1 })} inputMode="decimal" value={evidence.fromTime} aria-invalid={invalid} onChange={event => editEvidence({ fromTime: event.target.value })} /></label><label htmlFor={`${baseId}-to`}>{uiText("結束")}<input id={`${baseId}-to`} aria-label={uiText("{value0} 證據 {value1} 結束", { value0: criterion.label, value1: index + 1 })} inputMode="decimal" value={evidence.toTime} aria-invalid={invalid} onChange={event => editEvidence({ toTime: event.target.value })} /></label></div>
+                  <div className="aesthetic-evidence-actions"><button type="button" onClick={() => { const timing = initialEvidence(); editEvidence({ fromTime: timing.fromTime, toTime: timing.toTime }); }}>{uiText("用目前播放頭")}</button><button type="button" disabled={start === undefined || start >= durationFrames} onClick={() => { if (start !== undefined) onSeek(start / fps); }}>{uiText("跳到這裡")}</button><button type="button" aria-label={uiText("移除{value0}證據 {value1}", { value0: criterion.label, value1: index + 1 })} onClick={() => updateItem(axis, criterion.id, previous => ({ ...previous, evidence: previous.evidence.filter((_, at) => at !== index) }))}>{uiText("移除")}</button></div>
+                  <label htmlFor={`${baseId}-observation`}>{uiText("觀察與理由")}<textarea id={`${baseId}-observation`} value={evidence.observation} placeholder={uiText("例如：03 秒先露出目標，05 秒才揭曉差距，能看懂這段要解決什麼。")} onChange={event => editEvidence({ observation: event.target.value })} /></label>
+                  {invalid && <p className="aesthetic-field-error">{uiText("請填入片長內有效範圍，結束需晚於開始。")}</p>}
                 </fieldset>;
               })}
-              <button type="button" className="aesthetic-add-evidence" disabled={!Number.isFinite(fps) || fps <= 0 || durationFrames < 1} onClick={() => updateItem(axis, criterion.id, previous => ({ ...previous, evidence: [...previous.evidence, initialEvidence()] }))}>＋ 在目前播放頭加入證據</button>
+              <button type="button" className="aesthetic-add-evidence" disabled={!Number.isFinite(fps) || fps <= 0 || durationFrames < 1} onClick={() => updateItem(axis, criterion.id, previous => ({ ...previous, evidence: [...previous.evidence, initialEvidence()] }))}>{uiText("＋ 在目前播放頭加入證據")}</button>
             </div>
           </details>;
         })}</div>
       </details>;
     })}
-    <footer className="aesthetic-panel-footer"><p>總分試算 {provisional.score.toFixed(1)} / 100。雙基準各需 ≥ 7 / 10；一般維度每項 ≥ {system.scoreContract.minimumDimensionRating}。有分數不等於完成人工審片。</p>
-      {system.review.machineBlockers.length > 0 && <p className="aesthetic-field-error">仍有機器阻擋：{system.review.machineBlockers.join("、")}</p>}
-      <label className="aesthetic-attestation"><input type="checkbox" checked={attested} disabled={!bound} onChange={event => setAttested(event.target.checked)} /><span>我已觀看目前輸出，並親自完成逐項評分與時間碼證據。</span></label>
-      <div className="aesthetic-save-actions"><button type="button" disabled={prepared.errors.length > 0} onClick={() => persist(false)} data-testid="aesthetic-save-draft">儲存評分草稿</button><button type="button" disabled={!canComplete} onClick={() => persist(true)} data-testid="aesthetic-record-review">記錄人工審查</button></div>
-      {prepared.errors.length > 0 && <p className="aesthetic-field-error" role="status">{prepared.errors[0]} 修正後才能儲存，未輸入的理由可先留草稿。</p>}
-      {!canComplete && <p className="aesthetic-next-step">先儲存草稿也可以。記錄審查需要目前輸出綁定、全部評分、16 項各至少一筆有效證據，以及親自確認。</p>}
+    <footer className="aesthetic-panel-footer"><p>{uiText("總分試算")}{provisional.score.toFixed(1)} {uiText("/ 100。雙基準各需 ≥ 7 / 10；一般維度每項 ≥")}{system.scoreContract.minimumDimensionRating}{uiText("。有分數不等於完成人工審片。")}</p>
+      {system.review.machineBlockers.length > 0 && <p className="aesthetic-field-error">{uiText("仍有機器阻擋：")}{system.review.machineBlockers.join("、")}</p>}
+      <label className="aesthetic-attestation"><input type="checkbox" checked={attested} disabled={!bound} onChange={event => setAttested(event.target.checked)} /><span>{uiText("我已觀看目前輸出，並親自完成逐項評分與時間碼證據。")}</span></label>
+      <div className="aesthetic-save-actions"><button type="button" disabled={prepared.errors.length > 0} onClick={() => persist(false)} data-testid="aesthetic-save-draft">{uiText("儲存評分草稿")}</button><button type="button" disabled={!canComplete} onClick={() => persist(true)} data-testid="aesthetic-record-review">{uiText("記錄人工審查")}</button></div>
+      {prepared.errors.length > 0 && <p className="aesthetic-field-error" role="status">{prepared.errors[0]} {uiText("修正後才能儲存，未輸入的理由可先留草稿。")}</p>}
+      {!canComplete && <p className="aesthetic-next-step">{uiText("先儲存草稿也可以。記錄審查需要目前輸出綁定、全部評分、16 項各至少一筆有效證據，以及親自確認。")}</p>}
       <p className="aesthetic-notice" role="status" aria-live="polite">{notice}</p>
     </footer>
   </section>;

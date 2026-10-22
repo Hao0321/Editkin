@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-close-resident-audio"
+description = "Enables the close_resident_audio command without any pre-configured scope."
+commands.allow = ["close_resident_audio"]
+
+[[permission]]
+identifier = "deny-close-resident-audio"
+description = "Denies the close_resident_audio command without any pre-configured scope."
+commands.deny = ["close_resident_audio"]

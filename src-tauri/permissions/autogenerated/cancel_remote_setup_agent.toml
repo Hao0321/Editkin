@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cancel-remote-setup-agent"
+description = "Enables the cancel_remote_setup_agent command without any pre-configured scope."
+commands.allow = ["cancel_remote_setup_agent"]
+
+[[permission]]
+identifier = "deny-cancel-remote-setup-agent"
+description = "Denies the cancel_remote_setup_agent command without any pre-configured scope."
+commands.deny = ["cancel_remote_setup_agent"]

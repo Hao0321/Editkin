@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-render-job-progress"
+description = "Enables the render_job_progress command without any pre-configured scope."
+commands.allow = ["render_job_progress"]
+
+[[permission]]
+identifier = "deny-render-job-progress"
+description = "Denies the render_job_progress command without any pre-configured scope."
+commands.deny = ["render_job_progress"]

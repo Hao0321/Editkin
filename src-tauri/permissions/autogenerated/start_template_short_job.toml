@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-start-template-short-job"
+description = "Enables the start_template_short_job command without any pre-configured scope."
+commands.allow = ["start_template_short_job"]
+
+[[permission]]
+identifier = "deny-start-template-short-job"
+description = "Denies the start_template_short_job command without any pre-configured scope."
+commands.deny = ["start_template_short_job"]

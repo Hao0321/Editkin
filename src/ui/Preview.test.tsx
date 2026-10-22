@@ -48,9 +48,12 @@ describe("native effect preview labels", () => {
       playhead={0.5} projectDuration={2} projectFps={30} captions={project.captions} captionStyle={project.captionStyle}
       project={project} playing={false} onPlayingChange={() => undefined} onPlayheadChange={() => undefined} />);
     expect(html).toContain("container-type:size");
-    expect(html).toContain("font-size:5cqw");
-    expect(html).toContain("-webkit-text-stroke-width:0cqw");
-    expect(html).toContain("paint-order:stroke fill");
+    // ASS size 54 is Noto Sans TC's win ascent + descent (1.448 em): the export's em is 54 / 1.448 px and its
+    // line pitch is 54 px, both as canvas fractions (cqw), never UI pixels.
+    const fontSize = Number(/font-size:([\d.]+)cqw/.exec(html)?.[1]);
+    expect(fontSize).toBeCloseTo(54 / 1.448 / 1080 * 100, 6);
+    expect(html).toContain("line-height:5cqw");
+    expect(html).not.toContain("-webkit-text-stroke-width");
     expect(html).toContain("bottom:1.25%");
     expect(html).not.toContain("font-size:27px");
   });
@@ -82,6 +85,7 @@ describe("native effect preview labels", () => {
       project={project}
       nativeGpuPreview
       gpuPreviewAdmission="engine-video-native"
+      bakedCaptionIds={["native-caption"]}
       playing={false}
       onPlayingChange={() => undefined}
       onPlayheadChange={() => undefined}

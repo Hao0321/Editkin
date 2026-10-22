@@ -9,7 +9,9 @@ describe("Editkin Studio asset extension", () => {
     initializeStudioCreativeAssets();
     expect(STUDIO_MOTION_ASSETS).toHaveLength(8);
     expect(LOOK_PRESETS.filter((preset) => preset.id.startsWith("studio_") || preset.id.startsWith("cine_"))).toHaveLength(20);
-    expect(EFFECT_PRESETS.filter((preset) => preset.id.startsWith("studio_"))).toHaveLength(6);
+    // Six screen effects plus the source-backdrop soft blur used behind non-full-frame windows.
+    expect(EFFECT_PRESETS.filter((preset) => preset.id.startsWith("studio_"))).toHaveLength(7);
+    expect(EFFECT_PRESETS.some((preset) => preset.id === "studio_backdrop_soft" && preset.renderer === "ffmpeg-backdrop-soft")).toBe(true);
     expect(TRANSITION_PRESETS.filter((preset) => preset.id.startsWith("studio_") || preset.id.startsWith("cine_"))).toHaveLength(28);
     expect([...STUDIO_MOTION_ASSETS, ...LOOK_PRESETS, ...EFFECT_PRESETS, ...TRANSITION_PRESETS].every((preset) => preset.license && preset.provenance)).toBe(true);
   });

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-preview-paths"
+description = "Enables the preview_paths command without any pre-configured scope."
+commands.allow = ["preview_paths"]
+
+[[permission]]
+identifier = "deny-preview-paths"
+description = "Denies the preview_paths command without any pre-configured scope."
+commands.deny = ["preview_paths"]

@@ -1,3 +1,5 @@
+import { basename, dirname, isAbsolute, resolve } from "node:path";
+
 const ALLOWED_TAURI_PRODUCT_FLAGS = new Set(["--ci", "--verbose", "--no-default-features"]);
 const FORBIDDEN_BUILD_ENVIRONMENT = /^(?:RUSTFLAGS|CARGO_ENCODED_RUSTFLAGS|CARGO_BUILD_RUSTFLAGS|CARGO_TARGET_.+_RUSTFLAGS|CARGO_TARGET_DIR|CARGO_HOME|CARGO|RUSTC|RUSTC_WRAPPER|RUSTC_WORKSPACE_WRAPPER|CARGO_BUILD_TARGET|CARGO_BUILD_RUSTC|CARGO_BUILD_RUSTC_WRAPPER|CARGO_BUILD_TARGET_DIR)$/iu;
 export const TAURI_PRODUCT_EMBEDDED_FRONTEND_FEATURE = "tauri/custom-protocol";
@@ -64,6 +66,44 @@ export function assertTauriProductRustflagEnvironment(environment) {
       throw new Error(`Tauri product build 不接受未驗證的 Rust/Cargo 環境變數：${name}`);
     }
   }
+}
+
+/** rustup keeps every toolchain under <RUSTUP_HOME>/toolchains/<name>; remap the whole home when the sysroot is laid out so. */
+export function rustupHomeFromSysroot(sysroot) {
+  if (typeof sysroot !== "string" || !isAbsolute(sysroot.trim())) throw new Error("Rust sysroot must be an absolute path");
+  const resolved = resolve(sysroot.trim());
+  return basename(dirname(resolved)).toLowerCase() === "toolchains" ? dirname(dirname(resolved)) : resolved;
+}
+
+/**
+ * Release binaries must not carry build-machine paths (user profile, drive layout) in panic and error locations.
+ * Only the trusted product wrappers set these flags, from their own toolchain and checkout; callers still cannot inject
+ * RUSTFLAGS (assertTauriProductRustflagEnvironment). rustc applies the last matching prefix, so the more specific target
+ * directory comes after the checkout that may contain it.
+ */
+export function tauriProductPathRemapRustflags({ rustupHome, cargoHome, workspaceRoot, cargoTargetDir }) {
+  const flags = [];
+  for (const [prefix, replacement, required] of [
+    [rustupHome, "/rustup", true],
+    [cargoHome, "/cargo", true],
+    [workspaceRoot, "/editkin", true],
+    [cargoTargetDir, "/cargo-target", false],
+  ]) {
+    if (prefix === undefined && !required) continue;
+    if (typeof prefix !== "string" || !isAbsolute(prefix) || /[\u0000-\u001f]/u.test(prefix)) {
+      throw new Error(`Tauri product path remap needs an absolute ${replacement} prefix without control characters`);
+    }
+    flags.push(`--remap-path-prefix=${resolve(prefix)}=${replacement}`);
+  }
+  return flags;
+}
+
+/** CARGO_ENCODED_RUSTFLAGS form: one flag per 0x1F-separated field, so paths with spaces stay single arguments. */
+export function encodeCargoRustflags(flags) {
+  if (!Array.isArray(flags) || flags.some((flag) => typeof flag !== "string" || !flag || flag.includes("\u001f"))) {
+    throw new Error("Cargo rustflags must be non-empty strings without the 0x1F separator");
+  }
+  return flags.join("\u001f");
 }
 
 /** Build the only Cargo-feature posture accepted by the formal product wrapper. */

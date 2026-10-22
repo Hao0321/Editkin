@@ -1,0 +1,21 @@
+.speed-curve-editor-v1 { display: grid; gap: 8px; color: var(--text); min-width: 0; }
+.speed-curve-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.speed-curve-heading > span, .speed-curve-help { color: var(--soft); font-size: .875em; }
+.speed-curve-editor-v1 p { margin: 0; }
+.speed-curve-presets, .speed-curve-actions, .speed-curve-point-list { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.speed-curve-editor-v1 button { width: auto; min-height: var(--ui-target-size, 40px); padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--text); font: inherit; }
+.speed-curve-editor-v1 button[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); }
+.speed-curve-editor-v1 button:disabled, .speed-curve-editor-v1 input:disabled { opacity: .55; cursor: default; }
+.speed-curve-editor-v1 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.speed-curve-editor-v1 svg { width: 100%; height: 230px; overflow: visible; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; touch-action: none; user-select: none; }
+.speed-curve-editor-v1 svg path { fill: none; vector-effect: non-scaling-stroke; }
+.speed-curve-grid { stroke: var(--line); stroke-width: 1; }
+.speed-curve-line { stroke: var(--accent); stroke-width: 2; pointer-events: none; }
+.speed-curve-point, .speed-curve-handle { fill: var(--accent); stroke: transparent; stroke-width: 36px; vector-effect: non-scaling-stroke; pointer-events: all; cursor: grab; }
+.speed-curve-handle { fill: var(--soft); }
+.speed-curve-point[data-selected=true] { fill: var(--text); }
+.speed-curve-axis-labels { display: flex; justify-content: space-between; padding: 0 4%; color: var(--soft); font-size: .875em; }
+.speed-curve-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.speed-curve-fields label { display: grid; gap: 4px; min-width: 0; }
+.speed-curve-fields input { min-width: 0; width: 100%; min-height: var(--ui-target-size,40px); box-sizing: border-box; font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px; }
+@media (max-width: 420px) { .speed-curve-fields { grid-template-columns: 1fr; } }

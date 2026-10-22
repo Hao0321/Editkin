@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-copy-agent-setup"
+description = "Enables the copy_agent_setup command without any pre-configured scope."
+commands.allow = ["copy_agent_setup"]
+
+[[permission]]
+identifier = "deny-copy-agent-setup"
+description = "Denies the copy_agent_setup command without any pre-configured scope."
+commands.deny = ["copy_agent_setup"]

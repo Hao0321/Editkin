@@ -88,7 +88,7 @@ export function validateScene25dProductContract(project: EditProject): void {
   if (scene.directionalLight.keyframes.some((keyframe) => keyframe.color.some((value) => value < 0))) {
     throw new EditGraphError("2.5D 方向光關鍵幀顏色不可為負數");
   }
-  const videoTracks = project.tracks.filter((track) => track.kind === "video" && !track.muted);
+  const videoTracks = project.tracks.filter((track) => track.kind === "video" && !track.hidden);
   const planes = videoTracks.flatMap((track) => track.clips);
   if (!(planes.length >= 1 && planes.length <= 8)) throw new EditGraphError("原生 2.5D 場景必須包含 1 至 8 個照片／影片平面");
   if (project.tracks.some((track) => track.kind === "audio" && !track.muted && track.clips.length > 0)) throw new EditGraphError("2.5D v1 尚未接受同一 GPU scene session 內的獨立音訊 graph");
@@ -99,10 +99,10 @@ export function validateScene25dProductContract(project: EditProject): void {
     const asset = project.assets.find((candidate) => candidate.id === clip.assetId);
     const layer = { ...DEFAULT_CLIP_LAYER, ...clip.layer };
     const identityColor = Object.entries(DEFAULT_COLOR).every(([key, value]) => Math.abs(clip.color[key as keyof ColorAdjustments] - value) <= EPSILON);
-    const identity2d = Object.entries(DEFAULT_TRANSFORM).every(([key, value]) => Math.abs(clip.transform[key as keyof Transform2D] - value) <= EPSILON);
+    const identity2d = Object.entries(DEFAULT_TRANSFORM).every(([key, value]) => Math.abs(clip.transform[key as Exclude<keyof Transform2D, "flipX" | "flipY">] - value) <= EPSILON);
     if (!clip.transform3d || !asset || !["image", "video"].includes(asset.kind) || asset.compositionId || !layer.enabled
       || (layer.role ?? "content") !== "content" || layer.blendMode !== "normal" || layer.trackMatte
-      || !identityColor || !identity2d || clip.keyframes.length || Object.keys(clip.expressions ?? {}).length
+      || !identityColor || !identity2d || clip.transform.flipX || clip.transform.flipY || clip.keyframes.length || Object.keys(clip.expressions ?? {}).length
       || (clip.masks?.length ?? 0) > 0 || (clip.creative?.effectPresetIds.length ?? 0) > 0
       || (clip.creative?.nativeEffectInstances?.some((instance) => instance.enabled) ?? false)) {
       throw new EditGraphError(`2.5D 平面 ${clip.id} 必須是無 2D 疊加、無特效的照片／影片圖層`);

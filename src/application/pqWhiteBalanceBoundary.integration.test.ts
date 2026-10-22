@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, expect, it } from "vitest";
+import { EVIDENCE_ENV, REPO_TMP, useTempRoots } from "../test/tempRoot.mjs";
 import { createEmptyProject } from "../domain/editGraph";
 import { DEFAULT_COLOR, DEFAULT_TRANSFORM } from "../domain/types";
 import { renderComposite } from "../render/ffmpegComposite";
@@ -13,9 +14,9 @@ import { proposeAutoColorExposure, proposeReferenceWhiteBalance, verifyAutoColor
 
 const app = fileURLToPath(new URL("../../", import.meta.url));
 const ffmpegPath = join(app, "vendor/ffmpeg/win32-x64/ffmpeg.exe"), ffprobePath = join(app, "vendor/ffmpeg/win32-x64/ffprobe.exe");
+const temp = useTempRoots();
 async function fixture() {
-  await mkdir(join(app, ".rd/tmp"), { recursive: true });
-  const root = await mkdtemp(join(app, ".rd/tmp/pq-wb-boundary-")), source = join(root, "owned-neutral-pq.mkv");
+  const root = await temp.create("pq-wb-boundary-", { parent: REPO_TMP }), source = join(root, "owned-neutral-pq.mkv");
   const encoded = spawnSync(ffmpegPath, ["-v", "error", "-nostdin", "-f", "lavfi", "-i",
     "nullsrc=s=64x64:r=10:d=1,format=yuv420p10le,geq=lum=400:cb=512:cr=512,setparams=range=limited:color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc",
     "-an", "-c:v", "ffv1", source], { windowsHide: true, timeout: 15000 });
@@ -45,7 +46,8 @@ let f: Awaited<ReturnType<typeof fixture>>;
 const evidence: Record<string, unknown> = {};
 beforeAll(async () => { f = await fixture(); }, 90000);
 afterAll(async () => {
-  if (!f) return;
+  // Evidence is written (into the kept root) only when EDITKIN_TEST_EVIDENCE_ROOT asks for it.
+  if (!f || !process.env[EVIDENCE_ENV]) return;
   const path = join(f.root, "boundary-test-evidence.json");
   await writeFile(path, JSON.stringify({ schema: "editkin.pq-wb-boundary-integration/v1", root: f.root, source: f.source,
     sourceSha256: f.sourceSha, sourceAfterSha256: await colorFileSha(f.source), project: f.project,

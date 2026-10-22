@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-render-project"
+description = "Enables the render_project command without any pre-configured scope."
+commands.allow = ["render_project"]
+
+[[permission]]
+identifier = "deny-render-project"
+description = "Denies the render_project command without any pre-configured scope."
+commands.deny = ["render_project"]

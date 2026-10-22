@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-analyze-auto-roto"
+description = "Enables the analyze_auto_roto command without any pre-configured scope."
+commands.allow = ["analyze_auto_roto"]
+
+[[permission]]
+identifier = "deny-analyze-auto-roto"
+description = "Denies the analyze_auto_roto command without any pre-configured scope."
+commands.deny = ["analyze_auto_roto"]

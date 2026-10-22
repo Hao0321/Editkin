@@ -7,6 +7,7 @@ import {
 import type { EditProject } from "../domain/types";
 import { errorResult, textResult } from "./toolRuntime";
 import { readProject } from "./storage";
+import { registerMusicBeatsToolsV1 } from "./musicBeatsToolsV1";
 
 const boundedIdSchema = z.string().trim().min(1).max(128);
 const boundedTimeSchema = z.number().finite().nonnegative().max(86_400);
@@ -65,6 +66,7 @@ export async function compileBeatMontageReadOnly(
 }
 
 export function registerMontageTools(server: McpServer): void {
+  registerMusicBeatsToolsV1(server);
   server.registerTool("compile_beat_montage", {
     description: "唯讀把 caller 宣告但尚未驗真的 beat grid、salience 與 storyOrder 編譯成選鏡／重排／裁切 EditGraph draft command；不修改專案、不授予 ACCEPTED。上述證據仍須綁定 v4 material receipts 或人工檢查；將 command 放進同一份 Video Autopilot v4 plan，經 audit_autopilot_plan 後才可由 apply_autopilot_plan 原子提交。此工具不宣稱 beat detection、pairwise transition、time remap 或 J/L cut。",
     inputSchema: compileBeatMontageInputSchema,

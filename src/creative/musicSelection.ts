@@ -1,4 +1,17 @@
 import type { CreativeLibraryAsset } from "../application/creativeLibrary";
+import type { EditorialProfileId } from "../domain/types";
+
+/**
+ * Genre → library search hints for automatic background music. Same mapping as the MCP
+ * auto_add_music tool, so the in-app auto edit and batch pick music by the creator's genre too.
+ */
+export function automaticMusicPreferences(profile: EditorialProfileId | undefined): { contentHints: string[]; preferHighEnergy?: boolean } {
+  if (profile === "gaming") return { contentHints: ["game", "gaming", "玩具", "玩具開箱", "模型", "陀螺", "對戰"], preferHighEnergy: true };
+  if (profile === "food") return { contentHints: ["food", "美食", "料理"] };
+  if (profile === "travel") return { contentHints: ["travel", "旅遊", "出國"] };
+  if (profile?.startsWith("podcast")) return { contentHints: ["podcast", "訪談", "教學"] };
+  return { contentHints: [] };
+}
 
 export function selectAutomaticMusicAsset(
   assets: readonly CreativeLibraryAsset[],

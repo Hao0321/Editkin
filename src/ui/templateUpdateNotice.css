@@ -1,0 +1,9 @@
+/* 「把標題更新到新版」: a calm single line (not a dialog) in the workspace notices; after an update, the titles left behind. */
+.plain-problem-notice.template-update-notice { align-items: center; padding-block: 8px; font-size: 16px; }
+.template-update-notice .plain-problem-icon { width: 30px; height: 30px; font-size: 17px; }
+.template-update-notice .plain-problem-actions button { min-height: 44px; font-size: 16px; }
+.template-update-line { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.template-update-result { display: grid; gap: 4px; min-width: 0; }
+.template-update-result p { margin: 0; font-weight: 700; }
+.template-update-result ul { display: grid; gap: 2px; margin: 0; padding-left: 18px; overflow-wrap: anywhere; }
+.template-update-result li b { margin-right: 8px; }

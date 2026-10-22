@@ -1,0 +1,9 @@
+.gpu-color-scopes > small { display: block; margin-top: 8px; color: #9aacc5; font-size: 10px; line-height: 1.5; }
+/* Keep the existing panels inside the modal's actual available height. */
+.color-workspace { display: flex; flex-direction: column; }
+.color-workspace > header { flex-shrink: 0; }
+.color-workspace .color-layout { min-height: 0; }
+@media (max-width: 900px) {
+  .color-workspace .color-layout { display: block; overflow-y: auto; }
+  .color-workspace .scope-stage, .color-workspace .grade-controls { overflow: visible; }
+}

@@ -4,7 +4,6 @@ export const FirstProjectStart = lazy(() => import("./FirstProjectStart").then((
 export const MobileConnectModal = lazy(() => import("./MobileConnectModal").then((module) => ({ default: module.MobileConnectModal })));
 export const BatchAutoEditPanel = lazy(() => import("./BatchAutoEditPanel").then((module) => ({ default: module.BatchAutoEditPanel })));
 export const ColorWorkspace = lazy(() => import("./ColorWorkspace").then((module) => ({ default: module.ColorWorkspace })));
-export const DirectorConsole = lazy(() => import("./DirectorConsole").then((module) => ({ default: module.DirectorConsole })));
 export const Inspector = lazy(() => import("./Inspector").then((module) => ({ default: module.Inspector })));
 export const EditingProfilePicker = lazy(() => import("./EditingProfilePicker").then((module) => ({ default: module.EditingProfilePicker })));
 export const AgentPanel = lazy(() => import("./AgentPanel").then((module) => ({ default: module.AgentPanel })));

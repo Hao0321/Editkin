@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {readdir,readFile,lstat,mkdir,writeFile,mkdtemp,symlink} from 'node:fs/promises';
+import {readdir,readFile,lstat,mkdir,writeFile,mkdtemp,symlink,unlink,rmdir} from 'node:fs/promises';
 import {relative,resolve,sep} from 'node:path';
 import {deriveFontEmMetrics,verifyFontEmMetrics} from './lib/font-em-metrics-manifest.mjs';
 const hash=b=>createHash('sha256').update(b).digest('hex');
@@ -36,20 +36,37 @@ function verifyFace(bytes,face,font) {
   return data;
 }
 export function generated(manifest) {
-  return {index:JSON.stringify(manifest.fonts.map(f=>[f.family,f.id,f.faces.map(face=>face.weight)]))+'\n',css:manifest.fonts.flatMap(f=>f.faces.map(face=>`@font-face{font-family:"${face.family}";src:url("/fonts/${f.file}") format("truetype");font-style:normal;font-weight:${face.weight};font-display:swap;}`)).join('\n')+'\n'};
+  // Preview aliases must resolve to the same validated static bytes as ASS;
+  // the original variable face is provenance, not this physical alias.
+  return {index:JSON.stringify(manifest.fonts.map(f=>[f.family,f.id,f.faces.map(face=>face.weight)]))+'\n',css:manifest.fonts.flatMap(f=>f.faces.map(face=>`@font-face{font-family:"${face.family}";src:url("/fonts/${face.file}") format("truetype");font-style:normal;font-weight:${face.weight};font-display:swap;}`)).join('\n')+'\n'};
+}
+// Independently bind each CSS request to the physical manifest face. Merely
+// regenerating a matching CSS file cannot validate a variable-source alias.
+function verifyPreviewFontAliases(css,manifest) {
+  const rows=css.trimEnd().split('\n'),expected=manifest.fonts.flatMap(font=>font.faces);
+  assert.equal(rows.length,expected.length,'Preview font alias count mismatch');
+  const seen=new Set();
+  for(const row of rows){
+    const match=/^@font-face\{font-family:"([^"]+)";src:url\("\/fonts\/([^"]+)"\) format\("truetype"\);font-style:normal;font-weight:(\d+);font-display:swap;\}$/.exec(row);
+    assert(match,'Malformed preview font alias');
+    const [,family,file,weight]=match,face=expected.find(item=>item.family===family);
+    assert(face&&!seen.has(family),'Unknown or duplicate preview font alias');seen.add(family);
+    assert.equal(file,face.file,'Preview must request the validated static export face');
+    assert.equal(Number(weight),face.weight,'Preview font alias weight mismatch');
+  }
 }
 const args=process.argv.slice(2),root=resolve(args.find(a=>!a.startsWith('--'))??'public/fonts');
 const generatedArg=args.find(a=>a.startsWith('--generated-dir='));const generatedDir=resolve(generatedArg?.split('=').slice(1).join('=')??'src/generated');
 const manifest=JSON.parse(await readFile(resolve(root,'editkin-open-fonts.json'),'utf8'));
-assert.equal(manifest.schemaVersion,2);assert.equal(manifest.id,'studio.hao.editkin-open-fonts');assert.equal(manifest.fonts.length,5);
-assert.deepEqual(manifest.fonts.map(f=>[f.id,f.family]),[['noto-sans-tc','Noto Sans TC'],['noto-serif-tc','Noto Serif TC'],['lxgw-wenkai-mono-tc','LXGW WenKai Mono TC'],['bebas-neue','Bebas Neue'],['fredoka','Fredoka']],'Unknown or reordered logical font family');
+assert.equal(manifest.schemaVersion,2);assert.equal(manifest.id,'studio.hao.editkin-open-fonts');assert.equal(manifest.fonts.length,6);
+assert.deepEqual(manifest.fonts.map(f=>[f.id,f.family]),[['noto-sans-tc','Noto Sans TC'],['noto-serif-tc','Noto Serif TC'],['lxgw-wenkai-mono-tc','LXGW WenKai Mono TC'],['bebas-neue','Bebas Neue'],['fredoka','Fredoka'],['lxgw-wenkai-tc','LXGW WenKai TC']],'Unknown or reordered logical font family');
 const expected=new Set(['editkin-open-fonts.json']),families=new Set(),ids=new Set(),faces=[],sourceAxes=new Map();
 function add(path){safePath(path);assert(!expected.has(path),'Duplicate path');expected.add(path);return resolve(root,path);}
 const files=await inventory(root);
 for(const font of manifest.fonts){
   assert(!families.has(font.family)&&!ids.has(font.id),'Duplicate font family/id');families.add(font.family);ids.add(font.id);assert.equal(font.license,'OFL-1.1');
   const source=await readFile(add(font.file));assert.equal(source.length,font.bytes);assert.equal(hash(source),font.sha256);
-  const sourceData=sfnt(source),fvar=sourceData.tables.get('fvar');let weights=[400];
+  const sourceData=sfnt(source),fvar=sourceData.tables.get('fvar');let weights=[sourceData.weight];// static source keeps its own OS/2 weight
   const axes={};
   if(fvar){const base=fvar.offset,axesOffset=source.readUInt16BE(base+4),axisCount=source.readUInt16BE(base+8),axisSize=source.readUInt16BE(base+10);assert(axisSize>=20);let range;for(let i=0;i<axisCount;i++){const at=base+axesOffset+i*axisSize;assert(at+20<=base+fvar.length);const tag=source.toString('ascii',at,at+4);axes[tag]=[source.readInt32BE(at+4)/65536,source.readInt32BE(at+8)/65536,source.readInt32BE(at+12)/65536];if(tag==='wght')range=[axes[tag][0],axes[tag][2]];}assert(range);weights=[];for(let w=range[0];w<=range[1];w+=50)weights.push(w);}
   sourceAxes.set(font.id,axes);
@@ -59,15 +76,19 @@ for(const font of manifest.fonts){
 }
 const provenance=await readFile(add(manifest.staticFaceProvenance.file));assert.equal(hash(provenance),manifest.staticFaceProvenance.sha256);const p=JSON.parse(provenance);assert.equal(p.schema,'editkin.static-font-provenance/v1');assert.equal(p.generatorSha256,hash(await readFile('scripts/build-static-font-pack.py')));assert(typeof p.fontToolsVersion==='string');
 assert.deepEqual(p.families,manifest.fonts.map(f=>({id:f.id,sourceSha256:f.sha256,licenseSha256:f.licenseSha256,axes:sourceAxes.get(f.id),weights:f.faces.map(face=>face.weight)})),'Provenance axes/source/weight mapping differs');
-closedWorld(files,expected);assert.equal(faces.length,43);
+closedWorld(files,expected);assert.equal(faces.length,44);
 const products=generated(manifest);
+verifyPreviewFontAliases(products.css,manifest);
 const metrics=await deriveFontEmMetrics(root);
 if(args.includes('--write-generated')||args.includes('--refresh-generated')){assert(generatedArg,'Explicit generated-dir required for writes');await mkdir(generatedDir,{recursive:true});const options=args.includes('--refresh-generated')?undefined:{flag:'wx'};await writeFile(resolve(generatedDir,'fontFaceIndex.json'),products.index,options);await writeFile(resolve(generatedDir,'fontFaces.css'),products.css,options);await writeFile(resolve(generatedDir,'fontEmMetrics.json'),JSON.stringify(metrics)+'\n',options);}
 assert.equal(await readFile(resolve(generatedDir,'fontFaceIndex.json'),'utf8'),products.index,'Generated index differs');assert.equal(await readFile(resolve(generatedDir,'fontFaces.css'),'utf8'),products.css,'Generated CSS differs');
 verifyFontEmMetrics(await readFile(resolve(generatedDir,'fontEmMetrics.json'),'utf8'),metrics);
 let negatives=0;
 if(args.includes('--self-test')){
-  await mkdir('.rd',{recursive:true});const aliasFixture=await mkdtemp(resolve('.rd/font-gate-negative-'));await symlink(root,resolve(aliasFixture,'alias'),process.platform==='win32'?'junction':'dir');await assert.rejects(()=>inventory(aliasFixture),/symlink|alias/);negatives++;
+  await mkdir('.rd',{recursive:true});const aliasFixture=await mkdtemp(resolve('.rd/font-gate-negative-')),alias=resolve(aliasFixture,'alias');
+  // unlink drops only the junction, never the fonts behind it; a leaked junction to a deleted stage breaks the cleanup gate.
+  try{await symlink(root,alias,process.platform==='win32'?'junction':'dir');await assert.rejects(()=>inventory(aliasFixture),/symlink|alias/);negatives++;}
+  finally{await unlink(alias).catch(error=>{if(error.code!=='ENOENT')throw error;});await rmdir(aliasFixture);}
   for(const path of ['../escape.ttf','render/../escape.ttf','C:/x.ttf','render\\x.ttf','/x.ttf','render/%2e.ttf']){assert.throws(()=>safePath(path));negatives++;}
   const {font,face,bytes}=faces[0];
   for(const defect of ['hash','weight','name','fvar']){const damaged=Buffer.from(bytes),meta=structuredClone(face);const data=sfnt(damaged);if(defect==='hash')damaged[damaged.length-1]^=1;if(defect==='weight')damaged.writeUInt16BE(face.weight+1,data.tables.get('OS/2').offset+4);if(defect==='name'){const table=data.tables.get('name');damaged.writeUInt16BE(0,table.offset+2);}if(defect==='fvar'){const count=damaged.readUInt16BE(4);for(let i=0;i<count;i++)if(damaged.toString('ascii',12+i*16,16+i*16)==='head')damaged.write('fvar',12+i*16,'ascii');}if(defect!=='hash')meta.sha256=hash(damaged);assert.throws(()=>verifyFace(damaged,meta,font));negatives++;}
@@ -76,6 +97,9 @@ if(args.includes('--self-test')){
   assert.throws(()=>add(manifest.fonts[0].faces[0].file));negatives++;
   assert.throws(()=>assert.equal(products.index+' ',products.index));negatives++;
   assert.throws(()=>assert.equal(products.css.replace('weight:100','weight:101'),products.css));negatives++;
+  const firstFont=manifest.fonts[0],firstFace=firstFont.faces[0];
+  assert.throws(()=>verifyPreviewFontAliases(products.css.replace(`/fonts/${firstFace.file}`,`/fonts/${firstFont.file}`),manifest),/validated static export face/);negatives++;
+  assert.throws(()=>verifyPreviewFontAliases(products.css.replace(firstFace.family,'Unknown Font Alias'),manifest),/Unknown or duplicate/);negatives++;
   const badMetrics=structuredClone(metrics);badMetrics.faces[0].assAscender++;assert.throws(()=>verifyFontEmMetrics(JSON.stringify(badMetrics)+'\n',metrics));negatives++;
 }
 console.log(JSON.stringify({status:'VERIFIED_FONT_ASSET_CONTRACT_ONLY',root,fontCount:manifest.fonts.length,faceCount:faces.length,files:files.length,negatives}));

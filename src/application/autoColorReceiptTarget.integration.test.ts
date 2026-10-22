@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
+import { REPO_TMP, useTempRoots } from "../test/tempRoot.mjs";
 import { createEmptyProject } from "../domain/editGraph";
 import { DEFAULT_COLOR, DEFAULT_TRANSFORM } from "../domain/types";
 import type { EditorCommand } from "../domain/commands";
@@ -12,9 +13,9 @@ import { proposeAutoColorExposure, proposeReferenceWhiteBalance, verifyAutoColor
 
 const app = fileURLToPath(new URL("../../", import.meta.url));
 const ffmpegPath = join(app, "vendor/ffmpeg/win32-x64/ffmpeg.exe"), ffprobePath = join(app, "vendor/ffmpeg/win32-x64/ffprobe.exe");
+const temp = useTempRoots();
 async function fixture() {
-  await mkdir(join(app, ".rd/tmp"), { recursive: true });
-  const root = await mkdtemp(join(app, ".rd/tmp/color-receipt-target-")), source = join(root, "declared-neutral-cast.mp4");
+  const root = await temp.create("color-receipt-target-", { parent: REPO_TMP }), source = join(root, "declared-neutral-cast.mp4");
   const pixels = Buffer.alloc(128 * 96 * 3); for (let i = 0; i < pixels.length; i += 3) pixels.set([137, 128, 119], i);
   const encoded = spawnSync(ffmpegPath, ["-v", "error", "-nostdin", "-f", "rawvideo", "-pixel_format", "rgb24", "-video_size", "128x96", "-framerate", "10",
     "-i", "pipe:0", "-vf", "loop=loop=9:size=1:start=0,scale=out_color_matrix=bt709:out_range=tv", "-frames:v", "10", "-an", "-c:v", "libx264", "-crf", "0", "-pix_fmt", "yuv444p",

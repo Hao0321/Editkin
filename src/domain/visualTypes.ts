@@ -1,4 +1,9 @@
+import type { SecondaryHslV1 } from "./secondaryHslV1Types";
+import type { ClipAudioEnvelope } from "./clipAudioEnvelope";
+import type { ClipTimeRemapV1 } from "./clipTimeRemapV1";
 import type { ProductAutoRotoRouteReceipt } from "./autoRotoProductReceipt";
+import type { ProofStillV1 } from "./proofStillV1";
+import type { MotionLibraryClipV1 } from "./motionLibraryFieldsV1";
 
 export type AssetKind = "video" | "audio" | "image";
 export type TrackKind = "video" | "audio" | "caption";
@@ -44,6 +49,13 @@ export interface TimelineClip {
   sourceStart: number;
   duration: number;
   volume: number;
+  /** W2-3 opt-in source clock; omission retains the legacy 1x source route. */
+  speed?: number;
+  timeRemap?: ClipTimeRemapV1;
+  /** Optional authored sound; omission retains the original audio route. */
+  audioEnvelope?: ClipAudioEnvelope;
+  /** Optional project-local timing group; old clips keep this field absent. */
+  linkGroupId?: string;
   transform: Transform2D;
   /** Present only when the containing project/composition enables the bounded 2.5D scene. */
   transform3d?: Transform3D;
@@ -57,26 +69,124 @@ export interface TimelineClip {
   chromaKey?: ChromaKeySettings;
   layer?: ClipLayerState;
   expressions?: ClipExpressionBindings;
+  /** Optional professional grade (editkin.color-grade/v2). Omitted = the exact pre-v2 render. */
+  gradeV2?: ColorGradeV2;
+  /** Approved per-clip Rec.709 choice in fresh BT.1886 ACES projects. */
+  rec709Input?: "display" | "camera";
+  /** editkin.proof-still/v1 screenshot hold; omitted = no proof-still route anywhere. */
+  proofStill?: ProofStillV1;
+  /** editkin.motion-library-clip/v1: the asset is a rendered motion library cache clip; omitted = an ordinary clip. */
+  motionLibrary?: MotionLibraryClipV1;
 }
 
-export interface FloatingVideoFrame {
-  schema: "editkin.floating-video-frame/v1";
-  style: "prism" | "graphite";
+/** RGB + master wheel. Effective channel value = master + channel; every field defaults to 0 (neutral). */
+export interface ColorWheelV2 {
+  r?: number;
+  g?: number;
+  b?: number;
+  master?: number;
+}
+
+export interface ColorCurvePointV2 { x: number; y: number }
+/** `hue` uses hue-wheel degrees (0 red, 60 yellow, 120 green, 180 cyan, 240 blue, 300 magenta), mapped from Oklab hue. */
+export interface HueCurvePointV2 { hue: number; value: number }
+export interface LumCurvePointV2 { lum: number; value: number }
+
+/** A validated creative-library .cube, bound by its full content hash. */
+export interface ColorGradeLutRefV2 {
+  id: string;
+  sha256: string;
+  strength: number;
+}
+
+/** One serial node. Order inside a node: LUT → offset → lift/gamma/gain → log wheels → contrast/pivot → curves → Oklab (saturation, colour boost, hue curves, lum vs sat, skin protection) → soft clip → mix. */
+export interface ColorGradeNodeV2 {
+  id: string;
+  label?: string;
+  enabled?: boolean;
+  lut?: ColorGradeLutRefV2;
+  offset?: ColorWheelV2;
+  lift?: ColorWheelV2;
+  gamma?: ColorWheelV2;
+  gain?: ColorWheelV2;
+  log?: { shadow?: ColorWheelV2; midtone?: ColorWheelV2; highlight?: ColorWheelV2; lowRange?: number; highRange?: number };
+  contrast?: number;
+  pivot?: number;
+  saturation?: number;
+  colorBoost?: number;
+  curves?: { y?: ColorCurvePointV2[]; r?: ColorCurvePointV2[]; g?: ColorCurvePointV2[]; b?: ColorCurvePointV2[] };
+  hueVsHue?: HueCurvePointV2[];
+  hueVsSat?: HueCurvePointV2[];
+  hueVsLum?: HueCurvePointV2[];
+  lumVsSat?: LumCurvePointV2[];
+  skinProtection?: number;
+  /** Restores the hue of blue-sky colours (0 off … 1 full) so toning cannot push skies toward purple or cyan. */
+  skyProtection?: number;
+  /** Keeps chroma increases (and node-induced overflow) inside the working display gamut instead of clipping a channel. */
+  gamutLimit?: boolean;
+  /** Per-channel highlight soft clip (0 off … 1 strongest): values above the knee roll off instead of clipping. */
+  softClip?: number;
+  mix?: number;
+  /** Optional nonspatial HSL key; both branches share the node input and final mix. */
+  secondaryHslV1?: SecondaryHslV1;
+}
+
+/** Spatial finishing, rendered after the baked non-spatial LUT in output-canvas pixels. */
+export interface ColorGradeFinishingV2 {
+  grain?: { amount: number; size?: number };
+  halation?: { amount: number; threshold?: number; radius?: number };
+  bloom?: { amount: number; threshold?: number; radius?: number };
+  vignette?: { amount: number };
+}
+
+/** editkin.color-grade/v2: up to four serial nodes, then an optional Hao Film Look v2, then spatial finishing. */
+export interface ColorGradeV2 {
+  schema: "editkin.color-grade/v2";
+  nodes?: ColorGradeNodeV2[];
+  look?: { id: string; strength?: number };
+  finishing?: ColorGradeFinishingV2;
+}
+
+interface FloatingVideoFrameBase {
+  style: "prism" | "graphite" | "matte";
   size: number;
   yawDegrees: number;
   pitchDegrees: number;
-  aspect?: "canvas" | "portrait";
   centerX?: number;
   centerY?: number;
   orbit?: { amplitudeDegrees: number; periodSeconds: number };
 }
+
+export interface FloatingVideoFrameV1 extends FloatingVideoFrameBase {
+  schema: "editkin.floating-video-frame/v1";
+  aspect?: "canvas" | "portrait";
+}
+
+export interface FloatingVideoFrameV2 extends FloatingVideoFrameBase {
+  schema: "editkin.floating-video-frame/v2";
+  aspect: "source" | "canvas" | "portrait";
+  mediaFit: "contain";
+  motion?: { entranceFrames: number; exitFrames: number; travelY: number };
+}
+
+export type FloatingVideoFrame = FloatingVideoFrameV1 | FloatingVideoFrameV2;
 
 export interface TimelineTrack {
   id: string;
   name: string;
   kind: TrackKind;
   locked: boolean;
+  /** Sound off (「靜音」): the track's clips are not heard. It never turns a picture off. */
   muted: boolean;
+  /**
+   * Picture off (「隱藏畫面」, video tracks): the track's clips are not drawn in preview or export; their sound follows
+   * `muted` alone. Optional: a project saved before this field existed used `muted` for both, so loading migrates a video
+   * track saved with muted: true and no `hidden` to hidden: true (migrateProject) and it renders exactly as before. Muting
+   * a video track writes `hidden` explicitly, so a muted but visible track is never read as that old form.
+   */
+  hidden?: boolean;
+  /** Sound solo; absent in older projects means false. Picture visibility stays independent. */
+  solo?: boolean;
   clips: TimelineClip[];
 }
 
@@ -117,6 +227,14 @@ export interface CaptionStyle {
   bold: boolean;
   italic: boolean;
   shadow: number;
+  /** Drop-shadow colour (#RRGGBB[AA]) used when no background box is drawn. Omitted keeps the
+   * legacy behaviour, where the shadow takes `backgroundColor`. */
+  shadowColor?: string;
+  /** Gaussian softness in pixels for the outline and shadow edges; the glyph fill stays sharp. */
+  shadowBlur?: number;
+  /** When set, export breaks each caption into balanced lines no wider than this many em, only
+   * between words and never leaving a one-character line. Omitted keeps the renderer's own wrap. */
+  maxLineEm?: number;
   backgroundColor: string;
   letterSpacing: number;
   translationFontFamily: string;
@@ -165,6 +283,15 @@ export interface MotionTrack {
   role?: SpeakerRole;
 }
 
+export interface ClipRetimeSource {
+  schema: "editkin.clip-retime/v1";
+  sourceAssetId: string;
+  sourceStart: number;
+  sourceDuration: number;
+  rate: number;
+  reverse: boolean;
+}
+
 export interface MediaAsset {
   id: string;
   name: string;
@@ -173,6 +300,8 @@ export interface MediaAsset {
   duration: number;
   width?: number;
   height?: number;
+  /** Upright display aspect from real media geometry; not encoded width / height. */
+  displayAspectRatio?: number;
   role?: string;
   bpm?: number;
   license?: string;
@@ -186,6 +315,8 @@ export interface MediaAsset {
   imageSequence?: OpenExrImageSequence;
   color?: MediaColorMetadata;
   derivatives?: MediaDerivatives;
+  /** Original source window retained for absolute speed presets and reversible direction changes. */
+  clipRetime?: ClipRetimeSource;
   /** Points at an in-project composition. Its URI remains a stable virtual URI
    * until the render pipeline materializes the composition. */
   compositionId?: string;
@@ -197,6 +328,8 @@ export type AcesOutputTransform = "rec709_sdr" | "p3d65_sdr" | "rec2100_hlg_1000
 
 export interface ColorManagementSettings {
   mode: ColorPipelineMode;
+  /** Omission is the historic grade-dependent recipe. Migration pins it explicitly. */
+  rec709DisplayPolicy?: "legacy-grade-v2" | "phone-bt1886";
   workingSpace: "ACEScct";
   outputTransform: AcesOutputTransform;
   configId: "studio-config-v4.0.0_aces-v2.0_ocio-v2.5";
@@ -237,6 +370,8 @@ export interface Transform2D {
   scale: number;
   rotation: number;
   opacity: number;
+  flipX?: boolean;
+  flipY?: boolean;
 }
 
 export interface Transform3D {
@@ -423,7 +558,7 @@ export interface ClipLayerState {
   trackMatte?: ClipTrackMatte;
 }
 
-export type ClipExpressionProperty = keyof Transform2D;
+export type ClipExpressionProperty = Exclude<keyof Transform2D, "flipX" | "flipY">;
 export type ClipExpressionBindings = Partial<Record<ClipExpressionProperty, HaoExpressionSource>>;
 
 export interface ClipLayout {
@@ -521,6 +656,8 @@ export interface RetiredAutoRotoRecord {
 }
 
 export interface ClipMask {
+  /** Explicit template v3: keep this authored window stationary while its source moves. */
+  fixedWindowV3?: { schema: "editkin.fixed-template-window/v3"; fromFrame?: number; toFrame?: number };
   id: string;
   name: string;
   kind: MaskShapeKind;

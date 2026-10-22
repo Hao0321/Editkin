@@ -1,0 +1,8 @@
+.value-particles-panel-v1 { display:grid; gap:8px; min-width:0; }
+.value-particles-panel-v1 label { display:grid; gap:4px; min-width:0; }
+.value-particles-panel-v1 input[type="text"],.value-particles-panel-v1 select { box-sizing:border-box; width:100%; min-width:0; font:inherit; }
+.value-particles-panel-v1 .value-particle-confirm { display:flex; align-items:center; gap:8px; }
+.value-particles-panel-v1 .value-particle-confirm input { flex:none; }
+.value-particles-panel-v1 .value-particle-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.value-particles-panel-v1 p { margin:0; overflow-wrap:anywhere; }
+.value-particles-panel-v1 small { color:var(--muted); }

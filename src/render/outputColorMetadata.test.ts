@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import { strict as assert } from "node:assert";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { EVIDENCE_ENV, REPO_TMP, useTempRoots } from "../test/tempRoot.mjs";
 import type { AcesOutputTransform } from "../domain/types";
 import type { VideoEncoder } from "./ffmpegTypes";
 import { createDemoProject } from "../domain/demo";
@@ -17,6 +18,8 @@ const rec709 = ["-color_primaries", "bt709", "-colorspace", "bt709", "-color_trc
 const h264 = ["libx264", "h264_nvenc", "h264_videotoolbox"] as const;
 const hevc = ["libx265", "hevc_nvenc", "hevc_videotoolbox"] as const;
 const transforms = ["rec709_sdr", "rec2100_hlg_1000", "rec2100_pq_1000"] as const;
+// The real-encode workspace is removed after the test unless EDITKIN_TEST_EVIDENCE_ROOT keeps it.
+const temp = useTempRoots();
 
 describe("output colour metadata arguments", () => {
   it.each(h264)("uses H.264 VUI with the actual %s encoder", (encoder) => {
@@ -92,8 +95,7 @@ describe("independently decoded output colour metadata", () => {
     const suffix = process.platform === "win32" ? ".exe" : "";
     const ffmpeg = resolve(root, `vendor/ffmpeg/${platform}/ffmpeg${suffix}`);
     const ffprobe = resolve(root, `vendor/ffmpeg/${platform}/ffprobe${suffix}`);
-    const parent = resolve(root, ".rd/tmp"); await mkdir(parent, { recursive: true });
-    const workspace = await mkdtemp(resolve(parent, "output-color-metadata-real-"));
+    const workspace = await temp.create("output-color-metadata-real-", { parent: REPO_TMP });
     const sha = async (path: string) => createHash("sha256").update(await readFile(path)).digest("hex");
     const records: unknown[] = [];
     const exec = promisify(execFile);
@@ -182,7 +184,7 @@ describe("independently decoded output colour metadata", () => {
     } finally {
       const report = { schema: "editkin.output-color-metadata-test/v1", status, workspace, scope: "Actual synthetic encode + independent probe/full decode; NOT native-packaged/UI/appearance acceptance", input: "FFmpeg lavfi testsrc2=size=160x90:rate=30:duration=1", identities: { ffmpeg: await sha(ffmpeg), ffprobe: await sha(ffprobe), helper: await sha(resolve(root, "src/render/outputColorMetadata.ts")), composite: await sha(resolve(root, "src/render/ffmpegComposite.ts")), evaluator: await sha(fileURLToPath(import.meta.url)) }, artifacts, records, notChecked: ["hardware encoder execution", "real HDR appearance or mastering metadata", "P3 colour metadata repair", "native packaged app", "user footage or aesthetics", "release"] };
       await writeFile(resolve(workspace, "report.json"), JSON.stringify(report, null, 2) + "\n", { flag: "wx" });
-      console.log("RETAINED_OUTPUT_COLOR_METADATA", workspace, status);
+      if (process.env[EVIDENCE_ENV]) console.log("RETAINED_OUTPUT_COLOR_METADATA", workspace, status);
     }
   }, 120000);
 });

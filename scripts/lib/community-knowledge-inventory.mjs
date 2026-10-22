@@ -53,7 +53,7 @@ export const EXPECTED_COMMUNITY_KNOWLEDGE_COUNTS = Object.freeze({
   sourceFiles: 45,
   includedModules: 37,
   excludedSources: 8,
-  stableRules: 77,
+  stableRules: 79,
 });
 
 export const RETIRED_EDITOR_HISTORY_MARKER = /(?:capcut-agent-ops|capcut_helpers|\bcapcut\b|\bvectcut\b|jianying|剪映|CAPCUT_DRAFTS_ROOT|Path A-E)/i;

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-inject-gpu-device-loss-for-test"
+description = "Enables the inject_gpu_device_loss_for_test command without any pre-configured scope."
+commands.allow = ["inject_gpu_device_loss_for_test"]
+
+[[permission]]
+identifier = "deny-inject-gpu-device-loss-for-test"
+description = "Denies the inject_gpu_device_loss_for_test command without any pre-configured scope."
+commands.deny = ["inject_gpu_device_loss_for_test"]

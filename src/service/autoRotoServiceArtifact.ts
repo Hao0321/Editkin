@@ -30,7 +30,7 @@ export interface AutoRotoServiceArtifactReceipt {
 
 const PRODUCT_RUNTIME_STRING_KEYS = [
   "ffmpeg", "ffprobe", "whisperCli", "nativeCore", "gpuCompositor", "assetBase", "cacheRoot", "modelRoot",
-  "creativePackRoot", "personalMusicRoot", "personalVisualRoot", "fontRoot", "colorRoot", "pluginRoot",
+  "creativePackRoot", "personalMusicRoot", "personalVisualRoot", "personalColorLutRoot", "fontRoot", "colorRoot", "pluginRoot",
 ] as const;
 const PRODUCT_RUNTIME_KEYS = new Set<string>([...PRODUCT_RUNTIME_STRING_KEYS, "pluginRoots"]);
 

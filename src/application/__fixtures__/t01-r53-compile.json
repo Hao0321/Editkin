@@ -1,0 +1,429 @@
+{
+ "schema": "editkin.test-fixture/t01-r53-compile/v1",
+ "purpose": "M1 one-tool Short wave 2 step 2.2 r53 replay: the actual T01 r53 compile (roles, visible command targets, timings, phases) and the hand maps that failed and fixed it",
+ "source": {
+  "path": "videos/_AUTOPILOT/editkin-v4/t01-strike-trip-batcave-r53-20261009/live-r53/014-template.result.raw.json",
+  "bytes": 1492660,
+  "sha256": "92fcfea37fc5dfb0e9025f07785d7971a8e0377ab44f93fd8c8542df5b0bfb5c",
+  "correction": "videos/_AUTOPILOT/editkin-v4/t01-strike-trip-batcave-r53-20261009/engineering/EDITORIAL_ROLE_CORRECTION.json"
+ },
+ "fps": 30,
+ "instance": {
+  "input": {
+   "templateId": "strike_reframe",
+   "designSystem": "trip_pop_v1",
+   "startFrame": 0,
+   "durationFrames": 330,
+   "previousText": "來看蝙蝠",
+   "title": "其實是來看水簾"
+  },
+  "roles": [
+   {
+    "key": "design:page",
+    "kind": "graphic",
+    "id": "motion-template-b646aed1-1560-48de-ba4e-a0352727ddc6"
+   },
+   {
+    "key": "design:bloom:0",
+    "kind": "graphic",
+    "id": "motion-template-f77e6609-c196-4a86-bc33-ffc237c24bc4"
+   },
+   {
+    "key": "design:bloom:1",
+    "kind": "graphic",
+    "id": "motion-template-da259acd-e6c5-454f-8237-6123677d7f7e"
+   },
+   {
+    "key": "design:bloom:2",
+    "kind": "graphic",
+    "id": "motion-template-3c81aaa8-33c5-48a3-b7c7-3c7031387c07"
+   },
+   {
+    "key": "design:brand:pill",
+    "kind": "graphic",
+    "id": "motion-template-995b0219-b0bb-46f0-b866-6fec4ac05b64"
+   },
+   {
+    "key": "design:brand:outline",
+    "kind": "graphic",
+    "id": "motion-template-d6c0e27c-8c9b-4e63-921b-5230724ef796"
+   },
+   {
+    "key": "design:brand",
+    "kind": "graphic",
+    "id": "motion-template-74bda3a6-c08f-4006-ba71-5bab0242b97d"
+   },
+   {
+    "key": "design:kicker",
+    "kind": "graphic",
+    "id": "motion-template-2fa3cfbc-5251-4202-8fbc-493191514c72"
+   },
+   {
+    "key": "design:kicker:pin",
+    "kind": "graphic",
+    "id": "motion-template-37f044f7-c510-4286-ba9a-dc433ccd2a8c"
+   },
+   {
+    "key": "previous:hook",
+    "kind": "graphic",
+    "id": "motion-template-c37ad780-1b5d-450c-b552-f945c1928e55"
+   },
+   {
+    "key": "previous",
+    "kind": "graphic",
+    "id": "motion-template-0cd86359-6901-40d9-a81f-a81e9fd55782"
+   },
+   {
+    "key": "strike:0",
+    "kind": "graphic",
+    "id": "motion-template-30646833-d322-49d2-9fdb-8fdf5b61e9c1"
+   },
+   {
+    "key": "strike:impact:ring",
+    "kind": "graphic",
+    "id": "motion-template-61eafddd-79e2-484a-8249-40e26a7b46e0"
+   },
+   {
+    "key": "strike:impact:rays",
+    "kind": "graphic",
+    "id": "motion-template-ba13e6cd-c1e2-40a9-bde5-199f9b5643e9"
+   },
+   {
+    "key": "headline:0",
+    "kind": "graphic",
+    "id": "motion-template-9fe518b4-809a-4da1-a1a9-77c7e894da57"
+   },
+   {
+    "key": "headline:1",
+    "kind": "graphic",
+    "id": "motion-template-97dd326a-c1cb-44ef-a13f-0d5424f4e6ca"
+   },
+   {
+    "key": "headline:underline:0",
+    "kind": "graphic",
+    "id": "motion-template-17c9ee51-a13b-4039-a89b-741f1330d502"
+   },
+   {
+    "key": "subtitle",
+    "kind": "graphic",
+    "id": "motion-template-690adfdf-4143-44f6-a4ed-718136af8ce3"
+   },
+   {
+    "key": "subtitle:1",
+    "kind": "graphic",
+    "id": "motion-template-5373cdab-2e03-445b-ba4a-37b26b4fb0f2"
+   },
+   {
+    "key": "source:0:shadow",
+    "kind": "graphic",
+    "id": "motion-template-359eebe4-ff1b-494f-93f4-adb07645fa94"
+   },
+   {
+    "key": "source:0:mat",
+    "kind": "graphic",
+    "id": "motion-template-12df64fb-d680-496e-8db3-9b387acae6ab"
+   },
+   {
+    "key": "source:0:clip",
+    "kind": "clip",
+    "parentId": "video-main",
+    "id": "clip-batcave"
+   },
+   {
+    "key": "source:0:mask",
+    "kind": "mask",
+    "parentId": "clip-batcave",
+    "id": "motion-edge-469c1f0e-1d0b-47dd-8f50-71c098cb8657"
+   },
+   {
+    "key": "source:0:settled",
+    "kind": "keyframe",
+    "parentId": "clip-batcave",
+    "id": "motion-key-57f4dbf8-525d-4923-9f63-efbf85b98f18"
+   },
+   {
+    "key": "source:0:tape",
+    "kind": "graphic",
+    "id": "motion-template-73825c86-ba59-439e-85ea-8356bef2180e"
+   },
+   {
+    "key": "tag:shadow",
+    "kind": "graphic",
+    "id": "motion-template-915626a0-bd27-4023-a819-a21dd8ee8f70"
+   },
+   {
+    "key": "tag:fill",
+    "kind": "graphic",
+    "id": "motion-template-89f4c3dd-e75a-447d-83e2-469c1b8fc925"
+   },
+   {
+    "key": "tag:outline",
+    "kind": "graphic",
+    "id": "motion-template-a5ae7075-d6d1-450b-84f6-3e20678b584a"
+   },
+   {
+    "key": "tag",
+    "kind": "graphic",
+    "id": "motion-template-acb9766e-9911-4f87-a984-e92ced2c60e5"
+   }
+  ]
+ },
+ "phases": [
+  {
+   "role": "hold",
+   "startFrame": 1,
+   "endFrame": 49
+  },
+  {
+   "role": "focus",
+   "startFrame": 49,
+   "endFrame": 61
+  },
+  {
+   "role": "reveal",
+   "startFrame": 61,
+   "endFrame": 120
+  },
+  {
+   "role": "hold",
+   "startFrame": 120,
+   "endFrame": 137
+  },
+  {
+   "role": "reveal",
+   "startFrame": 137,
+   "endFrame": 152
+  },
+  {
+   "role": "hold",
+   "startFrame": 152,
+   "endFrame": 322
+  }
+ ],
+ "commands": [
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-b646aed1-1560-48de-ba4e-a0352727ddc6",
+   "startFrame": 0,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-f77e6609-c196-4a86-bc33-ffc237c24bc4",
+   "startFrame": 0,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-da259acd-e6c5-454f-8237-6123677d7f7e",
+   "startFrame": 0,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-3c81aaa8-33c5-48a3-b7c7-3c7031387c07",
+   "startFrame": 0,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-995b0219-b0bb-46f0-b866-6fec4ac05b64",
+   "startFrame": 0,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-d6c0e27c-8c9b-4e63-921b-5230724ef796",
+   "startFrame": 0,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-74bda3a6-c08f-4006-ba71-5bab0242b97d",
+   "startFrame": 0,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-2fa3cfbc-5251-4202-8fbc-493191514c72",
+   "startFrame": 0,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-37f044f7-c510-4286-ba9a-dc433ccd2a8c",
+   "startFrame": 0,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-c37ad780-1b5d-450c-b552-f945c1928e55",
+   "startFrame": 0,
+   "endFrame": 59
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-0cd86359-6901-40d9-a81f-a81e9fd55782",
+   "startFrame": 59,
+   "endFrame": 147
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-30646833-d322-49d2-9fdb-8fdf5b61e9c1",
+   "startFrame": 61,
+   "endFrame": 147
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-61eafddd-79e2-484a-8249-40e26a7b46e0",
+   "startFrame": 72,
+   "endFrame": 88
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-ba13e6cd-c1e2-40a9-bde5-199f9b5643e9",
+   "startFrame": 72,
+   "endFrame": 88
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-9fe518b4-809a-4da1-a1a9-77c7e894da57",
+   "startFrame": 75,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-97dd326a-c1cb-44ef-a13f-0d5424f4e6ca",
+   "startFrame": 85,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-17c9ee51-a13b-4039-a89b-741f1330d502",
+   "startFrame": 101,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-690adfdf-4143-44f6-a4ed-718136af8ce3",
+   "startFrame": 137,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-5373cdab-2e03-445b-ba4a-37b26b4fb0f2",
+   "startFrame": 140,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-359eebe4-ff1b-494f-93f4-adb07645fa94",
+   "startFrame": 0,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-12df64fb-d680-496e-8db3-9b387acae6ab",
+   "startFrame": 0,
+   "endFrame": 330
+  },
+  {
+   "type": "set_clip_layout",
+   "target": "clip-batcave"
+  },
+  {
+   "type": "add_clip_mask",
+   "target": "motion-edge-469c1f0e-1d0b-47dd-8f50-71c098cb8657"
+  },
+  {
+   "type": "add_keyframe",
+   "target": "motion-key-57f4dbf8-525d-4923-9f63-efbf85b98f18",
+   "frame": 0
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-73825c86-ba59-439e-85ea-8356bef2180e",
+   "startFrame": 0,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-915626a0-bd27-4023-a819-a21dd8ee8f70",
+   "startFrame": 107,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-89f4c3dd-e75a-447d-83e2-469c1b8fc925",
+   "startFrame": 107,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-a5ae7075-d6d1-450b-84f6-3e20678b584a",
+   "startFrame": 107,
+   "endFrame": 330
+  },
+  {
+   "type": "add_motion_graphic",
+   "target": "motion-template-acb9766e-9911-4f87-a984-e92ced2c60e5",
+   "startFrame": 110,
+   "endFrame": 330
+  },
+  {
+   "type": "upsert_reference_motion_instance"
+  }
+ ],
+ "handMaps": {
+  "staleR52": [
+   {
+    "id": "strike-hook",
+    "narrativeRole": "promise",
+    "designRole": "first_frame",
+    "startsAtRole": null,
+    "roles": [
+     "design:*",
+     "previous",
+     "strike*"
+    ]
+   },
+   {
+    "id": "curtain-payoff",
+    "narrativeRole": "payoff",
+    "designRole": "payoff",
+    "startsAtRole": "headline:0",
+    "roles": [
+     "headline*",
+     "source*",
+     "subtitle*",
+     "tag*"
+    ]
+   }
+  ],
+  "correctedR53b": [
+   {
+    "id": "strike-hook",
+    "narrativeRole": "promise",
+    "designRole": "first_frame",
+    "startsAtRole": null,
+    "roles": [
+     "design:*",
+     "previous*",
+     "strike*"
+    ]
+   },
+   {
+    "id": "curtain-payoff",
+    "narrativeRole": "payoff",
+    "designRole": "payoff",
+    "startsAtRole": "headline:0",
+    "roles": [
+     "headline*",
+     "source*",
+     "subtitle*",
+     "tag*"
+    ]
+   }
+  ]
+ }
+}

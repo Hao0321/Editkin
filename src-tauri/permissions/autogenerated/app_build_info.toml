@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-app-build-info"
+description = "Enables the app_build_info command without any pre-configured scope."
+commands.allow = ["app_build_info"]
+
+[[permission]]
+identifier = "deny-app-build-info"
+description = "Denies the app_build_info command without any pre-configured scope."
+commands.deny = ["app_build_info"]

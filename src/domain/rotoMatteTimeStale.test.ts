@@ -1,5 +1,5 @@
-import { mkdtemp, readFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
+import { useTempRoots } from "../test/tempRoot.mjs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { createProductAutoRotoRouteReceipt } from "../application/autoRotoProductContract";
@@ -44,6 +44,7 @@ function timeStaleProject() {
   return project;
 }
 const stroke = { id: "brush-1", frame: 0, mode: "foreground" as const, radius: .04, points: [{ x: .4, y: .5 }] };
+const temp = useTempRoots();
 
 describe("time-invalidated matte authoring and durable project boundary", () => {
   it("accepts and preserves the explicit reason without rewriting artifact provenance", () => {
@@ -67,8 +68,8 @@ describe("time-invalidated matte authoring and durable project boundary", () => 
   });
 
   it("persists and reopens the reason and complete artifact inventory, without process-local preview URLs", async () => {
-    // Keep only this owned temporary directory as replay evidence; no user data is deleted.
-    const directory = await mkdtemp(join(tmpdir(), "editkin-time-stale-project-"));
+    // Owned temporary directory (removed after the test; EDITKIN_TEST_EVIDENCE_ROOT keeps it as replay evidence).
+    const directory = await temp.create("editkin-time-stale-project-");
     const path = join(directory, "project.editkin.json");
     const project = timeStaleProject();
     await writeProjectFileAtomic(path, project);
@@ -157,7 +158,7 @@ describe("time-invalidated matte authoring and durable project boundary", () => 
     const project = session.getSnapshot().history.present;
     expect(project.tracks[0].clips[0].masks![0].matteSequence).not.toHaveProperty("staleReason");
     expect(project.tracks[0].clips[0].masks![0].matteSequence?.stale).toBeUndefined();
-    const directory = await mkdtemp(join(tmpdir(), "editkin-time-stale-reanalyzed-"));
+    const directory = await temp.create("editkin-time-stale-reanalyzed-");
     const path = join(directory, "project.editkin.json");
     await writeProjectFileAtomic(path, project);
     const reopened = await readProjectFile(path);

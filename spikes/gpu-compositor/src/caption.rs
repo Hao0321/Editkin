@@ -186,8 +186,7 @@ fn read_u32(bytes: &[u8], offset: usize) -> Result<u32> {
     Ok(u32::from_be_bytes([slice[0], slice[1], slice[2], slice[3]]))
 }
 
-// Inspect the actual hash-bound SFNT, not just manifest claims. No extra parser/runtime dependency.
-fn validate_static_face_bytes(bytes: &[u8], face: &FontFace) -> Result<()> {
+fn sfnt_tables(bytes: &[u8]) -> Result<BTreeMap<&[u8], &[u8]>> {
     if read_u32(bytes, 0)? != 0x0001_0000 { bail!("overlay physical face must be a standalone TrueType font"); }
     let count = usize::from(read_u16(bytes, 4)?);
     let mut tables = BTreeMap::new();
@@ -200,6 +199,12 @@ fn validate_static_face_bytes(bytes: &[u8], face: &FontFace) -> Result<()> {
         let data = bytes.get(start..end).context("font table exceeds physical face bytes")?;
         if tables.insert(tag, data).is_some() { bail!("duplicate font table"); }
     }
+    Ok(tables)
+}
+
+// Inspect the actual hash-bound SFNT, not just manifest claims. No extra parser/runtime dependency.
+fn validate_static_face_bytes(bytes: &[u8], face: &FontFace) -> Result<()> {
+    let tables = sfnt_tables(bytes)?;
     if tables.contains_key(b"fvar".as_slice()) { bail!("overlay physical face must not contain variable axes"); }
     let os2 = tables.get(b"OS/2".as_slice()).context("physical face has no OS/2 identity")?;
     if read_u16(os2, 4)? != face.weight { bail!("overlay physical face weight mismatch: {}", face.id); }
@@ -232,6 +237,12 @@ fn validate_static_face_bytes(bytes: &[u8], face: &FontFace) -> Result<()> {
 }
 
 fn load_bundled_font(font_root: &Path, family: &str, requested_weight: f64) -> Result<(Font, FontSelection)> {
+    let (font, selection, _) = load_bundled_face(font_root, family, requested_weight)?;
+    Ok((font, selection))
+}
+
+/// The hash-checked physical face, plus the vertical metrics libass sizes it by (read from the same bytes).
+fn load_bundled_face(font_root: &Path, family: &str, requested_weight: f64) -> Result<(Font, FontSelection, FaceVerticalMetrics)> {
     let manifest_path = checked_font_path(font_root, "editkin-open-fonts.json")?;
     if fs::metadata(&manifest_path)?.len() > 1024 * 1024 { bail!("overlay font manifest is oversized"); }
     let manifest: FontManifest = serde_json::from_slice(
@@ -247,9 +258,10 @@ fn load_bundled_font(font_root: &Path, family: &str, requested_weight: f64) -> R
         bail!("overlay font identity mismatch: {family}");
     }
     validate_static_face_bytes(&font_bytes, &selection.face)?;
+    let vertical = face_vertical_metrics(&font_bytes)?;
     let font = Font::from_bytes(font_bytes, FontSettings::default())
         .map_err(|error| anyhow::anyhow!("parse overlay font {family}: {error}"))?;
-    Ok((font, selection))
+    Ok((font, selection, vertical))
 }
 
 fn blend_pixel(destination: &mut [u8], source: [u8; 4], coverage: u8) {
@@ -274,41 +286,244 @@ fn blend_pixel(destination: &mut [u8], source: [u8; 4], coverage: u8) {
     destination[3] = (output_alpha.clamp(0.0, 1.0) * 255.0).round() as u8;
 }
 
-fn horizontal_origin(alignment: u8, canvas_width: i32, content_width: i32, padding: i32) -> i32 {
-    match alignment {
-        1 | 4 | 7 => padding,
-        3 | 6 | 9 => canvas_width - content_width - padding,
-        _ => (canvas_width - content_width) / 2,
+/// libass draws `\blur b` as a Gaussian of σ = b·2/√ln 256 (measured on the vendored FFmpeg: \blur 1/2/3/4/6
+/// → σ 0.84/1.66/2.58/3.40/5.10 px). render/captionLayout.ts uses the same constant for the HTML preview.
+const LIBASS_BLUR_SIGMA_PER_UNIT: f32 = 0.849_321_8;
+/// MarginL/MarginR of the exported caption Style (render/captionAss.ts).
+const CAPTION_SIDE_MARGIN: f32 = 40.0;
+/// Punctuation a line never starts with / never ends with (render/captionLineBreak.ts).
+const NO_LINE_START: &str = "，。、；：！？」』）》〉】〕…‧·,.;:!?)]}%～〜ー";
+const NO_LINE_END: &str = "「『（《〈【〔([{";
+
+/// The vertical metrics libass sizes a face by: the ASS Fontsize is OS/2 win ascent + descent, and lines stack
+/// by the hhea ascent + descent (FreeType's face ascender/descender) at that scale. The generated
+/// src/typography/fontEmMetrics.json the TypeScript previews use carries the same numbers.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct FaceVerticalMetrics {
+    pub units_per_em: f32,
+    pub hhea_ascender: f32,
+    pub hhea_descender: f32,
+    pub win_ascent: f32,
+    pub win_descent: f32,
+}
+
+impl FaceVerticalMetrics {
+    /// The pixel em, line ascent and line descent libass uses for an ASS Fontsize.
+    pub(crate) fn at_ass_size(&self, size: f32) -> (f32, f32, f32) {
+        let per_unit = size / (self.win_ascent + self.win_descent);
+        (self.units_per_em * per_unit, self.hhea_ascender * per_unit, self.hhea_descender * per_unit)
     }
 }
 
-fn vertical_origin(
-    alignment: u8,
-    canvas_height: i32,
-    content_height: i32,
-    margin_vertical: i32,
-) -> i32 {
-    match alignment {
-        7..=9 => margin_vertical,
-        4..=6 => (canvas_height - content_height) / 2,
-        _ => canvas_height - content_height - margin_vertical,
+pub(crate) fn face_vertical_metrics(bytes: &[u8]) -> Result<FaceVerticalMetrics> {
+    let tables = sfnt_tables(bytes)?;
+    let head = tables.get(b"head".as_slice()).context("physical face has no head table")?;
+    let hhea = tables.get(b"hhea".as_slice()).context("physical face has no hhea table")?;
+    let os2 = tables.get(b"OS/2".as_slice()).context("physical face has no OS/2 identity")?;
+    let units_per_em = f32::from(read_u16(head, 18)?);
+    let hhea_ascender = f32::from(read_u16(hhea, 4)? as i16);
+    let hhea_descender = -f32::from(read_u16(hhea, 6)? as i16);
+    let (win_ascent, win_descent) = (f32::from(read_u16(os2, 74)?), f32::from(read_u16(os2, 76)?));
+    if units_per_em < 16.0 || hhea_ascender <= 0.0 || hhea_descender < 0.0 || win_ascent + win_descent <= 0.0 {
+        bail!("physical face vertical metrics are unusable");
+    }
+    Ok(FaceVerticalMetrics { units_per_em, hhea_ascender, hhea_descender, win_ascent, win_descent })
+}
+
+fn wide_character(character: char) -> bool {
+    matches!(u32::from(character), 0x1100..=0x11FF | 0x2E80..=0x2FFF | 0x3000..=0x303F | 0x3040..=0x30FF
+        | 0x3100..=0x9FFF | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0xFF01..=0xFF60 | 0xFFE0..=0xFFE6 | 0x20000..=0x3FFFF)
+}
+
+/// Where a caption line may end: after a run of spaces, or next to a full-width character, never before closing
+/// or after opening punctuation.
+fn caption_break_after(characters: &[char], index: usize) -> bool {
+    let (Some(&current), Some(&next)) = (characters.get(index), characters.get(index + 1)) else { return false };
+    if current == ' ' {
+        return next != ' ';
+    }
+    if next == ' ' || NO_LINE_START.contains(next) || NO_LINE_END.contains(current) {
+        return false;
+    }
+    wide_character(current) || wide_character(next)
+}
+
+struct CaptionLine {
+    /// Each drawn character with its pen offset from the line start.
+    glyphs: Vec<(char, f32)>,
+    width: f32,
+}
+
+fn caption_line(characters: &[char], advances: &[f32]) -> CaptionLine {
+    let (mut from, mut to) = (0, characters.len());
+    while from < to && characters[from] == ' ' { from += 1; }
+    while to > from && characters[to - 1] == ' ' { to -= 1; }
+    let mut pen = 0.0;
+    let mut glyphs = Vec::with_capacity(to - from);
+    for index in from..to {
+        glyphs.push((characters[index], pen));
+        pen += advances[index];
+    }
+    CaptionLine { glyphs, width: pen }
+}
+
+/// The lines TypeScript sent, already broken where the export breaks. A line still wider than the room
+/// between the side margins (its Latin widths are estimates) wraps greedily at its last break opportunity, as
+/// the HTML preview's own wrapping and libass would, rather than run off the frame.
+fn caption_lines(font: &Font, text: &[char], em: f32, letter_spacing: f32, available: f32) -> Vec<CaptionLine> {
+    let mut lines = Vec::new();
+    for source in text.split(|character| *character == '\n') {
+        // libass adds the style spacing after every glyph, the last one included.
+        let advances = source.iter().map(|character| font.metrics(*character, em).advance_width + letter_spacing).collect::<Vec<_>>();
+        let (mut start, mut last_break) = (0, None);
+        for index in 0..source.len() {
+            if source[index] != ' ' {
+                if let Some(cut) = last_break.filter(|cut| *cut >= start) {
+                    if caption_line(&source[start..=index], &advances[start..=index]).width > available {
+                        lines.push(caption_line(&source[start..=cut], &advances[start..=cut]));
+                        start = cut + 1;
+                        last_break = None;
+                    }
+                }
+            }
+            if caption_break_after(source, index) { last_break = Some(index); }
+        }
+        lines.push(caption_line(&source[start..], &advances[start..]));
+    }
+    lines
+}
+
+/// A pixel rectangle of the canvas that every coverage mask of one caption shares.
+#[derive(Clone, Copy)]
+struct CoverageRegion {
+    x: i32,
+    y: i32,
+    width: usize,
+    height: usize,
+}
+
+impl CoverageRegion {
+    fn around(left: f32, top: f32, right: f32, bottom: f32, canvas_width: u32, canvas_height: u32) -> Option<Self> {
+        let x0 = left.floor().max(0.0) as i32;
+        let y0 = top.floor().max(0.0) as i32;
+        let x1 = (right.ceil() as i32).min(canvas_width as i32);
+        let y1 = (bottom.ceil() as i32).min(canvas_height as i32);
+        (x1 > x0 && y1 > y0).then(|| Self { x: x0, y: y0, width: (x1 - x0) as usize, height: (y1 - y0) as usize })
+    }
+
+    fn get(&self, mask: &[f32], x: i32, y: i32) -> f32 {
+        let (local_x, local_y) = (x - self.x, y - self.y);
+        if local_x < 0 || local_y < 0 || local_x as usize >= self.width || local_y as usize >= self.height {
+            return 0.0;
+        }
+        mask[local_y as usize * self.width + local_x as usize]
+    }
+
+    /// Coverage at a fractional offset (a shadow need not move by whole pixels).
+    fn shifted(&self, mask: &[f32], x: i32, y: i32, offset: f32) -> f32 {
+        let position = (x as f32 - offset, y as f32 - offset);
+        let (base_x, base_y) = (position.0.floor(), position.1.floor());
+        let (fraction_x, fraction_y) = (position.0 - base_x, position.1 - base_y);
+        let (base_x, base_y) = (base_x as i32, base_y as i32);
+        self.get(mask, base_x, base_y) * (1.0 - fraction_x) * (1.0 - fraction_y)
+            + self.get(mask, base_x + 1, base_y) * fraction_x * (1.0 - fraction_y)
+            + self.get(mask, base_x, base_y + 1) * (1.0 - fraction_x) * fraction_y
+            + self.get(mask, base_x + 1, base_y + 1) * fraction_x * fraction_y
     }
 }
 
+/// The glyphs grown by `radius` px in every direction, like libass's stroker (round joins), with an
+/// antialiased rim.
+fn dilate_coverage(mask: &[f32], region: CoverageRegion, radius: f32) -> Vec<f32> {
+    let reach = (radius + 0.5).ceil() as i32;
+    let mut kernel = Vec::new();
+    for offset_y in -reach..=reach {
+        for offset_x in -reach..=reach {
+            let weight = (radius + 0.5 - ((offset_x * offset_x + offset_y * offset_y) as f32).sqrt()).clamp(0.0, 1.0);
+            if weight > 0.0 { kernel.push((offset_x, offset_y, weight)); }
+        }
+    }
+    let mut grown = vec![0.0; mask.len()];
+    for y in 0..region.height as i32 {
+        for x in 0..region.width as i32 {
+            let mut coverage = 0.0_f32;
+            for &(offset_x, offset_y, weight) in &kernel {
+                coverage = coverage.max(region.get(mask, region.x + x + offset_x, region.y + y + offset_y) * weight);
+                if coverage >= 1.0 { break; }
+            }
+            grown[y as usize * region.width + x as usize] = coverage;
+        }
+    }
+    grown
+}
+
+/// Separable Gaussian blur of standard deviation `sigma` px (libass `\blur`).
+fn gaussian_blur(mask: &mut [f32], region: CoverageRegion, sigma: f32) {
+    let reach = (sigma * 3.0).ceil() as i32;
+    let weights = (-reach..=reach).map(|offset| (-((offset * offset) as f32) / (2.0 * sigma * sigma)).exp()).collect::<Vec<_>>();
+    let total = weights.iter().sum::<f32>();
+    let weights = weights.iter().map(|weight| weight / total).collect::<Vec<_>>();
+    let (width, height) = (region.width as i32, region.height as i32);
+    let mut pass = vec![0.0; mask.len()];
+    for y in 0..height {
+        for x in 0..width {
+            let mut sum = 0.0;
+            for (tap, weight) in weights.iter().enumerate() {
+                let source = x + tap as i32 - reach;
+                if (0..width).contains(&source) { sum += mask[(y * width + source) as usize] * weight; }
+            }
+            pass[(y * width + x) as usize] = sum;
+        }
+    }
+    for y in 0..height {
+        for x in 0..width {
+            let mut sum = 0.0;
+            for (tap, weight) in weights.iter().enumerate() {
+                let source = y + tap as i32 - reach;
+                if (0..height).contains(&source) { sum += pass[(source * width + x) as usize] * weight; }
+            }
+            mask[(y * width + x) as usize] = sum;
+        }
+    }
+}
+
+/// Area coverage of an axis-aligned box over one pixel.
+fn box_coverage(x: i32, y: i32, left: f32, top: f32, right: f32, bottom: f32) -> f32 {
+    let horizontal = ((x + 1) as f32).min(right) - (x as f32).max(left);
+    let vertical = ((y + 1) as f32).min(bottom) - (y as f32).max(top);
+    horizontal.clamp(0.0, 1.0) * vertical.clamp(0.0, 1.0)
+}
+
+fn coverage_byte(coverage: f32) -> u8 {
+    (coverage.clamp(0.0, 1.0) * 255.0).round() as u8
+}
+
+/// Draws a caption the way the export's libass draws it (render/captionLayout.ts describes the same model for
+/// the HTML preview): the ASS Fontsize is the face's OS/2 win ascent + descent, the lines are the ones
+/// TypeScript broke (`lines`) stacked by hhea ascent + descent between 40 px side margins and MarginV, an outline
+/// is the glyph grown by the outline width, the shadow is that grown shape (the bare glyph without an outline)
+/// offset by `shadow` px in the shadow colour, `shadow_blur` (libass `\blur`) softens only outline and shadow,
+/// and a visible background colour draws BorderStyle 3 instead: one box per line padded by max(8, outline).
 pub fn rasterize_caption(
     plan: &EngineVideoCaptionPlan,
     font_root: &Path,
     width: u32,
     height: u32,
 ) -> Result<CaptionRaster> {
-    let (font, selection) = load_bundled_font(font_root, &plan.font_family, if plan.bold { 800.0 } else { 400.0 })?;
+    let (font, selection, vertical) =
+        load_bundled_face(font_root, &plan.font_family, if plan.bold { 800.0 } else { 400.0 })?;
     let text_color = parse_color(&plan.text_color)?;
     let outline_color = parse_color(&plan.outline_color)?;
     let background_color = parse_color(&plan.background_color)?;
-    let font_size = plan.font_size;
-    let line_height = (font_size * 1.25).ceil() as i32;
-    let padding = (font_size * 0.35).ceil() as i32;
-    let characters = plan.text.chars().collect::<Vec<_>>();
+    let boxed = background_color[3] > 0;
+    // ASS BackColour: a box shadows in its own colour; otherwise the authored shadow colour, else the background.
+    let shadow_color = match (&plan.shadow_color, boxed) {
+        (Some(color), false) => parse_color(color)?,
+        _ => background_color,
+    };
+    // The lines TypeScript broke where the export breaks; a plan without them draws the text as typed.
+    let drawn = plan.lines.as_ref().map_or_else(|| plan.text.clone(), |lines| lines.join("\n"));
+    let characters = drawn.chars().filter(|character| *character != '\r').collect::<Vec<_>>();
     let glyph_count = characters
         .iter()
         .filter(|character| !character.is_whitespace())
@@ -320,113 +535,110 @@ pub fn rasterize_caption(
     if missing_glyph_count > 0 {
         bail!("caption font is missing {missing_glyph_count} glyphs");
     }
-    let metrics = characters
-        .iter()
-        .map(|character| font.metrics(*character, font_size))
-        .collect::<Vec<_>>();
-    let text_width = (metrics
-        .iter()
-        .map(|metrics| metrics.advance_width)
-        .sum::<f32>()
-        + plan.letter_spacing * characters.len().saturating_sub(1) as f32)
-        .ceil() as i32;
-    let box_width = (text_width + padding * 2).clamp(1, width as i32);
-    let box_height = (line_height + padding).clamp(1, height as i32);
-    let box_x = horizontal_origin(plan.alignment, width as i32, box_width, 20)
-        .clamp(0, width as i32 - box_width);
-    let box_y = vertical_origin(
-        plan.alignment,
-        height as i32,
-        box_height,
-        plan.margin_vertical.round() as i32,
-    )
-    .clamp(0, height as i32 - box_height);
+    let (em, ascent, descent) = vertical.at_ass_size(plan.font_size);
+    let pitch = ascent + descent;
+    let (canvas_width, canvas_height) = (width as f32, height as f32);
+    let available = (canvas_width - 2.0 * CAPTION_SIDE_MARGIN).max(1.0);
+    let lines = caption_lines(&font, &characters, em, plan.letter_spacing, available);
+    // libass stacks the line boxes (an empty line is half as tall) and anchors the block by alignment.
+    let heights = lines.iter().map(|line| if line.glyphs.is_empty() { pitch / 2.0 } else { pitch }).collect::<Vec<_>>();
+    let block = heights.iter().sum::<f32>();
+    let mut line_top = match plan.alignment {
+        7..=9 => plan.margin_vertical,
+        4..=6 => (canvas_height - block) / 2.0,
+        _ => canvas_height - plan.margin_vertical - block,
+    };
+    // Glyph bitmaps at their libass positions, and each non-empty line's box (line box + advance width).
+    let mut placed = Vec::new();
+    let mut line_boxes = Vec::new();
+    for (line, line_height) in lines.iter().zip(&heights) {
+        let start = match plan.alignment % 3 {
+            1 => CAPTION_SIDE_MARGIN,
+            0 => canvas_width - CAPTION_SIDE_MARGIN - line.width,
+            _ => CAPTION_SIDE_MARGIN + (available - line.width) / 2.0,
+        };
+        if !line.glyphs.is_empty() {
+            line_boxes.push((start, line_top, start + line.width, line_top + pitch));
+        }
+        let baseline = (line_top + ascent).round() as i32;
+        for &(character, pen) in &line.glyphs {
+            if character.is_whitespace() { continue; }
+            let (metrics, bitmap) = font.rasterize(character, em);
+            let left = (start + pen).round() as i32 + metrics.xmin;
+            let top = baseline - metrics.ymin - metrics.height as i32;
+            placed.push((left, top, metrics.width, metrics.height, bitmap));
+        }
+        line_top += line_height;
+    }
     let mut pixels = vec![0_u8; width as usize * height as usize * 4];
-    for y in box_y..box_y + box_height {
-        for x in box_x..box_x + box_width {
-            let offset = (y as usize * width as usize + x as usize) * 4;
-            blend_pixel(&mut pixels[offset..offset + 4], background_color, 255);
-        }
-    }
-    let mut glyph_mask = vec![0_u8; width as usize * height as usize];
-    let mut cursor_x = box_x + padding;
-    let glyph_top = box_y + (box_height - line_height) / 2;
-    for (character, metrics) in characters.iter().zip(metrics.iter()) {
-        let (raster_metrics, bitmap) = font.rasterize(*character, font_size);
-        let glyph_x = cursor_x + raster_metrics.xmin;
-        let glyph_y = glyph_top + (line_height - raster_metrics.height as i32) / 2;
-        for row in 0..raster_metrics.height {
-            for column in 0..raster_metrics.width {
-                let x = glyph_x + column as i32;
-                let y = glyph_y + row as i32;
-                if x < 0 || y < 0 || x >= width as i32 || y >= height as i32 {
-                    continue;
-                }
-                let source = bitmap[row * raster_metrics.width + column];
-                let target = y as usize * width as usize + x as usize;
-                glyph_mask[target] = glyph_mask[target].max(source);
+    let mut paint = |region: CoverageRegion, coverage: &dyn Fn(i32, i32) -> f32, color: [u8; 4]| {
+        for y in region.y..region.y + region.height as i32 {
+            for x in region.x..region.x + region.width as i32 {
+                let value = coverage_byte(coverage(x, y));
+                if value > 0 { blend_canvas_pixel(&mut pixels, width, height, x, y, color, value); }
             }
         }
-        cursor_x += (metrics.advance_width + plan.letter_spacing).ceil() as i32;
+    };
+    let shadow = if plan.shadow > 0.0 && shadow_color[3] > 0 { plan.shadow } else { 0.0 };
+    let border = if boxed { 0.0 } else { plan.outline_width.max(0.0) };
+    let sigma = if !boxed && border > 0.0 && plan.shadow_blur > 0.0 { plan.shadow_blur.min(32.0) * LIBASS_BLUR_SIGMA_PER_UNIT } else { 0.0 };
+    let (mut left, mut top, mut right, mut bottom) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+    for (x, y, glyph_width, glyph_height, _) in &placed {
+        left = left.min(*x as f32);
+        top = top.min(*y as f32);
+        right = right.max((*x + *glyph_width as i32) as f32);
+        bottom = bottom.max((*y + *glyph_height as i32) as f32);
     }
-    let shadow_offset = (plan.shadow * 2.0).round() as i32;
-    if shadow_offset > 0 {
-        for y in 0..height as i32 {
-            for x in 0..width as i32 {
-                let source_x = x - shadow_offset;
-                let source_y = y - shadow_offset;
-                if source_x < 0 || source_y < 0 {
-                    continue;
-                }
-                let coverage = glyph_mask[source_y as usize * width as usize + source_x as usize];
-                if coverage > 0 {
-                    let offset = (y as usize * width as usize + x as usize) * 4;
-                    blend_pixel(&mut pixels[offset..offset + 4], [0, 0, 0, 160], coverage);
+    if boxed {
+        // BorderStyle 3: one box per line, padded by the ASS Outline the writer uses for a box.
+        let padding = plan.outline_width.max(8.0);
+        let boxes = line_boxes.iter().map(|&(x0, y0, x1, y1)| (x0 - padding, y0 - padding, x1 + padding, y1 + padding)).collect::<Vec<_>>();
+        let union = |offset: f32, x: i32, y: i32| boxes.iter()
+            .map(|&(x0, y0, x1, y1)| box_coverage(x, y, x0 + offset, y0 + offset, x1 + offset, y1 + offset))
+            .fold(0.0_f32, f32::max);
+        for &(x0, y0, x1, y1) in &boxes {
+            left = left.min(x0);
+            top = top.min(y0);
+            right = right.max(x1 + shadow);
+            bottom = bottom.max(y1 + shadow);
+        }
+        if let Some(region) = CoverageRegion::around(left, top, right + 1.0, bottom + 1.0, width, height) {
+            if shadow > 0.0 { paint(region, &|x, y| union(shadow, x, y), shadow_color); }
+            paint(region, &|x, y| union(0.0, x, y), background_color);
+        }
+    }
+    let margin = border + sigma * 3.0 + shadow + 2.0;
+    if let Some(region) = (!placed.is_empty()).then(|| CoverageRegion::around(left - margin, top - margin, right + margin, bottom + margin, width, height)).flatten() {
+        let mut fill = vec![0.0_f32; region.width * region.height];
+        for (x, y, glyph_width, glyph_height, bitmap) in &placed {
+            for row in 0..*glyph_height {
+                for column in 0..*glyph_width {
+                    let (target_x, target_y) = (x + column as i32 - region.x, y + row as i32 - region.y);
+                    if target_x < 0 || target_y < 0 || target_x as usize >= region.width || target_y as usize >= region.height { continue; }
+                    let target = target_y as usize * region.width + target_x as usize;
+                    fill[target] = fill[target].max(f32::from(bitmap[row * glyph_width + column]) / 255.0);
                 }
             }
         }
-    }
-    let outline_radius = plan.outline_width.ceil() as i32;
-    if outline_radius > 0 && outline_color[3] > 0 {
-        for y in (box_y - outline_radius).max(0)
-            ..(box_y + box_height + outline_radius).min(height as i32)
-        {
-            for x in (box_x - outline_radius).max(0)
-                ..(box_x + box_width + outline_radius).min(width as i32)
-            {
-                let mut coverage = 0_u8;
-                for offset_y in -outline_radius..=outline_radius {
-                    for offset_x in -outline_radius..=outline_radius {
-                        if offset_x * offset_x + offset_y * offset_y
-                            > outline_radius * outline_radius
-                        {
-                            continue;
-                        }
-                        let source_x = x + offset_x;
-                        let source_y = y + offset_y;
-                        if source_x >= 0
-                            && source_y >= 0
-                            && source_x < width as i32
-                            && source_y < height as i32
-                        {
-                            coverage = coverage.max(
-                                glyph_mask[source_y as usize * width as usize + source_x as usize],
-                            );
-                        }
+        if !boxed {
+            let mut grown = if border > 0.0 { dilate_coverage(&fill, region, border) } else { Vec::new() };
+            if sigma > 0.0 { gaussian_blur(&mut grown, region, sigma); }
+            // The shadow copies the (softened) grown shape before the outline is trimmed under a see-through fill.
+            if shadow > 0.0 {
+                let source = if border > 0.0 { &grown } else { &fill };
+                paint(region, &|x, y| region.shifted(source, x, y, shadow), shadow_color);
+            }
+            if border > 0.0 && outline_color[3] > 0 {
+                if text_color[3] < 255 {
+                    // libass fix_outline: under a see-through fill the outline keeps only what the fill does not cover.
+                    for (outline, glyph) in grown.iter_mut().zip(&fill) {
+                        *outline = if *outline > *glyph { *outline - *glyph / 2.0 } else { 0.0 };
                     }
                 }
-                if coverage > 0 {
-                    let offset = (y as usize * width as usize + x as usize) * 4;
-                    blend_pixel(&mut pixels[offset..offset + 4], outline_color, coverage);
-                }
+                paint(region, &|x, y| region.get(&grown, x, y), outline_color);
             }
         }
-    }
-    for (pixel_index, coverage) in glyph_mask.into_iter().enumerate() {
-        if coverage > 0 {
-            let offset = pixel_index * 4;
-            blend_pixel(&mut pixels[offset..offset + 4], text_color, coverage);
-        }
+        paint(region, &|x, y| region.get(&fill, x, y), text_color);
     }
     let atlas_sha256 = digest(&pixels);
     Ok(CaptionRaster {
@@ -752,6 +964,9 @@ mod tests {
             bold: true,
             shadow: 1.0,
             letter_spacing: 0.0,
+            shadow_color: None,
+            shadow_blur: 0.0,
+            lines: None,
         };
         let font_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../public/fonts");
         let raster = rasterize_caption(&plan, &font_root, 320, 180).unwrap();
@@ -827,5 +1042,222 @@ mod tests {
             procedural_hashes.insert(styled_raster.atlas_sha256);
         }
         assert_eq!(procedural_hashes.len(), 8, "procedural visual styles must produce distinct atlases");
+    }
+
+    fn shorts_caption_plan(family: &str, font_size: f32, text: &str) -> EngineVideoCaptionPlan {
+        // shortsCaptionStyle on 1080x1920, as render/engineGraph.ts sends it.
+        EngineVideoCaptionPlan {
+            node_id: "caption".into(),
+            cue_id: "cue".into(),
+            text: text.into(),
+            timeline: NodeFrameRange {
+                timeline_start_frame: 0,
+                source_start_frame: 0,
+                duration_frames: 30,
+            },
+            font_family: family.into(),
+            font_size,
+            text_color: "#FFFFFF".into(),
+            outline_color: "#00000073".into(),
+            outline_width: 3.0,
+            background_color: "#00000000".into(),
+            alignment: 2,
+            margin_vertical: 300.0,
+            bold: true,
+            shadow: 4.0,
+            letter_spacing: 0.0,
+            shadow_color: Some("#00000099".into()),
+            shadow_blur: 4.0,
+            lines: None,
+        }
+    }
+
+    fn public_fonts() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../public/fonts")
+    }
+
+    /// The raster over the parity harness's #808080, as luma.
+    fn over_grey(raster: &CaptionRaster) -> Vec<u8> {
+        raster.pixels.chunks_exact(4).map(|pixel| {
+            let alpha = f32::from(pixel[3]) / 255.0;
+            let luma = (f32::from(pixel[0]) + f32::from(pixel[1]) + f32::from(pixel[2])) / 3.0;
+            (luma * alpha + 128.0 * (1.0 - alpha)).round() as u8
+        }).collect()
+    }
+
+    /// (top, bottom, left, right) of each band of near-white fill ink, the harness's line measure.
+    fn fill_bands(raster: &CaptionRaster) -> Vec<(usize, usize, usize, usize)> {
+        let (width, grey) = (raster.width as usize, over_grey(raster));
+        let rows = (0..raster.height as usize).filter(|y| grey[y * width..(y + 1) * width].iter().any(|value| *value >= 200)).collect::<Vec<_>>();
+        let mut bands: Vec<(usize, usize, usize, usize)> = Vec::new();
+        for y in rows {
+            let columns = (0..width).filter(|x| grey[y * width + x] >= 200).collect::<Vec<_>>();
+            let (left, right) = (columns[0], *columns.last().unwrap());
+            match bands.last_mut() {
+                Some(band) if y - band.1 <= 6 => *band = (band.0, y, band.2.min(left), band.3.max(right)),
+                _ => bands.push((y, y, left, right)),
+            }
+        }
+        bands
+    }
+
+    fn near(actual: usize, expected: usize, tolerance: usize) -> bool {
+        actual.abs_diff(expected) <= tolerance
+    }
+
+    #[test]
+    fn caption_size_converts_the_ass_fontsize_like_libass() {
+        // Export references (vendored FFmpeg/libass, same faces, 1080x1920): Noto Sans TC 95 and LXGW WenKai TC
+        // 86 draw 「樹上停滿獨角仙」 as 62 px ink, Noto at rows 1545-1606 / columns 312-764, WenKai 1546-1607 / 314-761.
+        for (family, size, top, bottom, left, right) in [("Noto Sans TC", 95.0, 1545, 1606, 312, 764), ("LXGW WenKai TC", 86.0, 1546, 1607, 314, 761)] {
+            let raster = rasterize_caption(&shorts_caption_plan(family, size, "樹上停滿獨角仙"), &public_fonts(), 1080, 1920).unwrap();
+            let bands = fill_bands(&raster);
+            assert_eq!(bands.len(), 1, "{family}: {bands:?}");
+            let (ink_top, ink_bottom, ink_left, ink_right) = bands[0];
+            assert!((61..=63).contains(&(ink_bottom - ink_top + 1)), "{family} glyph height {}", ink_bottom - ink_top + 1);
+            assert!(near(ink_top, top, 1) && near(ink_bottom, bottom, 1), "{family} rows {ink_top}-{ink_bottom}");
+            assert!(near(ink_left, left, 2) && near(ink_right, right, 2), "{family} columns {ink_left}-{ink_right}");
+        }
+    }
+
+    #[test]
+    fn caption_draws_every_line_typescript_broke_with_the_libass_line_pitch() {
+        // The export draws these three lines (breakCaptionLines, maxLineEm 11) at rows 1355-1416, 1450-1511 and
+        // 1545-1606: a 95 px pitch, the last line box ending MarginV 300 above the frame bottom.
+        let mut plan = shorts_caption_plan("Noto Sans TC", 95.0, "今天帶大家來看觀音山遊客中心門口這棵樹上停滿的獨角仙");
+        plan.lines = Some(vec!["今天帶大家來看觀音山".into(), "遊客中心門口這棵".into(), "樹上停滿的獨角仙".into()]);
+        let raster = rasterize_caption(&plan, &public_fonts(), 1080, 1920).unwrap();
+        let bands = fill_bands(&raster);
+        assert_eq!(bands.len(), 3, "{bands:?}");
+        for ((top, bottom, left, right), (expected_top, expected_bottom, expected_left, expected_right)) in
+            bands.iter().zip([(1355, 1416, 214, 861), (1450, 1511, 279, 800), (1545, 1606, 279, 797)])
+        {
+            assert!(near(*top, expected_top, 1) && near(*bottom, expected_bottom, 1), "rows {top}-{bottom}");
+            assert!(near(*left, expected_left, 2) && near(*right, expected_right, 2), "columns {left}-{right}");
+        }
+        assert_eq!(raster.glyph_count, 26);
+    }
+
+    #[test]
+    fn caption_shadow_takes_its_colour_offset_and_libass_blur() {
+        // One horizontal bar: the column under its middle sees only the bar's own shadow.
+        let text = "一";
+        let shadow_alpha_below = |blur: f32| {
+            let mut plan = shorts_caption_plan("Noto Sans TC", 95.0, text);
+            // Only the shadow shows: a transparent outline still widens the shadow shape, as in libass.
+            plan.outline_color = "#00000000".into();
+            plan.shadow_color = Some("#FF0000FF".into());
+            plan.shadow_blur = blur;
+            let raster = rasterize_caption(&plan, &public_fonts(), 1080, 1920).unwrap();
+            let (_, bottom, left, right) = fill_bands(&raster)[0];
+            let column = (left + right) / 2;
+            // From two rows under the fill's last bright row, so no antialiased fill pixel is sampled.
+            (bottom + 3..bottom + 26).map(|y| {
+                let pixel = &raster.pixels[(y * 1080 + column) * 4..][..4];
+                assert!(pixel[3] == 0 || (pixel[0] == 255 && pixel[1] == 0 && pixel[2] == 0), "shadow colour {pixel:?}");
+                pixel[3]
+            }).collect::<Vec<_>>()
+        };
+        let soft = shadow_alpha_below(4.0);
+        let hard = shadow_alpha_below(0.0);
+        // Hard: the glyph grown by the 3 px border and moved 4 px down stays solid to its edge, then nothing.
+        assert!(hard[..2].iter().all(|alpha| *alpha == 255) && hard[7..].iter().all(|alpha| *alpha == 0), "{hard:?}");
+        // \blur 4 (σ ≈ 3.4 px): a smooth fall-off that already fades where the hard one is solid and reaches past it.
+        let distinct = soft.iter().collect::<BTreeSet<_>>().len();
+        assert!(distinct >= 10 && soft.windows(2).all(|pair| pair[1] <= pair[0]) && soft[9] > 0 && soft[0] < 255, "{soft:?}");
+        // The legacy default keeps a transparent BackColour: no shadow at all.
+        let mut legacy = shorts_caption_plan("Noto Sans TC", 54.0, text);
+        legacy.shadow_color = None;
+        legacy.outline_color = "#00000000".into();
+        legacy.shadow_blur = 0.0;
+        let raster = rasterize_caption(&legacy, &public_fonts(), 1080, 1920).unwrap();
+        assert!(raster.pixels.chunks_exact(4).all(|pixel| pixel[3] == 0 || (pixel[0] == 255 && pixel[1] == 255 && pixel[2] == 255)));
+    }
+
+    #[test]
+    fn boxed_caption_draws_one_padded_box_per_line_like_border_style_3() {
+        // The export's box for the long-form default with a 65% black background: columns 784-1136, rows 946-1016
+        // (line box ± max(8, outline) and the 1 px shadow box).
+        let plan = EngineVideoCaptionPlan {
+            text: "清楚可讀，才是重點".into(),
+            font_size: 54.0,
+            outline_color: "#000000".into(),
+            outline_width: 4.0,
+            background_color: "#000000A6".into(),
+            margin_vertical: 72.0,
+            shadow: 1.0,
+            shadow_color: None,
+            shadow_blur: 0.0,
+            ..shorts_caption_plan("Noto Sans TC", 54.0, "")
+        };
+        let raster = rasterize_caption(&plan, &public_fonts(), 1920, 1080).unwrap();
+        let painted = raster.pixels.chunks_exact(4).enumerate().filter(|(_, pixel)| pixel[3] > 24).map(|(index, _)| (index % 1920, index / 1920)).collect::<Vec<_>>();
+        let (left, right) = (painted.iter().map(|p| p.0).min().unwrap(), painted.iter().map(|p| p.0).max().unwrap());
+        let (top, bottom) = (painted.iter().map(|p| p.1).min().unwrap(), painted.iter().map(|p| p.1).max().unwrap());
+        assert!(near(left, 784, 1) && near(right, 1136, 1) && near(top, 946, 1) && near(bottom, 1016, 1), "{left}-{right} x {top}-{bottom}");
+    }
+
+    #[test]
+    fn a_line_wider_than_the_frame_still_wraps_inside_the_side_margins() {
+        let plan = EngineVideoCaptionPlan {
+            text: "永".repeat(60),
+            font_size: 54.0,
+            margin_vertical: 72.0,
+            ..shorts_caption_plan("Noto Sans TC", 54.0, "")
+        };
+        let raster = rasterize_caption(&plan, &public_fonts(), 1920, 1080).unwrap();
+        let bands = fill_bands(&raster);
+        assert_eq!(bands.len(), 2, "{bands:?}");
+        assert!(bands.iter().all(|band| band.2 >= 40 && band.3 < 1880), "{bands:?}");
+    }
+
+    #[test]
+    fn face_metrics_are_the_ones_the_typescript_previews_use() {
+        // src/typography/fontEmMetrics.json drives the HTML preview's size conversion; the native raster reads the
+        // same OS/2 win and hhea numbers from the hash-checked faces themselves.
+        let index: serde_json::Value = serde_json::from_slice(&fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../src/generated/fontEmMetrics.json")).unwrap()).unwrap();
+        let manifest: FontManifest = serde_json::from_slice(&fs::read(public_fonts().join("editkin-open-fonts.json")).unwrap()).unwrap();
+        let mut checked = 0;
+        for face in manifest.fonts.iter().flat_map(|entry| &entry.faces) {
+            let metrics = face_vertical_metrics(&fs::read(public_fonts().join(&face.file)).unwrap()).unwrap();
+            let expected = index["faces"].as_array().unwrap().iter().find(|item| item["id"] == face.id.as_str()).unwrap();
+            for (actual, key) in [(metrics.units_per_em, "unitsPerEm"), (metrics.win_ascent, "assAscender"), (metrics.win_descent, "assDescender"),
+                (metrics.hhea_ascender, "cssAscender"), (metrics.hhea_descender, "cssDescender")] {
+                assert_eq!(f64::from(actual), expected[key].as_f64().unwrap(), "{} {key}", face.id);
+            }
+            checked += 1;
+        }
+        assert!(checked >= 40, "{checked} faces");
+        let noto = face_vertical_metrics(&fs::read(public_fonts().join("render/EditkinFace-noto-sans-tc-800.ttf")).unwrap()).unwrap();
+        let (em, ascent, descent) = noto.at_ass_size(95.0);
+        assert!((em - 95.0 / 1.448).abs() < 1e-4 && (ascent + descent - 95.0).abs() < 1e-4);
+    }
+
+    /// Caption parity harness, not a regression test. Each line of the file named by
+    /// EDITKIN_CAPTION_PARITY_JOBS is `<caption node json>|<width>|<height>|<out png>`: the node is the
+    /// caption node TypeScript writes into the engine graph, prepared exactly like the resident preview
+    /// prepares it, rasterized, and composited over #808080 so it can be compared with the libass export.
+    #[test]
+    #[ignore = "parity harness: run explicitly with --ignored and EDITKIN_CAPTION_PARITY_JOBS"]
+    fn caption_parity_dump() {
+        let jobs = std::env::var("EDITKIN_CAPTION_PARITY_JOBS").expect("EDITKIN_CAPTION_PARITY_JOBS");
+        let font_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../public/fonts");
+        for job in fs::read_to_string(jobs).unwrap().lines().filter(|line| !line.trim().is_empty()) {
+            let parts = job.split('|').collect::<Vec<_>>();
+            let node: hao_core::engine::model::EngineNode =
+                serde_json::from_str(&fs::read_to_string(parts[0]).unwrap()).unwrap();
+            let plan = crate::engine_graph::prepare_video_caption(&node, &mut BTreeSet::new()).unwrap();
+            let (width, height) = (parts[1].parse::<u32>().unwrap(), parts[2].parse::<u32>().unwrap());
+            let raster = rasterize_caption(&plan, &font_root, width, height).unwrap();
+            let mut rgb = Vec::with_capacity(width as usize * height as usize * 3);
+            for pixel in raster.pixels.chunks_exact(4) {
+                let alpha = f32::from(pixel[3]) / 255.0;
+                for channel in 0..3 {
+                    rgb.push((f32::from(pixel[channel]) * alpha + 128.0 * (1.0 - alpha)).round() as u8);
+                }
+            }
+            image::save_buffer(parts[3], &rgb, width, height, image::ColorType::Rgb8).unwrap();
+        }
     }
 }

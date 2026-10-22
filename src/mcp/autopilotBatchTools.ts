@@ -7,19 +7,22 @@ import * as z from "zod/v4";
 import { canonicalJson } from "../shared/canonicalJson";
 import { autopilotPlanSha256, parseAutopilotPlan } from "../application/autopilotPlan";
 import { createAutopilotProjectAuditIdentity } from "../application/autopilotInvocationIdentity";
-import { autopilotBatchManifestSchema, executeAutopilotBatch, readAutopilotBatchState, summarizeAutopilotBatch,
+import { autopilotBatchManifestSchema, readAutopilotBatchState, summarizeAutopilotBatch,
   type AutopilotBatchManifest, type AutopilotBatchItem, type AutopilotBatchRuntime } from "../application/autopilotBatchExecution";
 import { AutopilotBatchJobManager } from "../application/autopilotBatchJobs";
 import { batchFileSha256 } from "../application/editorialBatchResume";
 import { projectDuration } from "../domain/editGraph";
+import type { EditProject } from "../domain/types";
+import type { MediaProbe } from "../render/ffmpegContracts";
 import { inspectMedia } from "../application/inspectMedia";
 import { runAnalysisProcess } from "../application/analysisProcess";
+import { fullDecodeTimeoutMs } from "../render/renderLifetime";
 import { auditAutopilotPlan, applyAutopilotPlan } from "./autopilotTools";
 import { renderAutopilotProject } from "./renderTools";
 import { errorResult, textResult } from "./toolRuntime";
 import { readProject, resolveProjectPath, resolveRenderPath, resolveWorkspaceMediaPath, workspaceRoot } from "./storage";
 
-const batchJobs = new AutopilotBatchJobManager();
+const batchJobs = new AutopilotBatchJobManager({ ownerRoot: () => resolve(process.env.EDITKIN_CACHE_ROOT ?? join(workspaceRoot(), ".editkin-cache")) });
 
 async function boundedJson(path: string, limit = 4 * 1024 * 1024) {
   return JSON.parse((await readBoundedFile(path, limit, { followSymlinks: true, messages: { tooLarge: "批次或計畫超出有界檔案大小" } })).toString("utf8"));
@@ -54,7 +57,8 @@ async function verifyDistinctPaths(manifest: AutopilotBatchManifest, batchPath: 
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
   }
 }
-async function loadBatch(batchPath: string) {
+/** Workspace-resolved manifest, project/plan/output paths and the durable state path of one batch file. */
+export async function loadAutopilotBatch(batchPath: string) {
   const path = await resolveWorkspaceMediaPath(batchPath);
   if (!path.endsWith(".json")) throw new Error("批次清單須為 JSON");
   const manifest = autopilotBatchManifestSchema.parse(await boundedJson(path));
@@ -86,7 +90,15 @@ async function readCommittedReceipt(item: AutopilotBatchItem, planSha256: string
   }
   return undefined;
 }
-function createRuntime(batch: Awaited<ReturnType<typeof loadBatch>>, preferGpu: boolean): AutopilotBatchRuntime {
+export interface AutopilotBatchRuntimeOptions {
+  /** Extra candidate checks. They run only after the default probe and full decode passed, receive that
+   * probe and the applied project, and a throw keeps the candidate unpromoted (no output link). */
+  verifyRender?: (item: AutopilotBatchItem, candidate: string, base: { project: EditProject; probe: MediaProbe }) => Promise<void>;
+  /** Render deadline in milliseconds; the renderer is cancelled when it passes and the candidate is never promoted. */
+  renderTimeoutMs?: number;
+}
+export function createAutopilotBatchRuntime(batch: Awaited<ReturnType<typeof loadAutopilotBatch>>, preferGpu: boolean,
+  options: AutopilotBatchRuntimeOptions = {}): AutopilotBatchRuntime {
   return {
     validatePaths: () => verifyDistinctPaths(batch.manifest, batch.path, batch.statePath),
     async readPlan(item) {
@@ -102,8 +114,14 @@ function createRuntime(batch: Awaited<ReturnType<typeof loadBatch>>, preferGpu: 
     async audit(item, plan) { return payload(await auditAutopilotPlan(item.projectPath, plan)).auditReceipt; },
     async apply(item, plan, audit) { return payload(await applyAutopilotPlan(item.projectPath, plan, audit)).receipt; },
     reconcile: readCommittedReceipt,
-    async render(item, candidate) { return payload(await renderAutopilotProject(item.projectPath, candidate, preferGpu)); },
-    async verifyRender(item, candidate) {
+    async render(item, candidate, parentSignal) {
+      const deadline = options.renderTimeoutMs !== undefined ? AbortSignal.timeout(options.renderTimeoutMs) : undefined;
+      const signals = [parentSignal, deadline].filter((value): value is AbortSignal => !!value);
+      const signal = signals.length ? AbortSignal.any(signals) : undefined;
+      return payload(await renderAutopilotProject(item.projectPath, candidate, preferGpu, undefined, signal));
+    },
+    async verifyRender(item, candidate, signal) {
+      signal?.throwIfAborted();
       const project = await readProject(item.projectPath);
       const probe = await inspectMedia(candidate, process.env.HAO_FFPROBE_PATH);
       if (!probe.hasVideo || !probe.hasAudio || probe.width !== project.width || probe.height !== project.height
@@ -111,8 +129,9 @@ function createRuntime(batch: Awaited<ReturnType<typeof loadBatch>>, preferGpu: 
         throw new Error("批次成片音畫／尺寸／時長驗證失敗");
       }
       await runAnalysisProcess(process.env.HAO_FFMPEG_PATH ?? "ffmpeg", ["-v", "error", "-xerror", "-i", candidate, "-map", "0:v:0", "-map", "0:a:0", "-f", "null", "-"], {
-        timeoutMs: 20 * 60_000, label: "批次成片完整解碼", maximumStdout: 100_000, maximumStderr: 100_000,
+        timeoutMs: fullDecodeTimeoutMs(probe.duration), label: "批次成片完整解碼", maximumStdout: 100_000, maximumStderr: 100_000, signal,
       });
+      await options.verifyRender?.(item, candidate, { project, probe });
     },
   };
 }
@@ -122,20 +141,20 @@ export function registerAutopilotBatchTools(server: McpServer) {
     inputSchema: z.object({ batchPath: z.string(), itemId: z.string().optional(), through: z.enum(["apply", "render"]).default("render"), preferGpu: z.boolean().default(true) }),
   }, async ({ batchPath, itemId, through, preferGpu }) => {
     try {
-      const batch = await loadBatch(batchPath);
+      const batch = await loadAutopilotBatch(batchPath);
       if (itemId && !batch.manifest.items.some(item => item.id === itemId)) throw new Error("未知批次項目");
-      return textResult(batchJobs.start(batch.manifest, batch.statePath, createRuntime(batch, preferGpu), { itemId, through }));
+      return textResult(batchJobs.start(batch.manifest, batch.statePath, createAutopilotBatchRuntime(batch, preferGpu), { itemId, through }));
     } catch (error) { return errorResult(error); }
   });
   server.registerTool("get_autopilot_batch_job", {
-    description: "查詢目前 MCP 行程內的非同步批次工作；持久進度請另用 get_autopilot_batch_status。",
+    description: "查詢目前 MCP 行程內的非同步批次工作，含真實進行階段、目前項目與已套用／失敗數；重啟後的持久進度請另用 get_autopilot_batch_status。",
     inputSchema: z.object({ jobId: z.string().uuid() }),
   }, async ({ jobId }) => {
     try { return textResult(batchJobs.get(jobId)); }
     catch (error) { return errorResult(error); }
   });
   server.registerTool("cancel_autopilot_batch_job", {
-    description: "要求非同步批次在目前項目完成後、開始下一支影片前停止；不會中斷或刪除正在輸出的檔案。之後可用同一清單續跑。",
+    description: "要求非同步批次停止。套用尚未開始時可停止；已開始的套用會完成 receipt 核對。正在輸出或解碼驗證時會經既有 signal 安全停止，保留可續跑 journal 與自有 candidate，不覆蓋先前輸出。",
     inputSchema: z.object({ jobId: z.string().uuid() }),
   }, async ({ jobId }) => {
     try { return textResult(batchJobs.cancel(jobId)); }
@@ -146,8 +165,8 @@ export function registerAutopilotBatchTools(server: McpServer) {
     inputSchema: z.object({ batchPath: z.string(), itemId: z.string().optional(), through: z.enum(["apply", "render"]).default("render"), preferGpu: z.boolean().default(true) }),
   }, async ({ batchPath, itemId, through, preferGpu }) => {
     try {
-      const batch = await loadBatch(batchPath);
-      const result = await executeAutopilotBatch(batch.manifest, batch.statePath, createRuntime(batch, preferGpu), { itemId, through });
+      const batch = await loadAutopilotBatch(batchPath);
+      const result = await batchJobs.run(batch.manifest, batch.statePath, createAutopilotBatchRuntime(batch, preferGpu), { itemId, through });
       return textResult({ ...result, statePath: relative(workspaceRoot(), result.statePath) });
     } catch (error) { return errorResult(error); }
   });
@@ -156,10 +175,10 @@ export function registerAutopilotBatchTools(server: McpServer) {
     inputSchema: z.object({ batchPath: z.string() }),
   }, async ({ batchPath }) => {
     try {
-      const batch = await loadBatch(batchPath);
+      const batch = await loadAutopilotBatch(batchPath);
       const state = await readAutopilotBatchState(batch.statePath, batch.manifest);
       if (!state) return textResult({ status: "READY", expected: batch.manifest.expectedDeliverableCount, completed: 0 });
-      const runtime = createRuntime(batch, true);
+      const runtime = createAutopilotBatchRuntime(batch, true);
       for (const [index, item] of batch.manifest.items.entries()) {
         const progress = state.items[index];
         try {
@@ -167,6 +186,9 @@ export function registerAutopilotBatchTools(server: McpServer) {
           if ((await runtime.readPlan(item)).sha256 !== progress.planSha256) throw new Error("v4 計畫已變更");
           const expectedProject = progress.appliedProjectSha256 ?? progress.beforeProjectSha256;
           if (await batchFileSha256(item.projectPath) !== expectedProject) throw new Error("專案已變更");
+          if (["applied", "rendering", "review_required"].includes(progress.phase) && !await runtime.reconcile(item, progress.planSha256)) {
+            throw new Error("缺少綁定目前計畫與專案的 committed receipt；狀態查詢不依 progress 推測完成");
+          }
           if (progress.phase === "review_required" && await batchFileSha256(item.outputPath) !== progress.outputSha256) throw new Error("影片已變更");
         } catch (error) { progress.error = error instanceof Error ? error.message : String(error); }
       }

@@ -1,0 +1,6 @@
+.color-qualifier-controls { display: grid; gap: 8px; min-width: 0; padding-block-start: 12px; border-top: 1px solid var(--line-strong, #b7c3d8); }
+.color-qualifier-controls fieldset { min-width: 0; margin: 0; padding: 8px; border: 1px solid var(--line-strong, #b7c3d8); border-radius: 6px; }
+.color-qualifier-controls .color-qualifier-check { display: flex; align-items: center; gap: 8px; }
+.color-qualifier-controls input[type="checkbox"] { width: auto; min-height: 0; margin: 0; flex: 0 0 auto; accent-color: var(--accent, #285cff); }
+.color-qualifier-controls .grade-control-grid { margin-block: 10px; }
+.color-qualifier-controls p { margin: 0; }

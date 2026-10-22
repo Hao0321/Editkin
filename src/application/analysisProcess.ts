@@ -1,10 +1,12 @@
 import { spawn } from "node:child_process";
 
-/** Only direct, trusted FFmpeg/Whisper binaries are accepted by callers. They
+/** Only direct, trusted analysis binaries are accepted by callers. They
  * do not launch shell children. Cancellation settles on close, never on kill(). */
 export function runAnalysisProcess(executable: string, args: string[], options: {
   cwd?: string; timeoutMs: number; label: string; signal?: AbortSignal;
   maximumStdout?: number; maximumStderr?: number;
+  onStderr?: (chunk: string) => void;
+  onStdout?: (chunk: Buffer) => void; captureStdout?: boolean;
 }): Promise<{ stdout: Buffer; stderr: string }> {
   options.signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
@@ -18,9 +20,15 @@ export function runAnalysisProcess(executable: string, args: string[], options: 
     child.stdout.on("data", (chunk: Buffer) => {
       bytes += chunk.length;
       if (bytes > (options.maximumStdout ?? 4_000_000)) stop(new Error(`${options.label} stdout 超過預算`));
-      else chunks.push(chunk);
+      else {
+        try { options.onStdout?.(chunk); } catch (error) { stop(error instanceof Error ? error : new Error(String(error))); }
+        if (options.captureStdout !== false) chunks.push(chunk);
+      }
     });
-    child.stderr.on("data", (chunk: Buffer) => { stderr = `${stderr}${chunk.toString("utf8")}`.slice(-(options.maximumStderr ?? 4_000_000)); });
+    child.stderr.on("data", (chunk: Buffer) => {
+      const value = chunk.toString("utf8"); stderr = `${stderr}${value}`.slice(-(options.maximumStderr ?? 4_000_000));
+      try { options.onStderr?.(value); } catch (error) { stop(error instanceof Error ? error : new Error(String(error))); }
+    });
     child.on("error", error => { failure ??= error; });
     child.on("close", code => {
       clearTimeout(timer); options.signal?.removeEventListener("abort", abort);

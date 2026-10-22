@@ -6,6 +6,7 @@ export const REQUIRED_THEME_TOKENS = Object.freeze([
   "--surface-1",
   "--surface-2",
   "--surface-3",
+  "--editkin-brand-image",
   "--ink",
   "--soft",
   "--muted",

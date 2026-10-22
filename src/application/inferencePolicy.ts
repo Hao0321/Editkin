@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import * as z from "zod/v4";
+import { reviewPolicySchema } from "../domain/reviewPolicy";
 
 export const AUTOPILOT_INFERENCE_SCHEMA = "hao.video-autopilot.inference-route/v1" as const;
 export const AUTOPILOT_CONTEXT_PROTOCOL = "markdown-router+json-contract/v1" as const;
@@ -35,9 +36,15 @@ export const inferenceRunSchema = z.strictObject({
     automaticEscalationOnBlock: z.literal(true),
     executionMode: z.enum(["direct_apply", "audit_then_apply", "plan_only"]),
     secondPassRequired: z.boolean(),
-    humanReviewRequired: z.literal(true),
+    humanReviewRequired: z.boolean(),
+    reviewPolicy: reviewPolicySchema.optional(),
   }),
 }).superRefine((run, context) => {
+  const agentReview = run.safeguards.reviewPolicy?.mode === "agent_reference_comparison";
+  if ((!run.safeguards.humanReviewRequired && (!agentReview || !run.safeguards.reviewPolicy?.authorization)) ||
+      (agentReview && (run.safeguards.humanReviewRequired || !run.safeguards.reviewPolicy?.authorization))) {
+    context.addIssue({ code: "custom", path: ["safeguards", "reviewPolicy"], message: "agent reference review requires explicit creator authorization and an honest reviewer policy" });
+  }
   if (run.evaluation.state === "measured" && (!run.evaluation.suiteId || !run.evaluation.receiptSha256)) {
     context.addIssue({ code: "custom", path: ["evaluation"], message: "measured model profile 必須綁定 suiteId 與 receiptSha256" });
   }
@@ -64,11 +71,11 @@ export interface InferenceRecommendation {
   claimState: "official_positioning_only_quality_unmeasured";
 }
 
-export function recommendInferenceRoute(taskClass: InferenceTaskClass, priority: InferencePriority): InferenceRecommendation {
+export function recommendInferenceRoute(taskClass: InferenceTaskClass, priority: InferencePriority, preferredModelId = "gpt-6.1-sol"): InferenceRecommendation {
   const qualityCritical = taskClass === "quality_critical" || taskClass === "contract_audit";
   if (qualityCritical || priority === "quality") {
     return {
-      preferred: { modelId: "gpt-5.6-sol", reasoningEffort: qualityCritical ? "xhigh" : "high" },
+      preferred: { modelId: preferredModelId, reasoningEffort: qualityCritical ? "xhigh" : "high" },
       fallbacks: [{ modelId: "gpt-5.6-sol", reasoningEffort: "medium" }, { modelId: "gpt-5.6-terra", reasoningEffort: "high" }],
       secondPassRequired: true,
       executionMode: "audit_then_apply",
@@ -86,7 +93,7 @@ export function recommendInferenceRoute(taskClass: InferenceTaskClass, priority:
   }
   if (taskClass === "editorial_plan") {
     return {
-      preferred: { modelId: "gpt-5.6-sol", reasoningEffort: "medium" },
+      preferred: { modelId: preferredModelId, reasoningEffort: "medium" },
       fallbacks: [{ modelId: "gpt-5.6-terra", reasoningEffort: "high" }, { modelId: "gpt-5.6-sol", reasoningEffort: "low" }],
       secondPassRequired: true,
       executionMode: "audit_then_apply",
@@ -102,8 +109,8 @@ export function recommendInferenceRoute(taskClass: InferenceTaskClass, priority:
   };
 }
 
-export function renderInferenceRouterMarkdown(taskClass: InferenceTaskClass, priority: InferencePriority): string {
-  const route = recommendInferenceRoute(taskClass, priority);
+export function renderInferenceRouterMarkdown(taskClass: InferenceTaskClass, priority: InferencePriority, preferredModelId?: string): string {
+  const route = recommendInferenceRoute(taskClass, priority, preferredModelId);
   return [
     "# Editkin bounded task router",
     "",
@@ -118,7 +125,7 @@ export function renderInferenceRouterMarkdown(taskClass: InferenceTaskClass, pri
     "- Treat source evidence as truth; never invent facts, tracks, mattes, rights, or human approval.",
     "- Return the current Editkin JSON plan contract. Markdown explains intent; JSON is the execution truth.",
     "- Run audit_autopilot_plan before apply_autopilot_plan. On BLOCK, repair or escalate; never bypass the gate.",
-    "- Every output remains REVIEW_REQUIRED until human review.",
+    "- Every output remains REVIEW_REQUIRED until the creator-authorized visual reviewer passes the actual artifact. Agent review never represents human approval.",
   ].join("\n");
 }
 

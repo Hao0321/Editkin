@@ -1,8 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it , vi } from "vitest";
 import { AgentPanel } from "./AgentPanel";
 import { EditingProfilePicker } from "./EditingProfilePicker";
 import { Toolbar } from "./Toolbar";
+import { interfacePreferences } from "./i18n/interfacePreferences";
 
 const REASON = "網頁版沒有本機 Whisper／FFmpeg 引擎，這項功能需要桌面版。";
 const noop = () => undefined;
@@ -51,11 +52,29 @@ describe("browser capability hints", () => {
       onExport: noop, onOpenAgentConnect: noop, onCheckUpdates: noop, onDirectorConsole: noop, onHelp: noop,
       onAutoEdit: noop, autoEditUnavailableReason: REASON,
     };
+    // 先做一版粗剪 lives in 更多工具, which is advanced mode's since 2026-10-11 (simple mode's top bar is checked below).
+    interfacePreferences.setMode("advanced");
     const web = renderToStaticMarkup(Toolbar(props));
     expect(button(web, "semantic-edit-button")).toContain("disabled");
     expect(button(web, "render-button")).toContain("網頁版無法輸出影片");
     const desktop = renderToStaticMarkup(Toolbar({ ...props, isDesktop: true, autoEditUnavailableReason: undefined }));
     expect(button(desktop, "render-button")).toContain("輸出完成影片");
     expect(button(desktop, "semantic-edit-button")).not.toContain("disabled");
+    interfacePreferences.setMode("simple");
+    const simpleWeb = renderToStaticMarkup(Toolbar(props)), simpleDesktop = renderToStaticMarkup(Toolbar({ ...props, isDesktop: true }));
+    expect(button(simpleWeb, "render-button")).toContain("網頁版無法輸出影片");
+    expect(simpleWeb).toContain("匯出專案");
+    expect(button(simpleDesktop, "render-button")).toContain("輸出完成影片");
+    expect(simpleDesktop).toContain("輸出影片");
+    expect(simpleWeb).not.toContain("semantic-edit-button");
   });
+});
+
+afterEach(() => interfacePreferences.setMode("simple"));
+
+// Direct handler/hook-double controls isolate the new subscription. Real React
+// localization and browser state continuity are checked in separate suites.
+vi.mock("./i18n/interfacePreferences", async importOriginal => {
+  const actual = await importOriginal<typeof import("./i18n/interfacePreferences")>();
+  return { ...actual, useI18n: () => ({ ...actual.interfacePreferences.getSnapshot(), t: actual.translateUi }) };
 });

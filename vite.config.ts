@@ -18,6 +18,22 @@ const nodeTestFiles = [
   "scripts/lib/tauri-candidate-artifact-root.test.mjs",
   "scripts/material-color-runtime-pair.test.mjs",
   "src/shared/visualAssetRights.test.mjs",
+  "scripts/build-web-public.test.mjs",
+  "scripts/desktop-branding.test.mjs",
+  "scripts/lib/build-input-path-contract.test.mjs",
+  "scripts/lib/community-stable-rules.test.mjs",
+  "scripts/lib/frontend-quality-preflight.test.mjs",
+  "scripts/lib/module-metadata-authoring-v3.test.cjs",
+  "scripts/lib/module-metadata-bounded-read-v3.test.mjs",
+  "scripts/lib/module-metadata-validation-inputs.test.mjs",
+  "scripts/lib/product-module-specifiers.test.mjs",
+  "scripts/long-media/bench-runner.test.mjs",
+  "scripts/long-media/env-ledger.test.mjs",
+  "scripts/long-media/evaluators.integration.test.mjs",
+  "scripts/long-media/identity-audio.test.mjs",
+  "scripts/long-media/identity-video.test.mjs",
+  "scripts/long-media/rational.test.mjs",
+  "scripts/long-media/resource-sampler.test.mjs",
 ];
 
 export default defineConfig(({ command }) => ({

@@ -12,7 +12,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function fixture() {
+function fixture(confirmation?: (message: string) => boolean) {
   const session = createProjectSession(createDemoProject(), "D:/fixture-only/original.editkin.json");
   const save = deferred<SaveProjectResult>();
   const open = deferred<OpenProjectResult>();
@@ -28,9 +28,11 @@ function fixture() {
     if (result.project) session.replaceProject(result.project, result.path);
   });
   const actions = createAppProjectFileActions({
+    confirm: confirmation,
     api: api as unknown as HaoDesktopApi, session, loadOpenedProject,
     setStatus: status, setRuntimeUrls: vi.fn(), setSelectedClipId: vi.fn(),
     setSelectedCaptionId: vi.fn(), setPlayhead: vi.fn(), setPlaying: vi.fn(),
+    setPlaybackRate: vi.fn(),
     setTrackingMode: vi.fn(), setTrackingSelection: vi.fn(),
   });
   const edit = (name: string) => session.setHistory(state => dispatchCommand(state, { type: "rename_project", name }));
@@ -44,6 +46,18 @@ function fixture() {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe("manual file actions with actual project session (desktop I/O is deferred test double)", () => {
+  it("uses the presentation confirmation without discarding dirty edits or opening I/O when declined", async () => {
+    const confirmation = vi.fn(() => false);
+    const f = fixture(confirmation);
+    f.edit("Original 日本語 한국어");
+    const original = f.session.getSnapshot();
+    f.actions.newProject();
+    await f.actions.openProject();
+    expect(confirmation).toHaveBeenCalledTimes(2);
+    expect(f.confirm).not.toHaveBeenCalled();
+    expect(f.api.openProject).not.toHaveBeenCalled();
+    expect(f.session.getSnapshot()).toBe(original);
+  });
   it("persists only the submitted snapshot and keeps later edits dirty at the Save As path", async () => {
     const f = fixture();
     f.edit("Submitted A");

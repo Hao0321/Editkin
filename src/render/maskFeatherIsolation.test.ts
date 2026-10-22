@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { REPO_TMP, useTempRoots } from "../test/tempRoot.mjs";
 import { createDemoProject } from "../domain/demo";
 import { createClipMask } from "../domain/masks";
 import type { ClipMask } from "../domain/types";
@@ -17,6 +18,8 @@ const ff = resolve(app, "vendor/ffmpeg/win32-x64/ffmpeg.exe");
 const fp = resolve(app, "vendor/ffmpeg/win32-x64/ffprobe.exe");
 const sha = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const width = 64, height = 32;
+// Evidence folders are removed after each case unless EDITKIN_MASK_EVIDENCE_ROOT names a folder to keep them in.
+const temp = useTempRoots();
 
 function rectangle(id: string, left = 0, right = 1): ClipMask {
   const mask = createClipMask(id, "rectangle");
@@ -29,9 +32,7 @@ function rectangle(id: string, left = 0, right = 1): ClipMask {
 }
 
 async function decodedFixture(name: string, masks: ClipMask[], sourceAlpha: (x: number) => number) {
-  const evidenceBase = process.env.EDITKIN_MASK_EVIDENCE_ROOT ?? resolve(app, ".rd/tmp");
-  await mkdir(evidenceBase, { recursive: true });
-  const root = await mkdtemp(resolve(evidenceBase, `mask-${name}-`));
+  const root = await temp.create(`mask-${name}-`, { parent: REPO_TMP, keepEnv: "EDITKIN_MASK_EVIDENCE_ROOT" });
   const processes: object[] = [];
   function run(args: string[], input?: Buffer) {
     const started = performance.now();
@@ -62,6 +63,17 @@ async function decodedFixture(name: string, masks: ClipMask[], sourceAlpha: (x: 
 }
 
 describe("formal compositor per-operation feather isolation", () => {
+  it("reuses a static feathered plane while preserving changing source alpha frame by frame", () => {
+    const project = createDemoProject(), clip = project.tracks[0].clips[0];
+    const mask = rectangle("cached-static"); mask.feather = .1; clip.masks = [mask];
+    const graph = buildClipMaskAlphaFilters(compileClipAlphaPlan(project, clip), { sourceAlphaLabel: "0:v", outputLabel: "alpha", width, height }).join(";");
+    const frames = Buffer.concat([Buffer.alloc(width * height, 0), Buffer.alloc(width * height, 128), Buffer.alloc(width * height, 255)]);
+    const child = spawnSync(ff, ["-v", "error", "-f", "rawvideo", "-pixel_format", "gray", "-video_size", `${width}x${height}`, "-framerate", "30", "-i", "pipe:0",
+      "-filter_complex", graph, "-map", "[alpha]", "-frames:v", "3", "-pix_fmt", "gray", "-f", "rawvideo", "-"], { input: frames, windowsHide: true, timeout: 30000, maxBuffer: 1024 * 1024 });
+    expect(child.status, child.stderr?.toString()).toBe(0); expect(child.stdout.length).toBe(frames.length);
+    for (const [frame, value] of [0, 128, 255].entries()) expect(child.stdout[frame * width * height + 16 * width + 32]).toBe(value);
+  });
+
   it("keeps the existing source-alpha discontinuity under a feathered full-frame mask", async () => {
     const mask = rectangle("full-soft"); mask.feather = .15;
     const { samples, root } = await decodedFixture("source-alpha", [mask], x => x < 32 ? 0 : 128);
@@ -98,9 +110,7 @@ describe("formal compositor per-operation feather isolation", () => {
 // exercise the exact alpha builder used by renderComposite, not a model/quality claim.
 describe.each([255, 65535] as const)("lossless formal mask planes (maximum %s)", maximum => {
   it.each(["source-edge", "baked-detail", "ordered-stack"] as const)("preserves %s", async kind => {
-    const evidenceBase = process.env.EDITKIN_MASK_EVIDENCE_ROOT ?? resolve(app, ".rd/tmp");
-    await mkdir(evidenceBase, { recursive: true });
-    const root = await mkdtemp(resolve(evidenceBase, `mask-plane-${maximum}-${kind}-`));
+    const root = await temp.create(`mask-plane-${maximum}-${kind}-`, { parent: REPO_TMP, keepEnv: "EDITKIN_MASK_EVIDENCE_ROOT" });
     const project = createDemoProject();
     const clip = project.tracks[0].clips[0];
     const full = rectangle("soft-full"); full.feather = .15;

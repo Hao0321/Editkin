@@ -22,7 +22,11 @@ describe("agent workspace UI contract (SSR/source, not native dialog automation)
 
   it("native wiring returns cancellation before runtime/probe/host work and has no default folder", () => {
     const source = readFileSync(new URL("../../src-tauri/src/main.rs", import.meta.url), "utf8");
-    const command = source.slice(source.indexOf("fn copy_agent_setup("), source.indexOf("fn main()"));
+    // Only this command's own body (it ends at its column-0 brace); later commands may legitimately use the Videos folder.
+    const start = source.indexOf("fn copy_agent_setup(");
+    const end = /\r?\n\}\r?\n/g;
+    end.lastIndex = start;
+    const command = source.slice(start, end.exec(source)!.index);
     const cancellation = command.indexOf('"canceled": true');
     expect(command).toContain(".pick_folder()");
     expect(command).toContain("match selected_agent_workspace(selected.as_deref())");

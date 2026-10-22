@@ -1,3 +1,4 @@
+import { translateUi as uiText, useI18n } from "./i18n/interfacePreferences";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import type { TimelineTrack } from "../domain/types";
@@ -8,11 +9,15 @@ interface Props {
   track: TimelineTrack;
   onRename: (id: string, name: string) => void;
   onToggleLock: (id: string) => void;
+  /** A video track's picture off or on (「隱藏畫面／顯示畫面」); mute stays sound only. */
+  onToggleHidden?: (id: string) => void;
+  onToggleSolo?: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
 /** Portal escapes the timeline's scrolling clip and sticky-label stacking context. */
-export function TrackOptions({ track, onRename, onToggleLock, onDelete }: Props) {
+export function TrackOptions({ track, onRename, onToggleLock, onToggleHidden, onToggleSolo, onDelete }: Props) {
+  useI18n();
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<ReturnType<typeof trackMenuPosition>>();
@@ -52,20 +57,24 @@ export function TrackOptions({ track, onRename, onToggleLock, onDelete }: Props)
     buttons[next]?.focus();
   };
   return <div className="track-options">
-    <button ref={trigger} type="button" className="track-options-trigger" aria-label={`${track.name} 軌道選項`}
+    <button ref={trigger} type="button" className="track-options-trigger" aria-label={uiText("{value0} 軌道選項", { value0: track.name })}
       aria-haspopup="menu" aria-expanded={Boolean(position)} onClick={() => {
         if (position) close();
         else setPosition(trackMenuPosition(trigger.current!.getBoundingClientRect(), window.innerWidth, window.innerHeight));
       }}>⋯</button>
-    {position && createPortal(<div ref={menu} className="track-options-menu" role="menu" aria-label={`${track.name} 軌道操作`}
+    {position && createPortal(<div ref={menu} className="track-options-menu" role="menu" aria-label={uiText("{value0} 軌道操作", { value0: track.name })}
       data-testid="track-options-menu" data-drop-zone="blocked" style={position} onKeyDown={keyboard}>
       <button type="button" role="menuitem" onClick={() => {
         close(); const name = window.prompt("重新命名軌道", track.name)?.trim(); if (name) onRename(track.id, name);
-      }}>重新命名</button>
-      <button type="button" role="menuitem" onClick={() => { onToggleLock(track.id); close(); }}>{track.locked ? "解除鎖定" : "鎖定軌道"}</button>
+      }}>{uiText("重新命名")}</button>
+      <button type="button" role="menuitem" onClick={() => { onToggleLock(track.id); close(); }}>{track.locked ? uiText("解除鎖定") : uiText("鎖定軌道")}</button>
+      {track.kind === "video" && onToggleHidden && <button type="button" role="menuitem" data-testid="track-hidden-toggle"
+        onClick={() => { onToggleHidden(track.id); close(); }}>{track.hidden ? uiText("顯示畫面") : uiText("隱藏畫面")}</button>}
+      {track.kind !== "caption" && onToggleSolo && <button type="button" role="menuitem" data-testid="track-solo-toggle" aria-pressed={Boolean(track.solo)}
+        onClick={() => { onToggleSolo(track.id); close(); }}>{track.solo ? uiText("取消獨奏") : uiText("獨奏（只聽這軌）")}</button>}
       <button type="button" role="menuitem" className="danger-action"
         disabled={track.clips.length > 0 || track.kind === "caption" || track.id === "video-main" || track.id === "audio-main"}
-        onClick={() => { onDelete(track.id); close(); }}>刪除空軌</button>
+        onClick={() => { onDelete(track.id); close(); }}>{uiText("刪除空軌")}</button>
     </div>, document.body)}
   </div>;
 }

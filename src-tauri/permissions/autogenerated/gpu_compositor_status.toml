@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-gpu-compositor-status"
+description = "Enables the gpu_compositor_status command without any pre-configured scope."
+commands.allow = ["gpu_compositor_status"]
+
+[[permission]]
+identifier = "deny-gpu-compositor-status"
+description = "Denies the gpu_compositor_status command without any pre-configured scope."
+commands.deny = ["gpu_compositor_status"]

@@ -1,0 +1,91 @@
+{
+  "schema": "editkin.style-template/v1",
+  "id": "S3_lifestyle_promo",
+  "revision": 4,
+  "names": { "zh": "質感推廣・生活風格", "en": "Lifestyle promo" },
+  "reference": "R3 (walk-and-talk lifestyle promo): huge words with blur-in then sharp, big/small word pairs, script + sans mix, gradient keyword, warm grade. Without a subject matte the big words sit in negative space, never behind the person",
+  "videoTypes": ["real_estate", "shop_promo", "food_promo", "travel_promo"],
+  "palette": {
+    "bg": "#0C1424",
+    "ink": "#0C1424",
+    "paper": "#FFFFFF",
+    "accent": "#FCCC2C",
+    "accent2": "#F28C40",
+    "highlight": "#F45C5C",
+    "script": "#F2B23C"
+  },
+  "fonts": {
+    "display": { "font": "display", "weight": 900 },
+    "serif": { "font": "serif", "weight": 900 },
+    "script": { "font": "hand" },
+    "body": { "font": "display", "weight": 500 },
+    "mono": { "font": "mono" }
+  },
+  "components": {
+    "caption": {
+      "leadFont": "body",
+      "keywordFont": "display",
+      "leadSize": 0.06,
+      "keywordScale": 3.8,
+      "leadColor": "paper",
+      "leadTracking": 0.02,
+      "keywordTracking": -0.05,
+      "lineGap": 0.26,
+      "leadMaxEm": 9,
+      "treatments": ["gradient", "script", "accentColor", "size"],
+      "defaultTreatment": "gradient",
+      "keywordEntry": "blurIn",
+      "leadEntry": "slide",
+      "boxPadding": 0.1,
+      "boxRadius": 0.08,
+      "scriptRotation": -6,
+      "scriptScale": 0.95,
+      "readability": { "minContrast": 4.5, "ladder": ["scrim", "lighterKeyword", "whiteKeyword", "inkText"], "scrimOpacity": 0.35, "alwaysShadow": true },
+      "exitSeconds": 0.22
+    },
+    "section": {
+      "defaultStyle": "bleed",
+      "font": "display",
+      "color": "paper",
+      "bleed": 0.1,
+      "size": 0.5,
+      "scrim": 0.3,
+      "punchCard": { "plate": "accent", "text": "ink", "font": "display" },
+      "defaultSeconds": 1.6
+    },
+    "lightLeak": { "colors": ["#FFD08A", "#FCA040", "#F28C40"], "defaultSeconds": 1.0, "peak": 0.62, "origin": "left" },
+    "punchIn": { "scale": 1.08, "attackSeconds": 0.3, "curve": "quintOut" },
+    "annotation": { "stroke": "paper", "strokeWidth": 0.0065, "dash": true, "pin": "highlight", "marker": "accent", "label": "ink", "labelPlate": "paper", "font": "display" },
+    "insert": { "radius": 0.045, "border": "paper", "borderWidth": 0.005, "shadow": 0.55, "pipScale": 0.46, "paper": "paper", "divider": "accent" },
+    "stage": { "desk": "#C9A27A", "paper": "#FFF6E8", "leaf": "#5A8A44", "captionColor": "ink", "captionFont": "display" },
+    "sound": { "gainDb": -15, "minGapSeconds": 0.7, "cues": {
+      "keyword": "sfx:editkin-procedural-v1-pop-04", "section": "sfx:editkin-procedural-v1-riser-03", "punchCard": "sfx:editkin-procedural-v1-impact-03",
+      "leak": "sfx:editkin-procedural-v1-whoosh-03", "punchIn": "sfx:editkin-procedural-v1-whoosh-02", "click": "sfx:editkin-procedural-v1-tick-02",
+      "type": "sfx:editkin-procedural-v1-tick-05", "cards": "sfx:editkin-procedural-v1-pop-01", "pin": "sfx:editkin-procedural-v1-ding-03",
+      "arrow": "sfx:editkin-procedural-v1-whoosh-04", "stage": "sfx:editkin-procedural-v1-pop-02", "insert": "sfx:editkin-procedural-v1-whoosh-01" } },
+    "look": {
+      "filmLookId": "hfl2_travel_golden_hour",
+      "strength": 0.8,
+      "byGenre": {
+        "food": { "filmLookId": "hfl2_food_warm_appetite", "strength": 0.85 },
+        "night": { "filmLookId": "hfl2_night_neon_clean", "strength": 0.75 }
+      }
+    }
+  },
+  "editorial": {
+    "maxTreatmentsPer2s": 2,
+    "minKeywordHoldSeconds": 0.6,
+    "keywordDensity": { "min": 0.3, "max": 0.8 },
+    "phraseTailSeconds": 0.35,
+    "placement": {
+      "policy": "negative_space",
+      "titleSafe": 0.05,
+      "faceMargin": 0.04,
+      "portraitUiBottom": 0.2,
+      "portraitUiRight": 0.12,
+      "minScale": 0.5
+    }
+  },
+  "artStatus": "pending",
+  "notes": "Phase A first version. Palette measured from R3: keyword #FCCC2C, orange #F28C40, navy #0C1424, pin red #F45C5C, script gold #F2B23C. Behind-subject text waits for decision D1 (C10); map pins and PiP cards are Phase B (C4, C5)."
+}

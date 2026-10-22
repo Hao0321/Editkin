@@ -1,3 +1,12 @@
+import type { TimelineTransition } from "./timelineTransitionV1";
+import type { UnifiedLayerOrderV1 } from "./unifiedLayerOrderV1";
+import type { MotionLibraryClipV1 } from "./motionLibraryFieldsV1";
+import type { ClipGradeSnapshotV1 } from "./clipGradeSnapshotV1Schema";
+import type { ClipAudioEnvelope } from "./clipAudioEnvelope";
+import type { ClipTimeRemapV1, ClipTimeRemapExpectedV1 } from "./clipTimeRemapV1";
+import type { MotionScene2D } from "./motionScene2d";
+import type { ReferenceMotionTemplateInstance } from "./referenceMotionInstance";
+import type { Mesh3dScene } from "../motion/mesh3dScene";
 import type { SmartCutKeepRange } from "./smartCut";
 import type {
   CaptionCue,
@@ -10,6 +19,7 @@ import type {
   ChromaKeySettings,
   ClipKeyframe,
   ColorAdjustments,
+  ColorGradeV2,
   CreativeTransition,
   DirectorMarker,
   DirectorReviewState,
@@ -37,26 +47,49 @@ import type {
 export type CaptionPatch = Partial<Pick<CaptionCue, "text" | "start" | "duration">> & { translation?: CaptionCue["translation"] | null };
 
 export type EditorCommand =
+  | { type: "set_unified_layer_order"; expected: { projectId: string; revision: number; updatedAt: string }; compositionId?: string; order: UnifiedLayerOrderV1 | null }
   | { type: "import_asset"; asset: MediaAsset }
   | { type: "delete_asset"; assetId: string }
   | { type: "add_clip"; clip: TimelineClip }
+  /** Motion Library Phase 3: adds the rendered cache asset (unless the same asset is present) and its clip as one Undo. */
+  | { type: "add_motion_library_clip"; asset: MediaAsset; clip: TimelineClip; autoTrack?: true }
+  /** Swaps a motion library clip to a new render (asset + field) as one Undo; `expected` guards against stale edits. */
+  | { type: "update_motion_library_clip"; clipId: string; expected: { assetId: string; cacheKey: string }; asset: MediaAsset; motionLibrary: MotionLibraryClipV1; sourceStart?: number; duration?: number }
+  | { type: "set_timeline_transition"; transition: TimelineTransition }
+  | { type: "delete_timeline_transition"; transitionId: string }
+  | { type: "replace_clip_source"; clipId: string; expectedAssetId: string; assetId: string; sourceStart: number }
+  | { type: "rebind_reference_motion_clip_source"; clipId: string; expected: { assetId: string; sourceStart: number; duration: number }; assetId: string; sourceStart: number; duration: number }
+  | { type: "retime_clip"; clipId: string; expectedAssetId: string; assetId: string; sourceStart: number; duration: number }
   | { type: "add_track"; track: TimelineTrack }
   | { type: "precompose_clips"; compositionId: string; assetId: string; replacementClipId: string; targetTrackId: string; name: string; clipIds: string[] }
   | { type: "delete_track"; trackId: string }
   | { type: "rename_track"; trackId: string; name: string }
+  | { type: "reorder_tracks"; trackIds: string[] }
   | { type: "toggle_track_lock"; trackId: string }
   | { type: "toggle_track_mute"; trackId: string }
+  | { type: "set_track_solo"; trackId: string; solo: boolean }
+  /** 「隱藏畫面／顯示畫面」: a video track's picture on or off; its sound is unchanged. */
+  | { type: "toggle_track_hidden"; trackId: string }
   | { type: "move_clip_to_track"; clipId: string; trackId: string; timelineStart: number }
+  | { type: "set_clip_links"; clipIds: string[]; groupId?: string }
   | { type: "split_clip"; clipId: string; at: number; newClipId: string }
   | { type: "delete_clip"; clipId: string }
   | { type: "ripple_delete_clip"; clipId: string }
   | { type: "move_clip"; clipId: string; timelineStart: number }
   | { type: "trim_clip_start"; clipId: string; seconds: number }
   | { type: "trim_clip_end"; clipId: string; seconds: number }
+  /** Grow a clip toward its real source bounds; following content moves later if needed. */
+  | { type: "extend_clip"; clipId: string; edge: "start" | "end"; seconds: number }
+  /** New source in-point; timeline position and duration stay. */
+  | { type: "slip_clip"; clipId: string; sourceStart: number }
+  | { type: "set_clip_speed"; clipId: string; expected: ClipTimeRemapExpectedV1; speed: number | null }
+  | { type: "set_clip_time_remap"; clipId: string; expected: ClipTimeRemapExpectedV1; timeRemap: ClipTimeRemapV1 | null }
   | { type: "set_clip_volume"; clipId: string; volume: number }
+  | { type: "set_clip_audio_envelope"; clipId: string; envelope?: ClipAudioEnvelope }
   | { type: "compact_track"; trackId: string }
   | { type: "smart_cut_clip"; clipId: string; keepRanges: SmartCutKeepRange[]; segmentIds: string[] }
   | { type: "update_clip_transform"; clipId: string; patch: Partial<Transform2D> }
+  | { type: "set_mesh_3d_scene"; scene?: Mesh3dScene }
   | { type: "configure_scene_25d"; enabled: boolean }
   | { type: "set_scene_25d_settings"; settings: Scene25dSettings }
   | { type: "update_clip_transform_3d"; clipId: string; patch: Partial<Transform3D> }
@@ -65,6 +98,10 @@ export type EditorCommand =
   | { type: "set_particle_simulation_settings"; settings: ParticleSimulationSettings }
   | { type: "set_clip_color"; clipId: string; patch: Partial<ColorAdjustments> }
   | { type: "set_clip_creative"; clipId: string; patch: { lookPresetId?: string | null; effectPresetIds?: string[]; transitionIn?: CreativeTransition | null; transitionOut?: CreativeTransition | null } }
+  /** Replace (or with null remove) the clip's editkin.color-grade/v2; undo restores the previous grade. */
+  | { type: "set_clip_grade_v2"; clipId: string; grade: ColorGradeV2 | null }
+  /** One current-frame Primary/v2 snapshot replaces colour only, including target colour keyframes. */
+  | { type: "paste_clip_grade_v1"; clipId: string; snapshot: ClipGradeSnapshotV1 }
   | { type: "add_native_effect"; clipId: string; instance: NativeEffectInstance }
   | { type: "update_native_effect"; clipId: string; instanceId: string; patch: Partial<Pick<NativeEffectInstance, "enabled" | "parameters">> }
   | { type: "reorder_native_effect"; clipId: string; instanceId: string; toIndex: number }
@@ -85,13 +122,21 @@ export type EditorCommand =
   | { type: "add_motion_track"; track: MotionTrack }
   | { type: "delete_motion_track"; trackId: string }
   | { type: "set_motion_track_point"; trackId: string; point: MotionTrackPoint }
+  | { type: "add_motion_scene"; scene: MotionScene2D }
+  | { type: "update_motion_scene"; sceneId: string; scene: MotionScene2D }
+  | { type: "revise_motion_scene_graphics"; expectedRevision: number; expectedScene: MotionScene2D; expectedGraphics: MotionGraphic[]; graphics: MotionGraphic[] }
+  | { type: "revise_original_motion_scene_graphic"; sceneId: string; expectedGraphic: MotionGraphic; graphic: MotionGraphic }
+  | { type: "delete_motion_scene"; sceneId: string }
   | { type: "add_motion_graphic"; graphic: MotionGraphic }
-  | { type: "update_motion_graphic"; graphicId: string; patch: Partial<Omit<MotionGraphic, "schema" | "id">> }
+  | { type: "update_motion_graphic"; graphicId: string; patch: Partial<Omit<MotionGraphic, "id">> }
   | { type: "delete_motion_graphic"; graphicId: string }
+  | { type: "reorder_motion_graphics"; graphicIds: string[] }
   | { type: "set_asset_derivatives"; assetId: string; derivatives?: MediaAsset["derivatives"] }
+  | { type: "relink_asset_source"; assetId: string; sourceUri: string; expectedSourceSha256: string }
+  | { type: "set_clip_rec709_input"; clipId: string; interpretation: "display" | "camera" }
   | { type: "set_asset_color_interpretation"; assetId: string; interpretation: InputColorSpace }
   | { type: "set_asset_alpha_mode"; assetId: string; alphaMode: NonNullable<MediaAsset["alphaMode"]> }
-  | { type: "set_project_color_management"; patch: Partial<Pick<ColorManagementSettings, "mode" | "outputTransform">> }
+  | { type: "set_project_color_management"; patch: Partial<Pick<ColorManagementSettings, "mode" | "outputTransform" | "rec709DisplayPolicy">> }
   | { type: "add_caption"; caption: CaptionCue }
   | { type: "update_caption"; captionId: string; patch: CaptionPatch }
   | { type: "delete_caption"; captionId: string }
@@ -106,5 +151,7 @@ export type EditorCommand =
   | { type: "set_project_resolution"; width: number; height: number }
   | { type: "set_template_application"; application: TemplateApplicationState }
   | { type: "clear_template_application" }
+  | { type: "upsert_reference_motion_instance"; instance: ReferenceMotionTemplateInstance; expectedInstanceRevision?: number }
+  | { type: "remove_reference_motion_instance"; id: string; expectedInstanceRevision: number }
   | { type: "rename_project"; name: string }
   | { type: "batch"; commands: EditorCommand[] };

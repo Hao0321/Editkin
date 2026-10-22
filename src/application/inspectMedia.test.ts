@@ -2,8 +2,21 @@ import { createHash } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { inspectMedia } from "./inspectMedia";
+import { mediaUtilityInputOptions } from "./mediaUtilityInputPolicy";
+
+const spawned = vi.hoisted(() => [] as string[][]);
+// Record the ffprobe argv and answer with a fixed stream list; no FFmpeg binary runs.
+vi.mock("node:child_process", async importOriginal => {
+  const real = await importOriginal<typeof import("node:child_process")>();
+  const answer = JSON.stringify({ streams: [{ codec_type: "video", width: 4, height: 2 }], format: { duration: "1" } });
+  const spawn = (command: string, args: readonly string[], options: import("node:child_process").SpawnOptions) => {
+    spawned.push([command, ...args]);
+    return real.spawn(process.execPath, ["-e", `process.stdout.write(${JSON.stringify(answer)})`], options);
+  };
+  return { ...real, spawn };
+});
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
@@ -42,5 +55,20 @@ describe("inspectMedia OpenEXR sequences", () => {
     const { path, manifest } = await fixture();
     await writeFile(path, JSON.stringify({ ...manifest, frameCount: 3, lastFrame: 9 }));
     await expect(inspectMedia(path)).rejects.toThrow(/不完整/);
+  });
+});
+
+describe("inspectMedia ffprobe input options", () => {
+  it("places caller input options before the probed path and adds none by default", async () => {
+    const root = await mkdtemp(join(tmpdir(), "editkin-inspect-options-"));
+    roots.push(root);
+    const path = join(root, "clip.mp4"), options = mediaUtilityInputOptions(path);
+    await writeFile(path, "stand-in bytes; ffprobe is replaced");
+    await expect(inspectMedia(path, "fixture-ffprobe", options)).resolves.toMatchObject({ width: 4, height: 2, hasVideo: true });
+    expect(spawned.at(-1)!.slice(0, 3 + options.length)).toEqual(["fixture-ffprobe", "-v", "error", ...options]);
+    expect(options).toEqual(expect.arrayContaining(["-protocol_whitelist", "file", "-format_whitelist"]));
+    expect(spawned.at(-1)!.at(-1)).toBe(path);
+    await inspectMedia(path, "fixture-ffprobe");
+    expect(spawned.at(-1)).not.toContain("-protocol_whitelist");
   });
 });
