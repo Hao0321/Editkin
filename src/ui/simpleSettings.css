@@ -1,0 +1,17 @@
+/* The simple editor's ⚙ 設定: 專案比例 and 檔案 as plain groups below the interface choices. */
+.simple-settings-section { display: grid; gap: 8px; min-width: 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.simple-settings-section > h3 { margin: 0; color: var(--ink); font-size: calc(15px * var(--ui-scale, 1)); font-weight: 800; }
+.interface-settings-body .simple-settings-section > p { font-size: var(--ui-copy-size, 14px); }
+.simple-format-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 156px), 1fr)); gap: 8px; min-width: 0; }
+.interface-settings-body .simple-format-grid > button { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; text-align: start; cursor: pointer; }
+.simple-format-grid > button > b { color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.simple-format-grid > button > span { min-width: 0; overflow-wrap: anywhere; }
+.interface-settings-body .simple-format-grid > button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 750; }
+.simple-file-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 8px; min-width: 0; }
+.interface-settings-body .simple-file-actions > button { cursor: pointer; overflow-wrap: anywhere; }
+.simple-recent { display: grid; gap: 4px; min-width: 0; }
+.simple-recent > strong { color: var(--muted); font-size: var(--ui-copy-size, 14px); font-weight: 750; }
+.interface-settings-body .simple-recent > button { display: grid; gap: 2px; min-width: 0; text-align: start; cursor: pointer; }
+.simple-recent b, .simple-recent small { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.simple-recent small { color: var(--muted); }
+.interface-settings-body :is(.simple-format-grid, .simple-file-actions, .simple-recent) > button:hover { border-color: var(--accent); }

@@ -3,5 +3,5 @@
   "identifier": "main-window-events",
   "description": "Allow the main editor window to subscribe to native drag-and-drop events.",
   "windows": ["main"],
-  "permissions": ["core:event:default"]
+  "permissions": ["core:event:default", "core:webview:allow-set-webview-zoom", "core:window:allow-scale-factor"]
 }

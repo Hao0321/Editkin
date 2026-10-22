@@ -16,3 +16,26 @@ export function bundledFontAssMetrics(family: string, weight: number, emSize: nu
   const cssBaseline=(lineHeight-(metrics.cssAscender+metrics.cssDescender)*scale)/2+metrics.cssAscender*scale;
   return {fontSize:(metrics.assAscender+metrics.assDescender)*scale,topOffset:cssBaseline-metrics.assAscender*scale};
 }
+
+/** The other direction, for subtitle text authored as an ASS Fontsize: the CSS em libass draws at that size
+ * (the inverse of bundledFontAssMetrics, so OS/2 win ascent + descent equals the size) and libass's line box at
+ * that scale. libass stacks lines by the face's hhea ascent + descent, which is what these faces expose to CSS
+ * (cssAscender/cssDescender), so a CSS line-height of lineHeight puts the baseline ascent below the line top
+ * exactly where libass puts it. Undefined for a family without verified metrics: never guess. */
+export function bundledFontAssLineMetrics(family: string, weight: number, assFontSize: number) {
+  const face=resolveBundledFontFace(family,weight);
+  const metrics=face&&index.faces.find(item=>item.id===face.faceId);
+  if(!metrics||!Number.isFinite(assFontSize)||assFontSize<=0)return undefined;
+  const emSize=assFontSize/bundledFontAssMetrics(family,weight,1,0).fontSize;
+  const scale=emSize/metrics.unitsPerEm;
+  return {emSize,ascent:metrics.cssAscender*scale,descent:metrics.cssDescender*scale,lineHeight:(metrics.cssAscender+metrics.cssDescender)*scale};
+}
+
+/** Distance from the top of a CSS line box to the baseline, for aligning mixed faces. */
+export function bundledFontCssBaseline(family: string, weight: number, emSize: number, lineHeight: number): number {
+  const face=resolveBundledFontFace(family,weight);
+  const metrics=face&&index.faces.find(item=>item.id===face.faceId);
+  if(!metrics)throw new Error(`缺少已驗證的字型尺寸資料：${family}`);
+  const scale=emSize/metrics.unitsPerEm;
+  return (lineHeight-(metrics.cssAscender+metrics.cssDescender)*scale)/2+metrics.cssAscender*scale;
+}

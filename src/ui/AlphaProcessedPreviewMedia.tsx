@@ -1,3 +1,4 @@
+import { translateUi as uiText, useI18n } from "./i18n/interfacePreferences";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { ClipAlphaPlan } from "../domain/clipAlphaPlan";
 import type { MediaAsset } from "../domain/types";
@@ -140,9 +141,10 @@ function unavailablePlacement(style?: CSSProperties): CSSProperties {
 }
 
 export function AlphaPreviewUnavailable({ assetName, reason, className, style, testId }: { assetName: string; reason: string; className?: string; style?: CSSProperties; testId: string }) {
-  return <div className={[className, "keyed-preview-error", "alpha-plan-preview-error"].filter(Boolean).join(" ")} style={unavailablePlacement(style)} role="alert" aria-live="polite" aria-label={`${assetName} Alpha 預覽受阻`} data-alpha-preview-status="error" data-testid={`${testId}-alpha-error`}>
-    <strong>Alpha 預覽受阻</strong>
-    <span>為避免誤顯示未處理原片，這個片段暫時隱藏。</span>
+  useI18n();
+  return <div className={[className, "keyed-preview-error", "alpha-plan-preview-error"].filter(Boolean).join(" ")} style={unavailablePlacement(style)} role="alert" aria-live="polite" aria-label={uiText("{value0} Alpha 預覽受阻", { value0: assetName })} data-alpha-preview-status="error" data-testid={`${testId}-alpha-error`}>
+    <strong>{uiText("Alpha 預覽受阻")}</strong>
+    <span>{uiText("為避免誤顯示未處理原片，這個片段暫時隱藏。")}</span>
     <small>{reason}</small>
   </div>;
 }
@@ -161,6 +163,7 @@ export default function AlphaProcessedPreviewMedia({
   videoRef,
   testId,
 }: AlphaProcessedPreviewMediaProps) {
+  useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const matteCanvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -270,13 +273,9 @@ export default function AlphaProcessedPreviewMedia({
   const sourceStyle: CSSProperties = { position: "absolute", width: 2, height: 2, opacity: 0, pointerEvents: "none" };
   const canvasStyle: CSSProperties = currentState.status === "ready" ? (style ?? {}) : { ...style, visibility: "hidden" };
   return <>
-    {asset.kind === "image"
-      ? <img ref={imageRef} src={source} alt="" aria-hidden="true" style={sourceStyle} data-testid={`${testId}-alpha-source`} />
-      : <video key={source} ref={(node) => { internalVideoRef.current = node; videoRef?.(node); }} src={source} playsInline muted={muted} preload="auto" aria-hidden="true" style={sourceStyle} data-testid={`${testId}-alpha-source`} />}
+    {asset.kind === "image" ? <img ref={imageRef} src={source} alt="" aria-hidden="true" style={sourceStyle} data-testid={`${testId}-alpha-source`} /> : <video key={source} ref={(node) => { internalVideoRef.current = node; videoRef?.(node); }} src={source} playsInline muted={muted} preload="auto" aria-hidden="true" style={sourceStyle} data-testid={`${testId}-alpha-source`} />}
     {matteUri ? <img key={matteUri} ref={matteImageRef} src={matteUri} alt="" aria-hidden="true" style={sourceStyle} data-testid={`${testId}-alpha-matte-source`} /> : null}
     <canvas ref={matteCanvasRef} aria-hidden="true" style={sourceStyle} data-testid={`${testId}-alpha-matte-canvas`} />
-    {currentState.status === "error"
-      ? <AlphaPreviewUnavailable assetName={asset.name} reason={currentState.reason} className={className} style={style} testId={testId} />
-      : <canvas ref={canvasRef} className={className} style={canvasStyle} aria-label={`${asset.name} Alpha 計畫預覽`} data-alpha-plan-schema={plan.schema} data-alpha-preview-status={currentState.status} data-testid={testId} />}
+    {currentState.status === "error" ? <AlphaPreviewUnavailable assetName={asset.name} reason={currentState.reason} className={className} style={style} testId={testId} /> : <canvas ref={canvasRef} className={className} style={canvasStyle} aria-label={uiText("{value0} Alpha 計畫預覽", { value0: String(asset.name) })} data-alpha-plan-schema={plan.schema} data-alpha-preview-status={currentState.status} data-testid={testId} />}
   </>;
 }

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-preview-creative-asset"
+description = "Enables the preview_creative_asset command without any pre-configured scope."
+commands.allow = ["preview_creative_asset"]
+
+[[permission]]
+identifier = "deny-preview-creative-asset"
+description = "Denies the preview_creative_asset command without any pre-configured scope."
+commands.deny = ["preview_creative_asset"]

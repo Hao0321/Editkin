@@ -158,3 +158,10 @@ describe("MaskStudio time-invalidated matte brush boundary", () => {
     expect(ui.onUpdate).toHaveBeenCalledTimes(1);
   });
 });
+
+// Direct handler/hook-double controls isolate the new subscription. Real React
+// localization and browser state continuity are checked in separate suites.
+vi.mock("./i18n/interfacePreferences", async importOriginal => {
+  const actual = await importOriginal<typeof import("./i18n/interfacePreferences")>();
+  return { ...actual, useI18n: () => ({ ...actual.interfacePreferences.getSnapshot(), t: actual.translateUi }) };
+});

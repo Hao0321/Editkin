@@ -146,7 +146,7 @@ export function registerEditorialBatchTools(server: McpServer): void {
             ffmpegPath,
             ffprobePath,
             preferGpu,
-            timeoutMs: 20 * 60_000,
+            // No fixed 20-minute cap: the renderer's deadline scales with the Reel's duration plus a stall watchdog.
             fontRoot: process.env.EDITKIN_FONT_ROOT ?? resolve(process.cwd(), "public/fonts"),
             colorRoot: process.env.EDITKIN_COLOR_ROOT ?? resolve(process.cwd(), "public/color/aces2"),
           },

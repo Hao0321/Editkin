@@ -1,0 +1,14 @@
+/* Simple mode's editor (EditorShell.tsx): one 播放／暫停 (the transport row's, not a second one over the picture), the
+   panel for what was picked with a close button, and only its plain controls (engineering sections stay in 進階模式). */
+.app-shell[data-interface-mode="simple"] :is(.preview-play, .native-preview-play) { display: none; }
+/* The preview header keeps the picture's shape and any problem it reports; layer counts and engine names are advanced. */
+.app-shell[data-interface-mode="simple"] .preview-toolbar :is([data-preview-detail], [data-testid="native-audio-active"], .native-effect-preview-ready) { display: none; }
+.app-shell[data-interface-mode="simple"] .inspector .live-pill { display: none; }
+/* Points to the automation panel, which is an advanced tool. */
+.app-shell[data-interface-mode="simple"] .inspector .caption-bilingual-hint { display: none; }
+.app-shell[data-interface-mode="simple"] .inspector :is([data-testid="professional-engine-tools"], [data-testid="inspector-advanced"], [data-testid="clip-in-point"]) { display: none; }
+.inspector-title { position: relative; }
+.inspector .inspector-close { display: grid; place-items: center; flex: 0 0 auto; width: var(--ui-target-size, 44px); min-width: var(--ui-target-size, 44px); height: var(--ui-target-size, 44px); margin-inline-start: auto; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--soft); cursor: pointer; }
+.inspector .inspector-close > span { font-size: calc(22px * var(--ui-scale, 1)); line-height: 1; }
+.inspector .inspector-close:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.app-shell[data-interface-mode="simple"] > .status-bar { justify-content: flex-start; }

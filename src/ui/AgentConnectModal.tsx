@@ -1,3 +1,4 @@
+import { translateUi as uiText, useI18n } from "./i18n/interfacePreferences";
 import { useEffect, useState } from "react";
 import { EDITKIN_AGENT_STARTER_PROMPT, type AgentTarget } from "../application/agentSetup";
 import type { AgentSetupResult } from "../desktop/types";
@@ -6,11 +7,13 @@ import "./agentConnectModal.css";
 interface AgentConnectModalProps {
   onClose: () => void;
   onConnect: (target: AgentTarget) => Promise<AgentSetupResult | undefined>;
+  musicMvMode?: boolean;
 }
 
 const AGENT_NAME: Record<AgentTarget, string> = { codex: "Codex", claude: "Claude Code" };
 
-export function AgentConnectModal({ onClose, onConnect }: AgentConnectModalProps) {
+export function AgentConnectModal({ onClose, onConnect, musicMvMode = false }: AgentConnectModalProps) {
+  useI18n();
   const [busyTarget, setBusyTarget] = useState<AgentTarget>();
   const [result, setResult] = useState<AgentSetupResult>();
   const [copied, setCopied] = useState(false);
@@ -33,7 +36,7 @@ export function AgentConnectModal({ onClose, onConnect }: AgentConnectModalProps
   };
 
   const copyStarterPrompt = async () => {
-    const prompt = result?.starterPrompt ?? EDITKIN_AGENT_STARTER_PROMPT;
+    const prompt = musicMvMode ? `${result?.starterPrompt ?? EDITKIN_AGENT_STARTER_PROMPT}\n本次請製作原創插畫動畫 Music MV：遵循 video-autopilot 的 music-video-motion 流程；先取得有使用權的歌曲，核對 beat/phrase，準備原創角色透明圖層及背景插畫，依 intro/verse/chorus 等樂段規劃分鏡、角色動勢與畫面內文字；用 Editkin 的 prepare_illustrated_music_video_draft 編出可編輯分層命令，再綁定 v4 計畫 audit、apply、render，逐鏡檢查美術與效能。缺插畫時先安排生成／匯入，不得拿實拍歌詞卡代替。歌詞必須有可核對來源；沒有時只用經 brief 核對的標題文字。` : result?.starterPrompt ?? EDITKIN_AGENT_STARTER_PROMPT;
     try {
       await navigator.clipboard.writeText(prompt);
       setCopied(true);
@@ -60,52 +63,52 @@ export function AgentConnectModal({ onClose, onConnect }: AgentConnectModalProps
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busyTarget) onClose(); }}>
       <section className="agent-connect-modal" role="dialog" aria-modal="true" aria-labelledby="agent-connect-title" data-testid="agent-connect-modal">
-        <button type="button" className="modal-close" onClick={onClose} disabled={Boolean(busyTarget)} aria-label="關閉">×</button>
+        <button type="button" className="modal-close" onClick={onClose} disabled={Boolean(busyTarget)} aria-label={uiText("關閉")}>×</button>
 
         {!busyTarget && !result && <>
           <span className="agent-connect-kicker">EDITKIN × YOUR AI</span>
-          <h2 id="agent-connect-title">連上你已經在用的 AI</h2>
-          <p className="agent-connect-lead">不用申請 API key，也不會讀取或保存登入資料。Editkin 只把本機剪輯工具接進你自己的 Codex／Claude Code session。</p>
+          <h2 id="agent-connect-title">{musicMvMode ? uiText("連接 AI 製作 Music MV") : uiText("連上你已經在用的 AI")}</h2>
+          <p className="agent-connect-lead">{uiText("不用申請 API key，也不會讀取或保存登入資料。Editkin 只把本機剪輯工具接進你自己的 Codex／Claude Code session。")}</p>
           <div className="agent-choice-grid">
             <button type="button" onClick={() => void connect("codex")} data-testid="connect-codex-button">
-              <span className="agent-choice-icon codex">⌘</span><strong>連接 Codex</strong><small>沿用 Codex 登入與訂閱額度</small><em>一鍵設定 →</em>
+              <span className="agent-choice-icon codex">⌘</span><strong>{uiText("連接 Codex")}</strong><small>{uiText("沿用 Codex 登入與訂閱額度")}</small><em>{uiText("一鍵設定 →")}</em>
             </button>
             <button type="button" onClick={() => void connect("claude")} data-testid="connect-claude-button">
-              <span className="agent-choice-icon claude">◆</span><strong>連接 Claude Code</strong><small>沿用 Claude Code 登入與訂閱額度</small><em>一鍵設定 →</em>
+              <span className="agent-choice-icon claude">◆</span><strong>{uiText("連接 Claude Code")}</strong><small>{uiText("沿用 Claude Code 登入與訂閱額度")}</small><em>{uiText("一鍵設定 →")}</em>
             </button>
           </div>
-          <p className="agent-workspace-note">按下後，請選擇要授權給 AI 的工作資料夾。專案與素材需在這個範圍內；每次都可重新選擇，取消不會變更設定。</p>
-          <div className="agent-trust-row"><span>✓ 素材留在本機</span><span>✓ 不儲存密鑰</span><span>✓ 可隨時移除 editkin MCP</span></div>
-          <p className="agent-connect-note">連上後，AI 負責看懂題材與規劃；Editkin 在本機執行剪輯、字幕、音樂、效果與可編輯 Timeline。</p>
+          <p className="agent-workspace-note">{uiText("按下後，請選擇要授權給 AI 的工作資料夾。專案與素材需在這個範圍內；每次都可重新選擇，取消不會變更設定。")}</p>
+          <div className="agent-trust-row"><span>{uiText("✓ 素材留在本機")}</span><span>{uiText("✓ 不儲存密鑰")}</span><span>{uiText("✓ 可隨時移除 editkin MCP")}</span></div>
+          <p className="agent-connect-note">{uiText("連上後，AI 負責看懂題材與規劃；Editkin 在本機執行剪輯、字幕、音樂、效果與可編輯 Timeline。")}</p>
         </>}
 
         {busyTarget && <div className="agent-connect-progress" aria-live="polite">
           <span className="agent-connect-spinner" aria-hidden="true" />
-          <h2 id="agent-connect-title">正在連接 {AGENT_NAME[busyTarget]}</h2>
-          <ol><li className="active">選擇要授權給 AI 的工作資料夾</li><li>驗證 Editkin 本機 MCP 並設定 {AGENT_NAME[busyTarget]}</li><li>讀回設定並確認可用</li></ol>
-          <small>完成資料夾選擇後才會開始設定；可以取消，不會要求 API key。</small>
+          <h2 id="agent-connect-title">{uiText("正在連接")}{AGENT_NAME[busyTarget]}</h2>
+          <ol><li className="active">{uiText("選擇要授權給 AI 的工作資料夾")}</li><li>{uiText("驗證 Editkin 本機 MCP 並設定")}{AGENT_NAME[busyTarget]}</li><li>{uiText("讀回設定並確認可用")}</li></ol>
+          <small>{uiText("完成資料夾選擇後才會開始設定；可以取消，不會要求 API key。")}</small>
         </div>}
 
         {!busyTarget && result && <div className={`agent-connect-result ${setupVerified ? "success" : manual ? "manual" : "failed"}`} aria-live="polite">
           <span className="agent-result-icon" aria-hidden="true">{setupVerified ? "✓" : manual ? "!" : "×"}</span>
           <span className="agent-connect-kicker">{connected ? "CONNECTION VERIFIED" : setupVerified ? "CURRENT MCP VERIFIED" : manual ? "MANUAL SETUP" : "NEEDS ATTENTION"}</span>
-          <h2 id="agent-connect-title">{connected ? `${AGENT_NAME[result.target ?? "codex"]} 已連上最新版` : setupVerified ? `${AGENT_NAME[result.target ?? "codex"]} 已設定最新版 MCP` : manual ? "需要手動完成連線" : "這次沒有連成功"}</h2>
+          <h2 id="agent-connect-title">{connected ? uiText("{value0} 已連上最新版", { value0: AGENT_NAME[result.target ?? "codex"] }) : setupVerified ? uiText("{value0} 已設定最新版 MCP", { value0: AGENT_NAME[result.target ?? "codex"] }) : manual ? uiText("需要手動完成連線") : uiText("這次沒有連成功")}</h2>
           <p className="agent-connect-lead">{result.message}</p>
           {result.verification && <div className="agent-verification"><i />{result.verification}</div>}
           {setupVerified && <>
             <ol className="agent-next-steps">
-              <li><b>1</b><span>重新開啟 {AGENT_NAME[result.target ?? "codex"]}，或建立新 session</span></li>
-              <li><b>2</b><span>貼上下面這句，AI 就會自己啟動完整流程</span></li>
+              <li><b>1</b><span>{uiText("重新開啟")}{AGENT_NAME[result.target ?? "codex"]}{uiText("，或建立新 session")}</span></li>
+              <li><b>2</b><span>{uiText("貼上下面這句，AI 就會自己啟動完整流程")}</span></li>
             </ol>
-            <div className="agent-starter-prompt">{result.starterPrompt ?? EDITKIN_AGENT_STARTER_PROMPT}</div>
-            <button type="button" className="agent-primary-action" onClick={() => void copyStarterPrompt()} data-testid="copy-agent-starter-prompt">{copied ? "✓ 開工指令已複製" : "複製開工指令"}</button>
-            {copyFailed && <small className="agent-copy-failed">系統不允許自動複製，請在上方文字框手動選取。</small>}
+            <div className="agent-starter-prompt" data-authored-content="agent-instructions">{musicMvMode ? `${result.starterPrompt ?? EDITKIN_AGENT_STARTER_PROMPT}\n本次請製作原創插畫動畫 Music MV：遵循 video-autopilot 的 music-video-motion 流程；核對歌曲節拍／樂段，準備原創角色透明圖層和背景插畫，使用 prepare_illustrated_music_video_draft 編出可編輯分層命令，再走 v4 audit、apply、render 及畫面與播放效能檢查。缺插畫先生成／匯入，不能以實拍歌詞卡代替；無可靠歌詞來源就只用標題文字。` : result.starterPrompt ?? EDITKIN_AGENT_STARTER_PROMPT}</div>
+            <button type="button" className="agent-primary-action" onClick={() => void copyStarterPrompt()} data-testid="copy-agent-starter-prompt">{copied ? uiText("✓ 開工指令已複製") : uiText("複製開工指令")}</button>
+            {copyFailed && <small className="agent-copy-failed">{uiText("系統不允許自動複製，請在上方文字框手動選取。")}</small>}
           </>}
           {!setupVerified && <>
             <ol className="agent-repair-steps">{(result.repairSteps ?? ["開啟終端機", "貼上已複製的安全設定指令並按 Enter", "重新開啟 AI session，輸入 /mcp 確認 editkin"]).map((step) => <li key={step}>{step}</li>)}</ol>
-            {manual && <button type="button" className="agent-primary-action" onClick={() => result.target && void connect(result.target)}>完成後重新檢查</button>}
+            {manual && <button type="button" className="agent-primary-action" onClick={() => result.target && void connect(result.target)}>{uiText("完成後重新檢查")}</button>}
           </>}
-          <button type="button" className="agent-secondary-action" onClick={() => { setResult(undefined); setCopied(false); setCopyFailed(false); }}>{setupVerified ? "連接另一個 AI" : "返回重試"}</button>
+          <button type="button" className="agent-secondary-action" onClick={() => { setResult(undefined); setCopied(false); setCopyFailed(false); }}>{setupVerified ? uiText("連接另一個 AI") : uiText("返回重試")}</button>
         </div>}
       </section>
     </div>

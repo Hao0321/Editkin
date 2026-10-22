@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-run-engine-task-v1"
+description = "Enables the run_engine_task_v1 command without any pre-configured scope."
+commands.allow = ["run_engine_task_v1"]
+
+[[permission]]
+identifier = "deny-run-engine-task-v1"
+description = "Denies the run_engine_task_v1 command without any pre-configured scope."
+commands.deny = ["run_engine_task_v1"]

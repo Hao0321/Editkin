@@ -33,7 +33,9 @@ button, summary, select { -webkit-tap-highlight-color: transparent; }
   background: var(--surface);
   box-shadow: none;
 }
+.toolbar:has(.project-menu[open]) { z-index: 85; }
 .brand-lockup { display: flex; align-items: center; gap: 12px; min-width: 0; }
+/* Editkin folded-ribbon identity. High-resolution art stays in .rd; the toolbar loads one compact theme image. */
 .brand-mark {
   position: relative;
   display: grid;
@@ -42,12 +44,13 @@ button, summary, select { -webkit-tap-highlight-color: transparent; }
   height: 44px;
   flex: 0 0 44px;
   border-radius: 12px;
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: transparent;
+  color: transparent;
   box-shadow: none;
 }
-.brand-mark::after { content: ""; position: absolute; inset: 7px; border: 1px solid color-mix(in srgb, var(--accent-ink) 34%, transparent); border-radius: 7px; }
+.brand-mark::after { content: ""; position: absolute; inset: 0; background: var(--editkin-brand-image) center / contain no-repeat; pointer-events: none; }
 .brand-mark span { position: relative; z-index: 1; font-size: 17px; }
+
 .brand-copy { min-width: 0; }
 .brand-copy strong { display: block; font-size: 18px; letter-spacing: -.03em; }
 .brand-copy span { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; white-space: nowrap; }

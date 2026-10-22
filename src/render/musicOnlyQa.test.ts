@@ -1,13 +1,14 @@
-import {describe,it,expect} from "vitest";
-import {mkdtemp,readFile,writeFile} from "node:fs/promises";
-import {tmpdir} from "node:os";
+import {describe,it,expect,onTestFinished} from "vitest";
+import {readFile,writeFile} from "node:fs/promises";
 import {join,resolve} from "node:path";
+import {useTempRoots} from "../test/tempRoot.mjs";
 import {createHash} from "node:crypto";
 import {createDemoProject} from "../domain/demo";
 import {renderProject} from "./ffmpeg";
 import {runProcess} from "./ffmpegMedia";
 import {assertMusicOnlyProject,compareMusicPcm,runMusicOnlyQa} from "../../scripts/music-only-audio-qa";
 import {creativeAssetUri} from "../application/creativeLibrary";
+const temp=useTempRoots();
 function fixture(source:string,music:string){const p=createDemoProject();p.width=160;p.height=90;p.captions=[];p.motionGraphics=[];p.motionTracks=[];p.assets=[{...p.assets[0],uri:source,duration:2},{id:"bgm",kind:"audio",role:"background-music",name:"synthetic library fixture",uri:music,duration:3}];const c={...p.tracks[0].clips[0],duration:1,volume:0};p.tracks=[{...p.tracks[0],clips:[{...c,id:"v1"},{...c,id:"v2",timelineStart:1}]},{id:"music",name:"music",kind:"audio",locked:false,muted:false,clips:[{...c,id:"m",trackId:"music",assetId:"bgm",sourceStart:.5,duration:2,volume:.3}]}];return p;}
 describe("final music-only QA",()=>{
  it("rejects enabled original, separated bypass, missing and muted BGM",()=>{
@@ -23,7 +24,10 @@ describe("final music-only QA",()=>{
   expect(compareMusicPcm(ref,ref).pass).toBe(true);expect(compareMusicPcm(ref,extra).pass).toBe(false);expect(compareMusicPcm(ref,quiet).pass).toBe(false);expect(compareMusicPcm(ref,Buffer.alloc(ref.length)).pass).toBe(false);expect(compareMusicPcm(Buffer.alloc(ref.length),Buffer.alloc(ref.length)).pass).toBe(false);
  });
  it("compares actual native and FFmpeg renders against independent music references",async()=>{
-  const dir=await mkdtemp(join(tmpdir(),"editkin-music-qa-controls-")),source=join(dir,"synthetic-source.mp4"),music=join(dir,"synthetic-library.wav");
+  const dir=await temp.create("editkin-music-qa-controls-"),source=join(dir,"synthetic-source.mp4"),music=join(dir,"synthetic-library.wav");
+  // runMusicOnlyQa keeps each QA evidence folder in os.tmpdir(); point that inside this root so they are removed with it.
+  const savedTemp={TEMP:process.env.TEMP,TMP:process.env.TMP,TMPDIR:process.env.TMPDIR};process.env.TEMP=process.env.TMP=process.env.TMPDIR=dir;
+  onTestFinished(()=>{for(const [key,value] of Object.entries(savedTemp))if(value===undefined)delete process.env[key];else process.env[key]=value;});
   const ffmpegPath=resolve("vendor/ffmpeg/win32-x64/ffmpeg.exe"),ffprobePath=resolve("vendor/ffmpeg/win32-x64/ffprobe.exe");
   await runProcess(ffmpegPath,["-v","error","-f","lavfi","-i","testsrc2=size=160x90:rate=30","-f","lavfi","-i","sine=frequency=600:sample_rate=48000","-t","2","-c:v","libx264","-c:a","aac",source],30000);
   await runProcess(ffmpegPath,["-v","error","-f","lavfi","-i","sine=frequency=1000:sample_rate=48000","-t","3","-c:a","pcm_s16le",music],30000);

@@ -1,0 +1,9 @@
+.workspace-startup-failure { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: var(--canvas, #f6f8fc); color: var(--ink, #172033); }
+.workspace-startup-failure-card { width: min(100%, 480px); padding: 32px; border: 1px solid var(--line, #dce1e9); border-radius: 18px; background: var(--surface, #fff); box-shadow: 0 12px 40px rgb(0 0 0 / 6%); }
+.workspace-startup-brand { display: block; color: var(--accent, #175cd3); font-size: 12px; font-weight: 800; letter-spacing: .14em; }
+.workspace-startup-failure h1 { margin: 16px 0 12px; font-size: clamp(24px, 5vw, 30px); line-height: 1.25; }
+.workspace-startup-failure p { margin: 0; line-height: 1.65; color: var(--soft, #495469); }
+.workspace-startup-failure button { margin-top: 24px; min-height: 44px; padding: 10px 20px; border: 0; border-radius: 10px; background: var(--accent, #175cd3); color: var(--accent-ink, #fff); font-size: 14px; font-weight: 700; cursor: pointer; }
+.workspace-startup-failure button:focus-visible { outline: 3px solid var(--ink, #172033); outline-offset: 4px; }
+.workspace-startup-failure small { display: block; margin-top: 18px; line-height: 1.55; overflow-wrap: anywhere; color: var(--muted, #6b7585); }
+@media (max-width: 520px) { .workspace-startup-failure { padding: 16px; } .workspace-startup-failure-card { padding: 24px; } }

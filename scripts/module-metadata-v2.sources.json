@@ -1,0 +1,650 @@
+{
+  "schema": "editkin.module-metadata-source-binding/v3",
+  "generatedSha256": "0fcbf87b726c2768403bc60390d560a94650e50260daec738ffd5f6f330d9ac1",
+  "generatedFiles": [
+    {
+      "file": "src/modules/moduleMetadataV2.generated.ts",
+      "bytes": 902,
+      "sha256": "0fcbf87b726c2768403bc60390d560a94650e50260daec738ffd5f6f330d9ac1"
+    },
+    {
+      "file": "src/modules/moduleMetadataV2.data.json",
+      "bytes": 186657,
+      "sha256": "7d5ebeaeb0d9c68105af6573430c577d7ce6ac5455ecce5a5017355fa39126aa"
+    }
+  ],
+  "sources": [
+    {
+      "file": "scripts/lib/module-metadata-format-v3.cjs",
+      "sha256": "3fdbd9701c7f04467e5464d8f548788648be731923db2a7c4fe945c6346ab96f"
+    },
+    {
+      "file": "scripts/lib/module-metadata-input-contract-v3.cjs",
+      "sha256": "d35328d7346045b94ed290793ffc28a14a7998589df61c11022d4a3a08a4915d"
+    },
+    {
+      "file": "scripts/lib/module-metadata-source-loader-v3.cjs",
+      "sha256": "f7030edd1e611238dd38fa795f03b3cc2607cfcc25afa7c4b15a6afafcd44cdc"
+    },
+    {
+      "file": "scripts/lib/module-metadata-sync-read-v3.cjs",
+      "sha256": "c2da97464e1c3c0ab9bab4dfafca436f7670c8761303ad55ca816c3c75c047d1"
+    },
+    {
+      "file": "scripts/refresh-module-metadata-v2.cjs",
+      "sha256": "a273ebcc0cf1947a0b0da666f2467a95e8047c2b7502f8e68b6bb6c086092d27"
+    },
+    {
+      "file": "src/application/editkinAesthetic.ts",
+      "sha256": "b24730eceb36044804950e83cd59af3876ea70b5f9675667f57c611860954fe5"
+    },
+    {
+      "file": "src/application/longFormTemplates.ts",
+      "sha256": "549a3bed1002da1cbdd7fefdd371a81073fb9f7c4e349527bcdd64f986b933b9"
+    },
+    {
+      "file": "src/application/mesh3dTemplates.ts",
+      "sha256": "4dd6434147acf2ea262a427415643e7dea93b2d2f086a2ebc46fba6ccf214262"
+    },
+    {
+      "file": "src/application/motionDesignV3Creation.ts",
+      "sha256": "ae97d4b84607e57dd272de6e3c01c2d54580a4c54949756c7fa9331803f9aff7"
+    },
+    {
+      "file": "src/application/nativeReelSceneCommands.ts",
+      "sha256": "e6895eef85049b66fd75b233a57b4dbbf3e5e394864c94bdf638d8269ca0a298"
+    },
+    {
+      "file": "src/application/shortFormTemplates.ts",
+      "sha256": "075ba9d6b89ca7d6e7a946afa140c1d55d4b727888eb3555d234ec44e77a911d"
+    },
+    {
+      "file": "src/application/sourceDisplayMetadata.ts",
+      "sha256": "e3739a7042966c1bd292691dd3098b796c31e5930c7377836cafb911830e6e48"
+    },
+    {
+      "file": "src/application/templateLifecycle.ts",
+      "sha256": "7862bea4beeb5d8c7c9477c5b3fcaedb947b0994a742022ab87e8851e6125dce"
+    },
+    {
+      "file": "src/color/acesDisplayInverse.ts",
+      "sha256": "10d230495d48e1a9e678855703d8d299de1887994d4428c9dc8f280b415188c6"
+    },
+    {
+      "file": "src/color/acesPhoneInputV1.ts",
+      "sha256": "a2e619f66a1c1198153b52bdcd246361b210fc2efe830beedf219ec3ae865d9f"
+    },
+    {
+      "file": "src/color/displayTransfer.ts",
+      "sha256": "be1c19c65028d35c5aaa2f6d843b10869831e734976c334b4b244337079cc710"
+    },
+    {
+      "file": "src/color/gradeV2Color.ts",
+      "sha256": "3cf0b21d24682a085c934daa978bbd0a9bc5be5bfb1e45d9bb8611535d72c0fb"
+    },
+    {
+      "file": "src/color/primaryGrade.ts",
+      "sha256": "0699cf74e30a47a4be254bad27302b0d5968c8d0e6daa9ce5828edc3196e4e1d"
+    },
+    {
+      "file": "src/creative/cinematicLanguage.ts",
+      "sha256": "4eb2ec1309c20904bc1ff604c297dec780678bd155975f1c0738ed7b32892d08"
+    },
+    {
+      "file": "src/creative/corePack.ts",
+      "sha256": "414be7516204c1ad7c4da5cf809d56782266075ae12a922a741f4fd7d85bdf4c"
+    },
+    {
+      "file": "src/creative/editkinAestheticStandard.json",
+      "sha256": "5f73f7b91bd8d4fccd6cf12512c98a67cfdf460abfe7daf7ffc74191c6f66122"
+    },
+    {
+      "file": "src/creative/filmLooksV2.ts",
+      "sha256": "efd0809bf2d21ad44ec4dd296a41aa6a8566234b03554145997794506b090143"
+    },
+    {
+      "file": "src/creative/haoCorePack.json",
+      "sha256": "c9cb5db7846e5c5191c0dab5584e9f8ed76356bd6e116e6eb070c34bf7d8c46a"
+    },
+    {
+      "file": "src/creative/kineticMotionPresets.ts",
+      "sha256": "2fbde8a4d26763523018c8f42e1ed52216b1887ba63abe3f6516b120db45b795"
+    },
+    {
+      "file": "src/creative/lowerThirdPresets.ts",
+      "sha256": "4c1c42cd72ef1e04268943f09cb02828c2a0b50445a529c66d77fbeabd8701ff"
+    },
+    {
+      "file": "src/creative/motionDesignV3Presets.ts",
+      "sha256": "c827f36dbea3c33c7a81bff5da81bf16c5bfcc04a0f1dcf863116147f2409ff9"
+    },
+    {
+      "file": "src/creative/motionGraphicPresets.ts",
+      "sha256": "92a4b39c7f9f9de7bc91489bfb5d2eaeb28d68a91e947c57010f82db5603ea28"
+    },
+    {
+      "file": "src/creative/nativeVectorPresets.ts",
+      "sha256": "9cf8c536d3936c3fa68616b2ef90513c14c2cd9bac7cf6ed43d50466a7d0802d"
+    },
+    {
+      "file": "src/creative/originalElements.ts",
+      "sha256": "3e008d184ce5cc1c936c02f109884fcb167f9a69957d088590821cd52c51fad4"
+    },
+    {
+      "file": "src/creative/reelMotionPresets.ts",
+      "sha256": "2fd4095715ef5100c867f3d02b6a3059b0e65ad0c157d5b3bbf2ebe6c8c24bae"
+    },
+    {
+      "file": "src/creative/shotSelectionStyles.ts",
+      "sha256": "7781359d99e18517ef7857d8582b2ed99f407bf183162a90fd86d944bb80c82c"
+    },
+    {
+      "file": "src/creative/studioAssets.ts",
+      "sha256": "92644f53d6b6335f77d2a44aebfbff56754c6e1342cf861acca7af8cd44e4999"
+    },
+    {
+      "file": "src/creative/travelEditorialPresets.ts",
+      "sha256": "5f4ecef465c1d9e2885fe6f3646715a9e451672f3162ee7195c0fc3c4e4470f7"
+    },
+    {
+      "file": "src/creative/wave2Registry.ts",
+      "sha256": "0d32081976a49b9a90fd09401897ac66fa46bf230bedf0c3e93e051aef224397"
+    },
+    {
+      "file": "src/domain/acesPhoneMigrationV1.ts",
+      "sha256": "7e4ff6e9079bbf8405910b1117a7609f155ca1a784fa8ab948b368e8cc4d39d2"
+    },
+    {
+      "file": "src/domain/aestheticBenchmarks.ts",
+      "sha256": "6a78f5c30535325d448d7ff0002bf77053bb092ffeb1ff7481cd6d4b6113cf60"
+    },
+    {
+      "file": "src/domain/aestheticReview.ts",
+      "sha256": "e365e67db6ca3af1fcd40c0c36bb820223ce1714d91316aebd3425a94fac55d0"
+    },
+    {
+      "file": "src/domain/autoRotoProductReceipt.ts",
+      "sha256": "f0e51b1a55e5581a4eb2169fc19e278e7aa91d35e043a88f93e763795d180a85"
+    },
+    {
+      "file": "src/domain/clipAnimation.ts",
+      "sha256": "7d71672c950bced4506652cd467b323cfb8e631923f573025d9115d21a9f5593"
+    },
+    {
+      "file": "src/domain/clipAudioCommands.ts",
+      "sha256": "c9cadac00b532780b1fa5c280f445d260a9dea4a3aa6de7c940c02d07332b430"
+    },
+    {
+      "file": "src/domain/clipAudioEnvelope.ts",
+      "sha256": "ca97d40195e8be99ef689cfcd86d436f81f9e0f425396989a6b0dc340f82977f"
+    },
+    {
+      "file": "src/domain/clipCreativeSchema.ts",
+      "sha256": "430c25b9c761d031e3d6f4cd82c825db573aa802df7e6fcfe05fbe8eed69c7d2"
+    },
+    {
+      "file": "src/domain/clipGradeSnapshotV1.ts",
+      "sha256": "132aa9da771b0fa55965327f319432e534438b86c95493d3af053f1f112a1a0d"
+    },
+    {
+      "file": "src/domain/clipGradeSnapshotV1Schema.ts",
+      "sha256": "666b1d20914ac1d8edd037c1d6893631fda8ef2e7a1df2177c0af2a2b593dccb"
+    },
+    {
+      "file": "src/domain/clipLinks.ts",
+      "sha256": "7df2be4a6c919c24b1e56ab9df05ea301c0d9720fb6405459044f1359a4cd42c"
+    },
+    {
+      "file": "src/domain/clipMirrors.ts",
+      "sha256": "f1cb7737cd04064b178d0d3467e969177977d71914664bea4fb73e44380fcf1f"
+    },
+    {
+      "file": "src/domain/clipRetime.ts",
+      "sha256": "35bce97dc11d6fdf31396786ebbfd8caaea47f072e3fdc6bb81da7aabde35cef"
+    },
+    {
+      "file": "src/domain/clipSlicing.ts",
+      "sha256": "05002a03d30503f2d37f7af770ca465915c314149cf4dee4328811e4486dfab4"
+    },
+    {
+      "file": "src/domain/clipSourceEdits.ts",
+      "sha256": "6b2bb3b7e86189b8f64d772755fbc304d3c12d8ff5193310d1b3250356a80cc5"
+    },
+    {
+      "file": "src/domain/clipSourceReplacement.ts",
+      "sha256": "48df64adb4411a71a19e2a7c19e10ea5fc41c3ca4df9af21a8712951f491c64a"
+    },
+    {
+      "file": "src/domain/clipTimeRemapCommandsV1.ts",
+      "sha256": "f9b22e3b45f2f3e8ac026e5613dabd02b54d0288e0995eceb085bf9cd6881061"
+    },
+    {
+      "file": "src/domain/clipTimeRemapV1.ts",
+      "sha256": "0f376b6ea1539efabf82f868c20191b87945fe6ef88057c2f6fdae55e922e3e1"
+    },
+    {
+      "file": "src/domain/colorGradeV2Schema.ts",
+      "sha256": "93727bea59086338059cf3a5e74081fa1982050dd907de27e37e60703d807f19"
+    },
+    {
+      "file": "src/domain/commands.ts",
+      "sha256": "547df142a033377e62ce0652febad2a1b7f917c19fdda9cab5a5361ba4364c34"
+    },
+    {
+      "file": "src/domain/editGraph.ts",
+      "sha256": "f64924e33766767943fdbfa77e23bc18e62837ca1fcf7d1f6902ada3f2997f56"
+    },
+    {
+      "file": "src/domain/editGraphError.ts",
+      "sha256": "6d22f7fb08d4497e4b096331b9618485dde9cdd7f90712228612a6caa94e35a3"
+    },
+    {
+      "file": "src/domain/expression.ts",
+      "sha256": "95c35dfabb33266c7be1af15131cb7dfe43ac5bb95b6eaa631d22304b516e483"
+    },
+    {
+      "file": "src/domain/fastCommands.ts",
+      "sha256": "b120bfa0ccb2ca113359c689fbf4f39823a06ffc7e013663b5eeda5d5a16c1f4"
+    },
+    {
+      "file": "src/domain/fixedTemplateWindowV3.ts",
+      "sha256": "3ae5b8836c1cbe0d118fea2d015d62f4823f3a3b9d7c1ee5d67623f9421106d5"
+    },
+    {
+      "file": "src/domain/graphicCopyFitV3.ts",
+      "sha256": "8ac4a0e8194b15567aa64378037412347d279022dd4c114c00f734519589fc84"
+    },
+    {
+      "file": "src/domain/graphicHoldBeatV3.ts",
+      "sha256": "8c6359d260552a410ee39444e7dbb510ff0a8e884a57450209b68cf1c823284e"
+    },
+    {
+      "file": "src/domain/graphicPosterRangeV3.ts",
+      "sha256": "0a0d4c4d7c71535cce667d9f8f32b276d53d0e41f16fa051bb15d6d75334dc96"
+    },
+    {
+      "file": "src/domain/graphicTimingV2.ts",
+      "sha256": "646ec568d86aaff00fda155bb207bad3839e528a640be248fe9f27e526f03484"
+    },
+    {
+      "file": "src/domain/linkedClipCommands.ts",
+      "sha256": "da59dfd897b900ee4da15ee2be972852406e7315fdd370f2ce7ff1e21bbc7c9a"
+    },
+    {
+      "file": "src/domain/mesh3dOverlayValidationV1.ts",
+      "sha256": "928b69d89e026b93516c057fa27e08a8a8efa20237db85bd476532aebf0ea495"
+    },
+    {
+      "file": "src/domain/mesh3dValidation.ts",
+      "sha256": "b13c8e45b5670afa35a69dbc3e9e130068b0f31aeff835f9c119dac1ed8ab4b7"
+    },
+    {
+      "file": "src/domain/motionCompositionV2Contract.ts",
+      "sha256": "ce48c50a7009ea6b9bab857be522d740f01532066892e967ca59e4d5eb1ed85e"
+    },
+    {
+      "file": "src/domain/motionCompositionV3Contract.ts",
+      "sha256": "09db0ec642545383851be62160dcb9113d70b831b4026b44f6d3fa74785bc4a8"
+    },
+    {
+      "file": "src/domain/motionContinuityContract.ts",
+      "sha256": "9ac8178bd2801ec2a6d19a5498761269a3ce92c3c0eae5bb050cd65eea5531d2"
+    },
+    {
+      "file": "src/domain/motionLibraryCommandsV1.ts",
+      "sha256": "df5af580f863423fc4f8fe9f93d48f4a2bae7f3f782e68273e9c60031472a503"
+    },
+    {
+      "file": "src/domain/motionLibraryFieldsV1.ts",
+      "sha256": "51dc53b937c388d29d9944be1124c08188093ef42d44f29bee161ff1f268b7bd"
+    },
+    {
+      "file": "src/domain/motionLibraryV1.ts",
+      "sha256": "c690616c706476a330ff359959c25d4140f33eeb63336bf8b75650f8827b073c"
+    },
+    {
+      "file": "src/domain/motionPaint.ts",
+      "sha256": "b5e678a27e0f6514e3831f1c24a80d58df4030823f089e154988ed2ca72aae37"
+    },
+    {
+      "file": "src/domain/motionScene2d.ts",
+      "sha256": "5e7fc211dc406cb1ffbfc6857863c343130322c76d1a1ae43eed5196af468f5b"
+    },
+    {
+      "file": "src/domain/motionSceneStyle.ts",
+      "sha256": "f9c4851c3b63b18cfe3b13915ed47591ee81dc3ff4537bdecb9a14626794309f"
+    },
+    {
+      "file": "src/domain/motionTrackSampling.ts",
+      "sha256": "06200bd15302c61c404285a960e94633011c557eb0fac6b23cd065b48559517f"
+    },
+    {
+      "file": "src/domain/nativePaintOwnerRevision.ts",
+      "sha256": "c389724a2b20a92919bda2a83e83093d320c1c6651ba99eb7eb83ecf0d85159f"
+    },
+    {
+      "file": "src/domain/originalSceneGraphicRevision.ts",
+      "sha256": "65620ed04458daa70c5f9f63a04fec7588b072d82a669d661bdf88efbe001ee0"
+    },
+    {
+      "file": "src/domain/originalSourceOwnerRevision.ts",
+      "sha256": "c4f536a267c2b4bd626644b474125c5cd657551b4b417dbd1c0d1172a47fc13d"
+    },
+    {
+      "file": "src/domain/projectComposition.ts",
+      "sha256": "71a849e8272585818737d514d27560dd721a42b24cf95ebf10c50ab5d7845652"
+    },
+    {
+      "file": "src/domain/projectValidation.ts",
+      "sha256": "b3bf39a0efd369cce492a6b30df7d85f3e71b2689f8654becf66fcf8c50bd0d7"
+    },
+    {
+      "file": "src/domain/referenceMotionInstance.ts",
+      "sha256": "042957ea2ba6fb8bb47c059a57b43044088f50f57a745e53ab87f42b6f948312"
+    },
+    {
+      "file": "src/domain/referenceMotionSourceOwnerProof.ts",
+      "sha256": "9446321eed03fac80fd2e422a8757f13f15153d003423eb48878a7c53e90a90d"
+    },
+    {
+      "file": "src/domain/referenceMotionSourceRebind.ts",
+      "sha256": "e58d0f9c1e9b319666607032bc1e8296099248d7a2a6c7c8cb2fb3e1dcbeb9ff"
+    },
+    {
+      "file": "src/domain/referenceMotionSourceSlots.ts",
+      "sha256": "c962a0907d6532dbf8459766aa5203a9f90da5ace77451ab140ef153e6fe0760"
+    },
+    {
+      "file": "src/domain/reviewPolicy.ts",
+      "sha256": "bbcd17e3c892d2a119adfe66f4ddaeaa7f497530932d2fc773e97682a2e339ff"
+    },
+    {
+      "file": "src/domain/rippleDelete.ts",
+      "sha256": "6e88bb8a7eb6aacfe5314c0342d87ee8ba7527589918fa6bbc066a9e8f12a119"
+    },
+    {
+      "file": "src/domain/sceneValidation.ts",
+      "sha256": "d537d7c4ee793916f352ebced1b0a49ac6b95dd7daede375cb127e9c78441b8a"
+    },
+    {
+      "file": "src/domain/secondaryHslV1Schema.ts",
+      "sha256": "62bedb7e66f083f4963ccb4adf76747d48c49cc0703ab108d7c0d43a4dea9499"
+    },
+    {
+      "file": "src/domain/smartCut.ts",
+      "sha256": "e210ca86d7254aa8e222f9b4a1c795d2ce10caf2052eb0a1268d3020a1c39a69"
+    },
+    {
+      "file": "src/domain/templateApplication.ts",
+      "sha256": "46aeb9b68faa11b428799b4c65cfb2ca0ba78062d63ca01271db9c49e9616bc4"
+    },
+    {
+      "file": "src/domain/timelineCommands.ts",
+      "sha256": "855d755f4e12f78d7b1b4b99391587c9851cb8ac961c7e44d0995251c4dda028"
+    },
+    {
+      "file": "src/domain/timelineTransitionCommandsV1.ts",
+      "sha256": "a922ae9e876837f5931a1179c5fd0159be83827f0e1af7a152d30dc26ee79b97"
+    },
+    {
+      "file": "src/domain/timelineTransitionHandlesV1.ts",
+      "sha256": "8da9691463267a299b3fff316847ee17655e0f76960ef94266d330dc263a0abb"
+    },
+    {
+      "file": "src/domain/timelineTransitionV1.ts",
+      "sha256": "4d069a00bed78a3f24f26f202366727a07fa5943c4e0cb33f4076b48c85279d0"
+    },
+    {
+      "file": "src/domain/timeRemapClockV1.ts",
+      "sha256": "bae551b26e50a053aeb3dd4a7f50e7ddc30fed87fcfae551466c82861854c33b"
+    },
+    {
+      "file": "src/domain/timeRemapFrameCountV1.ts",
+      "sha256": "847a14f349db67006df13856f3cfd2b228bbd2efaa1ae1735c3da24edf0fc6cb"
+    },
+    {
+      "file": "src/domain/trackedTextBindingV1.ts",
+      "sha256": "e316e8cf0c3095a89e6dcb497082b3d20550623fb8e25c73d6d76a2759499171"
+    },
+    {
+      "file": "src/domain/trackLayerOrderV1.ts",
+      "sha256": "2d6becd435b962d4d2eb59b8b7bcaeddeb057a211ec5bbedb52b164bc613de75"
+    },
+    {
+      "file": "src/domain/trackLock.ts",
+      "sha256": "4207f2f039cfb511e3077217b7ec0d06ad5b8cb0e28ddde33cd529f2468e91de"
+    },
+    {
+      "file": "src/domain/trackState.ts",
+      "sha256": "3b7ec55e950cb5fadde7eeac36c888394559b80570c0395ecba601c5e9868a94"
+    },
+    {
+      "file": "src/domain/transformMotionBlur.ts",
+      "sha256": "18f1d83861de3437bb7b4538803168a972a1d4443c07feae4302ea3a44b64dc5"
+    },
+    {
+      "file": "src/domain/types.ts",
+      "sha256": "1619aed833b88cd7176b69da7aa64d0caa6bbed82a21b81c6b0f1e1101f6183b"
+    },
+    {
+      "file": "src/domain/unifiedLayerEditsV1.ts",
+      "sha256": "f545fb1e5ff2f2714765aba3e8071c7e03ee5baa168ba5ea4d600be04e5f371c"
+    },
+    {
+      "file": "src/domain/unifiedLayerOrderV1.ts",
+      "sha256": "cb215af5f9fa6f5decd61903137f396c427c00b37576e4097b254c7a0b2cc896"
+    },
+    {
+      "file": "src/domain/vectorTrackingV1.ts",
+      "sha256": "c76794c28f1af4b06ef03dc22fb77590c0771a3c72e6c0f1a6ce3e3440f87b7f"
+    },
+    {
+      "file": "src/domain/visualTypes.ts",
+      "sha256": "141267b58514eb2ce69f3c0491c4c163fba120fe57c8f413f1f2bd4c1277fe87"
+    },
+    {
+      "file": "src/generated/fontAdvanceMetrics.json",
+      "sha256": "f07659cf4fe144a02afe79e620834ff377a31c849f004f76f9db83334f847b18"
+    },
+    {
+      "file": "src/generated/fontEmMetrics.json",
+      "sha256": "4e3fee7d89ddb0bcb0612c255fb6a32ce0a2b7f694bc07e0ea14145854b2d40e"
+    },
+    {
+      "file": "src/generated/fontFaceIndex.json",
+      "sha256": "62db22182e71b92143a62fb2ce421c814d64643a64791559a4cdcca47b787f81"
+    },
+    {
+      "file": "src/lib/format.ts",
+      "sha256": "9bd57eeb66306789659c38009f93269d6e43b2f10439fbe65abb075e623be73d"
+    },
+    {
+      "file": "src/modules/moduleManifestCatalogSourceV2.ts",
+      "sha256": "c79bd01a13e1bf2604886c96a03093f026868901370af9e297e229c4237babc6"
+    },
+    {
+      "file": "src/modules/moduleMotionPresetSourceV2.ts",
+      "sha256": "93d4496a4141649d31cd4b49e9fd9040ddd606092c93ad346bce2dc17c313df6"
+    },
+    {
+      "file": "src/modules/moduleTypes.ts",
+      "sha256": "246b43b414426963b5e3de4f6af8dde744611a8d6846a29ec7fec53d7b6a3447"
+    },
+    {
+      "file": "src/modules/motionLibraryModuleManifestsV1.ts",
+      "sha256": "8c25f553dc8c314bfebebc651a1630045efc4a6b0bd7347b13e831656a5156d6"
+    },
+    {
+      "file": "src/modules/motionLibraryModuleVariantsV1.json",
+      "sha256": "3440c40c9aed638b41b11a1da3473c30db50c5cf9e9b801c664067669c90edac"
+    },
+    {
+      "file": "src/modules/templateCatalog.ts",
+      "sha256": "65a6fd63b6df92a905172fbf4843ec26b9f89f933e2d471ecdebfee23de92267"
+    },
+    {
+      "file": "src/motion/composition.ts",
+      "sha256": "4bcad3fbfa2e29ac44ab1a8fd8d539e62d5ed40b64db0b1b02652211be6a2737"
+    },
+    {
+      "file": "src/motion/compositionV2.ts",
+      "sha256": "d5b7e42991afd9344dd024e1aaa79fa58975d9c19a9d803fb4b550d06c800ba5"
+    },
+    {
+      "file": "src/motion/compositionV3.ts",
+      "sha256": "5bfa920eb3069b4a9275439600dda7cf72151e4fe22ac94caf158d0a06aa46ad"
+    },
+    {
+      "file": "src/motion/defaultGraphicSeedsV2.ts",
+      "sha256": "8f37ce2cdbc83bfeb97ad799e0629304e20b2d489f95191d9b4c5d9f8dc7096f"
+    },
+    {
+      "file": "src/motion/floatingFrameScenes.ts",
+      "sha256": "1e164e69519532dfe27d772ae720f19ca9310f32de0d210bedb170f278ecaccc"
+    },
+    {
+      "file": "src/motion/floatingVideoFrame.ts",
+      "sha256": "e771c98065d12dfd56a55bfa54de3cdace4139e705c0756b1d84e922903648fc"
+    },
+    {
+      "file": "src/motion/graphicCadence.ts",
+      "sha256": "9e55a352a1d62d58ee6c5ed3cc29aa4deb91981f0c92c3337baf7a630cb473f1"
+    },
+    {
+      "file": "src/motion/graphicHoldEnvelopeV3.ts",
+      "sha256": "162add4752ecaec8bcb74d4292e3d1c635d63f9d17b5cd5e7470e78f403f9278"
+    },
+    {
+      "file": "src/motion/mesh3dOverlayV1.ts",
+      "sha256": "fd37cb91293248b78ed77b8f3e103a161c3716c92f73f87d802528eb165d05d5"
+    },
+    {
+      "file": "src/motion/mesh3dScene.ts",
+      "sha256": "3085600d33543b314b4d4d91e7482887795815f49fb16ce6c04ed51274451e13"
+    },
+    {
+      "file": "src/motion/motionClipPresets.ts",
+      "sha256": "667b283900006d3026de3a02717d4961f75ea921f9aa61e1a12ff4de694fe550"
+    },
+    {
+      "file": "src/motion/motionEasing.ts",
+      "sha256": "f46bf5324fac6091e38fcf9533feacd33b21272df6091f9329f02352fe13550f"
+    },
+    {
+      "file": "src/motion/motionGlyphPaths.ts",
+      "sha256": "db7442fea55682c69d0697ab3e0a698ddd0c4a2d6f4f388f4ed4fba97014315e"
+    },
+    {
+      "file": "src/motion/motionLanguage.ts",
+      "sha256": "77a83a3587d6aa86e0152c7bdda568b62003cd083d3b2eb4b921bf7a2e7f42f0"
+    },
+    {
+      "file": "src/motion/referenceMotionTemplates.ts",
+      "sha256": "36c3b342215a64abb0ed9b4305adb5a2dce821c8c44ab91776c7bea88046ffe3"
+    },
+    {
+      "file": "src/motion/springGeometryTrack.ts",
+      "sha256": "f896a9b064629c636d8a9b424e690ec05839370cfeaaf045e59f93c80879db9d"
+    },
+    {
+      "file": "src/motion/springTargetTrack.ts",
+      "sha256": "b7b5cb0d46296f09efa8c3ca03ce02e54850feedbfc9d5f4ce51b08cb08410aa"
+    },
+    {
+      "file": "src/motion/v3/easing.ts",
+      "sha256": "77ab4f8691cf338f3250963216e32bca4b0e4d3edd6e3da1b7520d545d2cbac3"
+    },
+    {
+      "file": "src/motion/v3/geometry.ts",
+      "sha256": "73bf6779abd8825e4c2356c3f5f6b32cd2e8be8d24fff82c3e803d2ef118dc63"
+    },
+    {
+      "file": "src/motion/v3/kit.ts",
+      "sha256": "d90ca540d9ed710ceee361e779faa912dff0aab26d448aa2e139341776a24355"
+    },
+    {
+      "file": "src/motion/v3/templates/chapter.ts",
+      "sha256": "f783a0b63da283001a927370810164cf7135253a470e1404699908a8b84c6b61"
+    },
+    {
+      "file": "src/motion/v3/templates/data.ts",
+      "sha256": "808ec69185f49549d0aadc895ded439b62ce22762f307f058c5dba46d8a2ae08"
+    },
+    {
+      "file": "src/motion/v3/templates/emphasis.ts",
+      "sha256": "b514f2db0a2dcd2128cc0f01de893c19e8207da25daddd94fcc5b3f1564fd65f"
+    },
+    {
+      "file": "src/motion/v3/templates/index.ts",
+      "sha256": "03d80ae798d9d9438bea9938ae0ba34b0f1acf463bd21b091755e6569f4967e6"
+    },
+    {
+      "file": "src/motion/v3/templates/labels.ts",
+      "sha256": "b0ad4358ca780ade5c93eef30c1a3b9be64c3d67df6ceb8fc07391a4197b7584"
+    },
+    {
+      "file": "src/motion/v3/templates/lowerThirds.ts",
+      "sha256": "576deba7acef9f270a2b84f166faf6f1fa19f1abb1f7fff9be0797cdd1edca85"
+    },
+    {
+      "file": "src/motion/v3/templates/titles.ts",
+      "sha256": "d3dab90e37d029bb36dac5fbb6c887ec87998e110fdea86e2e4897503d577541"
+    },
+    {
+      "file": "src/motion/v3/textMetrics.ts",
+      "sha256": "81db5e83be3cf44ecdc805024585629e496bebcf6335991221971b4610592a96"
+    },
+    {
+      "file": "src/motion/v3/types.ts",
+      "sha256": "839a197a19e412eaa1a2c2c8f37919a9cf7230f0a4c7a3b0a4632d80adbf9b44"
+    },
+    {
+      "file": "src/motionLibrary/palettes.ts",
+      "sha256": "d3e03e1466731cde9cf300f3cc6bb020ed8934304af144df544168f4145d2164"
+    },
+    {
+      "file": "src/motionLibrary/params.ts",
+      "sha256": "3837c28195484d80343add37f00cab7ea3a5531f698a5afa5a58f34484b6e962"
+    },
+    {
+      "file": "src/motionLibrary/svg/document.ts",
+      "sha256": "3a4628c3b08819730b85cac6fc0f1e10051180c88ff29d26f906dec4e3526259"
+    },
+    {
+      "file": "src/motionLibrary/svg/glyphs.ts",
+      "sha256": "67cc02e46ddaeed128c6082463bb0816745e2825f697e8d3833f1f913d743db1"
+    },
+    {
+      "file": "src/motionLibrary/types.ts",
+      "sha256": "158c84094835f32c27663705a65d623c896d62749d59f3d82d063c781c7c872e"
+    },
+    {
+      "file": "src/shared/canonicalJson.ts",
+      "sha256": "d6a2f1be4d0273f6d8710b1779ef6002dbdf7b94ba16b9675775b29640f48237"
+    },
+    {
+      "file": "src/shared/utf8ByteOrder.ts",
+      "sha256": "30c9ac7197831dfbc963a216fa96bec81439de001ffaab29d0cd10b93d87c753"
+    },
+    {
+      "file": "src/typography/bundledFontCatalog.ts",
+      "sha256": "9d1a7d77113172089b8efa428755684f56e6057574052269db94b3aebc9f2fd3"
+    },
+    {
+      "file": "src/typography/fontEmMetrics.ts",
+      "sha256": "ed541c74a408dd2daf1d2d2bd93cb2f2de808bc04a2de2f41857deb537ec5966"
+    },
+    {
+      "file": "src/typography/fontFaces.ts",
+      "sha256": "cfc6f1988d798cb7c2cc2931e42f16b4aa861f5d685b5482a622e9deb7b1de44"
+    },
+    {
+      "file": "src/typography/preparedGlyphRun.ts",
+      "sha256": "f401d79e61deeb0efa1111f08b49a578b131dcc6a715c5f83e9becac22096ec2"
+    },
+    {
+      "file": "workspace/community/hao-motion-kit/expansion_2026_wave2/hao-core-pack-wave2-additions.json",
+      "sha256": "9a375645d439a6237243f53c3e30489382e137992ae5aa8fd28de37ff2e3fb29"
+    }
+  ]
+}

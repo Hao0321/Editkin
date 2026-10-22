@@ -500,10 +500,38 @@
           "sourceSha256": "2ba02e68b152868aef9ba28e24b3648c7d457fe6f25c761f2c2c53fb61a73fc8"
         }
       ]
+    },
+    {
+      "id": "lxgw-wenkai-tc",
+      "family": "LXGW WenKai TC",
+      "file": "LXGWWenKaiTC-Bold.ttf",
+      "bytes": 12879764,
+      "sha256": "5abc12ecb4252a81b9ddf19b4c8a303cd9fe01695d6d1681628e5a3662639220",
+      "license": "OFL-1.1",
+      "licenseFile": "lxgw-wenkai-tc-OFL.txt",
+      "licenseSha256": "1f87656911594714a58fe3025514485a3244a62c242d7712164d403872782fd4",
+      "source": "https://raw.githubusercontent.com/google/fonts/ec626514f79f831f1ab848a82114a0ce7e2d6372/ofl/lxgwwenkaitc/LXGWWenKaiTC-Bold.ttf",
+      "acquisition": {
+        "method": "creator-local-library-copy",
+        "version": "1.330 (2024-04-28)",
+        "upstreamByteIdentity": "not re-fetched; bootstrap from source verifies this pinned sha256 and fails closed on any mismatch"
+      },
+      "faces": [
+        {
+          "id": "EditkinFace-lxgw-wenkai-tc-700",
+          "weight": 700,
+          "file": "render/EditkinFace-lxgw-wenkai-tc-700.ttf",
+          "bytes": 12879924,
+          "sha256": "ac9ebe1bc20602d7b103d74cdcebc3503fd8a3559cc921a8a9316d88a88a08ef",
+          "family": "EditkinFace lxgw-wenkai-tc 700",
+          "postscriptName": "EditkinFace-lxgw-wenkai-tc-700",
+          "sourceSha256": "5abc12ecb4252a81b9ddf19b4c8a303cd9fe01695d6d1681628e5a3662639220"
+        }
+      ]
     }
   ],
   "staticFaceProvenance": {
     "file": "static-face-provenance.json",
-    "sha256": "5e225aa3a69aee30a149646d22d7fff99491e93d2f9ab87e029a57da77e2aaeb"
+    "sha256": "32ba33686b24e51cb5541d7d0a035cef0611ce7b681aa1a50c39eb240b8e88cb"
   }
 }

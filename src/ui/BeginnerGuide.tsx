@@ -1,73 +1,56 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useI18n } from "./i18n/interfacePreferences";
+import { BeginnerShortcutSheet } from "./BeginnerShortcuts";
 import "./beginnerGuide.css";
 import "./beginnerShortcuts.css";
 
-interface BeginnerGuideProps {
-  onClose: () => void;
-  onChooseMedia: () => void;
-}
-
-const STEPS = [
-  {
-    number: "1",
-    title: "先放進你拍的原始影片",
-    body: "按中央的「加入影片開始剪」，可以一次選影片、照片和聲音。直式或橫式會自動判斷，不用先設定尺寸。",
-    visual: "＋",
-  },
-  {
-    number: "2",
-    title: "告訴它這支影片是哪一型",
-    body: "選遊戲、美食、旅遊、Podcast 或讓 Editkin 自己判斷。片型會決定節奏、字幕、音樂與效果的取捨。",
-    visual: "遊戲 · 美食 · 旅遊 · Podcast",
-  },
-  {
-    number: "3",
-    title: "按「一鍵自動完成」",
-    body: "它會分析畫面與語音，剪停頓、切場景、做字幕，並在適合時套用配樂、調色、轉場、特效與追蹤。",
-    visual: "✦ 一鍵自動完成",
-  },
-  {
-    number: "4",
-    title: "不滿意就直接拖、改、刪",
-    body: "成品仍是完整可編輯 Timeline。拖片段、改字幕或刪除都能復原；完成後按右上角「輸出影片」。",
-    visual: "拖曳微調 → 輸出影片",
-  },
+interface BeginnerGuideProps { onClose: () => void; onChooseMedia: () => void; }
+export const STEPS = [
+  { title: "加入你拍的影片", body: "選影片、照片或聲音，也能一次選多個。", visual: "＋" },
+  { title: "剪掉不要的部分", body: "按 B 換成剪刀，在片段上點一下就切開；選取片段按 Delete 刪除；按復原可以回到上一步。", visual: "✂" },
+  { title: "播放一次，確認結果", body: "按播放看畫面與聲音，直接修改字幕或調整片段。", visual: "▶" },
+  { title: "儲存專案，再輸出影片", body: "專案檔可繼續編輯；輸出的影片可播放與分享。網頁版可下載專案。", visual: "↑" },
 ] as const;
 
 export function BeginnerGuide({ onClose, onChooseMedia }: BeginnerGuideProps) {
+  const { t } = useI18n();
+  const dialog = useRef<HTMLDialogElement>(null);
   const [step, setStep] = useState(0);
+  // The 快捷鍵 page: every key in big plain words (open with 說明 or "?").
+  const [shortcuts, setShortcuts] = useState(false);
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    const element = dialog.current;
+    element?.showModal();
+    return () => {
+      element?.close();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+    };
+  }, []);
   const current = STEPS[step];
-  const finish = (chooseMedia: boolean) => {
-    onClose();
-    if (chooseMedia) window.setTimeout(onChooseMedia, 0);
-  };
-  return <div className="beginner-guide-backdrop" role="presentation">
-    <section className="beginner-guide" role="dialog" aria-modal="true" aria-labelledby="beginner-guide-title" data-testid="beginner-guide">
-      <button type="button" className="guide-close" onClick={() => finish(false)} aria-label="關閉新手教學">×</button>
-      <header>
-        <span>第一次用剪輯軟體也沒問題</span>
-        <h2 id="beginner-guide-title">四步完成第一支影片</h2>
-        <p>不用先學 Timeline，也不用串 API。</p>
-      </header>
-      <div className="guide-progress" aria-label={`第 ${step + 1} 步，共 ${STEPS.length} 步`}>
-        {STEPS.map((item, index) => <button type="button" key={item.number} className={index === step ? "active" : index < step ? "done" : ""} onClick={() => setStep(index)} aria-label={`前往第 ${item.number} 步`}>{index < step ? "✓" : item.number}</button>)}
-      </div>
-      <div className="guide-card">
-        <div className={`guide-visual guide-visual-${step + 1}`} aria-hidden="true"><b>{current.visual}</b></div>
-        <div><span>步驟 {current.number}</span><h3>{current.title}</h3><p>{current.body}</p></div>
-      </div>
-      {step === 3 && <div className="guide-shortcuts" aria-label="常用快捷鍵">
-        <span><kbd>Space</kbd> 播放</span><span><kbd>B</kbd> 切開</span><span><kbd>Delete</kbd> 刪除補空隙</span><span><kbd>Ctrl Z</kbd> 復原</span>
-      </div>}
-      <footer>
-        <button type="button" className="guide-skip" onClick={() => finish(false)} data-testid="guide-skip">先自己試試看</button>
-        <div>
-          {step > 0 && <button type="button" className="guide-back" onClick={() => setStep((value) => value - 1)}>上一步</button>}
-          {step < STEPS.length - 1
-            ? <button type="button" className="guide-next" onClick={() => setStep((value) => value + 1)}>下一步</button>
-            : <button type="button" className="guide-next" onClick={() => finish(true)} data-testid="guide-choose-media">開始選影片</button>}
-        </div>
-      </footer>
-    </section>
-  </div>;
+  return <dialog ref={dialog} className="beginner-guide" aria-labelledby="beginner-guide-title" data-testid="beginner-guide"
+    onKeyDown={event => {
+      if (event.key !== "Tab") return;
+      const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
+      const first = buttons[0], last = buttons.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }}
+    onCancel={event => { event.preventDefault(); onClose(); }}>
+    <button type="button" className="guide-close" onClick={onClose} aria-label={t("關閉教學")}>×</button>
+    <header><span>{t("快速教學")}</span><h2 id="beginner-guide-title">{t("四步完成影片")}</h2><p>{t("不用記快捷鍵，按畫面上的按鈕即可。")}</p></header>
+    <div className="guide-progress" aria-label={t("第 {step} 步，共 {total} 步", { step: step + 1, total: STEPS.length })}>
+      {STEPS.map((item, index) => <button type="button" key={item.title} className={!shortcuts && index === step ? "active" : ""}
+        onClick={() => { setStep(index); setShortcuts(false); }} aria-current={!shortcuts && index === step ? "step" : undefined} aria-label={t("前往第 {step} 步", { step: index + 1 })}>{index + 1}</button>)}
+      <button type="button" className={shortcuts ? "guide-shortcuts-tab active" : "guide-shortcuts-tab"} aria-pressed={shortcuts}
+        onClick={() => setShortcuts(true)} data-testid="guide-shortcuts-tab">{t("快捷鍵")}</button>
+    </div>
+    {shortcuts ? <BeginnerShortcutSheet /> : <div className="guide-card"><div className={`guide-visual guide-visual-${step + 1}`} aria-hidden="true"><b>{current.visual}</b></div>
+      <div><span>{t("步驟 {step}", { step: step + 1 })}</span><h3>{t(current.title)}</h3><p>{t(current.body)}</p></div></div>}
+    <footer><button type="button" className="guide-skip" onClick={onClose} data-testid="guide-skip">{t("開始剪輯")}</button><div>
+      {!shortcuts && step > 0 && <button type="button" className="guide-back" onClick={() => setStep(step - 1)}>{t("上一步")}</button>}
+      {!shortcuts && step < STEPS.length - 1 && <button type="button" className="guide-back" onClick={() => setStep(step + 1)}>{t("下一步")}</button>}
+      <button type="button" className="guide-next" data-testid="guide-choose-media" onClick={() => { onClose(); window.setTimeout(onChooseMedia, 0); }}>{t("加入影片")}</button>
+    </div></footer>
+  </dialog>;
 }

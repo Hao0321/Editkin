@@ -1,3 +1,4 @@
+import { fixedTemplateWindowFrameCountV3, fixedTemplateWindowSamplesV3 } from "./fixedTemplateWindowPathV3";
 import type {
   ChromaKeySettings,
   ClipMask,
@@ -36,6 +37,8 @@ export interface ClipAlphaVectorOperation extends ClipAlphaOperationBase {
   edgeShift: number;
   path: readonly MaskPathPoint[];
   samples: readonly ClipAlphaPathSample[];
+  /** Explicit v3 uses bounded expression traversal; legacy plans omit this field. */
+  fixedWindowV3?: true;
 }
 
 export interface ClipAlphaPixelMatteOperation extends ClipAlphaOperationBase {
@@ -144,6 +147,7 @@ function trackPath(point: MotionTrackPoint): MaskPathPoint[] {
 }
 
 function vectorSamples(project: EditProject, clip: TimelineClip, mask: ClipMask): ClipAlphaPathSample[] {
+  if (mask.fixedWindowV3) return fixedTemplateWindowSamplesV3(project, clip, mask);
   if (mask.trackId) {
     const track = project.motionTracks.find((candidate) => candidate.id === mask.trackId && candidate.clipId === clip.id);
     if (!track) {
@@ -163,6 +167,7 @@ function vectorSamples(project: EditProject, clip: TimelineClip, mask: ClipMask)
 function compileVectorOperation(project: EditProject, clip: TimelineClip, mask: ClipMask, authoredIndex: number): ClipAlphaVectorOperation {
   return {
     source: "vector",
+    ...(mask.fixedWindowV3 ? { fixedWindowV3: true as const } : {}),
     maskId: mask.id,
     authoredIndex,
     mode: mask.mode,
@@ -244,6 +249,7 @@ export function compileClipAlphaPlan(
   if (enabled.length > 0 && enabled[0].mask.mode !== "add") {
     throw new ClipAlphaPlanError("first-mask-must-add", clip.id, enabled[0].mask.id, `片段 ${clip.id} 的第一個啟用遮罩必須使用 add`);
   }
+  for (const { mask } of enabled) if (mask.fixedWindowV3) fixedTemplateWindowFrameCountV3(project, clip, mask);
   const isPixelMatteCandidate = (mask: ClipMask) => mask.matteSequence !== undefined || mask.frozenRange !== undefined;
   const pixelMattes = enabled.filter(({ mask }) => isPixelMatteCandidate(mask));
   if (pixelMattes.length > 1) {

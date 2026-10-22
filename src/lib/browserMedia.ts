@@ -17,16 +17,24 @@ function mediaMetadata(url: string, kind: "video" | "audio"): Promise<{
   duration: number;
   width?: number;
   height?: number;
+  displayAspectRatio?: number;
 }> {
   return new Promise((resolve, reject) => {
     const media = document.createElement(kind);
     media.preload = "metadata";
     media.onloadedmetadata = () => {
       const video = media as HTMLVideoElement;
+      if (kind === "video" && (!Number.isSafeInteger(video.videoWidth) || !Number.isSafeInteger(video.videoHeight)
+        || video.videoWidth <= 0 || video.videoHeight <= 0)) {
+        reject(new Error("瀏覽器未提供有效的影片展示尺寸")); return;
+      }
       resolve({
         duration: media.duration,
         width: kind === "video" ? video.videoWidth : undefined,
         height: kind === "video" ? video.videoHeight : undefined,
+        // Browser intrinsic dimensions describe its displayed surface. They do
+        // not establish the encoded raster, SAR or camera rotation metadata.
+        displayAspectRatio: kind === "video" ? video.videoWidth / video.videoHeight : undefined,
       });
     };
     media.onerror = () => reject(new Error("瀏覽器無法讀取這個媒體檔案"));
@@ -47,7 +55,7 @@ export async function importBrowserMedia(file: File): Promise<ImportedBrowserMed
   const kind = kindFromFile(file);
   const runtimeUrl = URL.createObjectURL(file);
   try {
-    const metadata = kind === "image"
+    const metadata: { duration: number; width?: number; height?: number; displayAspectRatio?: number } = kind === "image"
       ? { ...(await imageMetadata(runtimeUrl)), duration: 5 }
       : await mediaMetadata(runtimeUrl, kind);
     if (!Number.isFinite(metadata.duration) || metadata.duration <= 0) {
@@ -63,6 +71,7 @@ export async function importBrowserMedia(file: File): Promise<ImportedBrowserMed
         duration: metadata.duration,
         width: metadata.width,
         height: metadata.height,
+        displayAspectRatio: metadata.displayAspectRatio,
       },
     };
   } catch (error) {

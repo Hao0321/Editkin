@@ -1,0 +1,18 @@
+/* Longer clips, new in-points and the project end on the ruler. */
+.timeline-clip.is-extending { outline: 2px dashed var(--hot); outline-offset: -2px; }
+/* Content the extension will move later, previewed where it will land. */
+.timeline-clip.is-pushed { opacity: .8; outline: 1px dashed var(--accent-ink); outline-offset: -3px; }
+.timeline-clip.is-slipping { z-index: 21; cursor: ew-resize; outline: 2px dashed var(--accent-ink); outline-offset: -4px; }
+.timeline-clip.is-slipping .clip-media-strip { opacity: .5; transform: translateX(var(--clip-slip-offset, 0px)); }
+.timeline-clip.is-slipping .clip-waveform > img { transform: translateX(var(--clip-slip-offset, 0px)); }
+.timeline-clip.is-slip-blocked { cursor: not-allowed; outline-color: var(--danger); }
+.timeline-edit-position[data-tone="limit"] { border-color: var(--warning); box-shadow: 0 0 0 1px var(--warning); }
+
+/* Seeking stops at the project end; the room after it is only for dropping new media. */
+.timeline-ruler > span.beyond-end { opacity: .4; }
+.timeline-beyond-end { position: absolute; z-index: 1; top: 0; bottom: 0; right: 0; pointer-events: none;
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--muted) 14%, transparent) 0 6px, transparent 6px 12px); }
+.timeline-project-end { position: absolute; z-index: 4; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--ink); opacity: .7; }
+/* The label sits low, clear of the time labels along the top of the ruler. */
+.timeline-project-end > span { position: absolute; bottom: 3px; left: 5px; padding: 0 5px; border-radius: 4px; background: var(--ink); color: var(--surface);
+  font-size: 10px; font-weight: 800; line-height: 16px; white-space: nowrap; }

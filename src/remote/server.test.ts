@@ -1,3 +1,4 @@
+import { chooseFetchSafePortV1 } from "./testing/fetchSafePortV1";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtemp, readdir, readFile, rm, writeFile, mkdir } from "node:fs/promises";
@@ -161,7 +162,7 @@ async function launch(overrides: Record<string, string> = {}, waitForReady = tru
   }));
   const relay = new FakeRelay(await freePort());
   await relay.start();
-  const httpPort = await freePort();
+  const httpPort = await chooseFetchSafePortV1(freePort);
   const connected = relay.nextConnection();
   const child = spawn(process.execPath, [bundle], {
     env: {
@@ -305,6 +306,32 @@ describe("cloud relay authorization", () => {
     expect(await queued()).toEqual([]);
     // The real credential still works after reconnect.
     expect((await harness.relay.ask("c1", { type: "status", deviceId: "phone-1", credential })).type).toBe("status");
+  }, 15_000);
+
+  it("survives a WebSocket protocol error and reconnects without authorizing a device", async () => {
+    const reconnected = harness.relay.nextConnection();
+    const exited = new Promise<never>((_resolve, reject) => {
+      harness.child.once("exit", (code) => reject(new Error(`remote crashed (${code}): ${harness.stderr()}`)));
+    });
+    // Server frames must not be masked. Drive the actual Node WebSocket error path.
+    harness.relay.connection.write(Buffer.from([0x81, 0x80, 0, 0, 0, 0]));
+    await Promise.race([reconnected, exited]);
+    expect((await harness.relay.nextMessage()).type).toBe("desktop-auth");
+    expect((await harness.relay.ask("c1", { type: "command", deviceId: "ghost", instruction: "undo" })).type).toBe("unauthorized");
+    expect(await queued()).toEqual([]);
+    expect(harness.stderr()).not.toMatch(/RangeError|Maximum call stack/);
+  }, 15_000);
+
+  it("keeps HTTP alive when the relay disappears and connection retries are refused", async () => {
+    const exited = new Promise<never>((_resolve, reject) => {
+      harness.child.once("exit", (code) => reject(new Error(`remote crashed (${code}): ${harness.stderr()}`)));
+    });
+    await harness.relay.stop();
+    await Promise.race([new Promise((resolve) => setTimeout(resolve, 2_000)), exited]);
+    expect(harness.child.exitCode).toBeNull();
+    expect((await fetch(`http://127.0.0.1:${harness.httpPort}/api/status`)).status).toBe(401);
+    expect(await queued()).toEqual([]);
+    expect(harness.stderr()).not.toMatch(/RangeError|Maximum call stack/);
   }, 15_000);
 
   it.each([

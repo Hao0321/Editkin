@@ -1,0 +1,6 @@
+.timeline-marquee { position: absolute; z-index: 6; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 4px; pointer-events: none; }
+.timeline-mark-range { position: absolute; inset-block: 0; pointer-events: none; }
+.timeline-mark-range.on-ruler { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.timeline-mark-range.on-track { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.timeline-range-edge { position: absolute; inset-block: 0; width: 2px; background: var(--accent); pointer-events: none; }
+.director-marker.selected { box-shadow: 0 0 0 2px var(--accent); }

@@ -1,0 +1,10 @@
+/* Ways into the 標題模板編輯器 from the Inspector and the Motion studio: large, plain, impossible to miss. */
+.inspector-template-card { display: grid; gap: 8px; margin: 10px 0 12px; padding: 12px; border: 2px solid var(--warning); border-radius: 12px;
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface)); }
+.inspector-template-card > div { display: grid; gap: 2px; }
+.inspector-template-card strong { color: var(--ink); font-size: 14px; }
+.inspector-template-card span { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.inspector-template-card button { min-height: 44px; overflow: hidden; font-size: 14px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.motion-open-template, .motion-graphic-list .motion-open-template { grid-column: 1 / -1; grid-row: auto; display: block; width: 100%; min-height: 40px; margin: 4px 0; padding: 6px 10px; border: 1px solid var(--warning); border-radius: 10px;
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface)); color: var(--ink); font-size: 13px; font-weight: 750; text-align: left; cursor: pointer; }
+.motion-graphic-list .motion-open-template:hover, .motion-graphic-list .motion-open-template:focus-visible { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 1px; }

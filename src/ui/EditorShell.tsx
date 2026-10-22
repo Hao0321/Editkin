@@ -1,4 +1,27 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from "react";
+import { EditingWorkspaceNavigationV1 } from "./EditingWorkspaceNavigationV1";
+import { EditingLayerStackV1 } from "./EditingLayerStackV1";
+import { EditingGraphicPropertiesV1 } from "./EditingGraphicPropertiesV1";
+import { editingLayerSelectionChangeV1 } from "./editingLayerSelectionV1";
+import { createGraphicEditingSelectionV1 } from "../application/graphicEditingSelectionV1";
+import { createMotionGraphicEditActionsV1 } from "../application/motionGraphicEditActionsV1";
+import { createGraphicParameterGestureV1, type GraphicNumberGestureStartV1 } from "../application/graphicParameterGestureV1";
+import { createClipAppearanceEditsV1, clipAppearanceNumberValuesV1 } from "../application/clipAppearanceEditsV1";
+import { createNativeEffectParameterGestureV1 } from "../application/nativeEffectParameterGestureV1";
+import { createClipParameterGestureV1 } from "../application/clipParameterGestureV1";
+import { createClipGradeEditsV1 } from "../application/clipGradeEditsV1";
+import { createCaptionEditingActionsV1, captionBackgroundOpacityV1, captionBackgroundWithOpacityV1, normalizeCaptionStylePatchV1 } from "../application/captionEditingActionsV1";
+import { createCaptionParameterGestureV1 } from "../application/captionParameterGestureV1";
+import { activeMediaLayers } from "../application/previewMedia";
+import { clipAttachments } from "../application/timelineMotionEdits";
+import { templateOwnerByGraphic } from "./templateEditorRequests";
+import type { EditingWorkspaceV1, EditingLayerSelectionV1 } from "./editingWorkspaceV1";
+import { CounterTickControlsV1 } from "./CounterTickControlsV1";
+import { AutoReframeDesktopControlV1 } from "./AutoReframeDesktopControlV1";
+import { createAutoReframeAppHostV1 } from "../application/autoReframeAppHostV1";
+import { planAudioDetach } from "../application/audioDetach";
+import { useColorGradeClipboardV1 } from "./useColorGradeClipboardV1";
+import { colorGradeClipboardActionsV1 } from "./colorGradeClipboardActionsV1";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import type { ActivePreviewLayer } from "../application/previewMedia";
 import { selectAutomaticMusicAsset } from "../creative/musicSelection";
 import { buildCaptionTrimCommand, buildClipTrimCommand } from "../application/timelineTrim";
@@ -14,36 +37,105 @@ import type { NativeAudioTransportState } from "../desktop/useNativeAudioPreview
 import { useNativeEffectPreview } from "../desktop/useNativeEffectPreview";
 import { useRemoteAgentLaunch } from "../desktop/useRemoteAgentLaunch";
 import type { EditorCommand } from "../domain/commands";
-import { animatedClipState } from "../domain/editGraph";
+import { animatedClipState, findClip } from "../domain/editGraph";
 import { createClipMask, resolveMaskPath } from "../domain/masks";
 import type { EditorHistory } from "../domain/history";
 import { DEFAULT_COLOR_MANAGEMENT } from "../domain/types";
 import { motionClipPresetCommands } from "../motion/motionClipPresets";
 import { floatingFrameSceneCommands } from "../motion/floatingFrameScenes";
+import { prepareReferenceMotionTemplateInstance, prepareReferenceMotionTemplateRevision } from "../application/referenceMotionTemplateInstances";
+import { prepareReferenceMotionTemplateReuse } from "../application/referenceMotionTemplateReuse";
+import { prepareReferenceMotionSourceReplacementForUi } from "../desktop/referenceMotionSourcePreparation";
+import { SOURCE_REPLACEMENT_MESSAGES, type ReferenceMotionSourceReplacementRequest } from "../application/referenceMotionSourceReplacement";
+import type { PickedMedia } from "../desktop/mediaTypes";
+import { ReferenceMotionSourceClipControl, hasReferenceMotionSourceOwner } from "./SavedReferenceMotionSourceReplacement";
 import type { CaptionCue, ClipLayout, EditProject, MotionGraphicKind, MotionGraphicPresetSeed, MotionTrack, NormalizedRect, TimelineClip } from "../domain/types";
 import { makeId } from "../lib/format";
 import type { EditorTheme } from "./theme";
 import { Toolbar } from "./Toolbar";
-import { WorkspaceControls } from "./WorkspaceControls";
+import { useI18n } from "./i18n/interfacePreferences";
 import { OperationStatus } from "./OperationStatus";
+import { saveStateMessage } from "./saveStateLabel";
+import { ProjectDownloadNotice } from "./ProjectDownloadNotice";
+import { SavedReferenceMotionInstances, runReferenceMotionUiPreparation, type ReferenceMotionUiPreparationOptions } from "./SavedReferenceMotionInstances";
+import { SavedOriginalMotionScenes } from "./SavedOriginalMotionScenes";
+import { prepareOriginalSceneGraphicRevision } from "../application/originalSceneGraphicRevision";
 import { MediaImportStatus } from "./MediaImportStatus";
 import { WorkspaceResizeHandle } from "./WorkspaceResizeHandle";
 import { useWorkspaceLayout } from "./workspaceLayout";
+import { useMotionLibraryWiringV1 } from "./useMotionLibraryWiringV1";
+import { useEasyFlowHost } from "./easy/useEasyFlowHost";
+import { useShellSafety } from "./useShellSafety";
 import { autoRotoRuntimeStatusFromReceipt, initialAutoRotoRuntimeStatus } from "./autoRotoRuntimeStatus";
 import { runAutoRotoAction } from "../application/runAutoRotoAction";
 import { acceptProjectTask } from "../application/projectTask";
-import { PROJECT_FORMATS, projectFormatLabel } from "../application/projectFormats";
+import { PROJECT_FORMATS, type ProjectFormat } from "../application/projectFormats";
+import { planTimelineClipMove } from "../application/timelinePlacement";
+import { resolveTimelineImportPlacement } from "./internalAssetPointerDrag";
+import { createClipSourceEditActions } from "../application/clipSourceEditActions";
+import { createClipNativeEffectEditsV1 } from "../application/clipNativeEffectEditsV1";
+import { createScene25dSettingsEditActionsV1 } from "../application/scene25dSettingsEditsV1";
+import { createClipPresetEffectEditActionsV1 } from "../application/clipPresetEffectEditsV1";
+import { createAttachedClipMoveActions } from "../application/attachedClipMoveActions";
+import { NOTHING_TO_REDO, NOTHING_TO_UNDO, useHistoryShortcutGuard } from "../desktop/useEditorShortcuts";
+import { clampProjectSeek } from "./playbackTiming";
+import { useProjectEndPlayheadClamp } from "./playheadBounds";
 import type { ProjectTask } from "../application/projectSession";
 import "./layoutHardening.css";
 import "./projectFormatControl.css";
+import "./mediaImportStatus.css";
+import "./accessibleWorkspace.css";
+import "./simpleWorkspace.css";
 
-import { AgentConnectModal, AutoEditDialog, AgentPanel, BatchAutoEditPanel, BeginnerGuide, ColorWorkspace, DirectorConsole, EditingProfilePicker, FirstProjectStart, Inspector, MediaBin, MobileConnectModal, Preview, Timeline, WorkspaceDropImport, BEGINNER_GUIDE_KEY } from "./editorShellLazy";
+import { AgentConnectModal, AutoEditDialog, AgentPanel, BatchAutoEditPanel, BeginnerGuide, ColorWorkspace, EditingProfilePicker, FirstProjectStart, Inspector, MediaBin, MobileConnectModal, Preview, Timeline, WorkspaceDropImport, BEGINNER_GUIDE_KEY } from "./editorShellLazy";
 import type { EditorShellProps, TrackingMode } from "./editorShellTypes";
+import type { TimelineEditOptions } from "./timelineContract";
 export type { TrackingMode } from "./editorShellTypes";
 
+import { planTimelineClipLink } from "../application/timelineLinkedEdits";
+
 export function EditorShell(props: EditorShellProps) {
-  const [colorWorkspaceOpened, setColorWorkspaceOpened] = useState(false);
-  const [directorConsoleOpened, setDirectorConsoleOpened] = useState(false);
+  const gradeClipboard = useColorGradeClipboardV1(props.projectSession);
+  const { t, mode, modeRevision } = useI18n();
+  const [activeWorkspace, setActiveWorkspace] = useState<EditingWorkspaceV1>("edit");
+  const [effectsLibraryRequest, setEffectsLibraryRequest] = useState(0);
+  const graphicSelectionState = useMemo(() => createGraphicEditingSelectionV1(props.projectSession, {
+    getSelection: props.getTimelineSelection, subscribe: props.subscribeTimelineSelection,
+  }), [props.projectSession, props.getTimelineSelection, props.subscribeTimelineSelection]);
+  const graphicSelectionSnapshot = useSyncExternalStore(graphicSelectionState.subscribe, graphicSelectionState.getSnapshot, graphicSelectionState.getSnapshot);
+  const effectRegistryRef = useRef(props.creativeLibrary.plugins);
+  effectRegistryRef.current = props.creativeLibrary.plugins;
+  const effectParameterGesture = useMemo(() => createNativeEffectParameterGestureV1({
+    session: props.projectSession, getSelectionSnapshot: graphicSelectionState.getSnapshot,
+    subscribeSelection: graphicSelectionState.subscribe, getRegistry: () => effectRegistryRef.current,
+  }), [props.projectSession, graphicSelectionState]);
+  const effectParameterDraft = useSyncExternalStore(effectParameterGesture.subscribe, effectParameterGesture.getSnapshot, effectParameterGesture.getSnapshot);
+  const clipParameterGesture = useMemo(() => createClipParameterGestureV1({ session: props.projectSession,
+    getSelectionSnapshot: graphicSelectionState.getSnapshot, subscribeSelection: graphicSelectionState.subscribe,
+  }), [props.projectSession, graphicSelectionState]);
+  const clipParameterDraft = useSyncExternalStore(clipParameterGesture.subscribe, clipParameterGesture.getSnapshot, clipParameterGesture.getSnapshot);
+  const graphicParameterRef = useRef<ReturnType<typeof createGraphicParameterGestureV1> | null>(null);
+  const captionParameterGesture = useMemo(() => createCaptionParameterGestureV1({ session: props.projectSession,
+    getSelectionSnapshot: graphicSelectionState.getSnapshot, subscribeSelection: graphicSelectionState.subscribe, setStatus: props.setStatus,
+    onBegin: () => { clipParameterGesture.cancel(); effectParameterGesture.cancel(); graphicParameterRef.current?.cancel(); },
+  }), [props.projectSession, graphicSelectionState, clipParameterGesture, effectParameterGesture, props.setStatus]);
+  const captionParameterDraft = useSyncExternalStore(captionParameterGesture.subscribe, captionParameterGesture.getSnapshot, captionParameterGesture.getSnapshot);
+  const graphicParameterGesture = useMemo(() => createGraphicParameterGestureV1({ session: props.projectSession,
+    getSelectionSnapshot: graphicSelectionState.getSnapshot, subscribeSelection: graphicSelectionState.subscribe, setStatus: props.setStatus,
+    onBegin: () => { clipParameterGesture.cancel(); effectParameterGesture.cancel(); captionParameterGesture.cancel(); },
+  }), [props.projectSession, graphicSelectionState, clipParameterGesture, effectParameterGesture, captionParameterGesture, props.setStatus]);
+  graphicParameterRef.current = graphicParameterGesture;
+  const graphicParameterDraft = useSyncExternalStore(graphicParameterGesture.subscribe, graphicParameterGesture.getSnapshot, graphicParameterGesture.getSnapshot);
+  const admitOtherParameterGesture = <T,>(lease: T): T => { if (lease) graphicParameterGesture.cancel(); return lease; };
+  const graphicSelection = graphicSelectionSnapshot.selection;
+  const [compactPane, setCompactPane] = useState<"media" | "preview" | "inspector">("preview");
+  const [compactWorkspace, setCompactWorkspace] = useState(() => window.innerWidth < 1040);
+  const toolbarMediaInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const resize = () => setCompactWorkspace(window.innerWidth < 1040);
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
   const [demoWorkspaceOpened, setDemoWorkspaceOpened] = useState(false);
   const [agentConnectOpened, setAgentConnectOpened] = useState(false);
   const [returnToRemoteAfterAgent, setReturnToRemoteAfterAgent] = useState(false);
@@ -52,24 +144,120 @@ export function EditorShell(props: EditorShellProps) {
   const autoEditTarget = useRef<{ task: ProjectTask; clipId: string } | undefined>(undefined);
   const [autoRotoBusy, setAutoRotoBusy] = useState(false);
   const autoRotoBusyRef = useRef(false);
+  const [referenceTemplateBusy, setReferenceTemplateBusy] = useState(false);
+  const referenceTemplateOperation = useRef<AbortController | undefined>(undefined);
+  const referenceTemplateMounted = useRef(true);
+  useEffect(() => {
+    referenceTemplateMounted.current = true;
+    return () => { referenceTemplateMounted.current = false; referenceTemplateOperation.current?.abort(); };
+  }, []);
   const [autoRotoRuntimeStatus, setAutoRotoRuntimeStatus] = useState(() => initialAutoRotoRuntimeStatus(window.haoDesktop?.analyzeAutoRoto));
-  const [beginnerGuideOpened, setBeginnerGuideOpened] = useState(() => window.localStorage.getItem(BEGINNER_GUIDE_KEY) !== "done");
+  const [beginnerGuideOpened, setBeginnerGuideOpened] = useState(false);
+  // Simple mode: the right-hand panel belongs to what the person picked; it stays closed until they pick something.
+  const [selectionPanelOpen, setSelectionPanelOpen] = useState(false);
   const workspace = useWorkspaceLayout();
+  const previousModeRevision = useRef(modeRevision);
+  useEffect(() => {
+    if (previousModeRevision.current === modeRevision) return;
+    previousModeRevision.current = modeRevision;
+    workspace.choosePreset(mode === "advanced" ? "edit" : "simple");
+    
+    setCompactPane("preview");
+    setSelectionPanelOpen(false);
+  }, [mode, modeRevision, workspace.choosePreset]);
   const {
     history, project, duration, theme, setTheme, isDesktop, playhead, setPlayhead, seekRevision, onPlaybackClock, playing, setPlaying,
+    playbackRate, setPlaybackRate, togglePlayback, pausePlayback, shuttlePlayback, frameStepPlayback,
     selectedClipId, setSelectedClipId, selectedCaptionId, setSelectedCaptionId, selectedClip,
     selectedClipAtPlayhead, selectedCaption, transitionNeighbors, selectedMotionTracks, activeLayers,
-    activeAudioLayers, runtimeUrls, status, setStatus, trackingMode, setTrackingMode, trackingSelection,
+    activeAudioLayers, runtimeUrls, missingMedia, relinkBrowserMedia, projectDownload, cancelProjectDownload, status, setStatus, trackingMode, setTrackingMode, trackingSelection,
     setTrackingSelection, trackingBusy, recovery, desktopActions, automatic, creativeLibrary, batchAutoEdit, mobile,
     newProject, openProject, saveProject, undoEdit, redoEdit, renderVideo, renderOpenExrSequence, renderAlphaMaster, importFiles,
-    acceptTrackingSelection, startPodcastDirector, submitAgentInstruction, runCommand, updateAnimatedClipProperty,
+    acceptTrackingSelection, startPodcastDirector, submitAgentInstruction, runCommand,
     addMotionGraphic, addCaption, addTrack, addAssetToTimeline, makeSelectedPictureInPicture, precomposeSelected, applyShortFormTemplate, applyLongFormTemplate, addLowerThird, clearTemplateApplication, splitSelected, deleteSelected,
   } = props;
+  const clipSourceTask = props.projectSession.beginTask(project);
+  const clipSourceSessionId = props.projectSession.getSnapshot().sessionId;
+  const appearanceTransport = useRef({ playhead, seekRevision });
+  appearanceTransport.current = { playhead, seekRevision };
+  const parameterPreviewProject = graphicParameterDraft.preview?.project ?? captionParameterDraft.preview?.project ?? clipParameterDraft.preview?.project ?? effectParameterDraft.preview?.project ?? project;
+  const parameterPreviewEpoch = graphicParameterDraft.epoch + captionParameterDraft.epoch + clipParameterDraft.epoch + effectParameterDraft.epoch;
+  const captionEdits = createCaptionEditingActionsV1({ getSnapshot: props.projectSession.getSnapshot,
+    getSelectionSnapshot: graphicSelectionState.getSnapshot, runCommand, setStatus },
+    { project, captionId: selectedCaption?.id, selection: graphicSelectionSnapshot });
+  const clipAppearance = createClipAppearanceEditsV1({ getSnapshot: props.projectSession.getSnapshot,
+    getSelectionSnapshot: graphicSelectionState.getSnapshot, getTransport: () => appearanceTransport.current,
+    runCommand, setStatus, makeId }, { project, clipId: selectedClip?.id, selection: graphicSelectionSnapshot,
+    transport: appearanceTransport.current });
+  const appearanceValues = useMemo(() => selectedClip ? clipAppearanceNumberValuesV1(selectedClip, playhead, project.fps) : undefined, [selectedClip, playhead, project.fps]);
+  const appearanceEditScope = useMemo(() => ({ selection: graphicSelectionSnapshot, playhead, seekRevision }), [graphicSelectionSnapshot, playhead, seekRevision]);
+  const clipGradeEdits = createClipGradeEditsV1({ getSnapshot: props.projectSession.getSnapshot,
+    getSelectionSnapshot: graphicSelectionState.getSnapshot, runCommand, setStatus },
+    { project, clipId: selectedClip?.id, selection: graphicSelectionSnapshot });
+  // Another project (new, opened, recovered) starts with the panel closed, although its first clip is selected.
+  useEffect(() => { setSelectionPanelOpen(false); }, [clipSourceSessionId]);
+  const moveTimelineClip = (clipId: string, timelineStart?: number, trackId?: string, options?: TimelineEditOptions) => {
+    try {
+      const currentProject = props.projectSession.getSnapshot().history.present;
+      const currentClip = findClip(currentProject, clipId);
+      const placement = planTimelineClipMove(currentProject, clipId, trackId ?? currentClip.trackId,
+        timelineStart ?? currentClip.timelineStart, makeId);
+      const message = placement.newLayer ? "已移到指定影格並新增圖層；原片段保留，一次復原即可還原。" : "已移到指定影格，可復原。";
+      return options ? runCommand(placement.command, message, options) : runCommand(placement.command, message);
+    } catch (error) { setStatus(error instanceof Error ? error.message : "無法移動片段。"); return false; }
+  };
+  // Longer clips and new in-points: one command per accepted gesture, against the live project.
+  const clipSourceEdits = createClipSourceEditActions({ getProject: () => props.projectSession.getSnapshot().history.present, runCommand, setStatus });
+  const presetEffectEdits = createClipPresetEffectEditActionsV1({ getSnapshot: props.projectSession.getSnapshot, runCommand, setStatus });
+  const sceneSettingsEdits = createScene25dSettingsEditActionsV1({ getSnapshot: props.projectSession.getSnapshot, runCommand, setStatus });
+  const effectStackEdits = createClipNativeEffectEditsV1({ getSnapshot: props.projectSession.getSnapshot,
+    getSelectionSnapshot: graphicSelectionState.getSnapshot, getRegistry: () => creativeLibrary.plugins, runCommand, setStatus },
+    { project, clipId: selectedClip?.id, selection: graphicSelectionSnapshot });
+  // Inspector start-time and layer edits: the titles and title template on a clip move with it, as one Undo.
+  const attachedClipMoves = createAttachedClipMoveActions({ getProject: () => props.projectSession.getSnapshot().history.present, runCommand, setStatus, makeId, plainMove: moveTimelineClip });
+  // Empty-history Undo/Redo shortcuts report that nothing changed instead of success.
+  useHistoryShortcutGuard(history.past.length > 0, history.future.length > 0, setStatus);
+  // An edit or Undo that shortens the project brings the playhead back to its real end.
+  useProjectEndPlayheadClamp(playhead, duration, setPlayhead);
+  // Unchanged is not saved: a new or demo project has no file on disk yet.
+  const hasProjectFile = Boolean(props.projectSession.getSnapshot().projectPath);
+  useEffect(() => { referenceTemplateOperation.current?.abort(); }, [selectedClipId]);
+  const cancelReferenceTemplate = () => {
+    if (!referenceTemplateOperation.current) return;
+    referenceTemplateOperation.current.abort();
+    setStatus("正在取消；畫面不會被改。");
+  };
+  const prepareReferenceInstance = (prepare: ReferenceMotionUiPreparationOptions["prepare"], action = "更新標題模板") => {
+    if (referenceTemplateOperation.current) return;
+    pausePlayback();
+    const controller = new AbortController(); referenceTemplateOperation.current = controller;
+    setReferenceTemplateBusy(true); setStatus("正在更新標題模板，好了會一次套用…");
+    void runReferenceMotionUiPreparation({ project, session: props.projectSession, controller, prepare,
+      action, isMounted: () => referenceTemplateMounted.current, onStatus: setStatus,
+      onCommand: (command, message, context) => runCommand(command, message, undefined, context),
+      successMessage: action === "更換模板影片" ? SOURCE_REPLACEMENT_MESSAGES.success : undefined,
+      onPrepared: prepared => { if (prepared.preparedMedia?.length && prepared.pickedMedia) creativeLibrary.acceptPreparedMedia(prepared.preparedMedia, prepared.pickedMedia); },
+    }).finally(() => {
+      if (referenceTemplateOperation.current === controller) {
+        referenceTemplateOperation.current = undefined;
+        if (referenceTemplateMounted.current) setReferenceTemplateBusy(false);
+      }
+    });
+  };
+  const replaceReferenceSource = (request: ReferenceMotionSourceReplacementRequest, picked?: PickedMedia) => {
+    if (creativeLibrary.hasPendingMediaImport()) return setStatus("正在匯入影片，完成後再更換模板影片。");
+    prepareReferenceInstance((prepareText, signal) => prepareReferenceMotionSourceReplacementForUi(project, request, picked, window.haoDesktop, makeId, { prepareText, signal }), "更換模板影片");
+  };
   // The browser build has no local Whisper/FFmpeg/Rust engines; say so up front instead of failing after a click.
   const engineUnavailableReason = isDesktop ? undefined : "網頁版沒有本機 Whisper／FFmpeg 引擎，這項功能需要桌面版。";
   const selectedAsset = selectedClip ? project.assets.find((asset) => asset.id === selectedClip.assetId) : undefined;
   const hasUserMedia = project.assets.some((asset) => asset.id !== "asset-demo");
-  const showWelcome = !hasUserMedia && !demoWorkspaceOpened;
+  const hasAuthoredGraph = project.motionGraphics.length > 0 || (project.motionScenes?.length ?? 0) > 0 || project.captions.length > 0;
+  // Simple mode starts with the easy flow; it keeps the start screen while it owns the chosen video.
+  const easyFlow = useEasyFlowHost(props, mode, () => setDemoWorkspaceOpened(true));
+  const showWelcome = easyFlow.holdsStart || (!hasUserMedia && !hasAuthoredGraph && !demoWorkspaceOpened);
+  // Plain problem notices, export panel, close guard, moved media, project changes by other programs, Save As / recent.
+  const shellSafety = useShellSafety(props, { showWelcome, translate: t });
   const [nativePreviewBounds, setNativePreviewBounds] = useState<NativePreviewBounds>();
   const [audioTransport, setAudioTransport] = useState<NativeAudioTransportState>();
   const latestSeekRevision = useRef(seekRevision);
@@ -87,38 +275,96 @@ export function EditorShell(props: EditorShellProps) {
       && current.projectId === next.projectId && current.projectRevision === next.projectRevision
       && current.projectUpdatedAt === next.projectUpdatedAt ? current : next);
   }, []);
+  const nativePreviewScaleRef = useRef<number | undefined>(undefined);
   const updateNativePreviewBounds = useCallback((bounds: Omit<NativePreviewBounds, "revision">) => {
-    setNativePreviewBounds((current) => ({ ...bounds, revision: (current?.revision ?? 0) + 1 }));
+    // Preview reports on every scroll anywhere on the page. Same rectangle at the same display scale keeps the state, so
+    // scrolling a panel neither re-renders the shell nor re-binds the native surface; a monitor-scale change still does.
+    const scale = window.devicePixelRatio, rescaled = nativePreviewScaleRef.current !== scale;
+    nativePreviewScaleRef.current = scale;
+    setNativePreviewBounds((current) => !rescaled && current && current.x === bounds.x && current.y === bounds.y
+      && current.width === bounds.width && current.height === bounds.height ? current : { ...bounds, revision: (current?.revision ?? 0) + 1 });
   }, []);
   const gpuPreview = useResidentGpuPreview(
-    project,
+    parameterPreviewProject,
     playhead,
-    isDesktop && !showWelcome && !trackingMode,
+    isDesktop && !showWelcome && !trackingMode && playbackRate === 1 && (!compactWorkspace || compactPane === "preview"),
     nativePreviewBounds,
     { playing, duration, seekRevision, audio: audioTransport, onClock: publishPlaybackClock, onEnded: finishPlayback },
   );
   const nativeEffectPreview = useNativeEffectPreview(
     window.haoDesktop,
-    project,
-    activeLayers,
-    isDesktop && !showWelcome && !trackingMode,
+    parameterPreviewProject,
+    parameterPreviewProject !== project ? activeMediaLayers(parameterPreviewProject, playhead, runtimeUrls, "video") : activeLayers,
+    isDesktop && !showWelcome && !trackingMode && (!compactWorkspace || compactPane === "preview"),
+    parameterPreviewEpoch,
   );
   const remoteAgentLaunch = useRemoteAgentLaunch(window.haoDesktop);
+  // Simple mode is one calm layout: the media panel and the timeline always show, the automation panel belongs to
+  // 進階模式, and the right-hand panel opens for what the person picked. A layout saved by an older version or in
+  // advanced mode cannot hide or pin them here.
+  const simpleMode = mode === "simple";
+  const graphicCandidate = project.motionGraphics.find(graphic => graphic.id === graphicSelection?.id);
+  const selectedGraphic = graphicCandidate;
+  const attachedGraphics = useMemo(() => selectedClip ? clipAttachments(project, selectedClip.id).graphics : [], [project, selectedClip]);
+  const selectedGraphicTemplate = useMemo(() => selectedGraphic ? templateOwnerByGraphic(project).get(selectedGraphic.id)?.id : undefined, [project, selectedGraphic]);
+  const graphicEdits = createMotionGraphicEditActionsV1({ getSnapshot: props.projectSession.getSnapshot,
+    getSelectionSnapshot: graphicSelectionState.getSnapshot, runCommand, setStatus }, {
+    project, selection: graphicSelectionSnapshot, ...(selectedClip ? { clipId: selectedClip.id } : {}),
+  });
+  const graphicLibraryDeletes = createMotionGraphicEditActionsV1({ getSnapshot: props.projectSession.getSnapshot,
+    getSelectionSnapshot: graphicSelectionState.getSnapshot, runCommand, setStatus }, {
+    project, selection: graphicSelectionSnapshot, libraryDeleteOnly: true,
+  });
+  const beginGraphicTextGesture = (graphicId: string) => {
+    const graphic = project.motionGraphics.find(item => item.id === graphicId);
+    return graphic ? graphicParameterGesture.begin({ project, graphicId, clipId: selectedClip?.id, selection: graphicSelectionSnapshot,
+      initial: graphic.text, plan: value => graphicEdits.planUpdate(graphicId, { text: value }), commit: value => graphicEdits.update(graphicId, { text: value }) }) : undefined;
+  };
+  const beginGraphicNumberGesture: GraphicNumberGestureStartV1 = (graphicId, request) => graphicParameterGesture.beginNumber({
+    project, graphicId, clipId: selectedClip?.id, selection: graphicSelectionSnapshot,
+    parameterId: request.parameterId, initial: request.initial, normalize: request.normalize,
+    plan: value => graphicEdits.planUpdate(graphicId, request.patch(value)), commit: value => graphicEdits.update(graphicId, request.patch(value)),
+  });
+  const layerSelection = useMemo<EditingLayerSelectionV1 | undefined>(() => selectedGraphic ? { kind: "graphic", id: selectedGraphic.id } : selectedCaption ? { kind: "caption", id: selectedCaption.id } : selectedClip ? { kind: "clip", id: selectedClip.id } : undefined, [selectedGraphic, selectedCaption, selectedClip]);
+  const selectLayer = useCallback((selection: EditingLayerSelectionV1) => {
+    if (props.projectSession.getSnapshot().sessionId !== clipSourceSessionId) return;
+    const next = editingLayerSelectionChangeV1(selection, clipSourceSessionId);
+    pausePlayback();
+    setSelectedClipId(next.clipId); setSelectedCaptionId(next.captionId); graphicSelectionState.select(next.graphic);
+    if (next.workspace) setActiveWorkspace(next.workspace);
+    setSelectionPanelOpen(true); if (compactWorkspace) setCompactPane("inspector");
+  }, [setSelectedClipId, setSelectedCaptionId, compactWorkspace, clipSourceSessionId, pausePlayback, props.projectSession, graphicSelectionState]);
+  const hasSelection = Boolean(selectedClip || selectedCaption || selectedGraphic);
+  const mediaShown = true;
+  const timelineShown = true;
+  const automationShown = activeWorkspace === "edit" && !simpleMode && workspace.layout.automationVisible;
+  const inspectorShown = compactWorkspace ? compactPane === "inspector" : true;
+  const previouslySelected = useRef(hasSelection);
+  useEffect(() => {
+    // Simple mode on a narrow window: once the picked item is deleted, show the picture again instead of an empty panel.
+    if (previouslySelected.current && !hasSelection && simpleMode && compactPane === "inspector") setCompactPane("preview");
+    previouslySelected.current = hasSelection;
+  }, [hasSelection, simpleMode, compactPane]);
   const workspaceColumns = useMemo(() => [
-    workspace.layout.mediaVisible && !directorConsoleOpened ? `${workspace.layout.mediaWidth}px 8px` : "",
-    "minmax(0,1fr)",
-    directorConsoleOpened ? "8px minmax(340px,440px)" : workspace.layout.inspectorVisible ? `8px ${workspace.layout.inspectorWidth}px` : "",
-  ].filter(Boolean).join(" "), [directorConsoleOpened, workspace.layout.inspectorVisible, workspace.layout.inspectorWidth, workspace.layout.mediaVisible, workspace.layout.mediaWidth]);
+    `minmax(220px,min(${workspace.layout.mediaWidth}px,28vw)) 8px`, "minmax(0,1fr)",
+    inspectorShown ? `8px minmax(${activeWorkspace === "color" ? 360 : 286}px,min(${workspace.layout.inspectorWidth}px,34vw))` : "",
+  ].filter(Boolean).join(" "), [activeWorkspace, inspectorShown, workspace.layout.inspectorWidth, workspace.layout.mediaWidth]);
   const shellStyle = {
-    "--timeline-height": workspace.layout.timelineVisible ? `${workspace.layout.timelineHeight}px` : "0px",
+    "--timeline-height": timelineShown ? `${workspace.layout.timelineHeight}px` : "0px",
   } as CSSProperties;
   const importState=creativeLibrary.importState;
   const importActive=Boolean(importState&&importState.phase!=="idle"&&importState.sessionId===props.projectSession.getSnapshot().sessionId);
+  const relinkActive = !showWelcome && !isDesktop && missingMedia.length > 0;
   const closeBeginnerGuide = () => {
-    window.localStorage.setItem(BEGINNER_GUIDE_KEY, "done");
+    try { window.localStorage.setItem(BEGINNER_GUIDE_KEY, "done"); } catch { /* Optional preference. */ }
     setBeginnerGuideOpened(false);
   };
-  const shortcutsBlocked = beginnerGuideOpened || colorWorkspaceOpened || (directorConsoleOpened && showWelcome) || batchAutoEdit.show || mobile.showConnect || agentConnectOpened || autoEditOpened;
+  const openAgentConnect = (returnToRemote = false) => {
+    closeBeginnerGuide();
+    setReturnToRemoteAfterAgent(returnToRemote);
+    setAgentConnectOpened(true);
+  };
+  const shortcutsBlocked = beginnerGuideOpened || batchAutoEdit.show || mobile.showConnect || agentConnectOpened || autoEditOpened;
   const closeAgentConnect = () => {
     setAgentConnectOpened(false);
     if (!returnToRemoteAfterAgent) return;
@@ -126,6 +372,11 @@ export function EditorShell(props: EditorShellProps) {
     void mobile.open();
   };
   const openAutoEdit = () => {
+    if (project.editorialProfile === "music_mv") {
+      openAgentConnect();
+      setStatus("動畫 MV 會先規劃歌曲樂段與原創插畫分層，再交給 Editkin 建立可編輯鏡頭。");
+      return;
+    }
     if (automatic.semantic.busy) return;
     if (!selectedClip) return setStatus("請先選一段要粗剪的影片或聲音。");
     autoEditTarget.current = { task: props.projectSession.beginTask(project), clipId: selectedClip.id };
@@ -142,7 +393,8 @@ export function EditorShell(props: EditorShellProps) {
         if (event.key === "Escape") { event.preventDefault(); closeBeginnerGuide(); }
         return;
       }
-      if (shortcutsBlocked || target?.closest("input,textarea,select,button,[contenteditable]:not([contenteditable='false'])")) return;
+      // "?" opens the guide (and its 快捷鍵 page) whatever button has focus, like the editor's other keys; never while typing.
+      if (shortcutsBlocked || target?.closest("input,textarea,select,[contenteditable]:not([contenteditable='false'])")) return;
       if (event.key === "?" && !event.ctrlKey && !event.metaKey && !event.altKey) {
         event.preventDefault();
         setBeginnerGuideOpened(true);
@@ -173,20 +425,52 @@ export function EditorShell(props: EditorShellProps) {
     void runAutoRoto(mask.id, props.projectSession.getSnapshot().history.present);
   };
 
+  const openSelectionInspector = () => {
+    pausePlayback();
+    
+    
+    if (simpleMode) setSelectionPanelOpen(true); else workspace.patch({ inspectorVisible: true });
+    setCompactPane("inspector");
+  };
+  // Simple mode has no 調整片段 button: clicking a clip, text or title opens its panel (on a narrow window, its tab).
+  const revealSelectionPanel = () => {
+    if (!simpleMode) return;
+    setSelectionPanelOpen(true);
+    if (compactWorkspace) setCompactPane("inspector");
+  };
+  // 動態素材庫: the 動態 tab, the inspector section, the timeline cut points and its keys (wiring only; the GUI lives in its own files).
+  const motionLibrary = useMotionLibraryWiringV1({ project, projectSession: props.projectSession, runCommand, setStatus, playhead, selectedClipId, selectedClip,
+    selectClip: clipId => { setSelectedCaptionId(undefined); setSelectedClipId(clipId); }, clearSelection: () => { setSelectedClipId(undefined); setSelectedCaptionId(undefined); },
+    revealSelection: openSelectionInspector, mergeRuntimeUrls: props.mergeRuntimeUrls, pause: pausePlayback, keyboard: props.motionLibraryKeyboard,
+    onPanelRequest: () => { if (compactWorkspace) setCompactPane("media"); } });
+  const changeProjectFormat = (format: ProjectFormat) => runCommand({ type: "set_project_resolution", width: format.width, height: format.height },
+    t("專案比例已改成 {ratio} {name}；素材位置與裁切仍可逐片調整。", { ratio: format.ratio, name: t(format.label) }));
+
   return (
-    <main className="app-shell" data-import-active={importActive} data-shortcuts-blocked={shortcutsBlocked} data-workspace-mode={showWelcome ? "welcome" : "editor"} data-text-size={workspace.layout.textSize} style={shellStyle}>
+    <main className="app-shell" data-interface-mode={mode} data-timeline-visible={timelineShown} data-editing-workspace={activeWorkspace} data-compact-workspace={compactWorkspace} data-active-pane={compactPane} data-import-active={importActive} data-workspace-notice={importActive || relinkActive || shellSafety.hasNotices} data-shortcuts-blocked={shortcutsBlocked} data-workspace-mode={showWelcome ? "welcome" : "editor"} data-text-size={workspace.layout.textSize} style={shellStyle}>
+      <input ref={toolbarMediaInput} className="visually-hidden" type="file" accept="video/*,audio/*,image/*" multiple data-testid="toolbar-media-input"
+        onChange={event => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; if (files.length) void importFiles(files); }} />
       <Suspense fallback={null}><WorkspaceDropImport
-        onBrowserFiles={(files) => void importFiles(files)}
-        onDesktopPaths={isDesktop ? (paths) => void creativeLibrary.importDesktopPaths(paths) : undefined}
+        onBrowserFiles={(files, point) => {
+          try { void importFiles(files, point ? resolveTimelineImportPlacement(point, document) : undefined); }
+          catch (error) { setStatus(error instanceof Error ? error.message : "這個位置無法匯入素材。"); }
+        }}
+        onDesktopPaths={isDesktop ? (paths, point) => {
+          try { void creativeLibrary.importDesktopPaths(paths, point ? resolveTimelineImportPlacement(point, document) : undefined); }
+          catch (error) { setStatus(error instanceof Error ? error.message : "這個位置無法匯入素材。"); }
+        } : undefined}
         onStatus={setStatus}
       /></Suspense>
       <Toolbar
+        onAddMedia={() => { if (isDesktop) void creativeLibrary.importDesktopMedia(); else toolbarMediaInput.current?.click(); }}
+        onEdit={() => { setActiveWorkspace("edit"); setCompactPane("preview"); }}
         projectName={project.name}
         hasUserMedia={hasUserMedia}
         workspaceMode={showWelcome ? "welcome" : "editor"}
         theme={theme}
         onThemeChange={setTheme}
         dirty={recovery.dirty}
+        hasProjectFile={hasProjectFile}
         recoveryState={recovery.recoveryState}
         playhead={playhead}
         canUndo={history.past.length > 0}
@@ -195,41 +479,59 @@ export function EditorShell(props: EditorShellProps) {
         onNew={() => { setDemoWorkspaceOpened(false); newProject(); }}
         onOpen={openProject}
         onSave={() => void saveProject()}
-        onUndo={undoEdit}
-        onRedo={redoEdit}
+        onUndo={() => history.past.length ? undoEdit() : setStatus(NOTHING_TO_UNDO)}
+        onRedo={() => history.future.length ? redoEdit() : setStatus(NOTHING_TO_REDO)}
         onExport={renderVideo}
         onExportOpenExrSequence={() => void renderOpenExrSequence()}
         onExportAlphaMaster={() => void renderAlphaMaster()}
-        onOpenAgentConnect={() => { setReturnToRemoteAfterAgent(false); setAgentConnectOpened(true); }}
+        onOpenAgentConnect={() => openAgentConnect()}
         onAutoEdit={openAutoEdit}
+        autoEditLabel={project.editorialProfile === "music_mv" ? "製作 Music MV" : undefined}
         autoEditBusy={automatic.semantic.busy}
         autoEditUnavailableReason={engineUnavailableReason}
         onMobileRemote={window.haoDesktop?.startMobileRemote ? () => void mobile.open() : undefined}
         mobileRemoteActive={mobile.remote?.active}
         mobileRemoteCount={mobile.remoteStatus?.connectedCount}
         onCheckUpdates={desktopActions.checkForUpdates}
-        onDirectorConsole={() => setDirectorConsoleOpened(true)}
         onHelp={() => setBeginnerGuideOpened(true)}
-        workspaceControls={<WorkspaceControls layout={workspace.layout} onPreset={workspace.choosePreset} onPatch={workspace.patch} onReset={workspace.reset} />}
+        textSize={workspace.layout.textSize}
+        onTextSizeChange={(textSize) => workspace.patch({ textSize })}
+        projectFormat={{ width: project.width, height: project.height, onChange: changeProjectFormat }}
+        {...shellSafety.toolbar}
       />
-      {importActive&&importState?<MediaImportStatus state={importState} onRetry={()=>void creativeLibrary.retryFailedImports()}/>:null}
-      {showWelcome ? <Suspense fallback={<section className="first-project-loading" aria-label="正在準備開始畫面" />}><FirstProjectStart
+      {!showWelcome && <EditingWorkspaceNavigationV1 active={activeWorkspace} onChange={next => { setActiveWorkspace(next); if (compactWorkspace) setCompactPane(next === "edit" ? "preview" : "inspector"); }} />}
+      {(importActive || relinkActive || shellSafety.hasNotices) && <div className="workspace-notices">
+        {shellSafety.notices}
+        {importActive&&importState?<MediaImportStatus state={importState} onRetry={()=>void creativeLibrary.retryFailedImports()}/>:null}
+        {relinkActive && <section className="media-import-status" data-testid="missing-media-relink" aria-label={t("缺失素材重新連結")}>
+          <div><strong>{t("專案已開啟，請重新連結素材")}</strong><span>{t("逐一選取原檔；瀏覽器重開後需再次選檔。")}</span></div>
+          {missingMedia.map(asset => <button key={asset.id} type="button" className="secondary-action" data-testid={`relink-media-${asset.id}`} onClick={() => void relinkBrowserMedia(asset.id)} disabled={Boolean(asset.imageSequence)} title={asset.imageSequence ? t("OpenEXR 序列需要桌面版") : t("為 {name} 選取原始檔案", { name: asset.name })}>{asset.name}{t(" · 重新連結")}</button>)}
+        </section>}
+      </div>}
+      {showWelcome ? <Suspense fallback={<section className="first-project-loading" aria-label={t("正在準備開始畫面")} />}><FirstProjectStart
         isDesktop={isDesktop}
         onImport={importFiles}
         onDesktopImport={isDesktop ? () => void creativeLibrary.importDesktopMedia() : undefined}
-        onOpenProject={isDesktop ? () => void openProject() : undefined}
+        onOpenProject={() => void openProject()}
         onExploreDemo={() => setDemoWorkspaceOpened(true)}
         onHelp={() => setBeginnerGuideOpened(true)}
-        onConnectAgent={isDesktop ? () => setAgentConnectOpened(true) : undefined}
+        onConnectAgent={isDesktop ? () => openAgentConnect() : undefined}
+        easyFlowHost={easyFlow.host}
       /></Suspense> : <>
-      <section className="workspace-grid" style={{ gridTemplateColumns: workspaceColumns }} data-testid="modular-workspace">
-        {!hasUserMedia && <div className="demo-workspace-banner" data-testid="demo-workspace-banner"><b>示範模式</b><span>{isDesktop ? "先熟悉介面；加入自己的影片後才會啟用自動剪輯與輸出" : "先熟悉介面；加入自己的影片後可手動剪輯並下載專案檔。自動剪輯與影片輸出需要桌面版"}</span></div>}
-        {workspace.layout.mediaVisible && !directorConsoleOpened && <><Suspense fallback={<aside className="panel media-bin" aria-label="正在載入素材面板" />}><MediaBin
+      <section className="workspace-grid" id="editing-workspace-panel" role="tabpanel" aria-labelledby={`editing-workspace-tab-${activeWorkspace}`} style={{ gridTemplateColumns: workspaceColumns }} data-testid="modular-workspace">
+        {!hasUserMedia && !hasAuthoredGraph && <div className="demo-workspace-banner" data-testid="demo-workspace-banner"><b>{t("示範模式")}</b><span>{t(isDesktop ? "先熟悉介面；加入自己的影片後才會啟用自動剪輯與輸出" : "先熟悉介面；加入自己的影片後可手動剪輯並下載專案檔。自動剪輯與影片輸出需要桌面版")}</span></div>}
+        <nav className="compact-panel-tabs" aria-label={t("顯示面板")}>
+          <button type="button" aria-pressed={compactPane === "media"} onClick={() => {  workspace.patch({ mediaVisible: true }); setCompactPane("media"); }}>{t("素材庫")}</button>
+          <button type="button" aria-pressed={compactPane === "preview"} onClick={() => setCompactPane("preview")}>{t("預覽")}</button>
+          <button type="button" aria-pressed={compactPane === "inspector"} onClick={() => {  workspace.patch({ inspectorVisible: true }); setCompactPane("inspector"); }}>{t("屬性面板")}</button>
+        </nav>
+        {mediaShown && <><Suspense fallback={<aside className="panel media-bin" aria-label={t("正在載入素材面板")} />}><MediaBin workspace={activeWorkspace} motionLibraryPanel={motionLibrary.panel} motionLibraryEntry={simpleMode ? motionLibrary.entry : undefined} motionLibraryRequest={motionLibrary.panelRequest} effectsLibraryRequest={effectsLibraryRequest} layerPanel={<EditingLayerStackV1 key={JSON.stringify([clipSourceSessionId, project.id])} project={project} selection={layerSelection} onSelect={selectLayer} onCommand={runCommand} />}
           assets={project.assets}
           runtimeUrls={runtimeUrls}
           onImport={importFiles}
           onDesktopImport={isDesktop ? () => void creativeLibrary.importDesktopMedia() : undefined}
           creativeLibrary={creativeLibrary.library}
+          onLoadOriginalSfxCandidates={isDesktop ? creativeLibrary.loadOriginalSfxCandidates : undefined}
           creativeLoading={creativeLibrary.loading}
           onCreativeImport={isDesktop ? (assetId) => void creativeLibrary.importCreativeAsset(assetId) : undefined}
           creativeImportingId={creativeLibrary.importingId}
@@ -249,14 +551,23 @@ export function EditorShell(props: EditorShellProps) {
           onAddAssetAsPictureInPicture={(assetId) => addAssetToTimeline(assetId, "pip")}
           onAssetDragStart={setDraggingAssetId}
           onAssetDragEnd={() => setDraggingAssetId(undefined)}
-          onApplyShortTemplate={(templateId) => void applyShortFormTemplate(templateId)}
+          onApplyShortTemplate={(templateId, content) => void applyShortFormTemplate(templateId, content)}
+          templateSourceAssetId={[...project.tracks.filter(track => track.kind === "video").flatMap(track => track.clips)].sort((a, b) => a.timelineStart - b.timelineStart)[0]?.assetId}
+          templateProject={project}
+          templateSourceClipId={selectedClip?.id}
+          templateMotionBusy={referenceTemplateBusy}
+          onCancelTemplateMotion={cancelReferenceTemplate}
+          onApplyThemedTemplate={referenceTemplateBusy ? undefined : input => prepareReferenceInstance((prepareText, signal) =>
+            prepareReferenceMotionTemplateInstance(project, input, makeId, { prepareText, signal }))}
+          templateFps={project.fps}
+          templateCanvasFormat={project.width > project.height ? "long" : "short"}
           onApplyLongTemplate={(templateId) => void applyLongFormTemplate(templateId)}
           onAddLowerThird={addLowerThird}
           motionGraphics={project.motionGraphics}
           captions={project.captions}
           directorMarkers={project.director.markers}
           templateApplication={project.templateApplication}
-          onDeleteMotionGraphic={(graphicId) => runCommand({ type: "delete_motion_graphic", graphicId }, "已刪除這個動態字卡，可復原。")} 
+          onDeleteMotionGraphic={(graphicId) => graphicLibraryDeletes.remove(graphicId)}
           onDeleteCaption={(captionId) => runCommand({ type: "delete_caption", captionId }, "已刪除模板示範字幕，可復原。")} 
           onDeleteDirectorMarker={(markerId) => runCommand({ type: "delete_director_marker", markerId }, "已刪除模板節奏註記，可復原。")} 
           onClearTemplateApplication={clearTemplateApplication}
@@ -276,28 +587,36 @@ export function EditorShell(props: EditorShellProps) {
           onRefreshPlugins={isDesktop ? () => void creativeLibrary.refreshPlugins() : undefined}
           workflowProfile={creativeLibrary.workflowProfile}
           onWorkflowProfileChange={isDesktop ? creativeLibrary.updateWorkflowProfile : undefined}
-        /></Suspense><WorkspaceResizeHandle axis="horizontal" label="調整素材面板寬度" onDelta={(delta) => workspace.resize("media", delta)} /></>}
+        /></Suspense><WorkspaceResizeHandle axis="horizontal" label={t("調整素材面板寬度")} value={workspace.layout.mediaWidth} min={220} max={520} onDelta={(delta) => workspace.resize("media", delta)} /></>}
         <div className="center-workspace">
-          <Suspense fallback={<section className="preview-panel" aria-label="正在載入播放器" />}><Preview
+          <Suspense fallback={<section className="preview-panel" aria-label={t("正在載入播放器")} />}><Preview
             onRebuildPreview={isDesktop ? creativeLibrary.repairPreview : undefined}
             previewRepair={creativeLibrary.previewRepair}
             layers={nativeEffectPreview.layers}
-            audioLayers={activeAudioLayers}
+            audioLayers={parameterPreviewProject !== project ? activeMediaLayers(parameterPreviewProject, playhead, runtimeUrls, "audio") : activeAudioLayers}
             projectWidth={project.width}
             projectHeight={project.height}
             playhead={playhead}
             projectDuration={duration}
             projectFps={project.fps}
-            captions={project.captions}
-            captionStyle={project.captionStyle}
-            project={project}
+            captions={parameterPreviewProject.captions}
+            captionStyle={parameterPreviewProject.captionStyle}
+            project={parameterPreviewProject}
+            parameterPreviewEpoch={parameterPreviewEpoch}
             gpuPreviewUrl={gpuPreview.frameUrl}
             nativeGpuPreview={gpuPreview.nativeSurfaceActive}
+            gpuPreviewFullComposition={gpuPreview.fullComposition}
+            onGpuPreviewImagePresented={gpuPreview.onImagePresented}
+            onGpuPreviewImageRejected={gpuPreview.onImageRejected}
+            bakedMotionGraphicIds={gpuPreview.bakedMotionGraphicIds}
+            bakedCaptionIds={gpuPreview.bakedCaptionIds}
             gpuPreviewAdmission={gpuPreview.admission}
             gpuPreviewFallbackReason={gpuPreview.fallbackReason}
             gpuPreviewAdmissionDiagnostic={gpuPreview.admissionDiagnostic}
             autonomousGpuPlayback={gpuPreview.autonomousPlayback}
             nativeGpuPlaybackPreparing={gpuPreview.nativePlaybackPreparing}
+            nativeGpuPresentedFrame={gpuPreview.presentedTimelineFrame}
+            nativeGpuFrameUpdating={gpuPreview.nativeFrameUpdating}
             seekRevision={seekRevision}
             onPlaybackClock={publishPlaybackClock}
             onAudioTransportChange={updateAudioTransport}
@@ -309,21 +628,32 @@ export function EditorShell(props: EditorShellProps) {
             trackingSelection={trackingSelection}
             onTrackingSelectionChange={(rect) => void acceptTrackingSelection(rect)}
             playing={playing}
+            playbackRate={playbackRate}
+            onPlaybackRateChange={setPlaybackRate}
+            onTogglePlayback={togglePlayback}
+            onPausePlayback={pausePlayback}
+            onShuttle={(direction) => shuttlePlayback(direction, direction === 1)}
+            onFrameStep={frameStepPlayback}
             onPlayingChange={setPlaying}
             onPlayheadChange={(time) => setPlayhead(Math.max(0, Math.min(duration, time)))}
+            gpuPreviewFailure={gpuPreview.failure}
+            onRetryGpuPreview={gpuPreview.retry}
           /></Suspense>
-          <Suspense fallback={null}><EditingProfilePicker
+          {/* The video type is chosen in the easy flow or the auto-edit dialog; this row is an advanced tool. */}
+          {!simpleMode && <Suspense fallback={null}><EditingProfilePicker
             profile={project.editorialProfile}
             hasVideo={Boolean(selectedClip && selectedAsset?.kind === "video")}
             trackingBusy={trackingBusy}
             onChange={(profile) => runCommand({ type: "batch", commands: [
               { type: "set_editorial_profile", profile },
               { type: "set_aesthetic_system", aestheticSystem: resolveAestheticSystem(profile, project.width > project.height ? "longform" : "shorts") },
-            ] }, "已套用剪輯類型與匿名美感標準；自動剪輯、批量與 AI 都會沿用。")}
+            ] }, profile === "music_mv"
+              ? "動畫 MV 已選取；按「製作 Music MV」連接 Video Autopilot，先核對歌曲並準備原創角色與場景插畫。"
+              : "已套用剪輯類型與匿名美感標準；自動剪輯、批量與 AI 都會沿用。")}
             onStartSpeakerDirector={startPodcastDirector}
             unavailableReason={engineUnavailableReason}
-          /></Suspense>
-          {workspace.layout.automationVisible && <Suspense fallback={null}><AgentPanel
+          /></Suspense>}
+          {automationShown && <Suspense fallback={null}><AgentPanel
             status={status}
             hasMedia={hasUserMedia}
             onSubmit={submitAgentInstruction}
@@ -334,13 +664,36 @@ export function EditorShell(props: EditorShellProps) {
             onSceneSplit={() => void automatic.scenes.run()}
             sceneSplitBusy={automatic.scenes.busy}
             onSemanticAutoEdit={openAutoEdit}
+            musicMvMode={project.editorialProfile === "music_mv"}
             unavailableReason={engineUnavailableReason}
             semanticAutoEditBusy={automatic.semantic.busy}
             semanticAutoEditStage={automatic.semantic.stage}
-            onOpenAgentConnect={isDesktop ? () => setAgentConnectOpened(true) : undefined}
+            onOpenAgentConnect={isDesktop ? () => openAgentConnect() : undefined}
           /></Suspense>}
         </div>
-        {workspace.layout.inspectorVisible && !directorConsoleOpened && <><WorkspaceResizeHandle axis="horizontal" label="調整屬性面板寬度" onDelta={(delta) => workspace.resize("inspector", delta)} /><Suspense fallback={<aside className="inspector inspector-empty"><small>正在載入調整面板…</small></aside>}><Inspector
+        {inspectorShown && activeWorkspace !== "color" && !selectedGraphic && <><WorkspaceResizeHandle axis="horizontal" label={t("調整屬性面板寬度")} value={workspace.layout.inspectorWidth} min={286} max={560} onDelta={(delta) => workspace.resize("inspector", delta)} /><Suspense fallback={<aside className="inspector inspector-empty"><small>{t("正在載入調整面板…")}</small></aside>}><Inspector workspace={activeWorkspace} motionLibraryControl={motionLibrary.inspector} onOpenEffectsLibrary={() => { setActiveWorkspace("effects"); setEffectsLibraryRequest(value => value + 1); }}
+          onClose={compactWorkspace ? () => setCompactPane("preview") : undefined}
+          captionProject={project}
+          onCaptionCommand={command => runCommand(command, "已修正字幕句尾時間，可復原。 ")}
+          onCaptionSelect={captionId => { const cue = project.captions.find(item => item.id === captionId); if (!cue) return; pausePlayback(); setSelectedClipId(undefined); setSelectedCaptionId(captionId); setPlayhead(cue.start); }}
+          mesh3dProject={project}
+          autoReframeControl={selectedClip && !selectedCaption && selectedAsset?.kind === "video" ? <AutoReframeDesktopControlV1
+            project={project} session={props.projectSession} clipId={selectedClip.id} api={window.haoDesktop}
+            disabled={referenceTemplateBusy || importActive || props.clipMediaBusy} onPause={pausePlayback}
+            onCommand={(command, revision) => {
+              const current = props.projectSession.getSnapshot();
+              if (current.sessionId !== clipSourceSessionId || current.history.present.revision !== revision) throw Error("AUTO_REFRAME_JOB_STALE");
+              return { status: runCommand(command) === false ? "cancelled" : "applied" };
+            }}
+            onNewProject={props.loadOpenedProject ? createAutoReframeAppHostV1({ session: props.projectSession,
+              confirmLeave: () => window.confirm(t("建立新專案會捨棄目前尚未儲存的修改。要繼續嗎？")),
+              openNew: next => props.loadOpenedProject!({ canceled: false, project: next, runtimeUrls }, { dirty: true }),
+            }) : undefined} /> : undefined}
+          templateSourceControl={hasReferenceMotionSourceOwner(project, selectedClip?.id) && selectedClip ? <ReferenceMotionSourceClipControl project={project} session={props.projectSession} clipId={selectedClip.id} busy={referenceTemplateBusy || importActive} api={window.haoDesktop} onReplace={replaceReferenceSource} onCancel={cancelReferenceTemplate} /> : undefined}
+          originalMotionScenesControl={<SavedOriginalMotionScenes project={project} sessionId={clipSourceSessionId} busy={referenceTemplateBusy}
+            onCancel={cancelReferenceTemplate} onRevise={input => prepareReferenceInstance((prepareText, signal) =>
+              prepareOriginalSceneGraphicRevision(project, input, { prepareText, signal }))} />}
+          onMesh3dCommand={command => runCommand(command, "已更新可編輯 3D 場景，可復原。 ")}
           projectFps={project.fps}
           playhead={playhead}
           pluginRegistry={creativeLibrary.plugins}
@@ -351,45 +704,87 @@ export function EditorShell(props: EditorShellProps) {
           canTransitionIn={transitionNeighbors.before}
           canTransitionOut={transitionNeighbors.after}
           asset={selectedAsset}
+          sceneAssets={project.assets}
           previewSource={selectedAsset ? runtimeUrls[`${selectedAsset.id}:thumbnail`] ?? (selectedAsset.kind === "image" ? runtimeUrls[selectedAsset.id] : undefined) : undefined}
           onMove={(timelineStart) => {
-            if (selectedClip && Number.isFinite(timelineStart)) runCommand({ type: "move_clip", clipId: selectedClip.id, timelineStart }, "已更新片段位置。");
+            if (selectedClip) return attachedClipMoves.move(selectedClip.id, timelineStart);
           }}
           onTrackChange={(trackId) => {
-            if (selectedClip) runCommand({ type: "move_clip_to_track", clipId: selectedClip.id, trackId, timelineStart: selectedClip.timelineStart }, "已把片段移到新軌道。");
+            if (selectedClip) return attachedClipMoves.move(selectedClip.id, undefined, trackId);
           }}
-          onVolumeChange={(volume) => {
-            if (selectedClip && Number.isFinite(volume)) runCommand({ type: "set_clip_volume", clipId: selectedClip.id, volume }, "已更新片段音量。");
+          clipSourceSessionId={clipSourceSessionId}
+          sourceTimingProject={project}
+          showClipSpeedControls clipMediaBusy={props.clipMediaBusy}
+          onClipRetime={selectedClip && props.onClipRetime ? (rate, reverse) => props.onClipRetime?.(selectedClip.id, rate, reverse) : undefined}
+          onFreezeFrame={selectedClip && props.onFreezeFrame ? () => props.onFreezeFrame?.(selectedClip.id) : undefined}
+          onSlipClip={(sourceStart) => selectedClip ? clipSourceEdits.slipClip(selectedClip.id, sourceStart) : false}
+          onReplaceClipSource={command => {
+            if (!clipSourceTask.isCurrent()) return setStatus("專案已變更，請重新選擇要替換的影片。");
+            if (selectedClip?.id !== command.clipId) return setStatus("請重新選擇要替換的片段。");
+            runCommand(command, "已替換影片並保留片段時間與動態，可復原。請檢查構圖、字幕和聲音。");
+          }}
+          onAudioEnvelopeChange={(envelope) => selectedClip ? runCommand({ type: "set_clip_audio_envelope", clipId: selectedClip.id, envelope }, "已更新聲音淡化與音量點，可一次復原。") : false}
+          numberEditScope={graphicSelectionSnapshot}
+          volumePreview={selectedClip && clipParameterDraft.preview?.clipId === selectedClip.id ? findClip(clipParameterDraft.preview.project, selectedClip.id).volume : undefined}
+          onVolumeChange={volume => clipAppearance.volume(volume)}
+          onVolumeGestureStart={() => {
+            effectParameterGesture.cancel();
+            return selectedClip ? admitOtherParameterGesture(clipParameterGesture.begin({ clipId: selectedClip.id, selection: graphicSelectionSnapshot,
+              parameterId: "volume", initial: selectedClip.volume, plan: clipAppearance.planVolume, commit: clipAppearance.volume })) : undefined;
           }}
           onTrimStart={() => {
-            if (selectedClip) runCommand({ type: "trim_clip_start", clipId: selectedClip.id, seconds: playhead - selectedClip.timelineStart }, "已把播放頭設為片段入點。");
+            if (selectedClip) void attachedClipMoves.trimAtPlayhead(selectedClip.id, "start", playhead - selectedClip.timelineStart);
           }}
           onTrimEnd={() => {
-            if (selectedClip) runCommand({ type: "trim_clip_end", clipId: selectedClip.id, seconds: selectedClip.timelineStart + selectedClip.duration - playhead }, "已把播放頭設為片段出點。");
+            if (selectedClip) void attachedClipMoves.trimAtPlayhead(selectedClip.id, "end", selectedClip.timelineStart + selectedClip.duration - playhead);
           }}
-          onTransformChange={(patch) => updateAnimatedClipProperty("transform", patch)}
+          onTransformChange={patch => clipAppearance.transform(patch)}
+          appearanceValues={appearanceValues}
+          appearanceEditScope={appearanceEditScope}
+          onTransformNumberGestureStart={field => {
+            if (!selectedClip || !appearanceValues || !["x", "y", "scale", "rotation", "opacity"].includes(field)) return undefined;
+            const initial = appearanceValues.transform[field];
+            if (!Number.isFinite(initial)) return undefined;
+            const plan = (value: number) => clipAppearance.planTransform({ [field]: value });
+            const initialPlan = plan(initial);
+            if (!initialPlan || initialPlan.command) return undefined;
+            const lease = clipParameterGesture.begin({ clipId: selectedClip.id, selection: graphicSelectionSnapshot,
+              parameterId: "transform." + field, initial, plan, commit: value => clipAppearance.transform({ [field]: value }),
+              isCurrent: () => appearanceTransport.current.playhead === playhead && appearanceTransport.current.seekRevision === seekRevision });
+            if (lease) { effectParameterGesture.cancel(); captionParameterGesture.cancel(); }
+            return admitOtherParameterGesture(lease);
+          }}
           scene25d={project.scene25d}
           onScene25dToggle={(enabled) => runCommand({ type: "configure_scene_25d", enabled }, enabled ? "已啟用原生 2.5D 場景；相機、燈光與平面深度會進入同一條 GPU graph。" : "已退出 2.5D 場景並回到一般 2D 圖層。")}
-          onScene25dChange={(settings) => runCommand({ type: "set_scene_25d_settings", settings }, "已更新 2.5D 相機／燈光設定。")}
-          onTransform3dChange={(patch) => {
-            if (selectedClip) runCommand({ type: "update_clip_transform_3d", clipId: selectedClip.id, patch }, "已更新 2.5D 平面位置。 ");
-          }}
+          onScene25dChange={(settings) => project.scene25d ? sceneSettingsEdits.apply({
+            sessionId: clipSourceSessionId, projectId: project.id,
+          }, project.scene25d, settings) : false}
+          onTransform3dChange={(patch, axis) => clipAppearance.transform3d(patch, axis)}
           onSetFloatingFrame={(frame) => {
             if (selectedClip) runCommand({ type: "set_clip_floating_frame", clipId: selectedClip.id, frame }, frame ? "已套用可編輯浮空影片框。" : "已移除浮空影片框。");
           }}
           portraitCanvas={project.height > project.width}
-          onApplyFloatingScene={(preset) => {
+          onApplyFloatingScene={(preset, sources) => {
             if (!selectedClip) return;
             try {
-              runCommand({ type: "batch", commands: floatingFrameSceneCommands(project, selectedClip.id, preset) }, "已建立三層可編輯直式浮空框舞台，可復原。");
+              runCommand({ type: "batch", commands: floatingFrameSceneCommands(project, selectedClip.id, preset, sources) }, "已建立三層可編輯直式浮空框舞台，可復原。");
             } catch (error) { setStatus(error instanceof Error ? error.message : "浮空框舞台套用失敗"); }
           }}
           onApplyClipMotionPreset={(preset) => {
             if (!selectedClip) return;
             try {
-              runCommand({ type: "batch", commands: motionClipPresetCommands(selectedClip, project.fps, preset) }, "已套用逐格 Motion 動畫，可復原。");
+              runCommand({ type: "batch", commands: motionClipPresetCommands(selectedClip, project.fps, preset, { projectWidth: project.width, projectHeight: project.height }) }, "已套用逐格 Motion 動畫，可復原。");
             } catch (error) { setStatus(error instanceof Error ? error.message : "Motion 動畫套用失敗"); }
           }}
+          onApplyReferenceMotionTemplate={referenceTemplateBusy ? undefined : (input) => {
+            if (!selectedClip || referenceTemplateOperation.current) return;
+            const captured = { ...structuredClone(input), clipId: selectedClip.id,
+              startFrame: Math.round(selectedClip.timelineStart * project.fps), durationFrames: Math.round(selectedClip.duration * project.fps),
+              evidenceRefs: ["manual:motion-template-input"] };
+            prepareReferenceInstance((prepareText, signal) => prepareReferenceMotionTemplateInstance(project, captured, makeId, { prepareText, signal }));
+          }}
+          referenceMotionTemplateBusy={referenceTemplateBusy}
+          onCancelReferenceMotionTemplate={cancelReferenceTemplate}
           particleSimulation={project.particleSimulation}
           onParticleSimulationToggle={(enabled) => runCommand({ type: "configure_particle_simulation", enabled }, enabled ? "已啟用原生 GPU 粒子 VFX；預覽與輸出會使用同一個 fixed-seed 模擬。" : "已移除粒子 VFX。")}
           onParticleSimulationChange={(settings) => runCommand({ type: "set_particle_simulation_settings", settings }, "已更新粒子 VFX。")}
@@ -402,22 +797,39 @@ export function EditorShell(props: EditorShellProps) {
           onMediaFrameApply={(layout, name) => {
             if (selectedClip) runCommand({ type: "set_clip_layout", clipId: selectedClip.id, layout }, `已套用「${name}」媒體框；仍使用原始真實素材。`);
           }}
-          onColorChange={(patch) => updateAnimatedClipProperty("color", patch)}
+          onColorChange={(patch) => clipAppearance.color(patch)}
+          onColorNumberGestureStart={field => {
+            if (!selectedClip || !appearanceValues || !["brightness", "contrast", "saturation", "hue"].includes(field)) return undefined;
+            const initial = appearanceValues.color[field];
+            if (!Number.isFinite(initial)) return undefined;
+            const plan = (value: number) => clipAppearance.planColor({ [field]: value });
+            const initialPlan = plan(initial);
+            if (!initialPlan || initialPlan.command) return undefined;
+            const lease = clipParameterGesture.begin({ clipId: selectedClip.id, selection: graphicSelectionSnapshot,
+              parameterId: "color." + field, initial, plan, commit: value => clipAppearance.color({ [field]: value }),
+              isCurrent: () => appearanceTransport.current.playhead === playhead && appearanceTransport.current.seekRevision === seekRevision });
+            if (lease) { effectParameterGesture.cancel(); captionParameterGesture.cancel(); }
+            return admitOtherParameterGesture(lease);
+          }}
           onCreativeChange={(patch) => {
-            if (selectedClip) runCommand({ type: "set_clip_creative", clipId: selectedClip.id, patch }, "已套用 Hao Creator Pack，預覽與輸出會使用同一設定。");
+            if (selectedClip) runCommand({ type: "set_clip_creative", clipId: selectedClip.id, patch }, "已套用 Editkin Creator Pack，預覽與輸出會使用同一設定。");
           }}
-          onNativeEffectAdd={(instance) => {
-            if (selectedClip) runCommand({ type: "add_native_effect", clipId: selectedClip.id, instance }, "已加入原生 GPU 動態模糊；預覽與輸出共用 shutter sampling。 ");
+          onPresetEffectEdit={(expectedIds, edit) => selectedClip ? presetEffectEdits.apply({
+            sessionId: clipSourceSessionId, projectId: project.id, clipId: selectedClip.id,
+          }, expectedIds, edit) : false}
+          onNativeEffectAdd={(instance) => effectStackEdits.add(instance)}
+          onNativeEffectUpdate={(instanceId, patch) => effectStackEdits.update(instanceId, patch)}
+          onNativeEffectParameterEdit={(expected, values) => effectStackEdits.parameters(expected, values)}
+          nativeEffectParameterPreview={effectParameterDraft.preview}
+          onNativeEffectParameterGesture={(expected, parameterId) => {
+            clipParameterGesture.cancel();
+            return selectedClip ? admitOtherParameterGesture(effectParameterGesture.begin({
+              clipId: selectedClip.id, expected, parameterId, selection: graphicSelectionSnapshot,
+              commit: values => effectStackEdits.parameters(expected, values),
+            })) : undefined;
           }}
-          onNativeEffectUpdate={(instanceId, patch) => {
-            if (selectedClip) runCommand({ type: "update_native_effect", clipId: selectedClip.id, instanceId, patch }, "已更新原生效果；正式輸出會使用這組參數。");
-          }}
-          onNativeEffectReorder={(instanceId, toIndex) => {
-            if (selectedClip) runCommand({ type: "reorder_native_effect", clipId: selectedClip.id, instanceId, toIndex }, "已調整效果順序；預覽與正式輸出會依這個順序執行。");
-          }}
-          onNativeEffectRemove={(instanceId) => {
-            if (selectedClip) runCommand({ type: "remove_native_effect", clipId: selectedClip.id, instanceId }, "已移除原生效果；可直接復原。");
-          }}
+          onNativeEffectReorder={(instanceId, toIndex) => effectStackEdits.reorder(instanceId, toIndex)}
+          onNativeEffectRemove={(instanceId) => effectStackEdits.remove(instanceId)}
           onAddKeyframe={() => {
             if (!selectedClip) return;
             const time = Math.max(0, Math.min(selectedClip.duration, playhead - selectedClip.timelineStart));
@@ -439,6 +851,7 @@ export function EditorShell(props: EditorShellProps) {
           trackingSelectionActive={Boolean(trackingMode)}
           trackingSelection={trackingSelection}
           onBeginMotionTrack={() => {
+            if (!props.trackingActionGuard()) return;
             if (!isDesktop) return setStatus("動態追蹤需要桌面版的本機分析引擎；網頁版無法使用。");
             if (!selectedClip || project.assets.find((asset) => asset.id === selectedClip.assetId)?.kind !== "video") return setStatus("請先選一段影片。");
             setPlaying(false);
@@ -447,34 +860,73 @@ export function EditorShell(props: EditorShellProps) {
             setStatus("請直接在預覽畫面拖曳框住要追蹤的人或物件，放開後會自動分析。");
           }}
           onCorrectMotionTrack={(trackId) => {
+            if (!props.trackingActionGuard(trackId)) return;
             setPlaying(false);
             setTrackingSelection(undefined);
             setTrackingMode({ kind: "correct", trackId });
             setStatus("在預覽畫面重新框住主體，這一幀會成為手動修正點。");
           }}
-          onDeleteMotionTrack={(trackId) => runCommand({ type: "delete_motion_track", trackId }, "已移除追蹤資料；已綁定的圖卡會保留為靜態圖卡。")}
-          onAddMotionGraphic={addMotionGraphic}
-          motionGraphics={project.motionGraphics}
-          onUpdateMotionGraphic={(graphicId, patch) => runCommand({ type: "update_motion_graphic", graphicId, patch }, "已更新動態圖卡，預覽與輸出會同步。")}
-          onDeleteMotionGraphic={(graphicId) => runCommand({ type: "delete_motion_graphic", graphicId }, "已刪除動態圖卡，可隨時復原。")}
-          onCaptionChange={(patch) => {
-            if (selectedCaption) runCommand({ type: "update_caption", captionId: selectedCaption.id, patch }, "已更新字幕。");
-          }}
-          onCaptionStyleChange={(presetId) => {
+          onDeleteMotionTrack={(trackId) => props.trackingActionGuard(trackId) ? runCommand({ type: "delete_motion_track", trackId }, "已移除追蹤資料；已綁定的圖卡會保留為靜態圖卡。") : false}
+          onAddMotionGraphic={(kind, trackId, seed) => { if (trackId && !props.trackingActionGuard(trackId)) return; addMotionGraphic(kind, trackId, seed); }}
+          onAddGeometryMotion={() => {
             const task = props.projectSession.beginTask(project);
-            void import("../creative/corePack")
-              .then(({ captionStyleFromPreset }) => {
-                if (acceptProjectTask(task, setStatus, "文字風格載入")) runCommand({ type: "set_caption_style", patch: captionStyleFromPreset(presetId) }, "已套用文字風格。");
-              })
-              .catch((error) => {
-                if (acceptProjectTask(task, setStatus, "文字風格載入")) setStatus(error instanceof Error ? error.message : "無法載入文字風格");
-              });
+            const startFrame = Math.round((selectedClip?.timelineStart ?? playhead) * project.fps);
+            const durationFrames = Math.min(1800, Math.round((selectedClip?.duration ?? 3) * project.fps));
+            const width = Math.min(4096, project.width * .72), height = Math.min(4096, project.height * .14);
+            const radius = Math.floor(Math.min(height * .18, width * .18) * 2) / 2, eventFrame = Math.max(1, Math.floor(durationFrames * .18));
+            const centerX = Math.round(width / 2), centerY = Math.round(height / 2);
+            void import("../application/nativeGeometryMotion").then(({ prepareNativeGeometryMotion }) => prepareNativeGeometryMotion(project, {
+              expectedRevision: project.revision, range: { startFrame, endFrame: startFrame + durationFrames },
+              position: { x: .14, y: .35 }, fixedEnvelope: { width, height },
+              initial: { left: centerX - radius, top: centerY - radius, right: centerX + radius, bottom: centerY + radius, cornerRadius: radius },
+              dynamics: { stiffness: 144, damping: 24, mass: 1 },
+              propertyDynamics: { left: { stiffness: 100, damping: 20, mass: 1 }, right: { stiffness: 225, damping: 30, mass: 1 } },
+              targets: [{ property: "left", frame: eventFrame, target: width * .02 }, { property: "right", frame: eventFrame, target: width * .98 },
+                { property: "top", frame: eventFrame, target: height * .16 }, { property: "bottom", frame: eventFrame, target: height * .84 },
+                { property: "cornerRadius", frame: eventFrame, target: Math.min(height * .12, radius) }],
+              purpose: "建立可編輯的圓形到柔角面板，後續依素材修改輪廓與節奏", evidenceRefs: ["manual:geometry-authoring"],
+            }, () => makeId("geometry"))).then(prepared => {
+              if (acceptProjectTask(task, setStatus, "連續輪廓建立")) runCommand({ type: "batch", commands: prepared.commands }, "已建立連續輪廓；可逐邊修改影格目標與彈性，也可復原。");
+            }).catch(error => {
+              if (acceptProjectTask(task, setStatus, "連續輪廓建立")) setStatus(error instanceof Error ? error.message : "連續輪廓建立失敗");
+            });
           }}
-          onCaptionStylePatch={(patch) => runCommand({ type: "set_caption_style", patch }, "已更新字幕字型，預覽與輸出會使用內建字型。")}
+          motionGraphics={attachedGraphics}
+          onGraphicTextGestureStart={beginGraphicTextGesture}
+          onGraphicTextDraftRejected={graphicParameterGesture.reportError}
+          onGraphicNumberGestureStart={beginGraphicNumberGesture}
+          onGraphicNumberDraftRejected={graphicParameterGesture.reportError}
+          onUpdateMotionGraphic={(graphicId, patch) => graphicEdits.update(graphicId, patch)}
+          managedMotionGraphicIds={[
+            ...(project.referenceMotionInstances?.flatMap(instance => instance.roles.filter(role => role.kind === "graphic").map(role => role.id)) ?? []),
+            ...(project.motionScenes?.flatMap(scene => scene.graphicIds) ?? []),
+          ]}
+          onDeleteMotionGraphic={(graphicId) => graphicEdits.remove(graphicId)}
+          onCaptionChange={(patch, intent) => captionEdits.patch(patch, intent)}
+          onCaptionStyleChange={(presetId) => {
+            void captionEdits.loadPreset(presetId, () => selectedCaption ? captionParameterGesture.begin({ project, captionId: selectedCaption.id,
+              selection: graphicSelectionSnapshot, parameterId: "caption.style", initial: project.captionStyle as Partial<import("../domain/types").CaptionStyle>,
+              normalize: normalizeCaptionStylePatchV1, plan: captionEdits.planStyle, commit: captionEdits.style,
+            }) : undefined, id => import("../creative/corePack").then(({ captionStyleFromPreset }) => captionStyleFromPreset(id)));
+          }}
+          onCaptionStylePatch={patch => captionEdits.style(patch)}
+          captionParameterPreview={captionParameterDraft.preview}
+          onCaptionDraftRejected={captionParameterGesture.reportError}
+          onCaptionTextGestureStart={field => {
+            if (!selectedCaption || field === "translation" && !selectedCaption.translation) return undefined;
+            return captionParameterGesture.begin({ project, captionId: selectedCaption.id, selection: graphicSelectionSnapshot,
+              parameterId: "caption." + field, initial: field === "text" ? selectedCaption.text : selectedCaption.translation!.text,
+              plan: value => captionEdits.planText(field, value), commit: value => captionEdits.text(field, value) });
+          }}
+          onCaptionOpacityGestureStart={() => selectedCaption ? captionParameterGesture.begin({ project, captionId: selectedCaption.id, selection: graphicSelectionSnapshot,
+            parameterId: "caption.background-opacity", initial: captionBackgroundOpacityV1(project.captionStyle.backgroundColor),
+            plan: value => captionEdits.planStyle({ backgroundColor: captionBackgroundWithOpacityV1(project.captionStyle.backgroundColor, value) }),
+            commit: value => captionEdits.style({ backgroundColor: captionBackgroundWithOpacityV1(project.captionStyle.backgroundColor, value) }),
+          }) : undefined}
           onOpenColorWorkspace={() => {
             if (!selectedClip || !selectedAsset || selectedAsset.kind === "audio") return setStatus("請先選一段影片或照片。");
             setPlaying(false);
-            setColorWorkspaceOpened(true);
+            setActiveWorkspace("color");
           }}
           onAddCaption={addCaption}
           onMakePictureInPicture={makeSelectedPictureInPicture}
@@ -514,27 +966,66 @@ export function EditorShell(props: EditorShellProps) {
           autoRotoBusy={autoRotoBusy}
           autoRotoRuntimeStatus={autoRotoRuntimeStatus}
         /></Suspense></>}
-        {directorConsoleOpened && <><div className="director-divider" aria-hidden="true" /><Suspense fallback={<aside aria-label="正在載入導演台" />}><DirectorConsole docked project={project} runtimeUrls={runtimeUrls} playhead={playhead} currentArtifact={props.currentAestheticArtifact} onSeek={(time) => setPlayhead(Math.max(0, Math.min(Math.max(duration, 12), time)))} onCommand={runCommand} onClose={() => setDirectorConsoleOpened(false)} /></Suspense></>}
+        {inspectorShown && selectedGraphic && activeWorkspace !== "color" && <><WorkspaceResizeHandle axis="horizontal" label={t("調整屬性面板寬度")} value={workspace.layout.inspectorWidth} min={286} max={560} onDelta={delta => workspace.resize("inspector", delta)} /><EditingGraphicPropertiesV1 graphic={selectedGraphic} editScope={graphicSelectionSnapshot} onTextGestureStart={beginGraphicTextGesture} onTextDraftRejected={graphicParameterGesture.reportError} onNumberGestureStart={beginGraphicNumberGesture} onNumberDraftRejected={graphicParameterGesture.reportError} templateId={selectedGraphicTemplate} managed={Boolean(selectedGraphicTemplate) || Boolean(project.motionScenes?.some(scene => scene.graphicIds.includes(selectedGraphic.id)))} onChange={patch => graphicEdits.update(selectedGraphic.id, patch)} onDelete={() => graphicEdits.remove(selectedGraphic.id)} onOpenSceneEditor={() => { if (graphicSelectionState.getSnapshot() !== graphicSelectionSnapshot) return; graphicSelectionState.select(undefined); setActiveWorkspace("effects"); }} /></>}
+        {inspectorShown && activeWorkspace === "color" && <><WorkspaceResizeHandle axis="horizontal" label={t("調整屬性面板寬度")} value={workspace.layout.inspectorWidth} min={360} max={700} onDelta={delta => workspace.resize("inspector", delta)} />
+      {activeWorkspace === "color" && selectedClip && selectedAsset && selectedAsset.kind !== "audio" && (
+        <Suspense fallback={null}><ColorWorkspace embedded asset={selectedAsset} clip={clipParameterDraft.preview?.clipId === selectedClip.id ? findClip(clipParameterDraft.preview.project, selectedClip.id) : selectedClip} source={runtimeUrls[selectedAsset.id]} playhead={playhead} colorManagement={project.colorManagement ?? DEFAULT_COLOR_MANAGEMENT} onColorManagementChange={(patch) => runCommand({ type: "set_project_color_management", patch }, patch.mode === "aces2" ? "已切換 ACES 2.0 專業色彩管理。" : "已切換快速 Rec.709。") } onColorChange={patch => { clipParameterGesture.cancel(); return clipAppearance.baseColor(patch); }} colorEditScopeKey={`${clipSourceSessionId}:${selectedClip.id}`} onColorGestureStart={key => {
+          effectParameterGesture.cancel();
+          const transport = appearanceTransport.current;
+          return admitOtherParameterGesture(clipParameterGesture.begin({ clipId: selectedClip.id, selection: graphicSelectionSnapshot, parameterId: "base-color." + key,
+            initial: selectedClip.color[key] ?? 0, plan: value => clipAppearance.planBaseColor({ [key]: value }), commit: value => clipAppearance.baseColor({ [key]: value }),
+            isCurrent: () => appearanceTransport.current.playhead === transport.playhead && appearanceTransport.current.seekRevision === transport.seekRevision }));
+        }} onInputColorSpaceChange={(interpretation) => runCommand({ type: "set_asset_color_interpretation", assetId: selectedAsset.id, interpretation }, interpretation === "log_unresolved" ? "已標記為未解讀 Log；輸出會安全阻擋。" : "已更新 Input Transform。") } onRec709InputChange={(interpretation) => runCommand({ type: "set_clip_rec709_input", clipId: selectedClip.id, interpretation }, "已更新這個片段的 Rec.709 解讀。") } onAlphaModeChange={(alphaMode) => runCommand({ type: "set_asset_alpha_mode", assetId: selectedAsset.id, alphaMode }, alphaMode === "premultiplied" ? "已啟用 Premultiplied Alpha 解碼，避免透明邊緣黑邊。" : "已更新素材 Alpha 模式。") } gradeClipboard={{ state: gradeClipboard.state, canPaste: gradeClipboard.clipboard.canPaste(selectedClip.id), ...colorGradeClipboardActionsV1(gradeClipboard.clipboard, selectedClip.id, playhead, runCommand, setStatus) }} gradeBaseClip={selectedClip} onGradeGestureStart={() => {
+          effectParameterGesture.cancel();
+          return admitOtherParameterGesture(clipParameterGesture.beginGrade({ clipId: selectedClip.id, selection: graphicSelectionSnapshot, parameterId: "grade-v2",
+            initial: selectedClip.gradeV2 ?? { schema: "editkin.color-grade/v2" }, plan: clipGradeEdits.plan, commit: clipGradeEdits.set }));
+        }} gradeEditOccurrence={graphicSelectionSnapshot} onGradeLookGestureStart={() => {
+          effectParameterGesture.cancel();
+          const look = selectedClip.gradeV2?.look;
+          return look ? admitOtherParameterGesture(clipParameterGesture.begin({ clipId: selectedClip.id, selection: graphicSelectionSnapshot, parameterId: "grade-v2.look.strength",
+            initial: look.strength ?? 1, plan: clipGradeEdits.planLookStrength, commit: clipGradeEdits.lookStrength })) : undefined;
+        }} gradeEditScope={{ owner: props.projectSession, sessionId: props.projectSession.getSnapshot().sessionId }} gradeReadOnlyReason={project.tracks.some(track => track.id === selectedClip.trackId && track.locked) ? "這個軌道已鎖定，先解鎖才能修改。" : undefined} onGradeV2Change={project.tracks.some(track => track.id === selectedClip.trackId && track.locked) ? undefined : (grade) => clipGradeEdits.set(grade) } onClose={() => setActiveWorkspace("edit")} /></Suspense>
+      )}
+        {(!selectedClip || !selectedAsset || selectedAsset.kind === "audio") && <aside className="panel inspector"><h2>{t("調色")}</h2><p>{t("請先從圖層選取影片或圖片")}</p></aside>}
+        </>}
       </section>
-      {workspace.layout.timelineVisible && <div className="timeline-region"><WorkspaceResizeHandle axis="vertical" label="調整時間軸高度" onDelta={(delta) => workspace.resize("timeline", delta)} /><Suspense fallback={<section className="timeline-shell" aria-label="正在載入時間軸" />}><Timeline
+      {timelineShown && <div className="timeline-region"><WorkspaceResizeHandle axis="vertical" label={t("調整時間軸高度")} value={workspace.layout.timelineHeight} min={170} max={520} onDelta={(delta) => workspace.resize("timeline", delta)} /><Suspense fallback={<section className="timeline-shell" aria-label={t("正在載入時間軸")} />}><Timeline
         project={project}
         duration={duration}
         playhead={playhead}
+        playing={playing}
+        onAddTitle={() => addMotionGraphic("title")}
         selectedClipId={selectedClipId}
         selectedCaptionId={selectedCaptionId}
+        selectedClipIds={props.selectedClipIds}
+        selectedCaptionIds={props.selectedCaptionIds}
+        onSelectionChange={props.onSelectionChange}
+        markRange={props.markRange}
+        markers={props.markers}
+        viewRequest={props.viewRequest}
         runtimeUrls={runtimeUrls}
         draggingAssetId={draggingAssetId}
-        onInsertAsset={(assetId, trackId, timelineStart) => addAssetToTimeline(assetId, "timeline", { trackId, timelineStart })}
-        onSeek={(time) => setPlayhead(Math.max(0, Math.min(Math.max(duration, 12), time)))}
+        onInsertAsset={(assetId, trackId, timelineStart, dropMode) => addAssetToTimeline(assetId, "timeline", { trackId, timelineStart, dropMode })}
+        onEditStart={pausePlayback}
+        onSeek={(time) => { pausePlayback(); setPlayhead(clampProjectSeek(time, duration)); }}
         onSelect={(clipId) => { setSelectedCaptionId(undefined); setSelectedClipId(clipId); }}
         onSelectCaption={(captionId) => { setSelectedClipId(undefined); setSelectedCaptionId(captionId); }}
-        onMoveClip={(clipId, timelineStart, trackId) => {
-          const clip = project.tracks.flatMap((track) => track.clips).find((item) => item.id === clipId);
-          if (!clip) return;
-          if (clip.trackId === trackId) runCommand({ type: "move_clip", clipId, timelineStart }, "已移動片段，可復原。");
-          else runCommand({ type: "move_clip_to_track", clipId, trackId, timelineStart }, "已把片段移到新軌道，可復原。");
+        onMoveClip={moveTimelineClip}
+        onExtendClip={clipSourceEdits.extendClip}
+        onSlipClip={clipSourceEdits.slipClip}
+        onFreezeFrame={props.onFreezeFrame} clipMediaBusy={props.clipMediaBusy}
+        onDetachAudio={clipId => {
+          try { const plan = planAudioDetach(props.projectSession.getSnapshot().history.present, clipId, { clipId: makeId("audio"), trackId: makeId("audio-track") }); runCommand(plan.command, plan.message); }
+          catch (error) { setStatus(error instanceof Error ? error.message : "無法分離聲音。"); }
         }}
-        onMoveCaption={(captionId, start) => runCommand({ type: "update_caption", captionId, patch: { start } }, "已移動字幕，可復原。")} 
+        onLinkClips={(clipIds, unlink) => {
+          try { const plan = planTimelineClipLink(props.projectSession.getSnapshot().history.present, clipIds, unlink); runCommand(plan.command, plan.message); }
+          catch (error) { setStatus(error instanceof Error ? error.message : "無法更新片段連結。"); }
+        }}
+        onEditRefused={setStatus}
+        onCommand={runCommand}
+        onMoveCaption={(captionId, start, options) => options ? runCommand({ type: "update_caption", captionId, patch: { start } }, "已移動字幕，可復原。", options)
+          : runCommand({ type: "update_caption", captionId, patch: { start } }, "已移動字幕，可復原。")} 
         onTrimClip={(clipId, edge, seconds) => {
           const clip = project.tracks.flatMap((track) => track.clips).find((item) => item.id === clipId);
           if (!clip) return;
@@ -545,44 +1036,76 @@ export function EditorShell(props: EditorShellProps) {
           if (!caption) return;
           runCommand(buildCaptionTrimCommand(caption, edge, seconds, project.fps), `已拖曳修剪字幕${edge === "start" ? "開頭" : "結尾"}。`);
         }}
-        onAddCaption={addCaption}
+        onAddCaption={() => { addCaption(); openSelectionInspector(); }}
+        onEditSelection={openSelectionInspector}
+        onActivateSelection={revealSelectionPanel}
         onAddTrack={addTrack}
         onRenameTrack={(trackId, name) => runCommand({ type: "rename_track", trackId, name }, `軌道已重新命名為「${name}」。`)}
         onToggleTrackLock={(trackId) => runCommand({ type: "toggle_track_lock", trackId }, "已切換軌道鎖定狀態。")}
         onDeleteTrack={(trackId) => runCommand({ type: "delete_track", trackId }, "已刪除空軌道，可復原。")}
         onMakePictureInPicture={() => makeSelectedPictureInPicture()}
         onPrecompose={precomposeSelected}
-        onToggleMute={(trackId) => runCommand({ type: "toggle_track_mute", trackId }, "已切換軌道靜音。")}
+        onToggleMute={(trackId) => {
+          // Mute is sound only: say so, so nobody looks for the picture it never hides.
+          const track = project.tracks.find(item => item.id === trackId);
+          runCommand({ type: "toggle_track_mute", trackId }, !track ? "已切換軌道靜音。" : track.muted ? `已取消「${track.name}」的靜音。`
+            : track.kind === "video" && !track.hidden ? `已將「${track.name}」靜音；畫面照常顯示。` : `已將「${track.name}」靜音。`);
+        }}
+        onToggleHidden={(trackId) => {
+          const track = project.tracks.find(item => item.id === trackId);
+          // Each message names only what is true afterwards: no "sound as usual" for a muted track, no "picture as usual" for a hidden one.
+          runCommand({ type: "toggle_track_hidden", trackId }, !track ? "已切換軌道畫面。" : track.hidden ? `已顯示「${track.name}」的畫面。`
+            : track.muted ? `已隱藏「${track.name}」的畫面。` : `已隱藏「${track.name}」的畫面；聲音照常。`);
+        }}
         onSplit={splitSelected}
         onDelete={deleteSelected}
+        onCut={props.cutClipsAt}
+        onStatus={setStatus}
+        keyboardActions={props.timelineKeyboard}
+        renderTrackOverlay={motionLibrary.renderTrackOverlay}
       /></Suspense></div>}
       </>}
-      <footer className="status-bar">
-        <span data-testid="save-state"><i className={recovery.recoveryState === "error" ? "red" : "green"} /> {recovery.dirty ? recovery.recoveryState === "saved" ? "未儲存 · Autosave 安全" : recovery.recoveryState === "error" ? "未儲存 · Autosave 失敗" : "未儲存 · Autosave…" : "所有變更已儲存"}</span>
-        <details className="project-format-control" data-testid="project-format-control" data-project-width={project.width} data-project-height={project.height}><summary aria-label="設定專案比例"><span data-testid="project-resolution">{projectFormatLabel(project.width, project.height)}</span><small>{project.width}×{project.height} · {project.fps} fps</small></summary><div><header><strong>專案比例</strong><span>只改畫布，不破壞原素材；可再到檢查器調整裁切與位置。</span></header>{PROJECT_FORMATS.map((format) => <button type="button" key={format.id} aria-label={`切換為 ${format.ratio} ${format.label}`} title={`${format.ratio} ${format.label} · ${format.width}×${format.height}`} className={project.width === format.width && project.height === format.height ? "active" : ""} onClick={(event) => { runCommand({ type: "set_project_resolution", width: format.width, height: format.height }, `專案已切換為 ${format.ratio} ${format.label}；素材位置與裁切仍可逐片調整。`); event.currentTarget.closest("details")?.removeAttribute("open"); }}><b>{format.ratio}</b><span><strong>{format.label}</strong><small>{format.use}</small></span></button>)}</div></details>
-        <OperationStatus status={status} runtimeInfo={isDesktop ? `桌面版 · 即時預覽 · 自動儲存${mobile.remote?.active ? ` · 手機已連線${mobile.remoteStatus?.connectedCount ? ` ${mobile.remoteStatus.connectedCount}` : ""}` : ""}` : "本機編輯 · 自動儲存"} />
+      <footer className="status-bar" style={{ position: "relative" }}>
+        {projectDownload && <ProjectDownloadNotice lease={projectDownload} onCancel={cancelProjectDownload} />}
+        <SavedReferenceMotionInstances project={project} session={props.projectSession} busy={referenceTemplateBusy || importActive} onCancel={cancelReferenceTemplate} onSourceReplace={replaceReferenceSource}
+          counterTicksControl={(instance, current) => <CounterTickControlsV1 key={`ticks:${clipSourceSessionId}:${instance.id}`} project={project} session={props.projectSession} instance={instance} current={current} busy={referenceTemplateBusy || importActive} api={window.haoDesktop}
+            onPause={pausePlayback} onStatus={setStatus} onPreview={isDesktop ? id => void creativeLibrary.previewCreativeAsset(id) : undefined}
+            onPrepared={(prepared, picked) => creativeLibrary.acceptPreparedMedia([prepared], [picked])} />}
+          onReuse={request => prepareReferenceInstance(async (prepareText, signal) => {
+            const prepared = await prepareReferenceMotionTemplateReuse(project, request, makeId, { prepareText, signal });
+            return { ...prepared, status: "REVIEW_REQUIRED" as const };
+          })}
+          onRevise={(id, patch, expectedInstanceRevision) => prepareReferenceInstance((prepareText, signal) =>
+            prepareReferenceMotionTemplateRevision(project, id, patch, { expectedInstanceRevision, prepareText, signal, idFactory: makeId }))}
+          onDetach={(id, expectedInstanceRevision) => {
+            if (referenceTemplateOperation.current || !acceptProjectTask(props.projectSession.beginTask(project), setStatus, "解除模板連結")) return;
+            pausePlayback();
+            runCommand({ type: "remove_reference_motion_instance", id, expectedInstanceRevision }, "已解除模板連結並保留全部圖層，可一次復原。");
+          }} />
+        {/* Simple mode: the save state is in the top bar and the project shape in ⚙ 設定; the footer keeps one status line. */}
+        {!simpleMode && <span data-testid="save-state"><i className={recovery.recoveryState === "error" ? "red" : "green"} /> {t(saveStateMessage({ mode, isDesktop, dirty: recovery.dirty, recoveryState: recovery.recoveryState, hasProjectFile }))}</span>}
+        {!simpleMode && <details className="project-format-control" data-testid="project-format-control" data-project-width={project.width} data-project-height={project.height}><summary aria-label={t("設定專案比例")}><span data-testid="project-resolution">{(() => { const format = PROJECT_FORMATS.find(item => item.width === project.width && item.height === project.height); return format ? `${format.ratio} · ${t(format.label)}` : `${project.width}:${project.height} · ${t("自訂")}`; })()}</span><small>{project.width}×{project.height} · {project.fps} fps</small></summary><div><header><strong>{t("專案比例")}</strong><span>{t("只改畫布，不破壞原素材；可再到檢查器調整裁切與位置。")}</span></header>{PROJECT_FORMATS.map((format) => <button type="button" key={format.id} aria-label={t("切換為 {ratio} {name}", { ratio: format.ratio, name: t(format.label) })} title={`${format.ratio} ${t(format.label)} · ${format.width}×${format.height}`} className={project.width === format.width && project.height === format.height ? "active" : ""} onClick={(event) => { runCommand({ type: "set_project_resolution", width: format.width, height: format.height }, `專案已切換為 ${format.ratio} ${format.label}；素材位置與裁切仍可逐片調整。`); event.currentTarget.closest("details")?.removeAttribute("open"); }}><b>{format.ratio}</b><span><strong>{t(format.label)}</strong><small>{t(format.use)}</small></span></button>)}</div></details>}
+        <OperationStatus status={status} runtimeInfo={isDesktop ? `${t("桌面版 · 即時預覽 · 當機復原")}${mobile.remote?.active ? ` · ${t("手機已連線")}${mobile.remoteStatus?.connectedCount ? ` ${mobile.remoteStatus.connectedCount}` : ""}` : ""}` : t("瀏覽器編輯 · 無自動儲存 · 請下載專案")} />
       </footer>
-      {beginnerGuideOpened && <Suspense fallback={null}><BeginnerGuide onClose={closeBeginnerGuide} onChooseMedia={() => document.querySelector<HTMLElement>('[data-testid="import-media-button"]')?.click()} /></Suspense>}
+      {beginnerGuideOpened && <Suspense fallback={null}><BeginnerGuide onClose={closeBeginnerGuide} onChooseMedia={() => { if (isDesktop) void creativeLibrary.importDesktopMedia(); else toolbarMediaInput.current?.click(); }} /></Suspense>}
       {mobile.showConnect && (
-        <Suspense fallback={null}><MobileConnectModal remote={mobile.remote} status={mobile.remoteStatus} networkSummary={mobile.networkSummary} agentLaunch={remoteAgentLaunch.state} onStartAgent={remoteAgentLaunch.start} onCancelAgent={remoteAgentLaunch.cancel} onClose={() => mobile.setShowConnect(false)} onStart={(confirmed) => void mobile.start(confirmed)} onStop={() => void mobile.stop()} onRevoke={(deviceId) => void mobile.revoke(deviceId)} onOpenAgentConnect={() => { mobile.setShowConnect(false); setReturnToRemoteAfterAgent(true); setAgentConnectOpened(true); }} /></Suspense>
+        <Suspense fallback={null}><MobileConnectModal remote={mobile.remote} status={mobile.remoteStatus} networkSummary={mobile.networkSummary} agentLaunch={remoteAgentLaunch.state} onStartAgent={remoteAgentLaunch.start} onCancelAgent={remoteAgentLaunch.cancel} onClose={() => mobile.setShowConnect(false)} onStart={(confirmed) => void mobile.start(confirmed)} onStop={() => void mobile.stop()} onRevoke={(deviceId) => void mobile.revoke(deviceId)} onOpenAgentConnect={() => { mobile.setShowConnect(false); openAgentConnect(true); }} /></Suspense>
       )}
       {batchAutoEdit.show && batchAutoEdit.session && (
         <Suspense fallback={null}>
           <BatchAutoEditPanel
             session={batchAutoEdit.session}
+            running={batchAutoEdit.summary?.running ?? false}
+            canCancel={batchAutoEdit.canCancel}
+            onCancel={batchAutoEdit.cancel}
+            onResume={() => void batchAutoEdit.resume()}
             onClose={() => batchAutoEdit.setShow(false)}
             onRetry={(jobId) => void batchAutoEdit.retry(jobId)}
             onOpenProject={(jobId) => void batchAutoEdit.openProject(jobId)}
           />
         </Suspense>
       )}
-      {colorWorkspaceOpened && selectedClip && selectedAsset && (
-        <Suspense fallback={null}><ColorWorkspace asset={selectedAsset} clip={selectedClip} source={runtimeUrls[selectedAsset.id]} playhead={playhead} colorManagement={project.colorManagement ?? DEFAULT_COLOR_MANAGEMENT} onColorManagementChange={(patch) => runCommand({ type: "set_project_color_management", patch }, patch.mode === "aces2" ? "已切換 ACES 2.0 專業色彩管理。" : "已切換快速 Rec.709。") } onColorChange={(patch) => runCommand({ type: "set_clip_color", clipId: selectedClip.id, patch }, "已更新 Primary Grade。") } onInputColorSpaceChange={(interpretation) => runCommand({ type: "set_asset_color_interpretation", assetId: selectedAsset.id, interpretation }, interpretation === "log_unresolved" ? "已標記為未解讀 Log；輸出會安全阻擋。" : "已更新 Input Transform。") } onAlphaModeChange={(alphaMode) => runCommand({ type: "set_asset_alpha_mode", assetId: selectedAsset.id, alphaMode }, alphaMode === "premultiplied" ? "已啟用 Premultiplied Alpha 解碼，避免透明邊緣黑邊。" : "已更新素材 Alpha 模式。") } onClose={() => setColorWorkspaceOpened(false)} /></Suspense>
-      )}
-      {directorConsoleOpened && showWelcome && (
-        <Suspense fallback={null}><DirectorConsole project={project} playhead={playhead} currentArtifact={props.currentAestheticArtifact} onSeek={(time) => setPlayhead(Math.max(0, Math.min(Math.max(duration, 12), time)))} onCommand={runCommand} onClose={() => setDirectorConsoleOpened(false)} /></Suspense>
-      )}
-      {agentConnectOpened && <Suspense fallback={null}><AgentConnectModal onClose={closeAgentConnect} onConnect={desktopActions.connectAgent} /></Suspense>}
+      {agentConnectOpened && <Suspense fallback={null}><AgentConnectModal onClose={closeAgentConnect} onConnect={desktopActions.connectAgent} musicMvMode={project.editorialProfile === "music_mv"} /></Suspense>}
       {autoEditOpened && <Suspense fallback={null}><AutoEditDialog onClose={() => setAutoEditOpened(false)} onStart={(policy) => {
         setAutoEditOpened(false);
         const target = autoEditTarget.current;
@@ -590,6 +1113,7 @@ export function EditorShell(props: EditorShellProps) {
         if (target.clipId !== selectedClipId) return setStatus("選取的片段已改變，請重新開啟粗剪設定。");
         void automatic.semantic.run(policy);
       }} /></Suspense>}
+      {shellSafety.overlays}
     </main>
   );
 }

@@ -1,23 +1,20 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, symlink, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { removeTempRoot, useTempRoots } from "../../test/tempRoot.mjs";
 import { MAX_JSON_BYTES } from "./constants";
 import { ProposalAlreadyExistsError, readJson, remoteSetupPaths, writeJsonAtomic, writeJsonCreateNew } from "./stateFiles";
 
-const temporaryRoot = () => mkdtemp(join(tmpdir(), "editkin-remote-state-"));
+const temp = useTempRoots();
+const temporaryRoot = () => temp.create("editkin-remote-state-");
 
 describe("remote onboarding state files", () => {
   it.skipIf(process.platform === "win32")("rejects a FIFO without waiting for a writer", async () => {
     const root = await temporaryRoot();
-    try {
-      const fifo = join(root, "not-a-receipt");
-      execFileSync("mkfifo", [fifo], { timeout: 5_000, stdio: "ignore" });
-      await expect(readJson(fifo)).rejects.toThrow();
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
+    const fifo = join(root, "not-a-receipt");
+    execFileSync("mkfifo", [fifo], { timeout: 5_000, stdio: "ignore" });
+    await expect(readJson(fifo)).rejects.toThrow();
   }, 5_000);
 
   it("derives receipt paths only from an absolute agent-runtime-v3 state root", async () => {
@@ -40,6 +37,8 @@ describe("remote onboarding state files", () => {
     await expect(readJson(join(root, "link.json"))).rejects.toThrow("symlink");
     await writeFile(join(root, "big.json"), " ".repeat(MAX_JSON_BYTES + 1));
     await expect(readJson(join(root, "big.json"))).rejects.toThrow();
+    await removeTempRoot(join(root, "link.json")); // removed as a link; its target stays
+    expect(await readJson(file)).toEqual({ ok: true });
   });
 
   it("publishes create-new receipts without replacing an existing one or leaving temporaries", async () => {
@@ -65,6 +64,9 @@ describe("remote onboarding state files", () => {
     await mkdir(join(root, "real"));
     await symlink(join(root, "real"), join(root, "parent-link"));
     await expect(writeJsonAtomic(join(root, "parent-link", "x.json"), {})).rejects.toThrow("symlink");
+    expect(await readdir(join(root, "real"))).toEqual([]);
+    for (const link of ["link.json", "parent-link"]) await removeTempRoot(join(root, link)); // links go, targets stay
+    expect(JSON.parse(await readFile(file, "utf8"))).toEqual({ revision: 2 });
     expect(await readdir(join(root, "real"))).toEqual([]);
   });
 });

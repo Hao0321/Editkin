@@ -56,6 +56,11 @@ export function effectFilters(clip: TimelineClip): string[] {
       case "ffmpeg-highlight-soft":
         filters.push("curves=master='0/0 0.72/0.77 1/0.94'", "gblur=sigma=0.18");
         break;
+      case "ffmpeg-backdrop-soft":
+        // Runs on the colour-converted, canvas-fitted layer, so the blur is in output pixels for every source;
+        // the channel mixer dims in RGB without a YUV round trip.
+        filters.push("gblur=sigma=30:steps=3", "colorchannelmixer=rr=0.68:gg=0.68:bb=0.68");
+        break;
       default:
         throw new Error(`Editkin 尚未支援 effect renderer：${preset.renderer}`);
     }

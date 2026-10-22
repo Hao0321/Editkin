@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-inspect-agent-connections"
+description = "Enables the inspect_agent_connections command without any pre-configured scope."
+commands.allow = ["inspect_agent_connections"]
+
+[[permission]]
+identifier = "deny-inspect-agent-connections"
+description = "Denies the inspect_agent_connections command without any pre-configured scope."
+commands.deny = ["inspect_agent_connections"]

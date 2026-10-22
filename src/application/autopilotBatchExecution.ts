@@ -41,8 +41,8 @@ export interface AutopilotBatchRuntime {
   audit(item: AutopilotBatchItem, plan: unknown): Promise<unknown>;
   apply(item: AutopilotBatchItem, plan: unknown, audit: unknown): Promise<Record<string, unknown>>;
   reconcile(item: AutopilotBatchItem, planSha256: string): Promise<Record<string, unknown> | undefined>;
-  render(item: AutopilotBatchItem, candidatePath: string): Promise<Record<string, unknown>>;
-  verifyRender(item: AutopilotBatchItem, candidatePath: string): Promise<void>;
+  render(item: AutopilotBatchItem, candidatePath: string, signal?: AbortSignal): Promise<Record<string, unknown>>;
+  verifyRender(item: AutopilotBatchItem, candidatePath: string, signal?: AbortSignal): Promise<void>;
   validatePaths(): Promise<void>;
 }
 
@@ -73,12 +73,40 @@ export async function readAutopilotBatchState(statePath: string, manifest: Autop
 export function summarizeAutopilotBatch(state: AutopilotBatchState) {
   const completed = state.items.filter(item => item.phase === "review_required" && !item.error).length;
   return { status: completed === state.items.length ? "REVIEW_REQUIRED" : "PARTIAL", completed, expected: state.items.length,
-    certified: false, items: state.items.map(({ id, phase, error, outputSha256 }) => ({ id, phase, error, outputSha256 })) };
+    certified: false, items: state.items.map(({ id, phase, error, outputSha256 }) => ({ id, phase, error: error?.slice(0, 4096), outputSha256 })) };
+}
+
+export type AutopilotBatchStage = "queued" | "validating" | "auditing" | "applying" | "reconciling" | "applied" | "rendering" | "failed" | "stopped" | "finished";
+/** Item phases come from the existing journal. Stage describes the currently awaited operation,
+ * not a guessed percentage. UI hosts and VA callers can consume the same bounded snapshot. */
+export type AutopilotBatchProgress = Readonly<ReturnType<typeof summarizeAutopilotBatch> & {
+  sequence: number; stage: AutopilotBatchStage; activeItemId?: string;
+  applied: number; failed: number; queued: number;
+}>;
+export interface AutopilotBatchExecutionOptions {
+  itemId?: string;
+  through?: "apply" | "render";
+  /** Cooperative cancellation. An already-started apply/reconcile or render transaction finishes first. */
+  shouldStop?: () => boolean;
+  /** Render/verification only. Audit, apply and receipt reconciliation never receive an abort signal. */
+  signal?: AbortSignal;
+  /** Observational only; exceptions cannot change journal/commit ownership. */
+  onProgress?: (progress: AutopilotBatchProgress) => void | Promise<void>;
+}
+
+/** Parse a private request snapshot before the first await; caller mutation cannot retarget a job. */
+export function snapshotAutopilotBatchManifest(manifest: AutopilotBatchManifest): AutopilotBatchManifest {
+  const snapshot = autopilotBatchManifestSchema.parse(manifest);
+  snapshot.items.forEach(Object.freeze);
+  Object.freeze(snapshot.items);
+  return Object.freeze(snapshot);
 }
 
 /** Uses the single-edit gates through the runtime. Journals never infer an uncertain apply succeeded. */
 export async function executeAutopilotBatch(manifest: AutopilotBatchManifest, statePath: string, runtime: AutopilotBatchRuntime,
-  options: { itemId?: string; through?: "apply" | "render"; shouldStop?: () => boolean } = {}) {
+  options: AutopilotBatchExecutionOptions = {}) {
+  manifest = snapshotAutopilotBatchManifest(manifest);
+  options = { ...options };
   if (options.itemId && !manifest.items.some(item => item.id === options.itemId)) throw new Error("未知批次項目");
   await runtime.validatePaths();
   const unlock = await acquireProjectLock(statePath);
@@ -88,27 +116,50 @@ export async function executeAutopilotBatch(manifest: AutopilotBatchManifest, st
       const items: AutopilotBatchItemState[] = manifest.items.map(item => ({ id: item.id, phase: "queued" }));
       state = { schema: "editkin.autopilot-batch-state/v1", manifestSha256: autopilotBatchManifestSha256(manifest), items, updatedAt: new Date().toISOString() };
     }
+    let sequence = 0;
+    let stage: AutopilotBatchStage = "queued";
+    let activeItemId: string | undefined;
+    const report = (nextStage = stage, itemId = activeItemId) => {
+      stage = nextStage;
+      activeItemId = itemId;
+      const progress: AutopilotBatchProgress = {
+        ...summarizeAutopilotBatch(state), sequence: ++sequence, stage, activeItemId,
+        applied: state.items.filter(item => ["applied", "rendering", "review_required"].includes(item.phase) && !item.error).length,
+        failed: state.items.filter(item => item.error).length,
+        queued: state.items.filter(item => item.phase === "queued").length,
+      };
+      // A consumer must never get references to mutable journal state, nor turn a
+      // committed edit into a failure by throwing from a notification callback.
+      try { void Promise.resolve(options.onProgress?.(progress)).catch(() => undefined); }
+      catch { /* observer failure is not transaction failure */ }
+    };
+    const save = async () => { state.updatedAt = new Date().toISOString(); await atomicJson(statePath, state); report(); };
+    let stopped = false;
+    const stop = () => { if (options.shouldStop?.() || options.signal?.aborted) stopped = true; return stopped; };
+    report();
     // Freeze readable inputs before any mutation. A missing/corrupt input belongs
     // to its item, and an already known identity is never replaced on retry.
     for (const [index, item] of manifest.items.entries()) {
+      if (stop()) break;
       const progress = state.items[index];
       if (progress.phase !== "queued") continue;
+      report("validating", item.id);
+      if (stop()) break;
       const errors: string[] = [];
       if (!progress.planSha256) {
         try { progress.planSha256 = (await runtime.readPlan(item)).sha256; }
         catch (error) { errors.push(`plan: ${error instanceof Error ? error.message : String(error)}`); }
       }
+      if (stop()) break;
       if (!progress.beforeProjectSha256) {
         try { progress.beforeProjectSha256 = await batchFileSha256(item.projectPath); }
         catch (error) { errors.push(`project: ${error instanceof Error ? error.message : String(error)}`); }
       }
       if (errors.length) progress.error = `輸入未就緒；${errors.join("；")}`;
     }
-    const save = async () => { state.updatedAt = new Date().toISOString(); await atomicJson(statePath, state); };
     await save();
-    let stopped = false;
     for (const [index, item] of manifest.items.entries()) {
-      if (options.shouldStop?.()) { stopped = true; break; }
+      if (stop()) break;
       if (options.itemId && options.itemId !== item.id) continue;
       const progress = state.items[index];
       let releaseItem: (() => Promise<void>) | undefined;
@@ -119,56 +170,90 @@ export async function executeAutopilotBatch(manifest: AutopilotBatchManifest, st
         const releaseProject = releaseItem;
         releaseItem = async () => { try { await releaseOutput(); } finally { await releaseProject(); } };
         await runtime.validatePaths();
+        if (stop()) break;
+        report("validating", item.id);
         if (!progress.planSha256 || !progress.beforeProjectSha256) throw new Error(progress.error ?? "輸入未就緒");
         const { plan, sha256 } = await runtime.readPlan(item);
         if (sha256 !== progress.planSha256) throw new Error("批次 v4 計畫已變更；不覆蓋既有結果");
+        if (stop()) break;
         delete progress.error;
         if (progress.phase === "review_required") {
-          await assertAppliedProject(item, progress);
+          await assertAppliedProject(item, progress, runtime);
           if (!progress.outputSha256 || await batchFileSha256(item.outputPath) !== progress.outputSha256) throw new Error("已完成影片已變更；不重用或覆蓋");
           continue;
         }
         if (progress.phase === "queued" && await exists(item.outputPath)) throw new Error("輸出已存在但不屬於本批次；拒絕覆蓋");
         if (progress.phase === "applying") {
+          report("reconciling", item.id);
           const committed = await runtime.reconcile(item, sha256);
           if (committed) {
             progress.executionReceipt = committed;
             progress.appliedProjectSha256 = await batchFileSha256(item.projectPath);
             progress.phase = "applied";
+            stage = "applied";
             await save();
           } else if (await batchFileSha256(item.projectPath) === progress.beforeProjectSha256) {
             progress.phase = "queued"; // Proven unchanged, so a fresh audit is safe.
           } else throw new Error("套用中斷且專案已改變，缺可核對的 committed receipt；請先 reconcile，禁止重套");
         }
         if (progress.phase === "queued") {
+          if (stop()) break;
           if (await batchFileSha256(item.projectPath) !== progress.beforeProjectSha256) throw new Error("專案已手動修改；批次不會覆蓋你的剪輯");
+          if (stop()) break;
+          report("auditing", item.id);
+          if (stop()) break;
           const audit = await runtime.audit(item, plan);
+          if (stop()) break;
+          if ((await runtime.readPlan(item)).sha256 !== progress.planSha256) throw new Error("批次 v4 計畫已變更；不覆蓋既有結果");
+          if (await batchFileSha256(item.projectPath) !== progress.beforeProjectSha256) throw new Error("專案已手動修改；批次不會覆蓋你的剪輯");
+          if (stop()) break;
           progress.phase = "applying";
+          stage = "applying";
           await save();
+          // The applying journal is a commit intent, not evidence of a mutation.
+          // Cancellation before apply starts can safely put it back in queued.
+          if (stop()) { progress.phase = "queued"; stage = "queued"; await save(); break; }
           progress.executionReceipt = await runtime.apply(item, plan, audit);
+          report("reconciling", item.id);
           const committed = await runtime.reconcile(item, sha256);
           if (!committed) throw new Error("套用後找不到綁定目前專案的 committed receipt");
           progress.appliedProjectSha256 = await batchFileSha256(item.projectPath);
           progress.phase = "applied";
+          stage = "applied";
           await save();
         }
-        await assertAppliedProject(item, progress);
+        if (stop()) break;
+        await assertAppliedProject(item, progress, runtime);
+        if (stop()) break;
         if (options.through === "apply") continue;
-        await renderItem(item, progress, runtime, save);
+        report("rendering", item.id);
+        if (stop()) break;
+        await renderItem(item, progress, runtime, save, options.signal);
       } catch (error) {
         progress.error = error instanceof Error ? error.message : String(error);
+        stage = "failed";
         await save(); // An independent item is still allowed to run.
       } finally { await releaseItem?.(); }
     }
+    stop(); // Include a request made during the last item, even without a next iteration.
+    activeItemId = undefined;
+    report(stopped ? "stopped" : "finished");
     return { ...summarizeAutopilotBatch(state), statePath, stopped };
   } finally { await unlock(); }
 }
-async function assertAppliedProject(item: AutopilotBatchItem, progress: AutopilotBatchItemState) {
+async function assertAppliedProject(item: AutopilotBatchItem, progress: AutopilotBatchItemState, runtime: AutopilotBatchRuntime) {
   if (!progress.appliedProjectSha256 || await batchFileSha256(item.projectPath) !== progress.appliedProjectSha256) {
     throw new Error("已套用專案已變更；保留人工修改，不重套或輸出舊計畫");
   }
+  // The mutable batch journal records progress, not authority to bypass apply.
+  // Only reconciliation with the canonical receipt for this plan/current project
+  // can admit a resumed applied/rendering/completed state.
+  if (!progress.planSha256 || !await runtime.reconcile(item, progress.planSha256)) {
+    throw new Error("缺少綁定目前計畫與專案的 committed receipt；禁止依 journal 推測已套用");
+  }
 }
-async function renderItem(item: AutopilotBatchItem, progress: AutopilotBatchItemState, runtime: AutopilotBatchRuntime, save: () => Promise<void>) {
+async function renderItem(item: AutopilotBatchItem, progress: AutopilotBatchItemState, runtime: AutopilotBatchRuntime, save: () => Promise<void>, signal?: AbortSignal) {
+  signal?.throwIfAborted();
   if (progress.candidateSha256 && progress.candidatePath) {
     const candidate = resolve(progress.candidatePath);
     const normalize = (value: string) => process.platform === "win32" ? value.toLowerCase() : value;
@@ -181,6 +266,7 @@ async function renderItem(item: AutopilotBatchItem, progress: AutopilotBatchItem
       if (await batchFileSha256(item.outputPath) !== progress.candidateSha256) throw new Error("輸出與已驗證 candidate 不同；拒絕覆蓋");
     } else {
       if (await batchFileSha256(progress.candidatePath) !== progress.candidateSha256) throw new Error("已驗證 candidate 已變更");
+      signal?.throwIfAborted();
       await link(progress.candidatePath, item.outputPath);
     }
   } else {
@@ -189,15 +275,19 @@ async function renderItem(item: AutopilotBatchItem, progress: AutopilotBatchItem
     progress.candidatePath = join(dirname(item.outputPath), `.editkin-${item.id}-${randomUUID()}.mp4`);
     progress.phase = "rendering";
     await save();
-    progress.render = await runtime.render(item, progress.candidatePath);
-    await runtime.verifyRender(item, progress.candidatePath);
-    await assertAppliedProject(item, progress);
+    signal?.throwIfAborted();
+    progress.render = await runtime.render(item, progress.candidatePath, signal);
+    signal?.throwIfAborted();
+    await runtime.verifyRender(item, progress.candidatePath, signal);
+    signal?.throwIfAborted();
+    await assertAppliedProject(item, progress, runtime);
     progress.candidateSha256 = await batchFileSha256(progress.candidatePath);
     await save();
     await runtime.validatePaths();
+    signal?.throwIfAborted();
     await link(progress.candidatePath, item.outputPath); // Atomic, no replacement; candidate is on the same volume.
   }
-  await assertAppliedProject(item, progress);
+  await assertAppliedProject(item, progress, runtime);
   progress.outputSha256 = progress.candidateSha256;
   progress.phase = "review_required";
   await save();

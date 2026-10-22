@@ -1,0 +1,7 @@
+.sticker-sheen-panel-v1 { display:grid; gap:8px; min-width:0; }
+.sticker-sheen-panel-v1 p { margin:0; overflow-wrap:anywhere; }
+.sticker-sheen-panel-v1 .sticker-sheen-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.sticker-sheen-panel-v1 button { white-space:normal; overflow-wrap:anywhere; min-width:0; }
+.sticker-sheen-panel-v1 label { display:grid; gap:4px; min-width:0; }
+.sticker-sheen-panel-v1 progress { width:100%; min-width:0; }
+.sticker-sheen-panel-v1 small { color:var(--muted); overflow-wrap:anywhere; }

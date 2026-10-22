@@ -35,6 +35,12 @@ beforeEach(() => {
 });
 
 describe("Remote-only MCP server", () => {
+  it("registers palette preparation only in the normal server without widening the remote-only surface", () => {
+    createServerForEnvironment({});
+    expect(registrations.tools.filter(name => name === "list_editkin_palette_roles")).toHaveLength(1);
+    expect(registrations.tools.filter(name => name === "prepare_editkin_palette_revision")).toHaveLength(1);
+    expect(registrations.configurations.get("prepare_editkin_palette_revision")?.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+  });
   it("publishes only the three bounded Remote research tools and Remote-only instructions", () => {
     createServerForEnvironment({ EDITKIN_MCP_MODE: "remote-only" });
     expect(registrations.tools.sort()).toEqual([

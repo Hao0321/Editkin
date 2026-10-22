@@ -22,12 +22,17 @@ describe("Editkin Motion floating frame controls", () => {
       onBeginMotionTrack: noop, onCorrectMotionTrack: noop, onDeleteMotionTrack: noop,
       onAddMotionGraphic: noop, onUpdateMotionGraphic: noop, onDeleteMotionGraphic: noop });
     const scene = byTestId(tree, "floating-scene-portrait_duo");
+    const stack = byTestId(tree, "floating-scene-portrait_stack");
     const orbit = byTestId(tree, "floating-frame-portrait_orbit");
     expect(scene?.props.disabled).toBe(false);
+    expect(stack?.props.disabled).toBe(false);
     scene?.props.onClick?.();
+    stack?.props.onClick?.();
     orbit?.props.onClick?.();
     expect(setScene).toHaveBeenCalledWith("portrait_duo");
-    expect(setFrame.mock.calls[0][0]).toMatchObject({ aspect: "portrait", orbit: { amplitudeDegrees: 24, periodSeconds: 3.6 } });
+    expect(setScene).toHaveBeenCalledWith("portrait_stack");
+    expect(setFrame.mock.calls[0][0]).toMatchObject({ schema: "editkin.floating-video-frame/v2", aspect: "portrait", mediaFit: "contain",
+      motion: { entranceFrames: 6, exitFrames: 6, travelY: .012 }, orbit: { amplitudeDegrees: 24, periodSeconds: 3.6 } });
   });
 
   it("blocks the portrait scene on a landscape canvas", () => {
@@ -40,4 +45,11 @@ describe("Editkin Motion floating frame controls", () => {
     expect(byTestId(tree, "floating-scene-portrait_duo")?.props.disabled).toBe(true);
     expect(byTestId(tree, "floating-frame-portrait_orbit")?.props.disabled).toBe(true);
   });
+});
+
+// Direct handler/hook-double controls isolate the new subscription. Real React
+// localization and browser state continuity are checked in separate suites.
+vi.mock("./i18n/interfacePreferences", async importOriginal => {
+  const actual = await importOriginal<typeof import("./i18n/interfacePreferences")>();
+  return { ...actual, useI18n: () => ({ ...actual.interfacePreferences.getSnapshot(), t: actual.translateUi }) };
 });

@@ -1,0 +1,15 @@
+/* Simple mode's timeline: the small zoom at the end of the one-row toolbar, and track headers that show the name only
+   (the mute and ⋯ options appear while the pointer is on the header or the keyboard is in it). */
+.timeline-zoom-control { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; min-width: 0; margin-inline-start: auto; }
+.timeline-shell .timeline-zoom-control > button { display: grid; place-items: center; width: var(--ui-target-size, 44px); min-width: var(--ui-target-size, 44px); padding: 0; color: var(--soft); }
+.timeline-zoom-control > button > svg { width: calc(18px * var(--ui-scale, 1)); height: calc(18px * var(--ui-scale, 1)); }
+.timeline-zoom-control > button:disabled { opacity: .4; cursor: default; }
+.timeline-zoom-control > input[type="range"] { flex: 0 1 auto; width: clamp(72px, 10vw, 150px); min-width: 0; height: var(--ui-target-size, 44px); margin: 0; accent-color: var(--accent); cursor: pointer; }
+.timeline-shell[data-interface-mode="simple"] .track-label:not(.ruler-label) > .track-kind { display: none; }
+/* The kind under the name (畫面／聲音／文字) only repeats a Chinese default name; other languages keep it, since track names are
+   the project's own words and are never translated. */
+:root:lang(zh) .timeline-shell[data-interface-mode="simple"] .track-label .track-copy > span:not(.track-locked):not(.track-hidden) { display: none; }
+.timeline-shell[data-interface-mode="simple"] .track-label .track-copy > strong { font-size: calc(14px * var(--ui-scale, 1)); }
+@media (hover: hover) {
+  .timeline-shell[data-interface-mode="simple"] .track-label:not(:hover):not(:focus-within) > :is(.track-mute, .track-options) { opacity: 0; pointer-events: none; }
+}

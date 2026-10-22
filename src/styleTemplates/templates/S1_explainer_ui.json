@@ -1,0 +1,100 @@
+{
+  "schema": "editkin.style-template/v1",
+  "id": "S1_explainer_ui",
+  "revision": 4,
+  "names": { "zh": "產品教學・介面講解", "en": "Explainer UI" },
+  "reference": "R1 (talking-head product tutorial): white body, one creator-yellow keyword, huge white serif section words bleeding off-frame, full-colour punch cards",
+  "videoTypes": ["ai_tutorial", "software_tutorial", "tool_demo"],
+  "palette": {
+    "bg": "#121214",
+    "ink": "#121214",
+    "paper": "#FFFFFF",
+    "accent": "#FCC834",
+    "accent2": "#7C5A00",
+    "highlight": "#FCC834",
+    "script": "#FCC834"
+  },
+  "fonts": {
+    "display": { "font": "display", "weight": 900 },
+    "serif": { "font": "serif", "weight": 900 },
+    "script": { "font": "hand" },
+    "body": { "font": "display", "weight": 700 },
+    "mono": { "font": "mono" }
+  },
+  "components": {
+    "caption": {
+      "leadFont": "body",
+      "keywordFont": "display",
+      "leadSize": 0.06,
+      "keywordScale": 3.4,
+      "leadColor": "paper",
+      "leadTracking": 0,
+      "keywordTracking": -0.04,
+      "lineGap": 0.32,
+      "leadMaxEm": 9,
+      "treatments": ["accentColor", "highlightBox", "size"],
+      "defaultTreatment": "accentColor",
+      "keywordEntry": "pop",
+      "leadEntry": "blurIn",
+      "boxPadding": 0.1,
+      "boxRadius": 0.1,
+      "scriptRotation": -5,
+      "scriptScale": 0.92,
+      "readability": { "minContrast": 4.5, "ladder": ["plate", "box"], "plateOpacity": 0.62, "alwaysShadow": true },
+      "exitSeconds": 0.18
+    },
+    "section": {
+      "defaultStyle": "bleed",
+      "font": "serif",
+      "color": "paper",
+      "bleed": 0.14,
+      "size": 0.46,
+      "scrim": 0.42,
+      "punchCard": { "plate": "accent", "text": "ink", "font": "display" },
+      "defaultSeconds": 1.6,
+      "backdrop": "blurDarken"
+    },
+    "lightLeak": { "colors": ["#FFC46B", "#FF8A3D", "#F2553C"], "defaultSeconds": 0.9, "peak": 0.62, "origin": "bottom" },
+    "punchIn": { "scale": 1.1, "attackSeconds": 0.17, "curve": "expoOut" },
+    "explainer": {
+      "font": "display", "textFont": "body", "em": 0.046,
+      "pill": { "plate": "accent", "text": "ink" },
+      "chips": { "active": "accent", "activeText": "ink", "idle": "bg", "idleText": "paper" },
+      "card": { "plate": "paper", "line": "ink" },
+      "prompt": { "plate": "bg", "text": "paper" },
+      "cursor": { "fill": "paper", "outline": "ink" }
+    },
+    "annotation": { "stroke": "accent", "strokeWidth": 0.008, "dash": false, "pin": "accent", "marker": "accent", "label": "ink", "labelPlate": "accent", "font": "display" },
+    "insert": { "radius": 0.03, "border": null, "borderWidth": 0, "shadow": 0.55, "pipScale": 0.5, "paper": "paper", "divider": "accent" },
+    "sound": { "gainDb": -14, "minGapSeconds": 0.6, "cues": {
+      "keyword": "sfx:editkin-procedural-v1-pop-02", "section": "sfx:editkin-procedural-v1-riser-01", "punchCard": "sfx:editkin-procedural-v1-impact-02",
+      "leak": "sfx:editkin-procedural-v1-whoosh-01", "punchIn": "sfx:editkin-procedural-v1-whoosh-03", "click": "sfx:editkin-procedural-v1-tick-02",
+      "type": "sfx:editkin-procedural-v1-tick-04", "cards": "sfx:editkin-procedural-v1-pop-03", "pin": "sfx:editkin-procedural-v1-ding-01",
+      "arrow": "sfx:editkin-procedural-v1-whoosh-05", "insert": "sfx:editkin-procedural-v1-whoosh-02" } },
+    "look": {
+      "filmLookId": "hfl2_teaching_clear_neutral",
+      "strength": 0.85,
+      "byGenre": {
+        "travel": { "filmLookId": "hfl2_travel_clear_air", "strength": 0.7 },
+        "food": { "filmLookId": "hfl2_food_clean_bright", "strength": 0.75 },
+        "night": { "filmLookId": "hfl2_night_neon_clean", "strength": 0.7 }
+      }
+    }
+  },
+  "editorial": {
+    "maxTreatmentsPer2s": 2,
+    "minKeywordHoldSeconds": 0.6,
+    "keywordDensity": { "min": 0.35, "max": 0.85 },
+    "phraseTailSeconds": 0.3,
+    "placement": {
+      "policy": "negative_space",
+      "titleSafe": 0.05,
+      "faceMargin": 0.03,
+      "portraitUiBottom": 0.2,
+      "portraitUiRight": 0.12,
+      "minScale": 0.55
+    }
+  },
+  "artStatus": "pending",
+  "notes": "Phase A first version. Palette measured from R1 (#FCC834 keyword/pill yellow, ink #121214). UI cards, step chips and pills are Phase B (C3)."
+}

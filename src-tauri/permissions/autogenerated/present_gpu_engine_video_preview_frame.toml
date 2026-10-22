@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-present-gpu-engine-video-preview-frame"
+description = "Enables the present_gpu_engine_video_preview_frame command without any pre-configured scope."
+commands.allow = ["present_gpu_engine_video_preview_frame"]
+
+[[permission]]
+identifier = "deny-present-gpu-engine-video-preview-frame"
+description = "Denies the present_gpu_engine_video_preview_frame command without any pre-configured scope."
+commands.deny = ["present_gpu_engine_video_preview_frame"]

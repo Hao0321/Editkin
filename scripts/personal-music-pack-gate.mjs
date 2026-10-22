@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { readFile, stat, writeFile } from "node:fs/promises";
-import { isAbsolute, resolve, sep } from "node:path";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "..");
@@ -73,6 +73,7 @@ const report = {
   findings: findings.length ? findings : [{ status: "PASS", code: "community-music-pack", message: "175 首音樂已逐檔 hash、AAC 解碼，並綁定 Hao 2026-08-22 社群散布聲明。" }],
 };
 const evidence = resolve(root, `../../.rd/benchmarks/editkin-personal-music-pack-${manifest.version}.json`);
+await mkdir(dirname(evidence), { recursive: true });
 await writeFile(evidence, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 process.stdout.write(`${JSON.stringify({ ...report, evidence })}\n`);
 if (report.status !== "GREEN") process.exitCode = 1;

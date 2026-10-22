@@ -1,9 +1,10 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { beforeAll, expect, it } from "vitest";
+import { REPO_TMP, useTempRoots } from "../test/tempRoot.mjs";
 import { compactMaterialContext, prepareMaterialIntelligence, readMaterialIntelligence } from "./materialIntelligence";
 import { estimateAgentContextTokens } from "./agentContextBudget";
 import { recordMaterialSemantics } from "./materialIntelligence";
@@ -16,10 +17,11 @@ const app = fileURLToPath(new URL("../../", import.meta.url));
 const ffmpegPath = join(app, "vendor/ffmpeg/win32-x64/ffmpeg.exe");
 const ffprobePath = join(app, "vendor/ffmpeg/win32-x64/ffprobe.exe");
 let sharedSource: { root: string; sourcePath: string; sourceSha256: string } | undefined;
+// Removed in afterAll even when preparation fails midway (per-case caches live inside it).
+const temp = useTempRoots();
 
 beforeAll(async () => {
-  await mkdir(join(app, ".rd/tmp"), { recursive: true });
-  const root = await mkdtemp(join(app, ".rd/tmp/material-colour-integration-"));
+  const root = await temp.create("material-colour-integration-", { parent: REPO_TMP });
   const sourcePath = join(root, "tagged-sdr.mp4");
   const result = spawnSync(ffmpegPath, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=320x240:r=30:d=1", "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-x264-params", "colorprim=bt709:transfer=bt709:colormatrix=bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv", sourcePath], { windowsHide: true, timeout: 30000 });
   expect(result.status, result.stderr.toString()).toBe(0);
@@ -31,10 +33,6 @@ beforeAll(async () => {
   expect(prepared.packet.analysis.color?.status).toBe("measured");
   sharedSource = { root, sourcePath, sourceSha256 };
 }, 60000);
-
-afterAll(async () => {
-  if (sharedSource) await rm(sharedSource.root, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
-});
 
 async function fixture() {
   if (!sharedSource) throw new Error("material colour integration source was not prepared");

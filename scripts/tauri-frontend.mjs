@@ -62,6 +62,11 @@ if (!meetsRequired(versionParts(process.version))) {
 const { PRODUCT_RELEASE_SCOPE } = await import("./lib/build-input-identity.mjs");
 assertTauriNativePolicyPin(await readFile(resolve(root, "src-tauri/build.rs"), "utf8"), PRODUCT_RELEASE_SCOPE.policySha256);
 
+// Web and native builds share all locale/content checks. Missing live validation
+// sources must fail before Cargo work, generated assets or build receipts.
+const { checkFrontendQuality } = await import("./frontend-quality-gate.mjs");
+await checkFrontendQuality(root);
+
 const cargoName = process.platform === "win32" ? "cargo.exe" : "cargo";
 const standardCargo = resolve(homedir(), ".cargo", "bin", cargoName);
 const cargo = process.env.CARGO || (existsSync(standardCargo) ? standardCargo : cargoName);

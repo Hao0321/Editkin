@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-update-mobile-snapshot"
+description = "Enables the update_mobile_snapshot command without any pre-configured scope."
+commands.allow = ["update_mobile_snapshot"]
+
+[[permission]]
+identifier = "deny-update-mobile-snapshot"
+description = "Denies the update_mobile_snapshot command without any pre-configured scope."
+commands.deny = ["update_mobile_snapshot"]

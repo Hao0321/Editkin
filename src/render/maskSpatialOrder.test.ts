@@ -1,9 +1,10 @@
 import { expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { REPO_TMP, useTempRoots } from "../test/tempRoot.mjs";
 import { createDemoProject } from "../domain/demo";
 import { createClipMask } from "../domain/masks";
 import { createProductAutoRotoRouteReceipt } from "../application/autoRotoProductContract";
@@ -15,6 +16,8 @@ const app = fileURLToPath(new URL("../../", import.meta.url));
 const ff = resolve(app, "vendor/ffmpeg/win32-x64/ffmpeg.exe"), fp = resolve(app, "vendor/ffmpeg/win32-x64/ffprobe.exe");
 const width = 192, height = 128, sha = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 const layout = { crop: { x: .125, y: .125, width: .5, height: .75 }, viewport: { x: .375, y: .125, width: .5, height: .5 } };
+// Evidence folders are removed after each case unless EDITKIN_SPATIAL_EVIDENCE_ROOT names a folder to keep them in.
+const temp = useTempRoots();
 const cases: Array<{ id: string; transform?: Partial<TimelineClip["transform"]>; layout?: TimelineClip["layout"]; full?: boolean; pixel?: boolean; letterbox?: boolean }> = [
   { id: "identity-control" },
   { id: "half-scale", transform: { scale: .5 } },
@@ -28,9 +31,7 @@ const cases: Array<{ id: string; transform?: Partial<TimelineClip["transform"]>;
 ];
 
 it.each(cases)("masked spatial order agrees with independently pre-masked source: $id", async spec => {
-  const evidenceBase = process.env.EDITKIN_SPATIAL_EVIDENCE_ROOT ?? resolve(app, ".rd/tmp");
-  await mkdir(evidenceBase, { recursive: true });
-  const root = await mkdtemp(resolve(evidenceBase, `spatial-${spec.id}-`));
+  const root = await temp.create(`spatial-${spec.id}-`, { parent: REPO_TMP, keepEnv: "EDITKIN_SPATIAL_EVIDENCE_ROOT" });
   const processes: object[] = [];
   function run(args: string[], input?: Buffer) {
     const child = spawnSync(ff, args, { input, windowsHide: true, timeout: 30000, maxBuffer: 16 * 1024 * 1024 });

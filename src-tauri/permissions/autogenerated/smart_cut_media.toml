@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-smart-cut-media"
+description = "Enables the smart_cut_media command without any pre-configured scope."
+commands.allow = ["smart_cut_media"]
+
+[[permission]]
+identifier = "deny-smart-cut-media"
+description = "Denies the smart_cut_media command without any pre-configured scope."
+commands.deny = ["smart_cut_media"]

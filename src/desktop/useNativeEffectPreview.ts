@@ -21,13 +21,15 @@ export function useNativeEffectPreview(
   project: EditProject,
   layers: ActivePreviewLayer[],
   enabled: boolean,
+  previewEpoch = 0,
 ): NativeEffectPreviewState {
   const targetClipIds = useMemo(() => layers
     .filter((layer) => !layer.displayClip && layer.clip.creative?.nativeEffectInstances?.some((instance) => instance.enabled && instance.runtimeType !== "gpu_effect_graph" && !isTransformMotionBlurInstance(instance)))
     .map((layer) => layer.clip.id)
     .sort(), [layers]);
   const targetKey = targetClipIds.join("\u0000");
-  const projectIdentity = `${project.id}:${project.revision}:${project.updatedAt}`;
+  // Transient parameter previews intentionally keep the canonical project revision/timestamp.
+  const projectIdentity = JSON.stringify([project.id, project.revision, project.updatedAt, previewEpoch]);
   const [cache, setCache] = useState<Record<string, CachedPreview>>({});
   const [pendingClipIds, setPendingClipIds] = useState<string[]>([]);
   const [errorByClipId, setErrorByClipId] = useState<Record<string, string>>({});

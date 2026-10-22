@@ -1,79 +1,29 @@
 import { createHash, randomUUID } from "node:crypto";
-import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import * as z from "zod/v4";
 import { analyzeSceneCuts, type SceneCut } from "./sceneDetection";
-import { analyzeAutomaticCaptionTranscript, automaticCaptionRuntimeSha256, configuredWhisperCliPath, type AutomaticCaptionCue, type AutomaticCaptionRecognition, type RawWhisperTranscript } from "./automaticCaptions";
+import { analyzeAutomaticCaptionTranscript, automaticCaptionRuntimeSha256, captionScriptTarget, configuredWhisperCliPath, type AutomaticCaptionCue } from "./automaticCaptions";
 import { inspectMedia } from "./inspectMedia";
-import type { ColorManagementSettings, MediaColorMetadata } from "../domain/types";
-import { getMaterialColorRuntimeIdentity, sampleMaterialColor, type MaterialColorReceipt } from "./materialColorSampling";
-import { hashMaterialJson, hashMaterialSource, publishMaterialCache, readCompletedMaterialCache, sealMaterialPacket, verifyMaterialPacket, type MaterialCacheIdentity, type MaterialCacheSeal } from "./materialEvidenceCache";
-import { materialColorReference, materialColorSummary } from "./materialColorContext";
+import { PINNED_WHISPER_MODEL } from "./automaticCaptions";
+import { selectedWhisperModelV1, withWhisperModelRuntimeV1 } from "./whisperModelChoiceV1";
+import { ensurePinnedModelFileV1 } from "./whisperPinnedDownloadV1";
+import { getMaterialColorRuntimeIdentity, sampleMaterialColor } from "./materialColorSampling";
+import { hashMaterialJson, hashMaterialSource, publishMaterialCache, readCompletedMaterialCache, sealMaterialPacket, verifyMaterialPacket, type MaterialCacheIdentity, MaterialPreparationWorkPool } from "./materialEvidenceCache";
+import { withMediaCachePublishLock } from "./mediaCachePublishLock";
+import { createMaterialCacheStagingDirectoryV1 } from "./materialCacheStagingDirectoryV1";
 import { materialColorCodeIdentity } from "./materialColorCodeIdentity";
 import { extractMaterialKeyframes } from "./materialKeyframeExtraction";
-import type { CaptionSegmentation } from "./segmentedCaptions";
-import type { AutomaticCaptionRuntime } from "./automaticCaptions";
-import { validateExplicitKeyframeTimes, type MaterialKeyframeAnalysis, type MaterialKeyframeDisplay } from "./materialKeyframeTypes";
-import {
-  AGENT_CONTEXT_MAX_TOKENS,
-  MATERIAL_CONTEXT_DEFAULT_TOKENS,
-  estimateAgentContextTokens,
-} from "./agentContextBudget";
+import { validateExplicitKeyframeTimes } from "./materialKeyframeTypes";
+
+import type { MaterialKeyframe, MaterialIntelligencePacket, PrepareMaterialRequest, MaterialRuntime, MaterialPreparationProgress } from "./materialIntelligenceProtocol";
+export type { MaterialKeyframe, MaterialIntelligencePacket, PrepareMaterialRequest, MaterialRuntime, MaterialPreparationProgress } from "./materialIntelligenceProtocol";
+export { compactMaterialContext, type MaterialContextOptions } from "./materialIntelligenceContext";
 
 export const MATERIAL_INTELLIGENCE_SCHEMA = "hao.editkin.material-intelligence/v1" as const;
 export const MATERIAL_SEMANTICS_SCHEMA = "hao.editkin.material-semantics/v1" as const;
 const MATERIAL_ID = /^[a-f0-9]{64}$/;
 const MAX_TRANSCRIPT_CUES = 2_000;
-
-export interface MaterialKeyframe {
-  id: string;
-  time: number;
-  sceneIndex: number;
-  sha256: string;
-  bytes: number;
-  mimeType: "image/jpeg";
-  fileName: string;
-  /** Absent only on historical, read-only evidence. */
-  display?: MaterialKeyframeDisplay;
-}
-
-export interface MaterialIntelligencePacket {
-  schema: typeof MATERIAL_INTELLIGENCE_SCHEMA;
-  materialId: string;
-  cache?: MaterialCacheSeal;
-  source: {
-    assetId: string;
-    clipId: string;
-    sourceSha256: string;
-    sourceStart: number;
-    duration: number;
-    kind: "video" | "audio" | "image";
-    width?: number;
-    height?: number;
-    fps: number;
-    hasAudio: boolean;
-    color?: MediaColorMetadata;
-    colorManagement?: ColorManagementSettings;
-  };
-  analysis: {
-    keyframes?: MaterialKeyframeAnalysis;
-    color?: MaterialColorReceipt;
-    scene: { state: "ready" | "not_applicable" | "blocked"; engine?: string; cuts: SceneCut[]; reason?: string };
-    transcript: {
-      state: "ready" | "not_applicable" | "blocked";
-      engine?: string;
-      language?: string;
-      cueCount: number;
-      cues: AutomaticCaptionCue[];
-      reason?: string;
-      recognition?: AutomaticCaptionRecognition;
-      rawTranscript?: RawWhisperTranscript;
-      segmentation?: CaptionSegmentation;
-    };
-  };
-  keyframes: MaterialKeyframe[];
-  createdAt: string;
-}
 
 const semanticSegmentSchema = z.strictObject({
   start: z.number().nonnegative(),
@@ -123,39 +73,6 @@ export function materialTranscriptCueSha256(cue: Pick<AutomaticCaptionCue, "star
   return createHash("sha256").update(JSON.stringify({ start: cue.start, end: cue.end, text: cue.text })).digest("hex");
 }
 
-export interface PrepareMaterialRequest {
-  assetId: string;
-  clipId: string;
-  sourcePath: string;
-  sourceStart: number;
-  duration: number;
-  fps: number;
-  kind: "video" | "audio" | "image";
-  sourceSha256?: string;
-  language?: string;
-  includeTranscript?: boolean;
-  maxKeyframes?: number;
-  /** Optional exact, increasing clip-relative source seconds for local event inspection. */
-  keyframeTimes?: number[];
-  color?: MediaColorMetadata;
-  colorManagement?: ColorManagementSettings;
-}
-
-export interface MaterialRuntime {
-  ffmpegPath: string;
-  ffprobePath?: string;
-  modelRoot: string;
-  cacheRoot: string;
-  modelPath?: string;
-  whisperCliPath?: string;
-  requireTranscriptCompletion?: boolean;
-  signal?: AbortSignal;
-  onProgress?: (progress: MaterialPreparationProgress) => void | Promise<void>;
-}
-
-export type MaterialPreparationProgress = { phase: "identity" | "scene" | "keyframes" | "color" | "finalizing" }
-  | Parameters<NonNullable<AutomaticCaptionRuntime["onProgress"]>>[0];
-
 function cleanReason(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
   return raw.replace(/[A-Za-z]:\\[^\n\r]+|\/(?:[^\s/]+\/)+[^\s]+/g, "[local-path]").slice(0, 500);
@@ -204,6 +121,11 @@ function publicPacket(packet: MaterialIntelligencePacket): MaterialIntelligenceP
   return structuredClone(packet);
 }
 
+type PreparedMaterialResult = { packet: MaterialIntelligencePacket; cacheHit: boolean };
+const preparationWork = new MaterialPreparationWorkPool<PreparedMaterialResult, MaterialPreparationProgress>();
+/** Logical process-local preparation resources; does not count OS/native handles. */
+export const materialPreparationWorkSnapshot = () => preparationWork.snapshot();
+
 export async function prepareMaterialIntelligence(
   request: PrepareMaterialRequest,
   runtime: MaterialRuntime,
@@ -217,12 +139,18 @@ export async function prepareMaterialIntelligence(
     if (request.kind !== "video") throw Error("explicit-keyframe-times-require-video");
     request = { ...request, keyframeTimes: validateExplicitKeyframeTimes(request.keyframeTimes, request.duration, clamp(Math.floor(request.maxKeyframes ?? 8), 1, 12)) };
   }
-  runtime = { ...runtime, whisperCliPath: configuredWhisperCliPath(runtime) };
+  runtime = { ...withWhisperModelRuntimeV1(runtime, request.whisperModel, PINNED_WHISPER_MODEL), whisperCliPath: configuredWhisperCliPath(runtime) };
   runtime.signal?.throwIfAborted();
   await runtime.onProgress?.({ phase: "identity" });
   await Promise.all([access(request.sourcePath), access(runtime.ffmpegPath)]);
-  const sourceSha256 = await hashMaterialSource(request.sourcePath);
+  const sourceSha256 = await hashMaterialSource(request.sourcePath, { signal: runtime.signal });
   if (request.sourceSha256 !== undefined && request.sourceSha256.toLowerCase() !== sourceSha256) throw new Error("來源 SHA-256 已變更，請重新匯入／分析");
+  if (runtime.whisperModel === "medium" && request.includeTranscript !== false && request.kind !== "image") {
+    const selectedModel = selectedWhisperModelV1(runtime.whisperModel, PINNED_WHISPER_MODEL), expectedPath = resolve(runtime.modelRoot, selectedModel.fileName);
+    const selectedPath = runtime.modelPath ? resolve(runtime.modelPath) : expectedPath;
+    const isDefaultPath = process.platform === "win32" ? selectedPath.toLowerCase() === expectedPath.toLowerCase() : selectedPath === expectedPath;
+    await ensurePinnedModelFileV1({ ...runtime, modelPath: isDefaultPath ? undefined : runtime.modelPath }, selectedModel);
+  }
   const colorRuntime = await getMaterialColorRuntimeIdentity(runtime);
   const preparation = materialColorCodeIdentity().implementations.find(item => item.name === "materialIntelligence.ts");
   if (!preparation) throw new Error("material-preparation-implementation-missing");
@@ -236,35 +164,51 @@ export async function prepareMaterialIntelligence(
     preparationSha256: preparation.sha256,
     ...(runtime.requireTranscriptCompletion ? { transcriptPolicy: "required" as const } : {}),
     ...(request.includeTranscript !== false && request.kind !== "image"
-      ? { transcriptRuntimeSha256: await automaticCaptionRuntimeSha256(runtime) } : {}),
+      // Packets hold script-converted cue text, so the target script is part of the material identity.
+      ? { transcriptRuntimeSha256: await automaticCaptionRuntimeSha256(runtime), captionScript: captionScriptTarget(request.script) } : {}),
   };
   const materialId = hashMaterialJson(identity);
   const directory = materialDirectory(runtime.cacheRoot, materialId);
-  const cached = await readCompletedMaterialCache<MaterialIntelligencePacket>(directory, materialId);
-  runtime.signal?.throwIfAborted();
-  if (cached) {
-    if (await hashMaterialSource(request.sourcePath) !== sourceSha256) throw new Error("來源 SHA-256 在 cache 驗證中改變");
-    return { packet: publicPacket(cached), cacheHit: true };
-  }
-  const probe = await inspectMedia(request.sourcePath, runtime.ffprobePath);
-  await mkdir(dirname(directory), { recursive: true });
-  const staging = await mkdtemp(join(dirname(directory), `.pending-${materialId}-`));
+  const workKey = process.platform === "win32" ? directory.toLowerCase() : directory;
+  const lease = preparationWork.acquire(workKey, async (signal, onProgress) => {
+    const sharedRuntime = { ...runtime, signal, onProgress };
+    const cached = await readCompletedMaterialCache<MaterialIntelligencePacket>(directory, materialId);
+    sharedRuntime.signal?.throwIfAborted();
+    if (cached) {
+      return { packet: cached, cacheHit: true };
+    }
+    const probe = await inspectMedia(request.sourcePath, runtime.ffprobePath, [], { signal, shared: true });
+    signal.throwIfAborted();
+    await mkdir(dirname(directory), { recursive: true });
+    const staging = await createMaterialCacheStagingDirectoryV1(dirname(directory), materialId);
+    try {
+      const packet = await prepareMaterialContent(request, sharedRuntime, probe, identity, materialId, staging);
+      sharedRuntime.signal?.throwIfAborted();
+      await sharedRuntime.onProgress?.({ phase: "finalizing" });
+      if (await hashMaterialSource(request.sourcePath, { signal }) !== sourceSha256) throw new Error("來源 SHA-256 在分析期間改變");
+      sharedRuntime.signal?.throwIfAborted();
+      verifyMaterialPacket(packet, materialId);
+      await writeJsonAtomic(join(staging, "manifest.json"), packet);
+      const winner = await withMediaCachePublishLock(directory, () => {
+        signal.throwIfAborted();
+        return publishMaterialCache<MaterialIntelligencePacket>(staging, directory, materialId);
+      });
+      if (winner) return { packet: winner, cacheHit: true };
+      return { packet, cacheHit: false };
+    } finally {
+      // Only the exact generated private staging directory can be removed.
+      if (dirname(resolve(staging)) !== dirname(resolve(directory))) throw new Error("素材 staging 邊界不合法");
+      await rm(staging, { recursive: true, force: true });
+    }
+  }, { signal: runtime.signal, onProgress: runtime.onProgress });
   try {
-    const packet = await prepareMaterialContent(request, runtime, probe, identity, materialId, staging);
+    const result = await lease.result;
     runtime.signal?.throwIfAborted();
-    await runtime.onProgress?.({ phase: "finalizing" });
-    if (await hashMaterialSource(request.sourcePath) !== sourceSha256) throw new Error("來源 SHA-256 在分析期間改變");
+    // Every caller rechecks its own source, even when another path produced the result.
+    if (await hashMaterialSource(request.sourcePath, { signal: runtime.signal }) !== sourceSha256) throw new Error("來源 SHA-256 在 cache 驗證中改變");
     runtime.signal?.throwIfAborted();
-    verifyMaterialPacket(packet, materialId);
-    await writeJsonAtomic(join(staging, "manifest.json"), packet);
-    const winner = await publishMaterialCache<MaterialIntelligencePacket>(staging, directory, materialId);
-    if (winner) return { packet: publicPacket(winner), cacheHit: true };
-    return { packet: publicPacket(packet), cacheHit: false };
-  } finally {
-    // Only the exact generated private staging directory can be removed.
-    if (dirname(resolve(staging)) !== dirname(resolve(directory))) throw new Error("素材 staging 邊界不合法");
-    await rm(staging, { recursive: true, force: true });
-  }
+    return { packet: publicPacket(result.packet), cacheHit: result.cacheHit || lease.coalesced };
+  } finally { await lease.release(); }
 }
 
 async function prepareMaterialContent(
@@ -290,13 +234,14 @@ async function prepareMaterialContent(
     runtime.signal?.throwIfAborted();
     try {
       const result = await analyzeAutomaticCaptionTranscript({ ...request, sourceSha256 }, {
-        ffmpegPath: runtime.ffmpegPath, modelRoot: runtime.modelRoot, modelPath: runtime.modelPath, cacheRoot: runtime.cacheRoot, whisperCliPath: runtime.whisperCliPath,
+        ffmpegPath: runtime.ffmpegPath, modelRoot: runtime.modelRoot, modelPath: runtime.modelPath, whisperModel: runtime.whisperModel, mediumModelPath: runtime.mediumModelPath, smallModelPath: runtime.smallModelPath, cacheRoot: runtime.cacheRoot, whisperCliPath: runtime.whisperCliPath,
         signal: runtime.signal, onProgress: runtime.onProgress,
       });
       if (result.cues.length > MAX_TRANSCRIPT_CUES) throw new Error("逐字稿超過 2000 段，請分成較短素材分析；未將截斷結果標為完成");
       const cues = result.cues;
       transcript = {
         state: "ready", engine: result.engine, language: result.language, cueCount: cues.length, cues,
+        ...(result.scriptConversion ? { scriptConversion: result.scriptConversion } : {}),
         recognition: result.recognition, rawTranscript: result.rawTranscript,
         ...(result.segmentation ? { segmentation: result.segmentation } : {}),
         ...(result.recognition.status === "empty" ? { reason: "辨識程序已完成，但沒有可用逐字稿；聲音內容尚未驗證，不代表素材沒有語音" } : {}),
@@ -305,7 +250,8 @@ async function prepareMaterialContent(
   }
 
   const keyframes: MaterialKeyframe[] = [];
-  const samples = request.kind === "audio" ? [] : selectMaterialKeyframeTimes(request.duration, scene.cuts, identity.maxKeyframes, identity.keyframeTimes)
+  // A still image has exactly one decodable frame: sample it once, at t=0.
+  const samples = request.kind === "audio" ? [] : (request.kind === "image" ? [0] : selectMaterialKeyframeTimes(request.duration, scene.cuts, identity.maxKeyframes, identity.keyframeTimes))
     .map((time, index) => ({ id: `kf-${index + 1}`, time, sceneIndex: scene.cuts.filter(cut => cut.time <= time).length }));
   const visualRequest = {
     sourcePath: request.sourcePath, sourceSha256, sourceStart: request.sourceStart, duration: request.duration,
@@ -356,83 +302,6 @@ export async function readMaterialKeyframe(cacheRoot: string, materialId: string
   const data = await readFile(join(materialDirectory(cacheRoot, materialId), frame.fileName));
   if (createHash("sha256").update(data).digest("hex") !== frame.sha256) throw new Error(`關鍵幀完整性驗證失敗：${frameId}`);
   return { frame, data };
-}
-
-export interface MaterialContextOptions {
-  afterCueIndex?: number;
-  maxTokens?: number;
-  maxCuts?: number;
-}
-
-export function compactMaterialContext(
-  packet: MaterialIntelligencePacket,
-  start: number,
-  end: number,
-  maxCues: number,
-  options: MaterialContextOptions = {},
-) {
-  if (!Number.isFinite(start) || start < 0 || !Number.isFinite(end) || end <= start || end > packet.source.duration + 1e-6) throw new Error("素材 context 時間窗不合法");
-  const afterCueIndex = Math.max(-1, Math.floor(options.afterCueIndex ?? -1));
-  const maxTokenBudget = clamp(Math.floor(options.maxTokens ?? MATERIAL_CONTEXT_DEFAULT_TOKENS), 200, AGENT_CONTEXT_MAX_TOKENS);
-  const maximumCues = clamp(Math.floor(maxCues), 1, 200);
-  const maximumCuts = clamp(Math.floor(options.maxCuts ?? 20), 1, 100);
-  const cueCandidates = packet.analysis.transcript.cues
-    .map((cue, index) => ({ ...cue, index }))
-    .filter((cue) => cue.start < end && cue.end > start)
-    .filter((cue) => cue.index > afterCueIndex);
-  const allCuts = packet.analysis.scene.cuts.filter((cut) => cut.time >= start && cut.time <= end);
-  const allKeyframes = packet.keyframes.filter((frame) => frame.time >= start && frame.time <= end)
-    .map(({ fileName: _privateFileName, display, ...frame }) => ({ ...frame, ...(display ? { display: { receiptSha256: display.receiptSha256, transfer: display.normalization.transfer, requestedTime: display.requested.time, actualTime: display.decoded.relativeTime } } : {}) }));
-  const cuts = allCuts.slice(0, maximumCuts);
-  const keyframes = [...allKeyframes];
-  const cues: typeof cueCandidates = [];
-  const minimumColor = materialColorReference(packet.analysis.color);
-  let color: ReturnType<typeof materialColorSummary> = minimumColor;
-
-  const build = () => ({
-    materialId: packet.materialId,
-    sourceSha256: packet.source.sourceSha256,
-    window: { start, end },
-    transcript: {
-      state: packet.analysis.transcript.state,
-      recognition: packet.analysis.transcript.recognition,
-      reason: packet.analysis.transcript.reason,
-      rawTranscriptSha256: packet.analysis.transcript.rawTranscript?.sha256,
-      cues,
-      returnedCues: cues.length,
-      remainingWindowCues: Math.max(0, cueCandidates.length - cues.length),
-      hasMore: cueCandidates.length > cues.length,
-      nextCueIndex: cueCandidates.length > cues.length ? (cues.at(-1)?.index ?? afterCueIndex) : undefined,
-    },
-    cuts,
-    cutsHasMore: allCuts.length > cuts.length,
-    keyframes,
-    keyframesHasMore: allKeyframes.length > keyframes.length,
-    color,
-    budget: { maxTokens: maxTokenBudget, estimatedTokens: 0 },
-  });
-  const selectionBudget = Math.max(1, maxTokenBudget - 12);
-  const metadataBudget = Math.max(160, Math.floor(selectionBudget * 0.45));
-  const fits = (limit = selectionBudget) => estimateAgentContextTokens(JSON.stringify(build())) <= limit;
-  // The separate keyframe tool owns visual detail. Keep this packet's metadata
-  // small enough that transcript evidence still receives most of the budget.
-  while (!fits(metadataBudget) && cuts.length) cuts.pop();
-  while (!fits(metadataBudget) && keyframes.length) keyframes.pop();
-  for (const cue of cueCandidates.slice(0, maximumCues)) {
-    cues.push(cue);
-    if (fits()) continue;
-    cues.pop();
-    break;
-  }
-  if (cueCandidates.length && !cues.length) throw new Error("素材 context 的單一逐字稿 cue 無法放入 Token 預算；請提高 maxTokens，不可跳過此 cue");
-  // Rich colour detail only uses remaining space: never pop transcript evidence
-  // or advance its cursor just to fit an observation summary.
-  color = materialColorSummary(packet.analysis.color, start, end);
-  if (!fits()) color = minimumColor;
-  const response = build();
-  response.budget.estimatedTokens = estimateAgentContextTokens(JSON.stringify(response));
-  if (response.budget.estimatedTokens > maxTokenBudget) throw new Error("素材 context 基礎 metadata 超過 Token 預算，請縮小時間窗");
-  return response;
 }
 
 export async function recordMaterialSemantics(cacheRoot: string, input: MaterialSemanticsInput): Promise<MaterialSemanticsReceipt> {

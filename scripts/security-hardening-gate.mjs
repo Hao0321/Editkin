@@ -1,5 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import {
   evaluateSourceSecurity,
   PAYLOAD_SECURITY_POLICY_REVISION,
@@ -112,6 +112,7 @@ const output = resolve(
   root,
   `../../.rd/benchmarks/editkin-security-hardening-${packageJson.version}-windows-x64-${profile}.json`,
 );
+await mkdir(dirname(output), { recursive: true });
 await writeFile(output, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 process.stdout.write(
   `${JSON.stringify({ status: report.status, profile, artifactTarget: currentArtifactTarget, productVersion: packageJson.version, source: source.status, payload: payload?.status ?? "missing", ownerOnlyFiles: payload?.ownerOnlyFiles, authenticode: payload?.authenticode?.Status, pe: payload?.pe, findings, evidencePath: output })}\n`,

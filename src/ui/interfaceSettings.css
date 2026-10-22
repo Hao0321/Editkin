@@ -1,0 +1,31 @@
+.interface-settings { position: relative; }
+.interface-settings > summary { display: flex; align-items: center; gap: .45rem; min-height: 44px; padding: .55rem .7rem; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); cursor: pointer; list-style: none; }
+.interface-settings > summary::-webkit-details-marker { display: none; }
+.interface-settings > summary small { color: var(--muted); }
+.interface-settings-body { position: fixed; z-index: 100; inset-block-start: 12px; inset-inline-end: 12px; width: min(440px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; display: grid; gap: 14px; padding: 18px; border: 1px solid var(--line-strong); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
+.interface-settings-body label { display: grid; grid-template-columns: minmax(0,1fr) minmax(100px,1fr); align-items: center; gap: 10px; }
+.interface-settings-body :is(select, button) { width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: var(--surface-2); }
+.interface-settings-body p { margin: 0; color: var(--muted); line-height: 1.6; overflow-wrap: anywhere; }
+.interface-settings-body .interface-settings-close { justify-self: end; width: 44px; }
+.interface-mode-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.interface-mode-options [aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.app-version-info { display: grid; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+.app-version-info dl { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 4px 14px; margin: 0; }
+.app-version-info dt { color: var(--muted); }
+.app-version-info dd { margin: 0; font-variant-numeric: tabular-nums; font-family: ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
+/* The 進階模式 switch: one control, its state shown by the knob and announced as a switch. */
+.interface-settings-body .interface-mode-switch { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 12px; padding: 10px 12px; text-align: start; cursor: pointer; }
+.interface-mode-switch-copy { display: grid; gap: 2px; min-width: 0; }
+.interface-mode-switch-copy b { font-weight: 750; overflow-wrap: anywhere; }
+.interface-mode-switch-copy small { color: var(--muted); overflow-wrap: anywhere; }
+.interface-mode-switch-track { position: relative; flex: 0 0 auto; width: 46px; height: 26px; box-sizing: border-box; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface-3); }
+.interface-mode-switch-track i { position: absolute; inset-block-start: 2px; inset-inline-start: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 3px rgb(0 0 0 / .25); }
+.interface-mode-switch[aria-checked="true"] .interface-mode-switch-track { border-color: var(--accent); background: var(--accent); }
+.interface-mode-switch[aria-checked="true"] .interface-mode-switch-track i { inset-inline-start: 22px; }
+@media (prefers-reduced-motion: no-preference) { .interface-mode-switch-track, .interface-mode-switch-track i { transition: background-color .16s ease, inset-inline-start .16s ease; } }
+/* The simple editor's ⚙ 設定: the close button shares the title's row. */
+.interface-settings[data-variant="editor"] > summary { font-weight: 750; }
+/* Room for the longer choices (e.g. 「大字（推薦）」 in other languages); large interface sizes keep the stacked layout. */
+:root:not(:is([data-ui-scale="1.5"], [data-ui-scale="1.75"], [data-ui-scale="2"])) .interface-settings[data-variant="editor"] .interface-settings-body label { grid-template-columns: minmax(0, 1fr) minmax(min(100%, 170px), 1.4fr); }
+.interface-settings[data-variant="editor"] .interface-settings-body > .interface-settings-close { position: absolute; inset-block-start: 14px; inset-inline-end: 14px; }
+.interface-settings[data-variant="editor"] .interface-settings-body > strong { display: flex; align-items: center; min-height: 44px; padding-inline-end: 56px; font-size: calc(17px * var(--ui-scale, 1)); }

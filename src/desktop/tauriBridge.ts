@@ -1,12 +1,21 @@
+import { isRetainedProjectV1 } from "../domain/projectSaveRetentionV1";
 import { Channel, convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { listen } from "@tauri-apps/api/event";
+import { ownAsyncListenerV1 } from "./asyncListenerOwnerV1";
 import { createTauriGpuPreviewApi, createTauriGpuPreviewOwner } from "./tauriGpuPreview";
 import type { NativeAudioPreviewStatus } from "./nativeAudioTypes";
 import type { ResidentAudioStatus } from "./residentAudioTypes";
 import type { MediaAsset } from "../domain/types";
-import type { HaoDesktopApi, OpenProjectResult, PickedMedia, PrepareMediaResult, UpdateCheckResult } from "./types";
+import type { DesktopRenderResult, HaoDesktopApi, OpenProjectResult, PickedMedia, PrepareMediaResult, UpdateCheckResult } from "./types";
+import type { TemplateShortJobStatus } from "./templateShortTypes";
 import { buildOpenExrSequenceRenderRequest } from "../render/openExrSequence";
 import { dehydrateAutoRotoFramePreviews, hydrateAutoRotoFramePreviews } from "../domain/autoRotoPreviewProjection";
+import { createEngineTaskHostV1 } from "./engineTaskHostV1";
 import { parseRemoteAgentLaunchResult, parseRemoteAgentLaunchStatus } from "./remoteAgentLaunchStore";
+import { normalizeUiLocale, type UiLocale } from "../shared/uiLocaleContract";
+import { isOriginalSfxCandidateIdV1 } from "../domain/originalSfxCandidateContractV1";
+import { decodeColorLutBytesV1 } from "./colorLutApiV1";
 
 declare global {
   interface Window { __TAURI_INTERNALS__?: unknown }
@@ -14,6 +23,17 @@ declare global {
 
 function urls(paths: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(paths).map(([key, path]) => [key, convertFileSrc(path)]));
+}
+
+function nativeDialogLocale(): UiLocale {
+  return normalizeUiLocale(typeof document === "undefined" ? undefined : document.documentElement.lang);
+}
+
+/** The finished export for the in-app player; the host allowed the path when the render completed. */
+function withOutputUrl(result: DesktopRenderResult): DesktopRenderResult {
+  if (result.canceled || !result.outputPath) return result;
+  const version = result.artifactIdentity?.outputSha256 ?? String(Date.now());
+  return { ...result, outputUrl: `${convertFileSrc(result.outputPath)}?v=${encodeURIComponent(version)}` };
 }
 
 const delay = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
@@ -31,46 +51,90 @@ async function pollUpdateJob(download: boolean): Promise<UpdateCheckResult> {
 }
 
 if (window.__TAURI_INTERNALS__) {
+  const engineTasks = createEngineTaskHostV1(invoke, receive => new Channel<unknown>(receive));
   const api: HaoDesktopApi = {
+    generateClipMediaDerivative: async (request) => {
+      const result = await invoke<Awaited<ReturnType<NonNullable<HaoDesktopApi["generateClipMediaDerivative"]>>>>("clip_media_derivative", { request });
+      return { ...result, previewUrl: convertFileSrc(result.asset.uri) };
+    },
     isDesktop: true,
+    ...engineTasks,
+    renderMotionLibraryV1: async (input, options) => {
+      const reply = await engineTasks.runMotionLibraryRenderTaskV1(input, options);
+      const previewUrls = Object.fromEntries(Object.values(reply.result.assets).filter((asset): asset is MediaAsset => Boolean(asset))
+        .map(asset => [asset.id, convertFileSrc(asset.uri)]));
+      return { ...reply.result, previewUrls };
+    },
+    setInterfaceScale: async scale => {
+      if (!Number.isFinite(scale) || scale < 0.8 || scale > 2) throw new Error("Invalid interface scale");
+      await getCurrentWebview().setZoom(scale);
+    },
     pickMedia: async () => {
-      const picked = await invoke<Array<{ asset: MediaAsset; previewPath: string }>>("pick_media");
+      const picked = await invoke<Array<{ asset: MediaAsset; previewPath: string }>>("pick_media", { uiLocale: nativeDialogLocale() });
       return picked.map(({ asset, previewPath }): PickedMedia => ({ asset, previewUrl: convertFileSrc(previewPath) }));
     },
     importMediaPaths: async (paths) => {
       const picked = await invoke<Array<{ asset: MediaAsset; previewPath: string }>>("import_media_paths", { paths });
       return picked.map(({ asset, previewPath }): PickedMedia => ({ asset, previewUrl: convertFileSrc(previewPath) }));
     },
-    pickBatchMedia: (editorialProfile) => invoke("pick_batch_media", { editorialProfile }),
+    pickBatchMedia: (editorialProfile) => invoke("pick_batch_media", { editorialProfile, uiLocale: nativeDialogLocale() }),
     getBatchSession: () => invoke("get_batch_session"),
-    runBatchAutoEditItem: (sessionId, jobId) => invoke("run_batch_auto_edit_item", { sessionId, jobId }),
+    runBatchAutoEditItem: async (sessionId, jobId, options) => {
+      const reply = await engineTasks.runDesktopBatchTaskV1({ operationId: `batch-${crypto.randomUUID()}`, sessionId, jobId }, options);
+      return { session: reply.result.session! };
+    },
     openBatchProject: async (sessionId, jobId) => {
       const opened = await invoke<Omit<OpenProjectResult, "runtimeUrls"> & { runtimePaths?: Record<string, string>; mattePreviewPaths?: string[] }>("open_batch_project", { sessionId, jobId });
       return { ...opened, project: opened.project ? hydrateAutoRotoFramePreviews(opened.project, opened.mattePreviewPaths ?? [], convertFileSrc) : undefined, runtimeUrls: opened.runtimePaths ? urls(opened.runtimePaths) : undefined };
     },
     listCreativeLibrary: () => invoke("list_creative_library"),
+    listOriginalSfxCandidates: () => invoke("list_creative_library", { includeOriginalSfxCandidates: true }),
+    resolveOriginalSfxCandidate: async (assetId) => {
+      if (!isOriginalSfxCandidateIdV1(assetId)) throw new Error("SFX_ID_NOT_IN_OWNED_CATALOGUE");
+      const picked = await invoke<{ asset: MediaAsset; previewPath: string }>("import_creative_asset", { assetId });
+      return { asset: picked.asset, absolutePath: picked.previewPath, previewUrl: convertFileSrc(picked.previewPath) };
+    },
     importCreativeAsset: async (assetId) => {
       const picked = await invoke<{ asset: MediaAsset; previewPath: string }>("import_creative_asset", { assetId });
       return { asset: picked.asset, previewUrl: convertFileSrc(picked.previewPath) };
     },
     previewCreativeAsset: async (assetId, mode = "media") => convertFileSrc(await invoke<string>("preview_creative_asset", { assetId, mode })),
     readColorAsset: (relativePath) => invoke("read_color_asset", { relativePath }),
+    listColorLutsV1: (offset = 0, limit = 100) => invoke("list_color_luts_v1", { offset, limit }),
+    pickColorLutV1: () => invoke("pick_color_lut_v1", { uiLocale: nativeDialogLocale() }),
+    importColorLutV1: (request) => invoke("import_color_lut_v1", { request }),
+    readColorLutV1: async (ref, inputSpace) => decodeColorLutBytesV1(await invoke<ArrayBuffer>("read_color_lut_v1", { id: ref.id, sha256: ref.sha256, inputSpace })),
+    readMesh3dFont: async (weight) => new Uint8Array(await invoke<ArrayBuffer>("read_mesh_3d_font", { weight })),
+    readBundledFontFace: async (faceId) => {
+      const bytes = await invoke<ArrayBuffer>("read_bundled_font_face", { faceId });
+      if (!(bytes instanceof ArrayBuffer) || bytes.byteLength === 0 || bytes.byteLength > 16 * 1024 * 1024) {
+        throw new Error("Bundled font IPC did not return bounded binary bytes");
+      }
+      return new Uint8Array(bytes);
+    },
     listInstalledPlugins: () => invoke("list_installed_plugins"),
     getWorkflowProfile: () => invoke("get_workflow_profile"),
     saveWorkflowProfile: (profile) => invoke("save_workflow_profile", { profile }),
     openPluginFolder: () => invoke("open_plugin_folder"),
     compilePluginTool: (pluginId, capabilityId, targetClipId, parameters = {}) => invoke("compile_plugin_tool", { pluginId, capabilityId, targetClipId, parameters }),
     openProject: async () => {
-      const opened = await invoke<Omit<OpenProjectResult, "runtimeUrls"> & { runtimePaths?: Record<string, string>; mattePreviewPaths?: string[] }>("open_project");
+      const opened = await invoke<Omit<OpenProjectResult, "runtimeUrls"> & { runtimePaths?: Record<string, string>; mattePreviewPaths?: string[] }>("open_project", { uiLocale: nativeDialogLocale() });
       return { ...opened, project: opened.project ? hydrateAutoRotoFramePreviews(opened.project, opened.mattePreviewPaths ?? [], convertFileSrc) : undefined, runtimeUrls: opened.runtimePaths ? urls(opened.runtimePaths) : undefined };
     },
-    saveProject: async (project, currentPath, saveAs) => {
-      const saved = await invoke<import("./types").SaveProjectResult & { mattePreviewPaths?: string[] }>("save_project", { project: dehydrateAutoRotoFramePreviews(project), currentPath, saveAs });
+    saveProject: async (project, currentPath, saveAs, expectedFileIdentity) => {
+      const saved = await invoke<import("./types").SaveProjectResult & { mattePreviewPaths?: string[]; saveFailed?: boolean; message?: string; retainedProject?: unknown }>("save_project", { project: dehydrateAutoRotoFramePreviews(project), currentPath, saveAs, expectedFileIdentity, uiLocale: nativeDialogLocale() });
+      if (saved.saveFailed) {
+        const failure = new Error(saved.message ?? "無法儲存專案");
+        if (isRetainedProjectV1(saved.retainedProject) && saved.retainedProject.fileIdentity.projectId === project.id) {
+          Object.defineProperty(failure, "retainedProject", { value: Object.freeze({ ...saved.retainedProject, fileIdentity: Object.freeze({ ...saved.retainedProject.fileIdentity }) }) });
+        }
+        throw failure;
+      }
       return { ...saved, project: saved.project ? hydrateAutoRotoFramePreviews(saved.project, saved.mattePreviewPaths ?? [], convertFileSrc) : undefined };
     },
-    renderProject: (project) => invoke("render_project", { project: dehydrateAutoRotoFramePreviews(project) }),
-    renderAlphaMaster: (project) => invoke("render_alpha_master", { project: dehydrateAutoRotoFramePreviews(project) }),
-    renderOpenExrSequence: (project) => invoke("render_openexr_sequence", { ...buildOpenExrSequenceRenderRequest(project) }),
+    renderProject: async (project, options) => withOutputUrl(await invoke<DesktopRenderResult>("render_project", { project: dehydrateAutoRotoFramePreviews(project), uiLocale: nativeDialogLocale(), jobId: options?.jobId })),
+    renderAlphaMaster: (project, options) => invoke("render_alpha_master", { project: dehydrateAutoRotoFramePreviews(project), uiLocale: nativeDialogLocale(), jobId: options?.jobId }),
+    renderOpenExrSequence: (project) => invoke("render_openexr_sequence", { ...buildOpenExrSequenceRenderRequest(project), uiLocale: nativeDialogLocale() }),
     renderNativeEffectPreview: async (project, clipId) => {
       const result = await invoke<Omit<import("./types").NativeEffectPreviewResult, "previewUrl">>("render_native_effect_preview", { project, clipId });
       return { ...result, previewUrl: `${convertFileSrc(result.path)}?v=${encodeURIComponent(result.sha256)}` };
@@ -93,12 +157,12 @@ if (window.__TAURI_INTERNALS__) {
       if (!result.found) return result;
       return { ...result, snapshot: { ...result.snapshot, project: hydrateAutoRotoFramePreviews(result.snapshot.project, result.mattePreviewPaths ?? [], convertFileSrc) } };
     },
-    saveRecovery: async (project, projectPath, cleanUpdatedAt) => { await invoke("save_recovery", { project: dehydrateAutoRotoFramePreviews(project), projectPath, cleanUpdatedAt }); },
+    saveRecovery: async (project, projectPath, cleanUpdatedAt, baseFileIdentity) => { await invoke("save_recovery", { project: dehydrateAutoRotoFramePreviews(project), projectPath, cleanUpdatedAt, baseFileIdentity }); },
     clearRecovery: async () => { await invoke("clear_recovery"); },
     integrationSmokeEnabled: () => invoke("integration_smoke_enabled"),
     checkForUpdates: (options) => pollUpdateJob(options?.download !== false),
-    installUpdate: () => invoke("install_update"),
-    copyAgentSetup: (target) => invoke("copy_agent_setup", { target }),
+    installUpdate: () => invoke("install_update", { uiLocale: nativeDialogLocale() }),
+    copyAgentSetup: (target) => invoke("copy_agent_setup", { target, uiLocale: nativeDialogLocale() }),
     inspectAgentConnections: () => invoke("inspect_agent_connections"),
     launchRemoteSetupAgent: async (target, jobId, consentRevision, scopeConfirmed) => parseRemoteAgentLaunchResult(
       await invoke<unknown>("launch_remote_setup_agent", { target, jobId, consentRevision, scopeConfirmed }),
@@ -141,6 +205,36 @@ if (window.__TAURI_INTERNALS__) {
       const result = await invoke<import("./types").GpuCompositionResult>("render_gpu_composition", { graph });
       return { ...result, outputUrl: convertFileSrc(result.outputPath) };
     },
+    templateShortPrepare: (sourcePath) => invoke("template_short_prepare", { sourcePath }),
+    // `confirmed: true` is sent from this one call, which only the 「是，這是我自己拍的素材」 click reaches.
+    templateShortConfirmRights: (sourcePath, brandMark) => invoke("template_short_confirm_rights", { sourcePath, brandMark: brandMark?.trim() || null, confirmed: true }),
+    templateShortStart: (request) => invoke("start_template_short_job", { sourcePath: request.sourcePath, genre: request.genre, copy: request.copy }),
+    templateShortStatus: async (jobId) => {
+      const status = await invoke<TemplateShortJobStatus>("template_short_job_status", { jobId });
+      return status.outputPath ? { ...status, outputUrl: `${convertFileSrc(status.outputPath)}?v=${encodeURIComponent(status.result?.outputSha256 ?? status.jobId)}` } : status;
+    },
+    templateShortCancel: (jobId) => invoke("cancel_template_short_job", { jobId }),
+    templateShortSaveVideo: (jobId, fileName) => invoke("save_template_short_video", { jobId, fileName }),
+    templateShortOpenProject: async (jobId) => {
+      const opened = await invoke<Omit<OpenProjectResult, "runtimeUrls"> & { runtimePaths?: Record<string, string>; mattePreviewPaths?: string[] }>("open_template_short_project", { jobId });
+      return { ...opened, project: opened.project ? hydrateAutoRotoFramePreviews(opened.project, opened.mattePreviewPaths ?? [], convertFileSrc) : undefined, runtimeUrls: opened.runtimePaths ? urls(opened.runtimePaths) : undefined };
+    },
+    revealInFolder: async (path) => { await invoke("reveal_in_folder", { path }); },
+    renderJobProgress: (jobId) => invoke("render_job_progress", { jobId }),
+    cancelRenderJob: (jobId) => invoke("cancel_render_job", { jobId }),
+    appBuildInfo: () => invoke("app_build_info"),
+    setCloseGuard: async (armed) => { await invoke("set_close_guard", { armed }); },
+    acknowledgeCloseRequest: async () => { await invoke("acknowledge_close_request"); },
+    closeWindowConfirmed: async () => { await invoke("close_window_confirmed"); },
+    onCloseRequested: handler => ownAsyncListenerV1(callback => listen("editkin:close-requested", callback), handler),
+    inspectProjectFile: path => invoke("inspect_project_file", { path }),
+    openProjectPath: async (path) => {
+      const opened = await invoke<Omit<OpenProjectResult, "runtimeUrls"> & { runtimePaths?: Record<string, string>; mattePreviewPaths?: string[] }>("open_project_path", { path });
+      return { ...opened, project: opened.project ? hydrateAutoRotoFramePreviews(opened.project, opened.mattePreviewPaths ?? [], convertFileSrc) : undefined, runtimeUrls: opened.runtimePaths ? urls(opened.runtimePaths) : undefined };
+    },
+    checkMediaPaths: (paths) => invoke("check_media_paths", { paths }),
+    pickRelinkMedia: () => invoke("pick_relink_media", { uiLocale: nativeDialogLocale() }),
+    keepRecoveryAside: () => invoke("keep_recovery_aside"),
   };
   window.haoDesktop = api;
   void invoke("smoke_ready");

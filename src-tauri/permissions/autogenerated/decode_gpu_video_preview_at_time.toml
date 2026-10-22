@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-decode-gpu-video-preview-at-time"
+description = "Enables the decode_gpu_video_preview_at_time command without any pre-configured scope."
+commands.allow = ["decode_gpu_video_preview_at_time"]
+
+[[permission]]
+identifier = "deny-decode-gpu-video-preview-at-time"
+description = "Denies the decode_gpu_video_preview_at_time command without any pre-configured scope."
+commands.deny = ["decode_gpu_video_preview_at_time"]

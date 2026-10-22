@@ -1,5 +1,9 @@
+import { trackAudioAudible } from "../domain/trackState";
+import { assertLegacyTimeRemapRouteV1 } from "../domain/clipTimeRemapV1";
 import { findAsset, projectDuration, validateProject } from "../domain/editGraph";
 import type { CaptionCue, EditProject, TimelineClip } from "../domain/types";
+
+import { compileTimelineTransitionHandlesV1, type TimelineTransitionHandlePlanV1 } from "../domain/timelineTransitionHandlesV1";
 
 export type RenderSegment =
   | { kind: "gap"; start: number; duration: number }
@@ -24,17 +28,22 @@ export interface RenderPlan {
   videoLayers: RenderVideoLayer[];
   audioClips: RenderAudioClip[];
   captions: CaptionCue[];
+  pairTransitions?: TimelineTransitionHandlePlanV1[];
+  /** Internal LONG subgraph context; absent keeps the original per-project precision choice. */
+  compositePrecision16?: boolean;
 }
 
 export type AssetPathResolver = (uri: string) => string;
 
 export function buildRenderPlan(project: EditProject, resolveAssetPath: AssetPathResolver): RenderPlan {
   validateProject(project);
+  assertLegacyTimeRemapRouteV1(project);
   const duration = projectDuration(project);
   if (duration <= 0) throw new Error("專案沒有可輸出的內容");
 
   const videoLayers = project.tracks.flatMap((track, trackIndex) => {
-    if (track.kind !== "video" || track.muted) return [];
+    // Picture follows `hidden`; `muted` is sound only (below).
+    if (track.kind !== "video" || track.hidden) return [];
     const clips = track.clips.filter((clip) => clip.layer?.enabled !== false).sort((a, b) => a.timelineStart - b.timelineStart);
     const segments: RenderSegment[] = [];
     let cursor = 0;
@@ -49,7 +58,7 @@ export function buildRenderPlan(project: EditProject, resolveAssetPath: AssetPat
   });
 
   const audioClips = project.tracks
-    .filter((track) => (track.kind === "audio" || track.kind === "video") && !track.muted)
+    .filter((track) => trackAudioAudible(project, track))
     .flatMap((track) => track.clips)
     .filter((clip) => clip.volume > 0 && clip.layer?.enabled !== false && (clip.layer?.role ?? "content") === "content" && findAsset(project, clip.assetId).kind !== "image")
     .map((clip) => ({ clip, assetPath: resolveAssetPath(findAsset(project, clip.assetId).uri) }));
@@ -62,5 +71,6 @@ export function buildRenderPlan(project: EditProject, resolveAssetPath: AssetPat
     videoLayers,
     audioClips,
     captions: [...project.captions].sort((a, b) => a.start - b.start),
+    ...(project.timelineTransitions?.length ? { pairTransitions: compileTimelineTransitionHandlesV1(project) } : {}),
   };
 }

@@ -1,3 +1,4 @@
+import { translateUi as uiText, useI18n } from "./i18n/interfacePreferences";
 import { useEffect, useMemo, useState } from "react";
 import type { PluginRegistrySummary } from "../desktop/types";
 import type { EditkinWorkflowProfile } from "../plugins/skillPack";
@@ -43,6 +44,7 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 export default function PluginBrowser({ registry, loading, busyId, hasSelectedClip, onApply, onOpenFolder, onRefresh, workflowProfileStorage, workflowProfile: hostWorkflowProfile, onWorkflowProfileChange }: PluginBrowserProps) {
+  useI18n();
   const [drafts, setDrafts] = useState<Record<string, Record<string, unknown>>>({});
   const profileStorage = useMemo(() => workflowProfileStorage ?? browserWorkflowProfileStorage(), [workflowProfileStorage]);
   const initialProfile = useMemo(() => loadWorkflowProfile(profileStorage), [profileStorage]);
@@ -79,14 +81,14 @@ export default function PluginBrowser({ registry, loading, busyId, hasSelectedCl
   const setDraft = (capabilityId: string, parameterId: string, value: unknown) => {
     setDrafts((current) => ({ ...current, [capabilityId]: { ...current[capabilityId], [parameterId]: value } }));
   };
-  if (loading) return <div className="plugin-browser-state">正在讀取已安裝工具…</div>;
+  if (loading) return <div className="plugin-browser-state">{uiText("正在讀取已安裝工具…")}</div>;
   if (!registry?.plugins.length) return (
     <div className="plugin-browser-state">
-      <b>還沒有安裝外掛</b>
-      <span>把符合 editkin.plugin/v1 的工具放進你的外掛資料夾，再重新掃描；不必修改安裝檔或重開 Editkin。</span>
+      <b>{uiText("還沒有安裝外掛")}</b>
+      <span>{uiText("把符合 editkin.plugin/v1 的工具放進你的外掛資料夾，再重新掃描；不必修改安裝檔或重開 Editkin。")}</span>
       <div className="plugin-browser-actions">
-        <button type="button" onClick={onOpenFolder}>開啟外掛資料夾</button>
-        <button type="button" className="secondary" onClick={onRefresh}>重新掃描</button>
+        <button type="button" onClick={onOpenFolder}>{uiText("開啟外掛資料夾")}</button>
+        <button type="button" className="secondary" onClick={onRefresh}>{uiText("重新掃描")}</button>
       </div>
     </div>
   );
@@ -94,14 +96,14 @@ export default function PluginBrowser({ registry, loading, busyId, hasSelectedCl
   return (
     <div className="plugin-browser" data-testid="plugin-browser">
       <div className="plugin-browser-intro">
-        <div><b>創作者工具</b><span>一般工具由你手動套用；Workflow Skill 只提供規劃偏好，需明確授權後才會交給自動剪輯。</span></div>
+        <div><b>{uiText("創作者工具")}</b><span>{uiText("一般工具由你手動套用；Workflow Skill 只提供規劃偏好，需明確授權後才會交給自動剪輯。")}</span></div>
         <div className="plugin-browser-actions">
-          <button type="button" onClick={onOpenFolder}>外掛資料夾</button>
-          <button type="button" className="secondary" onClick={onRefresh}>重新掃描</button>
+          <button type="button" onClick={onOpenFolder}>{uiText("外掛資料夾")}</button>
+          <button type="button" className="secondary" onClick={onRefresh}>{uiText("重新掃描")}</button>
         </div>
       </div>
       {profileNotice && <div className="workflow-profile-notice" role="status">{profileNotice}</div>}
-      {!hasSelectedClip && <div className="plugin-selection-tip">片段工具需先選取片段；標示「專案」的工具可直接套用，實際作用時間由工具參數決定</div>}
+      {!hasSelectedClip && <div className="plugin-selection-tip">{uiText("片段工具需先選取片段；標示「專案」的工具可直接套用，實際作用時間由工具參數決定")}</div>}
       {registry.plugins.map((plugin) => (
         <section className="plugin-group" key={plugin.id}>
           <header>
@@ -129,9 +131,9 @@ export default function PluginBrowser({ registry, loading, busyId, hasSelectedCl
                     <span className="plugin-kind">{KIND_LABEL[capability.kind] ?? capability.kind}</span>
                     <strong>{capability.name}</strong>
                     <p>{capability.description}</p>
-                    {planningOnly && <p className="workflow-skill-safety"><b>只讀規劃</b>：不能執行程式或直接修改專案；實際剪輯仍須通過同一份 v4 plan audit。</p>}
+                    {planningOnly && <p className="workflow-skill-safety"><b>{uiText("只讀規劃")}</b>{uiText("：不能執行程式或直接修改專案；實際剪輯仍須通過同一份 v4 plan audit。")}</p>}
                     <div className="plugin-role-list">
-                      {projectOnly && <small>專案</small>}
+                      {projectOnly && <small>{uiText("專案")}</small>}
                       {capability.semanticRoles.slice(0, 3).map((role) => <small key={role}>{role}</small>)}
                     </div>
                   </div>
@@ -141,43 +143,42 @@ export default function PluginBrowser({ registry, loading, busyId, hasSelectedCl
                       type="button"
                       disabled={!workflowSkill || workflowStatus === "unavailable"}
                       aria-pressed={workflowStatus === "enabled"}
-                      title="只授權讀取目前 manifest/pack hash 綁定的規劃資料，不會直接執行 Skill"
+                      title={uiText("只授權讀取目前 manifest/pack hash 綁定的規劃資料，不會直接執行 Skill")}
                       onClick={() => workflowSkill && void commitWorkflowProfile(setWorkflowSkillEnabled(workflowProfile, workflowSkill, workflowStatus !== "enabled"))}
                     >
-                      {workflowStatus === "enabled" ? "停用自動剪輯" : workflowStatus === "needs_reauthorization" ? "重新授權新版" : workflowStatus === "disabled" ? "啟用給自動剪輯" : "驗證未通過"}
+                      {workflowStatus === "enabled" ? uiText("停用自動剪輯") : workflowStatus === "needs_reauthorization" ? uiText("重新授權新版") : workflowStatus === "disabled" ? uiText("啟用給自動剪輯") : uiText("驗證未通過")}
                     </button>
-                    {workflowStatus === "enabled" && <div className="workflow-skill-priority" aria-label={`${capability.name} 的固定優先順序`}>
-                      <span>優先 {workflowPriority + 1}</span>
-                      <button type="button" aria-label={`提高 ${capability.name} 優先順序`} disabled={workflowPriority <= 0} onClick={() => void commitWorkflowProfile(moveWorkflowSkillPriority(workflowProfile, id, -1))}>↑</button>
-                      <button type="button" aria-label={`降低 ${capability.name} 優先順序`} disabled={workflowPriority < 0 || workflowPriority >= workflowProfile.priority.length - 1} onClick={() => void commitWorkflowProfile(moveWorkflowSkillPriority(workflowProfile, id, 1))}>↓</button>
+                    {workflowStatus === "enabled" && <div className="workflow-skill-priority" aria-label={uiText("{value0} 的固定優先順序", { value0: capability.name })}>
+                      <span>{uiText("優先 {priority}", { priority: workflowPriority + 1 })}</span>
+                      <button type="button" aria-label={uiText("提高 {value0} 優先順序", { value0: capability.name })} disabled={workflowPriority <= 0} onClick={() => void commitWorkflowProfile(moveWorkflowSkillPriority(workflowProfile, id, -1))}>↑</button>
+                      <button type="button" aria-label={uiText("降低 {value0} 優先順序", { value0: capability.name })} disabled={workflowPriority < 0 || workflowPriority >= workflowProfile.priority.length - 1} onClick={() => void commitWorkflowProfile(moveWorkflowSkillPriority(workflowProfile, id, 1))}>↓</button>
                     </div>}
                   </div> : <div className="plugin-application-controls">
                     <button
                       className="plugin-apply"
                       type="button"
                       disabled={disabled}
-                      title={applicationReady ? capability.readinessDetail : `目前不能直接套用：${capability.readinessDetail}`}
+                      title={applicationReady ? capability.readinessDetail : uiText("目前不能直接套用：{value0}", { value0: capability.readinessDetail })}
                       onClick={() => onApply?.(plugin.id, capability.id, draft)}
                     >
-                      {busyId === id ? "套用中…" : applicationReady ? "套用" : "僅手動"}
+                      {busyId === id ? uiText("套用中…") : applicationReady ? uiText("套用") : uiText("僅手動")}
                     </button>
                     {pluginAutomationIdentity && <button
                       className="plugin-automation-toggle"
                       type="button"
                       aria-pressed={pluginAutomationStatus === "enabled"}
-                      title="只授權這個 manifest hash 下的指定 capability；實際動作仍須放進同一份 v4 plan 並通過 audit"
+                      title={uiText("只授權這個 manifest hash 下的指定 capability；實際動作仍須放進同一份 v4 plan 並通過 audit")}
                       onClick={() => void commitWorkflowProfile(setPluginAutomationEnabled(workflowProfile, pluginAutomationIdentity, pluginAutomationIdentities, pluginAutomationStatus !== "enabled"))}
                     >
-                      {pluginAutomationStatus === "enabled" ? "停用自動套用" : pluginAutomationStatus === "needs_reauthorization" ? "重新授權新版" : "允許自動套用"}
+                      {pluginAutomationStatus === "enabled" ? uiText("停用自動套用") : pluginAutomationStatus === "needs_reauthorization" ? uiText("重新授權新版") : uiText("允許自動套用")}
                     </button>}
                   </div>}
-                  {(planningOnly || capability.parameters.length > 0 || capability.requires.length > 0 || capability.avoidWhen.length > 0) && (
-                    <details className="plugin-settings">
-                      <summary>設定與使用時機</summary>
+                  {(planningOnly || capability.parameters.length > 0 || capability.requires.length > 0 || capability.avoidWhen.length > 0) && (<details className="plugin-settings">
+                      <summary>{uiText("設定與使用時機")}</summary>
                       {planningOnly && workflowSkill && <div className="workflow-skill-contract">
-                        <p><b>授權：</b>僅 workflow.read</p>
-                        <p><b>版本綁定：</b>manifest {workflowSkill.manifestSha256.slice(0, 8)}… / pack {workflowSkill.packSha256.slice(0, 8)}…</p>
-                        <p><b>衝突規則：</b>依你上方設定的固定順序決定；版本或 hash 改變時自動失效。</p>
+                        <p><b>{uiText("授權：")}</b>{uiText("僅 workflow.read")}</p>
+                        <p><b>{uiText("版本綁定：")}</b>manifest {workflowSkill.manifestSha256.slice(0, 8)}… / pack {workflowSkill.packSha256.slice(0, 8)}…</p>
+                        <p><b>{uiText("衝突規則：")}</b>{uiText("依你上方設定的固定順序決定；版本或 hash 改變時自動失效。")}</p>
                       </div>}
                       {capability.parameters.length > 0 && <div className="plugin-parameter-list">
                         {capability.parameters.map((parameter) => {
@@ -221,21 +222,20 @@ export default function PluginBrowser({ registry, loading, busyId, hasSelectedCl
                             </label>
                           );
                         })}
-                        {Object.keys(draft).length > 0 && <button className="plugin-reset" type="button" onClick={() => setDrafts((current) => ({ ...current, [id]: {} }))}>恢復預設</button>}
+                        {Object.keys(draft).length > 0 && <button className="plugin-reset" type="button" onClick={() => setDrafts((current) => ({ ...current, [id]: {} }))}>{uiText("恢復預設")}</button>}
                       </div>}
                       {(capability.requires.length > 0 || capability.avoidWhen.length > 0) && <div className="plugin-usage-notes">
-                        {capability.requires.length > 0 && <p><b>適合：</b>{capability.requires.join("、")}</p>}
-                        {capability.avoidWhen.length > 0 && <p><b>避免：</b>{capability.avoidWhen.join("、")}</p>}
+                        {capability.requires.length > 0 && <p><b>{uiText("適合：")}</b>{capability.requires.join("、")}</p>}
+                        {capability.avoidWhen.length > 0 && <p><b>{uiText("避免：")}</b>{capability.avoidWhen.join("、")}</p>}
                       </div>}
-                    </details>
-                  )}
+                    </details>)}
                 </article>
               );
             })}
           </div>
         </section>
       ))}
-      {registry.diagnostics.length > 0 && <details className="plugin-diagnostics"><summary>{registry.diagnostics.length} 個外掛未載入</summary><p>為了安全已阻擋，請檢查版本、權限或檔案完整性。</p></details>}
+      {registry.diagnostics.length > 0 && <details className="plugin-diagnostics"><summary>{registry.diagnostics.length} {uiText("個外掛未載入")}</summary><p>{uiText("為了安全已阻擋，請檢查版本、權限或檔案完整性。")}</p></details>}
     </div>
   );
 }

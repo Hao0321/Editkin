@@ -1,6 +1,8 @@
 import * as z from "zod/v4";
 import type { EditorCommand } from "../domain/commands";
 import { EDITKIN_MOTION } from "../motion/identity";
+import { isScopedMotionRevision } from "./scopedMotionRevision";
+import { isScopedPaletteRevision } from "./scopedPaletteRevision";
 
 export const MOTION_TREATMENT_FAMILIES = ["title", "subtitles", "cards", "hud", "motion", "tracking_masks", "vfx", "transitions_camera", "color", "sound"] as const;
 export type MotionTreatmentFamily = typeof MOTION_TREATMENT_FAMILIES[number];
@@ -34,10 +36,21 @@ export type MotionTreatment = z.infer<typeof motionTreatmentSchema>;
 export function motionCommandFamilies(command: EditorCommand): MotionTreatmentFamily[] {
   if (command.type === "batch") return [...new Set(command.commands.flatMap(motionCommandFamilies))];
   const families = new Set<MotionTreatmentFamily>();
+  if (["add_motion_scene", "update_motion_scene", "delete_motion_scene"].includes(command.type)) {
+    families.add("motion"); families.add("transitions_camera");
+  }
+  if (isScopedMotionRevision(command)) families.add("motion");
+  if (isScopedPaletteRevision(command)) families.add("color");
+  if (command.type === "set_mesh_3d_scene" && command.scene?.enabled) {
+    families.add("vfx");
+    if (command.scene.segments.some(s => s.cameraKeyframes.length || s.objects.some(o => o.keyframes.length))) families.add("transitions_camera");
+    if (command.scene.segments.some(s => s.objects.some(o => o.geometry.kind === "text"))) families.add("title");
+    families.add("motion");
+  }
   if (command.type === "add_motion_graphic") {
     const graphic = command.graphic;
     families.add(graphic.kind === "title" ? "title" : graphic.kind === "card" ? "cards" : "hud");
-    if (graphic.schema === "hao.motion-composition/v2") families.add("motion");
+    if (graphic.schema === "hao.motion-composition/v2" || graphic.schema === "hao.motion-composition/v3") families.add("motion");
     if (graphic.trackId) families.add("tracking_masks");
   }
   if (["add_caption", "update_caption", "set_caption_style"].includes(command.type)) families.add("subtitles");
@@ -45,6 +58,7 @@ export function motionCommandFamilies(command: EditorCommand): MotionTreatmentFa
   if (["configure_scene_25d", "set_scene_25d_settings", "configure_particle_simulation", "set_particle_simulation_settings", "set_clip_floating_frame", "add_native_effect", "update_native_effect"].includes(command.type)) families.add("vfx");
   if (["update_clip_transform", "update_clip_transform_3d", "set_clip_floating_frame", "add_keyframe", "update_keyframe", "set_clip_expression", "set_clip_layout"].includes(command.type)) families.add("transitions_camera");
   if (["set_clip_color", "set_asset_color_interpretation", "set_project_color_management"].includes(command.type)) families.add("color");
+  if (command.type === "set_clip_grade_v2") families.add("color");
   if (command.type === "set_clip_volume" || (command.type === "add_track" && command.track.kind === "audio")) families.add("sound");
   if (command.type === "add_clip") {
     if (command.clip.floatingFrame) {

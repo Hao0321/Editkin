@@ -24,7 +24,7 @@ describe("nested precompositions", () => {
       type: "precompose_clips", compositionId: "comp-a", assetId: "asset-comp-a", replacementClipId: "clip-comp-a",
       targetTrackId: "video-main", name: "Hero group", clipIds: ["shot"],
     });
-    expect(result.schemaVersion).toBe(8);
+    expect(result.schemaVersion).toBe(9);
     expect(result.compositions).toHaveLength(1);
     expect(result.compositions[0].tracks[0].clips[0]).toMatchObject({ id: "shot", timelineStart: 0, duration: 3 });
     expect(result.assets.find((asset) => asset.id === "asset-comp-a")).toMatchObject({
@@ -49,7 +49,7 @@ describe("nested precompositions", () => {
     const legacy = fixture() as unknown as Record<string, unknown>;
     legacy.schemaVersion = 7;
     delete legacy.compositions;
-    expect(migrateProject(legacy)).toMatchObject({ schemaVersion: 8, compositions: [] });
+    expect(migrateProject(legacy)).toMatchObject({ schemaVersion: 9, compositions: [] });
 
     let project = applyCommand(fixture(), {
       type: "precompose_clips", compositionId: "comp-a", assetId: "asset-comp-a", replacementClipId: "clip-comp-a",

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-render-gpu-preview-frame"
+description = "Enables the render_gpu_preview_frame command without any pre-configured scope."
+commands.allow = ["render_gpu_preview_frame"]
+
+[[permission]]
+identifier = "deny-render-gpu-preview-frame"
+description = "Denies the render_gpu_preview_frame command without any pre-configured scope."
+commands.deny = ["render_gpu_preview_frame"]

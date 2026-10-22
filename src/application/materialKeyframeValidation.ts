@@ -1,8 +1,7 @@
 import { canonicalJson } from "../shared/canonicalJson";
 import type { MediaColorMetadata } from "../domain/types";
 import { colorDigest } from "./materialColorSamplingRuntime";
-import { materialKeyframeFilters } from "./materialKeyframeExtraction";
-import { sourceDisplayColorMetadata } from "./sourceDisplayMetadata";
+import { materialKeyframeDisplayPlanV1, materialKeyframeFilters, materialStillKeyframeNormalizationV1 } from "./materialKeyframeExtraction";
 import type { MaterialKeyframeAnalysis, MaterialKeyframeDisplay } from "./materialKeyframeTypes";
 
 interface DisplayFrame { id: string; time: number; sceneIndex: number; sha256: string; bytes: number; display?: MaterialKeyframeDisplay }
@@ -28,10 +27,13 @@ export function verifyMaterialKeyframeDisplay(analysis: MaterialKeyframeAnalysis
     if (![actual, clock.sourceTime, clock.relativeTime].every(Number.isFinite) || Math.abs(actual - clock.sourceTime) > 1e-7 || Math.abs(actual - source.sourceStart - clock.relativeTime) > 1e-7 || clock.relativeTime < d.requested.time - 1e-7 || clock.relativeTime < 0 || clock.relativeTime >= source.duration || frame.time !== clock.relativeTime) throw Error("keyframe-display-clock");
     if (clock.sceneAttributionVerified !== (cuts !== undefined) || frame.sceneIndex !== clock.sceneIndex || clock.sceneIndex !== (cuts?.filter(cut => clock.relativeTime >= cut).length ?? d.requested.sceneIndex)) throw Error("keyframe-display-scene-binding");
     if (!digest.test(d.probe.sha256)) throw Error("keyframe-display-probe");
-    const stream = d.probe.metadata.stream, verifiedColor = sourceDisplayColorMetadata(stream, source.color), input = verifiedColor.interpretation as "rec709" | "hlg" | "pq";
+    // The same decision as extraction: strict for video; an image2 still that the strict path refuses may only be the recorded sRGB still.
+    const stream = d.probe.metadata.stream, plan = materialKeyframeDisplayPlanV1(d.probe.metadata, source.kind, source.color);
     if (Number(d.probe.metadata.format.start_time ?? stream.start_time) !== clock.timelineOrigin) throw Error("keyframe-display-origin");
     if (![Number(stream.width), Number(stream.height)].every(n => Number.isSafeInteger(n) && n > 0 && n <= 32768)) throw Error("keyframe-display-probe-dimensions");
-    const expected = { interpretation: input, filters: materialKeyframeFilters(input, Number(stream.width), Number(stream.height), verifiedColor), intermediateTransfer: "bt709", displayEotf: "bt1886-ideal", purpose: "neutral-display-proxy", transfer: "srgb", primaries: "bt709", range: "full", exposure: 0, creativeLook: false, maximumDimension: 1280 };
+    const expected = plan.mode === "strict"
+      ? { interpretation: plan.input, filters: materialKeyframeFilters(plan.input, Number(stream.width), Number(stream.height), plan.color), intermediateTransfer: "bt709", displayEotf: "bt1886-ideal", purpose: "neutral-display-proxy", transfer: "srgb", primaries: "bt709", range: "full", exposure: 0, creativeLook: false, maximumDimension: 1280 }
+      : materialStillKeyframeNormalizationV1(plan.still, Number(stream.width), Number(stream.height));
     if (canonicalJson(d.normalization) !== canonicalJson(expected)) throw Error("keyframe-display-normalization");
     if (!digest.test(frame.sha256) || !Number.isSafeInteger(frame.bytes) || frame.bytes < 4 || frame.bytes > 8 * 1024 * 1024 || canonicalJson(d.jpeg) !== canonicalJson({ sha256: frame.sha256, bytes: frame.bytes, mimeType: "image/jpeg" })) throw Error("keyframe-display-jpeg-binding");
   }

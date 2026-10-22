@@ -1,0 +1,12 @@
+/* Same segmented control geometry and colours as timelineBlade.css. */
+.clip-speed-controls { display: grid; gap: 8px; }
+.clip-speed-controls > .field-label { margin: 0; }
+.clip-speed-controls-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.clip-speed-controls .timeline-tool-toggle { display: inline-flex; flex: 0 0 auto; align-items: stretch; gap: 2px; padding: 2px;
+  border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); }
+.clip-speed-controls .timeline-tool-toggle > button { display: inline-flex; align-items: center; gap: 5px; width: auto;
+  height: auto; min-height: calc(var(--ui-target-size, 40px) - 6px); padding: 0 9px; border: 0;
+  border-radius: 8px; background: transparent; color: var(--soft); white-space: nowrap; }
+.clip-speed-controls .timeline-tool-toggle > button[aria-pressed="true"],
+.clip-speed-controls .timeline-tool-toggle > button[aria-pressed="true"]:hover { background: var(--accent); color: var(--accent-ink); }
+.clip-speed-controls .clip-speed-reverse, .clip-speed-controls .clip-speed-freeze { width: auto; justify-self: start; }

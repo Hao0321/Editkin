@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-remote-provider-connectors"
+description = "Enables the list_remote_provider_connectors command without any pre-configured scope."
+commands.allow = ["list_remote_provider_connectors"]
+
+[[permission]]
+identifier = "deny-list-remote-provider-connectors"
+description = "Denies the list_remote_provider_connectors command without any pre-configured scope."
+commands.deny = ["list_remote_provider_connectors"]

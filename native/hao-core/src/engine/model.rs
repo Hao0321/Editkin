@@ -378,6 +378,10 @@ pub enum NodeOperation {
         #[serde(default)]
         parent: Option<String>,
     },
+    #[serde(rename = "floating_video_frame_2d")]
+    FloatingVideoFrame2d {
+        spec: super::floating_video_frame::FloatingVideoFrameSpec,
+    },
     Camera {
         position: [f32; 3],
         target: [f32; 3],
@@ -434,6 +438,16 @@ pub enum NodeOperation {
         #[serde(default)]
         matte_mode: Option<MatteMode>,
     },
+    #[serde(rename = "timeline_transition_v1")]
+    TimelineTransitionV1 {
+        blend_mode: BlendMode,
+        opacity: f32,
+        #[serde(default)]
+        matte_input: Option<String>,
+        #[serde(default)]
+        matte_mode: Option<MatteMode>,
+        plans: Vec<super::timeline_pair_v1::TimelinePairSpecV1>,
+    },
     Adjustment {
         #[serde(default)]
         affected_inputs: Vec<String>,
@@ -462,6 +476,17 @@ pub enum NodeOperation {
         shadow: f32,
         #[serde(default)]
         letter_spacing: f32,
+        /// Drop-shadow colour (#RRGGBB[AA]). Omitted, the shadow takes `background_color`, the ASS export's
+        /// BackColour rule.
+        #[serde(default)]
+        shadow_color: Option<String>,
+        /// libass `\blur` strength on the outline and the shadow; 0 keeps hard edges.
+        #[serde(default)]
+        shadow_blur: f32,
+        /// The lines to draw, broken by TypeScript exactly where the ASS export breaks them (with the export's
+        /// glyph stand-ins). Omitted, `text` is drawn as typed. `text` stays the authored cue text.
+        #[serde(default)]
+        lines: Option<Vec<String>>,
         #[serde(default)]
         translation: Option<String>,
     },
@@ -492,6 +517,10 @@ pub enum NodeOperation {
         offset_y: f32,
         #[serde(default)]
         tracking: Option<MotionGraphicTracking>,
+    },
+    NativeMotionPaint {
+        graphic_id: String,
+        track: super::motion_paint_track::NativeMotionPaintTrack,
     },
     ParticleEmitter {
         #[serde(default)]
@@ -553,6 +582,7 @@ impl NodeOperation {
             Self::Source { .. } => EngineStage::Decode,
             Self::AutoRoto { .. } => EngineStage::Analysis,
             Self::Transform2d { .. }
+            | Self::FloatingVideoFrame2d { .. }
             | Self::Transform3d { .. }
             | Self::Camera { .. }
             | Self::Light { .. } => EngineStage::Geometry,
@@ -562,10 +592,12 @@ impl NodeOperation {
                 EngineStage::Effect
             }
             Self::Composite { .. }
+            | Self::TimelineTransitionV1 { .. }
             | Self::Adjustment { .. }
             | Self::Precomposition { .. }
             | Self::Caption { .. }
-            | Self::MotionGraphic { .. } => EngineStage::Composite,
+            | Self::MotionGraphic { .. }
+            | Self::NativeMotionPaint { .. } => EngineStage::Composite,
             Self::ParticleEmitter { .. } => EngineStage::Simulation,
             Self::Output { .. } => EngineStage::Output,
         }

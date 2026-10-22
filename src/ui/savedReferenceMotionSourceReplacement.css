@@ -1,0 +1,10 @@
+.saved-template-source { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); min-width: 0; }
+.saved-template-source summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-weight: 700; }
+.saved-template-source fieldset { display: grid; gap: 8px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.saved-template-source label { display: grid; gap: 5px; min-width: 0; }
+.saved-template-source fieldset input:not([type="checkbox"]), .saved-template-source fieldset select, .saved-template-source fieldset button, .saved-template-source > button { width: 100%; min-width: 0; min-height: 44px; }
+.saved-template-source small { display: block; overflow-wrap: anywhere; line-height: 1.5; }
+.saved-template-source .saved-template-source-check { display: flex; align-items: center; gap: 8px; }
+.saved-template-source fieldset .saved-template-source-check input { width: 20px; height: 20px; min-height: 20px; flex: 0 0 20px; }
+.saved-template-source [data-testid="replace-template-source"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+.saved-template-source [data-testid="replace-template-source"]:disabled { background: var(--surface-2); color: var(--muted); border-color: var(--line); }

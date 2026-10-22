@@ -1,0 +1,28 @@
+/* The simple editor's one-row top bar (SimpleEditorTopBar.tsx). The doubled class outweighs the shared toolbar grid of
+   accessibleWorkspace.css and styles.css, which the advanced toolbar keeps. */
+.app-shell.app-shell[data-interface-mode] > .toolbar.simple-topbar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px;
+  min-height: 64px; padding: 10px 16px; grid-template-columns: none;
+}
+.app-shell > .toolbar.simple-topbar:has(.interface-settings[open]) { z-index: 90; }
+.simple-topbar-project { display: flex; flex: 1 1 220px; align-items: center; gap: 12px; min-width: 0; }
+.simple-topbar .brand-mark { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 11px; }
+.simple-project-copy { display: grid; justify-items: start; gap: 2px; min-width: 0; }
+.simple-project-name { max-width: 100%; overflow: hidden; color: var(--ink); font-size: calc(16px * var(--ui-scale, 1)); font-weight: 800; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.simple-save-state { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; color: var(--muted); font-size: var(--ui-copy-size, 14px); line-height: 1.4; }
+.simple-save-state > span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.simple-save-state .status-dot { flex: 0 0 8px; grid-row: auto; }
+.simple-save-state .status-dot[data-state="error"] { background: var(--danger); }
+.app-shell.app-shell[data-interface-mode] .simple-topbar button.simple-save-state { min-height: 34px; padding: 3px 4px 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); color: var(--soft); cursor: pointer; white-space: nowrap; }
+/* 儲存 never shrinks: on a narrow window the state's words give way first (their full text stays in their tooltip). */
+.simple-topbar button.simple-save-state > b { flex: none; padding: 3px 10px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 800; white-space: nowrap; }
+.simple-topbar button.simple-save-state:hover { border-color: var(--accent); }
+.app-shell.app-shell[data-interface-mode] .simple-topbar-actions { display: flex; flex: 0 0 auto; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 8px; grid-column: auto; }
+.simple-topbar .history-actions { display: flex; gap: 4px; }
+.app-shell.app-shell[data-interface-mode] .simple-topbar .simple-icon-action { display: grid; place-items: center; width: var(--ui-target-size, 44px); min-width: var(--ui-target-size, 44px); padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); color: var(--ink); cursor: pointer; }
+.simple-topbar .simple-icon-action > span { font-size: calc(21px * var(--ui-scale, 1)); line-height: 1; }
+.simple-topbar .simple-icon-action:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.simple-topbar .simple-icon-action:disabled { opacity: .4; cursor: default; }
+.simple-topbar .interface-settings > summary { min-height: var(--ui-target-size, 44px); padding-inline: 12px; }
+.app-shell.app-shell[data-interface-mode] .simple-topbar .simple-help-action { white-space: nowrap; }
+.app-shell.app-shell[data-interface-mode] .simple-topbar .export-action { margin-inline-start: 0; white-space: nowrap; }

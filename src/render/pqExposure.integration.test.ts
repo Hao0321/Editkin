@@ -1,9 +1,10 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, expect, it } from "vitest";
+import { useTempRoots } from "../test/tempRoot.mjs";
 import { createEmptyProject } from "../domain/editGraph";
 import { DEFAULT_COLOR, DEFAULT_COLOR_MANAGEMENT, DEFAULT_TRANSFORM, type MediaAsset } from "../domain/types";
 import { renderComposite } from "./ffmpegComposite";
@@ -20,8 +21,10 @@ function run(exe: string, args: string[]) {
   const result = spawnSync(exe, args, { windowsHide: true, timeout: 30000, maxBuffer: 4 * 1024 * 1024 });
   expect(result.status, result.stderr.toString()).toBe(0); return result.stdout;
 }
+// Removed after the file unless EDITKIN_TEST_EVIDENCE_ROOT keeps it.
+const temp = useTempRoots();
 beforeAll(async () => {
-  const parent = join(app, ".rd/pq-primary-exposure-20260831"); await mkdir(parent, { recursive: true }); root = await mkdtemp(join(parent, "integration-"));
+  root = await temp.create("integration-", { parent: join(app, ".rd/pq-primary-exposure-20260831") });
   for (const input of ["pq", "hlg", "rec709"] as const) {
     const codes = input === "pq" ? nits.map(n => Math.round(64 + 876 * pq(n))) : [64, 128, 200, 300, 400, 500, 600, 700, 800, 900];
     const staircase = codes.slice(0, -1).reduceRight((next, value, index) => `if(lt(X,${(index + 1) * 32}),${value},${next})`, String(codes.at(-1)));

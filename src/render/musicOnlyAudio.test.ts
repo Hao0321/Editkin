@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, writeFile } from "node:fs/promises";
+import { useTempRoots } from "../test/tempRoot.mjs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createDemoProject } from "../domain/demo";
@@ -8,6 +8,7 @@ import type { EditProject } from "../domain/types";
 import { buildRenderPlan, type RenderPlan } from "./planner";
 import { renderProject } from "./ffmpeg";
 import { runProcess } from "./ffmpegMedia";
+const temp = useTempRoots();
 
 function projectFixture(source="synthetic-source.mp4",music="synthetic-library-music.wav") {
  const p=createDemoProject();p.width=160;p.height=90;p.captions=[];p.motionGraphics=[];p.motionTracks=[];
@@ -49,7 +50,7 @@ function spectralAmplitude(bytes:Buffer,frequency:number,startSeconds:number,dur
 }
 describe("synthetic rendered music-only audio",()=>{
  it("removes 600Hz source tone and keeps 1000Hz music; enabled-source control detects leakage",async()=>{
-  const dir=await mkdtemp(join(tmpdir(),"editkin-music-only-spectrum-")),source=join(dir,"synthetic-600hz.mp4"),music=join(dir,"synthetic-library-1000hz.wav");
+  const dir=await temp.create("editkin-music-only-spectrum-"),source=join(dir,"synthetic-600hz.mp4"),music=join(dir,"synthetic-library-1000hz.wav");
   const ffmpegPath=resolve("vendor/ffmpeg/win32-x64/ffmpeg.exe"),ffprobePath=resolve("vendor/ffmpeg/win32-x64/ffprobe.exe");
   await runProcess(ffmpegPath,["-v","error","-f","lavfi","-i","testsrc2=size=160x90:rate=30","-f","lavfi","-i","sine=frequency=600:sample_rate=48000","-t","1","-c:v","libx264","-c:a","aac",source],30000);
   await runProcess(ffmpegPath,["-v","error","-f","lavfi","-i","sine=frequency=1000:sample_rate=48000","-t","2","-c:a","pcm_s16le",music],30000);

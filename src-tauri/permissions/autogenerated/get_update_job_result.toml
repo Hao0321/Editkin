@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-get-update-job-result"
+description = "Enables the get_update_job_result command without any pre-configured scope."
+commands.allow = ["get_update_job_result"]
+
+[[permission]]
+identifier = "deny-get-update-job-result"
+description = "Denies the get_update_job_result command without any pre-configured scope."
+commands.deny = ["get_update_job_result"]

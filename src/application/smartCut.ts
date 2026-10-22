@@ -42,6 +42,19 @@ function frame(value: number, fps: number): number {
   return Math.round(value * fps);
 }
 
+/** Tolerance for a duration that is a whole frame count up to floating-point error. */
+const SOURCE_FRAME_EPSILON = 1e-6;
+
+/**
+ * Whole frames that fit inside the analysed source span. The planners (Rust and the TypeScript fallback)
+ * round the duration to frames, so a source whose duration is not a frame multiple (10.02 s at 30 fps)
+ * would get a last kept range ending at 301/30 s, past the real source end. Flooring keeps the last range
+ * inside the source; a frame-exact duration keeps its exact frame count.
+ */
+export function smartCutSourceFrames(duration: number, fps: number): number {
+  return Math.max(0, Math.floor(duration * fps + SOURCE_FRAME_EPSILON));
+}
+
 function validateRequest(request: SmartCutRequest): void {
   if (!Number.isFinite(request.fps) || request.fps <= 0 || request.fps > 240) throw new Error("Smart Cut fps 不合法");
   if (!Number.isFinite(request.duration) || request.duration <= 0) throw new Error("Smart Cut 片段時長不合法");
@@ -152,7 +165,7 @@ export async function analyzeSmartCut(
     try {
       const cached = JSON.parse(await readFile(cachePath, "utf8")) as { schemaVersion?: number; result?: Omit<SmartCutResult, "cacheHit"> };
       if (cached.schemaVersion === SMART_CUT_CACHE_SCHEMA && cached.result?.engine === SMART_CUT_NATIVE_ENGINE
-        && cached.result.sourceFrames === Math.round(request.duration * request.fps)
+        && cached.result.sourceFrames === smartCutSourceFrames(request.duration, request.fps)
         && Array.isArray(cached.result.ranges) && cached.result.ranges.length > 0) {
         return { ...cached.result, cacheHit: true };
       }
@@ -161,7 +174,8 @@ export async function analyzeSmartCut(
   const silences = await detectSilences(request, options, runtime.ffmpegPath);
   const nativeRequest: SmartCutRequest = {
     fps: request.fps,
-    duration: request.duration,
+    // Plan on whole frames inside the source: the last kept range must not end past the source end.
+    duration: smartCutSourceFrames(request.duration, request.fps) / request.fps,
     silences,
     options: { padding: options.padding, minSilence: options.minSilence, minKeep: options.minKeep },
   };

@@ -7,9 +7,9 @@ import {deriveFontEmMetrics,verifyFontEmMetrics} from './lib/font-em-metrics-man
 import {fileURLToPath} from 'node:url';
 const root=new URL('../public/fonts/',import.meta.url),manifestBytes=await readFile(new URL('editkin-open-fonts.json',root)),manifest=JSON.parse(manifestBytes);
 const generated=JSON.parse(await readFile(new URL('../src/generated/fontEmMetrics.json',import.meta.url)));
-test('all 43 metric records are bound to actual licensed static font bytes',async()=>{
+test('all 44 metric records are bound to actual licensed static font bytes',async()=>{
  assert.equal(generated.manifestSha256,createHash('sha256').update(manifestBytes).digest('hex'));let count=0;
- for(const f of manifest.fonts)for(const face of f.faces){const b=await readFile(new URL(face.file,root)),m=generated.faces.find(x=>x.id===face.id);assert.equal(m.sha256,createHash('sha256').update(b).digest('hex'));assert.deepEqual(m,{id:face.id,sha256:face.sha256,...readFontEmMetrics(b)});count++;}assert.equal(count,43);assert.equal(generated.faces.length,count);
+ for(const f of manifest.fonts)for(const face of f.faces){const b=await readFile(new URL(face.file,root)),m=generated.faces.find(x=>x.id===face.id);assert.equal(m.sha256,createHash('sha256').update(b).digest('hex'));assert.deepEqual(m,{id:face.id,sha256:face.sha256,...readFontEmMetrics(b)});count++;}assert.equal(count,44);assert.equal(generated.faces.length,count);
 });
 test('invalid header, missing/truncated tables and invalid em are rejected',async()=>{
  const original=await readFile(new URL(manifest.fonts[0].faces[0].file,root));

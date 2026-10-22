@@ -15,3 +15,10 @@ describe("linear WB controls and honest scopes",()=>{
  it.each([[true,false],[false,true]])("hides untrustworthy scopes for WB=%s HDR=%s",(wb,hdr)=>{const html=renderToStaticMarkup(setup(wb,hdr).element);expect(html).toContain("color-scope-unavailable");expect(html).not.toContain('class="scope-grid"');expect(html).not.toContain('class="color-source-preview"');});
  it("labels the unchanged browser scopes approximate",()=>{expect(renderToStaticMarkup(setup().element)).toContain("RGB Waveform（近似）");});
 });
+
+// Direct handler/hook-double controls isolate the new subscription. Real React
+// localization and browser state continuity are checked in separate suites.
+vi.mock("./i18n/interfacePreferences", async importOriginal => {
+  const actual = await importOriginal<typeof import("./i18n/interfacePreferences")>();
+  return { ...actual, useI18n: () => ({ ...actual.interfacePreferences.getSnapshot(), t: actual.translateUi }) };
+});

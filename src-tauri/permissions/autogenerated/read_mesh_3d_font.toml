@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-read-mesh-3d-font"
+description = "Enables the read_mesh_3d_font command without any pre-configured scope."
+commands.allow = ["read_mesh_3d_font"]
+
+[[permission]]
+identifier = "deny-read-mesh-3d-font"
+description = "Denies the read_mesh_3d_font command without any pre-configured scope."
+commands.deny = ["read_mesh_3d_font"]

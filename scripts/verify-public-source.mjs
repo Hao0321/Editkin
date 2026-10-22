@@ -7,7 +7,7 @@ const ignoredGeneratedDirs = new Set([".git", ".rd", "node_modules", "dist", "de
 const forbiddenDirs = new Set([".personal-packs", ".creative-packs", "vendor", "desktop-deliveries", ".desktop-resources", ".desktop-product-release-candidates"]);
 const forbiddenRootFiles = new Set(["audit.config.json", "autopilot-capabilities.json", "market-parity-contract.json", "model-capability-contract.json", "product-capabilities.json", "video-autopilot-rule-coverage.json"]);
 const forbiddenExt = new Set([".exe", ".dll", ".pdb", ".zip", ".dmg", ".p12", ".pfx", ".pem", ".key"]);
-const binaryExt = new Set([".mp4", ".mov", ".mp3", ".wav", ".ttf", ".otf", ".png", ".jpg", ".jpeg", ".ico", ".icns"]);
+const binaryExt = new Set([".mp4", ".mov", ".mp3", ".wav", ".ttf", ".otf", ".png", ".jpg", ".jpeg", ".ico", ".icns", ".webp"]);
 const keyMarker = ["-----BEGIN", "PRIVATE KEY-----"].join(" ");
 const sensitive = [
   new RegExp(keyMarker),
@@ -30,6 +30,7 @@ function allowedBinary(path, rights) {
   if (forbiddenExt.has(ext)) return false;
   if (!binaryExt.has(ext)) return true;
   if (path.startsWith("src-tauri/icons/") && /Editkin visual identity/.test(rights)) return true;
+  if (path.startsWith("public/brand/") && ext === ".webp" && /Editkin visual identity/.test(rights)) return true;
   if (path.startsWith("public/fonts/") && ext === ".ttf" && /SIL-OFL-1\.1/.test(rights)) return true;
   if (path.startsWith("public/") && ext === ".mp4" && /synthetic FFmpeg lavfi fixture/.test(rights)) return true;
   return false;

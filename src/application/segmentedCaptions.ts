@@ -1,4 +1,4 @@
-import type { AutomaticCaptionAnalysisResult, AutomaticCaptionCue, AutomaticCaptionRequest, AutomaticCaptionRuntime, CaptionWindow, CaptionWindowEvidence } from "./automaticCaptionTypes";
+import type { AutomaticCaptionAnalysisResult, AutomaticCaptionCue, AutomaticCaptionRequest, AutomaticCaptionRuntime, CaptionWindow, CaptionWindowEvidence, RawWhisperTranscript, SkippedCaptionBlock } from "./automaticCaptionTypes";
 export type { CaptionSegmentation, CaptionWindow, CaptionWindowEvidence } from "./automaticCaptionTypes";
 
 export const CAPTION_WINDOW_SECONDS = 30;
@@ -30,14 +30,30 @@ export async function analyzeSegmentedCaptions(
 ): Promise<AutomaticCaptionAnalysisResult> {
   const started = Date.now(), windows = captionWindows(request.duration), evidence: CaptionWindowEvidence[] = [];
   const cues: AutomaticCaptionCue[] = [];
+  const skipped: SkippedCaptionBlock[] = [];
+  let unparseable: unknown;
   let first: AutomaticCaptionAnalysisResult | undefined, cacheHit = true, downloaded = false, cachedSegments = 0, boundary = false, usedCpu = false;
   for (const window of windows) {
     runtime.signal?.throwIfAborted();
     await runtime.onProgress?.({ phase: "transcript", completedSegments: window.index, totalSegments: windows.length, analyzedSeconds: window.coreStart, totalSeconds: request.duration, cachedSegments });
-    const result = await analyzeWindow({ ...request, sourceStart: request.sourceStart + window.start, duration: window.duration }, { ...runtime, onProgress: undefined });
+    let result: AutomaticCaptionAnalysisResult;
+    try {
+      result = await analyzeWindow({ ...request, sourceStart: request.sourceStart + window.start, duration: window.duration }, { ...runtime, onProgress: undefined });
+    } catch (error) {
+      runtime.signal?.throwIfAborted();
+      // One window whose whole recognizer output is unreadable loses only its own cues; its raw text stays evidence.
+      const failure = error as { code?: unknown; block?: unknown; rawTranscript?: RawWhisperTranscript } | undefined;
+      if (failure?.code !== "AUTOMATIC_CAPTION_PARSE" || !failure.rawTranscript) throw error;
+      unparseable ??= error; cacheHit = false;
+      skipped.push({ block: typeof failure.block === "number" ? failure.block : 0, reason: "unparseable-window", window: window.index });
+      evidence.push({ ...window, rawTranscript: failure.rawTranscript });
+      await runtime.onProgress?.({ phase: "transcript", completedSegments: window.index + 1, totalSegments: windows.length, analyzedSeconds: window.coreEnd, totalSeconds: request.duration, cachedSegments });
+      continue;
+    }
     runtime.signal?.throwIfAborted();
     first ??= result; cacheHit &&= result.cacheHit; downloaded ||= result.modelDownloaded; cachedSegments += result.cacheHit ? 1 : 0; usedCpu ||= result.acceleration === "cpu";
     if (result.modelSha256 !== first.modelSha256 || result.language !== first.language || result.translationTarget !== first.translationTarget) throw new Error("字幕分段模型／語言身分不一致");
+    for (const block of result.recognition.skippedBlocks ?? []) skipped.push({ ...block, window: window.index });
     evidence.push({ ...window, rawTranscript: result.rawTranscript, ...(result.rawTranslation ? { rawTranslation: result.rawTranslation } : {}) });
     for (const cue of result.cues) {
       const start = cue.start + window.start, end = Math.min(request.duration, cue.end + window.start), midpoint = (start + end) / 2;
@@ -47,7 +63,7 @@ export async function analyzeSegmentedCaptions(
     }
     await runtime.onProgress?.({ phase: "transcript", completedSegments: window.index + 1, totalSegments: windows.length, analyzedSeconds: window.coreEnd, totalSeconds: request.duration, cachedSegments });
   }
-  if (!first) throw new Error("字幕分段結果遺失");
+  if (!first) throw unparseable ?? new Error("字幕分段結果遺失");
   cues.sort((a,b) => a.start - b.start || a.end - b.end);
   // Do not silently delete disputed/repeated words. Preserve overlaps and flag
   // them for review instead of certifying direct subtitle burn-in.
@@ -58,6 +74,7 @@ export async function analyzeSegmentedCaptions(
   const { rawTranslation: _firstTranslation, segmentation: _firstSegmentation, ...metadata } = first;
   return {
     ...metadata, ...aggregate, cues: normalizedCues,
+    ...(skipped.length ? { recognition: { ...aggregate.recognition, skippedBlocks: skipped } } : {}),
     ...(translated ? { rawTranslation: translated.rawTranscript } : {}),
     analyzedSeconds: request.duration, elapsedMs: Date.now() - started, cacheHit, modelDownloaded: downloaded,
     engine: `${first.engine}+segmented-v1`,

@@ -193,7 +193,7 @@ export type PluginManifest = z.infer<typeof pluginManifestSchema>;
 
 export type PluginParameterValues = Record<string, string | number | boolean>;
 
-export function validatePluginParameters(capability: PluginCapability, input: Record<string, unknown>): PluginParameterValues {
+export function validatePluginParameters(capability: Pick<PluginCapability, "parameters">, input: Record<string, unknown>): PluginParameterValues {
   const definitions = new Map(capability.parameters.map((parameter) => [parameter.id, parameter]));
   for (const key of Object.keys(input)) if (!definitions.has(key)) throw new Error(`外掛參數不存在：${key}`);
   const output: PluginParameterValues = {};

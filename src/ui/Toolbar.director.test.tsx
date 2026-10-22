@@ -2,6 +2,12 @@ import { Children, isValidElement, type ReactNode, type ReactElement, type Mouse
 import { describe, it, expect, vi } from "vitest";
 import { Toolbar } from "./Toolbar";
 
+// This test exercises the menu callback directly; localization hooks are covered
+// through real React rendering and the preference-store suite.
+vi.mock("./i18n/interfacePreferences", () => ({
+  useI18n: () => ({ t: (source: string) => source }),
+}));
+
 function findAction(node: ReactNode): ReactElement<{ onClick: (event: MouseEvent<HTMLButtonElement>) => void }> | undefined {
   let found: ReturnType<typeof findAction>;
   Children.forEach(node, child => {

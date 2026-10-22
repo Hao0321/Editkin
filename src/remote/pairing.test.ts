@@ -1,3 +1,4 @@
+import { chooseFetchSafePortV1 } from "./testing/fetchSafePortV1";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -69,7 +70,7 @@ describe("LAN remote server pairing", () => {
     const bundle = join(root, "remote.mjs");
     await build({ entryPoints: [resolve("src/remote/server.ts")], bundle: true, platform: "node", target: "node22", format: "esm", outfile: bundle, logLevel: "silent" });
     await writeFile(join(root, "snapshot.json"), `${JSON.stringify({ projectName: "Pairing Test" })}\n`);
-    const port = await allocatePort();
+    const port = await chooseFetchSafePortV1(allocatePort);
     origin = `http://127.0.0.1:${port}`;
     child = spawn(process.execPath, [bundle], {
       stdio: ["ignore", "pipe", "ignore"],

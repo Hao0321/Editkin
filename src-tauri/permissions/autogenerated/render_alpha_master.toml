@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-render-alpha-master"
+description = "Enables the render_alpha_master command without any pre-configured scope."
+commands.allow = ["render_alpha_master"]
+
+[[permission]]
+identifier = "deny-render-alpha-master"
+description = "Denies the render_alpha_master command without any pre-configured scope."
+commands.deny = ["render_alpha_master"]

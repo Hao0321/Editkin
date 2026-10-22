@@ -4,8 +4,11 @@ import { resolve } from "node:path";
 import {
   assertTauriNativePolicyPin,
   assertTauriProductRustflagEnvironment,
+  encodeCargoRustflags,
+  rustupHomeFromSysroot,
   tauriProductCargoBuildArgs,
   tauriProductBuildArgs,
+  tauriProductPathRemapRustflags,
 } from "./lib/tauri-product-feature-policy.mjs";
 import { PRODUCT_RELEASE_SCOPE } from "./lib/build-input-identity.mjs";
 import { assertTauriStageReplacementTarget, resolveTauriStageTarget } from "./lib/tauri-stage-target-policy.mjs";
@@ -157,6 +160,37 @@ const frontendBuilder = await readFile(new URL("./tauri-frontend.mjs", import.me
 assertBefore(frontendBuilder, "assertTauriNativePolicyPin(await readFile", 'await runNode("scripts/build-creative-pack.mjs")');
 assert.throws(() => assertBefore(frontendBuilder.replace("assertTauriNativePolicyPin(await readFile", "missingPreflight(await readFile"), "assertTauriNativePolicyPin(await readFile", 'await runNode("scripts/build-creative-pack.mjs")'));
 
+// Build-machine path remapping: only the trusted wrappers set it, after rejecting caller Rust/Cargo injection.
+const remapFixture = { rustupHome: resolve("/fixture/rustup"), cargoHome: resolve("/fixture/cargo"), workspaceRoot: resolve("/fixture/editkin"),
+  cargoTargetDir: resolve("/fixture/editkin/src-tauri/product-release-candidates/candidate-0123") };
+const remapFlags = tauriProductPathRemapRustflags(remapFixture);
+assert.deepEqual(remapFlags, [
+  `--remap-path-prefix=${remapFixture.rustupHome}=/rustup`,
+  `--remap-path-prefix=${remapFixture.cargoHome}=/cargo`,
+  `--remap-path-prefix=${remapFixture.workspaceRoot}=/editkin`,
+  `--remap-path-prefix=${remapFixture.cargoTargetDir}=/cargo-target`,
+], "rustc applies the last matching prefix: the nested target directory must follow the checkout");
+assert.equal(encodeCargoRustflags(remapFlags), remapFlags.join("\u001f"));
+assert.equal(rustupHomeFromSysroot(resolve("/fixture/rustup/toolchains/stable-x86_64-pc-windows-msvc")), remapFixture.rustupHome);
+assert.equal(rustupHomeFromSysroot(resolve("/fixture/custom-sysroot")), resolve("/fixture/custom-sysroot"));
+const remapMutations = [{ cargoHome: "relative/cargo" }, { workspaceRoot: undefined }, { rustupHome: `${remapFixture.rustupHome}\u001f--cfg=x` }];
+for (const mutation of remapMutations) {
+  assert.throws(() => tauriProductPathRemapRustflags({ ...remapFixture, ...mutation }), /absolute/u);
+}
+assert.throws(() => encodeCargoRustflags(["--cfg=x\u001f--cfg=y"]), /0x1F/u);
+assert.throws(() => rustupHomeFromSysroot("relative"), /absolute/u);
+const tauriBuilder = await readFile(new URL("./tauri-build.mjs", import.meta.url), "utf8");
+const remapSetters = [
+  ["tauri-build.mjs", tauriBuilder, "environment.CARGO_ENCODED_RUSTFLAGS = encodeCargoRustflags(pathRemapRustflags)", "const child = spawn(buildNode, args"],
+  ["build-tauri-product-binary.mjs", productBinaryBuilder, "CARGO_ENCODED_RUSTFLAGS: encodeCargoRustflags(pathRemapRustflags)", "await run(cargoPath, command"],
+];
+for (const [label, source, setter, cargoWork] of remapSetters) {
+  assert.equal(source.split(setter).length, 2, `${label} must set the remap flags exactly once`);
+  assertBefore(source, "assertTauriProductRustflagEnvironment(process.env)", setter);
+  assertBefore(source, setter, cargoWork);
+  assert.match(source, /^\s+pathRemapRustflags,$/mu, `${label} must record the remap flags in its build receipt`);
+}
+
 const fixtureRoot = resolve(".tauri-stage-policy-fixture");
 const canonicalStage = resolveTauriStageTarget(fixtureRoot);
 assert.equal(canonicalStage.targetRoot, resolve(fixtureRoot, "src-tauri/target/release/runtime"));
@@ -188,6 +222,8 @@ console.log(JSON.stringify({
   earlyPolicyOrderingAssertions: 3,
   missingPreflightOrderingMutationRejected: 1,
   standaloneCargoArgs,
+  pathRemapMutationsRejected: remapMutations.length + 2,
+  pathRemapWrappersChecked: remapSetters.length,
   stageTargetMutationsRejected: 6,
   forcedArgs: tauriProductBuildArgs(["--ci"]),
 }));

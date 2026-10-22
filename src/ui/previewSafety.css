@@ -1,0 +1,4 @@
+.preview-badges .preview-gpu-retry { min-height: 36px; padding: 4px 12px; border: 1px solid color-mix(in srgb, var(--warning, #ffbd59) 60%, var(--line)); border-radius: 8px; background: color-mix(in srgb, var(--warning, #ffbd59) 12%, var(--surface)); color: var(--ink); font: inherit; font-weight: 750; cursor: pointer; }
+.preview-badges .preview-gpu-retry:hover { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.preview-update-notice[data-testid="native-effect-preview-error"] details { width: 100%; color: var(--soft); font-size: 14px; }
+.preview-update-notice[data-testid="native-effect-preview-error"] summary { cursor: pointer; }

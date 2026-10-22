@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, expect, it } from "vitest";
+import { REPO_TMP, useTempRoots } from "../test/tempRoot.mjs";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { createEmptyProject } from "../domain/editGraph";
@@ -19,9 +20,9 @@ import { bindCurrentDesignEvidence } from "./testCurrentDesignEvidence";
 
 const app = fileURLToPath(new URL("../../", import.meta.url));
 const ffmpegPath = join(app, "vendor/ffmpeg/win32-x64/ffmpeg.exe"), ffprobePath = join(app, "vendor/ffmpeg/win32-x64/ffprobe.exe");
+const temp = useTempRoots();
 async function makeFixture() {
-  await mkdir(join(app, ".rd/tmp"), { recursive: true });
-  const root = await mkdtemp(join(app, ".rd/tmp/auto-colour-")), source = join(root, "ramp.mp4");
+  const root = await temp.create("auto-colour-", { parent: REPO_TMP }), source = join(root, "ramp.mp4");
   const encode = spawnSync(ffmpegPath, ["-v", "error", "-f", "lavfi", "-i", "nullsrc=s=128x96:r=10:d=1,geq=lum='32+X/W*100':cb=128:cr=128",
     "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-x264-params", "colorprim=bt709:transfer=bt709:colormatrix=bt709:range=tv", source], { windowsHide: true, timeout: 30000 });
   expect(encode.status, encode.stderr.toString()).toBe(0);

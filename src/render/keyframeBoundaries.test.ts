@@ -1,9 +1,10 @@
 import { expect, it, vi } from "vitest";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { REPO_TMP, useTempRoots } from "../test/tempRoot.mjs";
 import { createDemoProject } from "../domain/demo";
 import { DEFAULT_TRANSFORM, type EditProject } from "../domain/types";
 import { renderComposite } from "./ffmpegComposite";
@@ -24,6 +25,8 @@ vi.mock("node:child_process", async importOriginal => {
 const app = fileURLToPath(new URL("../../", import.meta.url));
 const ff = resolve(app, "vendor/ffmpeg/win32-x64/ffmpeg.exe"), fp = resolve(app, "vendor/ffmpeg/win32-x64/ffprobe.exe");
 const width = 128, height = 96, frameCount = 6, bytesPerFrame = width * height;
+// Evidence folders are removed after each case unless EDITKIN_KEYFRAME_EVIDENCE_ROOT names a folder to keep them in.
+const temp = useTempRoots();
 const sha = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 const cases = [24, 30, 60, 24000 / 1001, 30000 / 1001, 60000 / 1001].map((fps, i) => ({ id: `rate-${i}`, fps, startFrame: 0 }));
 cases.push({ id: "nonzero-clip-start", fps: 30, startFrame: 7 });
@@ -46,8 +49,7 @@ it("calibrates boundary-frame pixel checks with shifted, empty and wrong-opacity
 });
 
 it.each(cases)("renders authored zero/hold boundaries against independent frame snapshots: $id", async spec => {
-  const base = process.env.EDITKIN_KEYFRAME_EVIDENCE_ROOT ?? resolve(app, ".rd/tmp"); await mkdir(base, { recursive: true });
-  const root = await mkdtemp(resolve(base, `${spec.id}-`)), processes: object[] = []; productionProcesses.length = 0;
+  const root = await temp.create(`${spec.id}-`, { parent: REPO_TMP, keepEnv: "EDITKIN_KEYFRAME_EVIDENCE_ROOT" }), processes: object[] = []; productionProcesses.length = 0;
   const run = (args: string[], input?: Buffer) => {
     const child = spawnSync(ff, args, { input, windowsHide: true, timeout: 30000, maxBuffer: 8 * 1024 * 1024 });
     processes.push({ executable: ff, args, pid: child.pid, code: child.status, signal: child.signal, stderr: child.stderr?.toString() });

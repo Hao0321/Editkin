@@ -1,17 +1,19 @@
 import { beforeAll,expect,it,vi } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdir,mkdtemp,readFile,writeFile } from "node:fs/promises";
+import { readFile,writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { REPO_TMP,useTempRoots } from "../test/tempRoot.mjs";
 import { sampleMaterialColor,getMaterialColorRuntimeIdentity,verifyMaterialColorReceipt,materialColorRequestSnapshot,type MaterialColorRequest } from "./materialColorSampling";
 import * as io from "./materialColorSamplingRuntime";
 const app=fileURLToPath(new URL("../../",import.meta.url)),ff=resolve(app,"vendor/ffmpeg/win32-x64/ffmpeg.exe"),fp=resolve(app,"vendor/ffmpeg/win32-x64/ffprobe.exe");
 const runtime={ffmpegPath:ff,ffprobePath:fp};let dir:string;
 const sources:Record<string,string>={};
+const temp=useTempRoots();
 function run(args:string[]) {const r=spawnSync(ff,args,{windowsHide:true,timeout:30000,maxBuffer:2*1024*1024});if(r.status!==0)throw Error(r.stderr.toString());return r.stdout;}
 async function request(name="sdr",patch:Partial<MaterialColorRequest>={}):Promise<MaterialColorRequest> {return {sourcePath:sources[name],sourceSha256:await io.colorFileSha(sources[name]),sourceStart:.1,duration:1,kind:"video",sceneCount:3,sceneCountVerified:true,samples:[{id:"a",time:.01,sceneIndex:0},{id:"b",time:.41,sceneIndex:2}],...patch};}
 beforeAll(async()=>{
-  await mkdir(resolve(app,".rd/tmp"),{recursive:true});dir=await mkdtemp(resolve(app,".rd/tmp/material-color-sampling-"));
+  dir=await temp.create("material-color-sampling-",{parent:REPO_TMP});
   for(const name of ["sdr","hlg","pq","unknown","offset","vfr"]) {
     const file=resolve(dir,`${name}.mkv`);sources[name]=file;
     const hdr=name==="hlg"||name==="pq";

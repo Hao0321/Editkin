@@ -72,12 +72,21 @@ fn encoded_srgb_to_render_target(value: f32) -> f32 {
 fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let source = textureSample(source_texture, source_sampler, input.uv);
     let encoded = sample_tetrahedral(linear_rec709_to_acescct(source.rgb));
-    // The SDR swap-chain view is sRGB. Return linearized code values so its fixed-function
-    // OETF writes the OCIO LUT's encoded Rec.709/sRGB bytes exactly once.
+    // Return display-linear code values. The historical SDR swap-chain view
+    // applies its OETF directly; the explicit display-paint float target keeps
+    // these same values for linear source-over before fragment_display_copy.
     return vec4<f32>(
         encoded_srgb_to_render_target(encoded.r),
         encoded_srgb_to_render_target(encoded.g),
         encoded_srgb_to_render_target(encoded.b),
         source.a
     );
+}
+
+// A display-linear float intermediate has no fixed-function encoding. Its values
+// are exactly those returned above for the sRGB target, without writing SDR code
+// values and decoding them again. The final target performs the sole OETF.
+@fragment
+fn fragment_display_copy(input: VertexOutput) -> @location(0) vec4<f32> {
+    return textureSample(source_texture, source_sampler, input.uv);
 }

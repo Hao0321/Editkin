@@ -11,13 +11,20 @@ import type { MaterialColorRuntime, MaterialColorRuntimeIdentity } from "./mater
 export const colorDigest = (value: unknown) => createHash("sha256").update(canonicalJson(value)).digest("hex");
 export const colorBytesSha = (value: Uint8Array) => createHash("sha256").update(value).digest("hex");
 export const MATERIAL_COLOR_IMPLEMENTATIONS=implementationPaths;
-export async function colorFileSha(path: string): Promise<string> {
+export async function colorFileSha(path: string, signal?: AbortSignal): Promise<string> {
+  signal?.throwIfAborted();
   const info=await stat(path);
   if (!info.isFile() || info.size>64*1024**3) throw new Error("source-or-tool-not-bounded-regular-file");
+  signal?.throwIfAborted();
   const stream=createReadStream(path),hash=createHash("sha256");
+  // A destroy request is not an acknowledgement that the stream's fd closed.
+  const closed=new Promise<void>(done=>stream.once("close",()=>done()));
+  const abort=()=>stream.destroy(signal?.reason instanceof Error?signal.reason:Object.assign(new Error("analysis-cancelled"),{name:"AbortError",cause:signal?.reason}));
+  signal?.addEventListener("abort",abort,{once:true});
+  if(signal?.aborted)abort();
   const timer=setTimeout(()=>stream.destroy(new Error("hash-timeout")),30000);
-  try { for await (const chunk of stream) hash.update(chunk); return hash.digest("hex"); }
-  finally { clearTimeout(timer);stream.destroy(); }
+  try { for await (const chunk of stream) {signal?.throwIfAborted();hash.update(chunk);} signal?.throwIfAborted();return hash.digest("hex"); }
+  finally { clearTimeout(timer);signal?.removeEventListener("abort",abort);stream.destroy();await closed;signal?.throwIfAborted(); }
 }
 export function colorToolPaths(runtime: MaterialColorRuntime) {
   if (!isAbsolute(runtime.ffmpegPath) || (runtime.ffprobePath && !isAbsolute(runtime.ffprobePath))) throw new Error("absolute-tool-path-required");
@@ -41,17 +48,18 @@ export function runColorProcess(executable:string,args:string[],maximumStdout:nu
   });
 }
 export async function getMaterialColorRuntimeIdentity(runtime:MaterialColorRuntime):Promise<MaterialColorRuntimeIdentity> {
+  runtime.signal?.throwIfAborted();
   const base:Omit<MaterialColorRuntimeIdentity,"identitySha256">={schema:"editkin.material-color-runtime/v1",status:"verified",tools:[],implementations:[]};
   try {
     const paths=colorToolPaths(runtime);
     for(const role of ["ffmpeg","ffprobe"] as const) {
-      const before=await colorFileSha(paths[role]);
+      const before=await colorFileSha(paths[role],runtime.signal);
       const result=await runColorProcess(paths[role],["-version"],32768,runtime.timeoutMs,runtime.signal);
       const version=result.stdout.toString("utf8").split(/\r?\n/)[0];
-      if(!version.startsWith(`${role} version `)||await colorFileSha(paths[role])!==before)throw Error("tool-identity-unverified");
+      if(!version.startsWith(`${role} version `)||await colorFileSha(paths[role],runtime.signal)!==before)throw Error("tool-identity-unverified");
       base.tools.push({role,sha256:before,version});
     }
     Object.assign(base,materialColorCodeIdentity());
-  } catch(error) {base.status="unmeasured";base.reason=error instanceof Error?error.message:"runtime-identity-unverified";}
+  } catch(error) {runtime.signal?.throwIfAborted();base.status="unmeasured";base.reason=error instanceof Error?error.message:"runtime-identity-unverified";}
   return {...base,identitySha256:colorDigest(base)};
 }

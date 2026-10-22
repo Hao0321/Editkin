@@ -1,0 +1,10 @@
+.file-menu-popover { width: min(380px, calc(100vw - 24px)); }
+.file-menu-recent { display: grid; gap: 2px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); min-width: 0; }
+.file-menu-recent > strong { display: block; padding: 6px 7px 4px; color: var(--muted); font-size: 12px; font-weight: 800; }
+.file-menu-recent > button { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 9px; align-items: center; width: 100%; min-height: 56px; padding: 7px; border: 0; border-radius: 11px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.file-menu-recent > button:hover, .file-menu-recent > button:focus-visible { background: var(--accent-soft); }
+.file-menu-recent > button > span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--surface-3); color: var(--accent); font-size: 16px; }
+.file-menu-recent > button > div { min-width: 0; }
+.file-menu-recent b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 750; }
+.file-menu-recent small { display: block; margin-top: 2px; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.file-menu-empty { margin: 2px 7px 8px; color: var(--muted); font-size: 14px; line-height: 1.5; }

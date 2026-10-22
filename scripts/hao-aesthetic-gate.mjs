@@ -7,7 +7,9 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const bundledPath = path.join(root, "src", "creative", "editkinAestheticStandard.json");
-const canonicalPath = path.resolve(root, "..", "..", "video-autopilot-kit", "knowledge", "aesthetic_standard.json");
+const canonicalPath = process.env.EDITKIN_AESTHETIC_CANONICAL
+  ? path.resolve(process.env.EDITKIN_AESTHETIC_CANONICAL)
+  : path.resolve(root, "..", "..", "video-autopilot-kit", "knowledge", "aesthetic_standard.json");
 const bundledText = await readFile(bundledPath, "utf8");
 const bundled = JSON.parse(bundledText);
 assert.equal(bundled.standard_id, "editkin-community-aesthetic-standard");

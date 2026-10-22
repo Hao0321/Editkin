@@ -2,6 +2,12 @@
   "$schema": "https://schema.tauri.app/config/2",
   "bundle": {
     "targets": ["nsis"],
+    "icon": [
+      "icons/brand-v3/128x128@2x.png",
+      "icons/brand-v3/128x128.png",
+      "icons/brand-v3/32x32.png",
+      "icons/brand-v3/icon.ico"
+    ],
     "resources": {
       "../vendor/node/win32-x64/node.exe": "runtime/node.exe",
       "../vendor/node/win32-x64/NODE-LICENSE.txt": "runtime/NODE-LICENSE.txt",
@@ -21,7 +27,7 @@
     },
     "windows": {
       "nsis": {
-        "installerIcon": "icons/icon.ico",
+        "installerIcon": "icons/brand-v3/icon.ico",
         "compression": "zlib"
       }
     }

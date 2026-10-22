@@ -1,6 +1,6 @@
 import { build } from "esbuild";
 import { rm } from "node:fs/promises";
-import { buildMaterialColorBundle } from "./lib/material-color-bundle-identity.mjs";
+import { buildShotGradeBundleV1 } from "./lib/shot-grade-bundle-identity-v1.mjs";
 
 const production = {
   minify: true,
@@ -10,6 +10,9 @@ const production = {
 
 // A source-only desktop smoke needs the real service, not owner release assets.
 const community = process.argv.includes("--community");
+// A portable community app bundle also needs the self-authored MCP and Remote
+// entrypoints its release runtime resolves. Owner release inputs stay excluded.
+const communityEntrypoints = community && process.argv.includes("--with-mcp-and-remote");
 
 await Promise.all([
   "desktop-dist/main.mjs.map",
@@ -41,8 +44,10 @@ if (!community) {
     external: ["electron"],
     ...production,
   });
+}
 
-  await buildMaterialColorBundle({
+if (!community || communityEntrypoints) {
+  await buildShotGradeBundleV1({
     entryPoints: ["src/mcp/server.ts"],
     bundle: true,
     platform: "node",
@@ -66,7 +71,7 @@ await build({
   ...production,
 });
 
-if (!community) {
+if (!community || communityEntrypoints) {
   await build({
     entryPoints: ["src/remote/server.ts"],
     bundle: true,
@@ -76,6 +81,8 @@ if (!community) {
     outfile: "desktop-dist/remote.mjs",
     ...production,
   });
+}
 
+if (!community) {
   await import("./build-release-input-manifest.mjs");
 }

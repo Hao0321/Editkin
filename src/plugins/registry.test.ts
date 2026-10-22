@@ -1,8 +1,8 @@
-import { mkdtemp, mkdir, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { removeTempRoot, useTempRoots } from "../test/tempRoot.mjs";
 import { compilePluginApplication, compilePluginAutomationApplication, compilePluginCommands, discoverInstalledPlugins, findInstalledCapability, resolveGpuEffectGraphBinding, resolveGpuEffectGraphBindings, resolveNativeEffectBinding } from "./registry";
 
 const manifest = {
@@ -29,8 +29,9 @@ const manifest = {
   }],
 };
 
+const temp = useTempRoots();
 async function fixtureRoot(value: unknown = manifest): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "editkin-plugin-test-"));
+  const root = await temp.create("editkin-plugin-test-");
   const directory = join(root, "fixture");
   await mkdir(directory);
   await writeFile(join(directory, "editkin-plugin.json"), JSON.stringify(value));
@@ -39,7 +40,7 @@ async function fixtureRoot(value: unknown = manifest): Promise<string> {
 
 describe("Editkin plugin registry", () => {
   it("blocks a Skill Pack index symlink that escapes the plugin directory", async () => {
-    const root = await mkdtemp(join(tmpdir(), "editkin-plugin-symlink-"));
+    const root = await temp.create("editkin-plugin-symlink-");
     const directory = join(root, "fixture");
     await mkdir(directory);
     const pack = {
@@ -66,6 +67,9 @@ describe("Editkin plugin registry", () => {
     const registry = await discoverInstalledPlugins([root]);
     expect(registry.plugins[0].capabilities[0]).toMatchObject({ planningReady: false, readiness: "BLOCKED" });
     expect(registry.plugins[0].capabilities[0].readinessDetail).toMatch(/symlink|junction/);
+    // Removing the plugin folder unlinks skill.json as a link; the file it points to outside the plugin survives.
+    await removeTempRoot(directory);
+    expect(await readFile(outside, "utf8")).toBe(source);
   });
 
   it("ships three bounded GPU looks that the UI and automatic editor can apply", async () => {
@@ -203,7 +207,7 @@ describe("Editkin plugin registry", () => {
   });
 
   it("resolves a hash-pinned numeric native effect instance and blocks identity drift", async () => {
-    const root = await mkdtemp(join(tmpdir(), "editkin-native-plugin-test-"));
+    const root = await temp.create("editkin-native-plugin-test-");
     const directory = join(root, "fixture");
     await mkdir(directory);
     const library = Buffer.from("diagnostic native library fixture");

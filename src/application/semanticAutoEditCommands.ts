@@ -13,17 +13,18 @@ export function buildSemanticAutoEditCommand(
   idFactory: (kind: "caption" | "segment", index: number) => string = (kind) => makeId(kind === "caption" ? "caption-highlight" : "clip-highlight"),
 ): { command: EditorCommand; addedCaptions: number; segmentCount: number; segmentIds: string[] } {
   if (!plan.keepRanges.length) throw new Error("智慧成片沒有產生可保留區間");
-  const captions = buildAutomaticCaptionCommand(project, clip, transcript, (() => {
+  // Footage without speech gets no transcript captions; captions already on the timeline are left alone.
+  const captions = transcript.cues.some((cue) => cue.text.trim()) ? buildAutomaticCaptionCommand(project, clip, transcript, (() => {
     let index = 0;
     return () => idFactory("caption", index++);
-  })());
+  })()) : undefined;
   const segmentIds = plan.keepRanges.map((_, index) => index === 0 ? clip.id : idFactory("segment", index));
   return {
     command: {
       type: "batch",
-      commands: [captions.command, { type: "smart_cut_clip", clipId: clip.id, keepRanges: plan.keepRanges, segmentIds }],
+      commands: [...(captions ? [captions.command] : []), { type: "smart_cut_clip", clipId: clip.id, keepRanges: plan.keepRanges, segmentIds }],
     },
-    addedCaptions: captions.added,
+    addedCaptions: captions?.added ?? 0,
     segmentCount: plan.keepRanges.length,
     segmentIds,
   };

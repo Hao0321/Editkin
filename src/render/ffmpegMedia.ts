@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { EditProject } from "../domain/types";
+import type { NativeAudioStageParentCleanupV1 } from "../application/nativeAudioStageWorkOwnerV1";
 import type { RenderPlan } from "./planner";
 import { finite } from "./ffmpegExpressions";
 import type { NativeFinalAudioReceipt, RenderOptions } from "./ffmpegTypes";
@@ -67,7 +68,7 @@ export async function prepareNativeFinalAudio(
   project: EditProject,
   plan: RenderPlan,
   workspace: string,
-  options: Required<Pick<RenderOptions, "ffmpegPath" | "ffprobePath" | "nativeCorePath" | "timeoutMs">> & Pick<RenderOptions, "assetBase">,
+  options: Required<Pick<RenderOptions, "ffmpegPath" | "ffprobePath" | "nativeCorePath" | "timeoutMs">> & Pick<RenderOptions, "assetBase"> & { pendingCloseParent?: NativeAudioStageParentCleanupV1 },
 ): Promise<PreparedNativeFinalAudio> {
   const { stageNativeAudioPreview } = await import("../application/nativeAudioPreview");
   const stage = await stageNativeAudioPreview(project, {
@@ -75,6 +76,7 @@ export async function prepareNativeFinalAudio(
     ffprobePath: options.ffprobePath,
     cacheRoot: join(workspace, "native-final-audio"),
     assetBase: options.assetBase,
+    pendingCloseParent: options.pendingCloseParent,
     timelineStartSeconds: 0,
     maxDurationSeconds: plan.duration,
     timeoutMs: Math.min(options.timeoutMs, 120_000),

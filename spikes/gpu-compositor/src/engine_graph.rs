@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use hao_core::engine::compile_graph;
 use hao_core::engine::composite::LinearRgba;
+use hao_core::engine::floating_video_frame::{FloatingVideoFrameSample, FloatingVideoFrameSpec};
 use hao_core::engine::model::{
     AlphaMode, BlendMode as EngineBlendMode, CameraKeyframe, DepthOfFieldKeyframe, EngineGraph,
     EngineNode, KeyframeEasing, LightKeyframe, LightKind, MatteMode, MotionBlurSourceSampling,
@@ -22,6 +23,13 @@ use super::{
     BlendMode, BuiltinEffect, Layer, LayerSource, PreparedGraph, RenderGraph, SourceAlphaMode,
     Transform, prepare_graph,
 };
+
+#[path = "timeline_pair_plan_v1.rs"]
+mod timeline_pair_plan_v1;
+pub use timeline_pair_plan_v1::PreparedTimelinePairV1;
+#[path = "unified_video_program_v1.rs"]
+mod unified_video_program_v1;
+pub use unified_video_program_v1::{Program as UnifiedVideoProgramV1, Step as UnifiedVideoStepV1, DrawKind as UnifiedVideoDrawKindV1};
 
 const COMMON_GRAPH_SCHEMA: &str = "editkin.engine-graph/v1";
 const RESIDENT_VIDEO_RESOURCE_SCHEMA: &str = "editkin.resident-video-resource-plan/v1";
@@ -212,6 +220,7 @@ impl EngineDisplayTransform {
 /// The platform executor is selected only after the shared graph compiler has validated every
 /// node; no node may be silently bypassed by the specialized video path.
 pub struct PreparedEngineVideoGraph {
+    pub unified_program: Option<UnifiedVideoProgramV1>,
     pub width: u32,
     pub height: u32,
     pub coverage: EngineExecutionCoverage,
@@ -228,6 +237,7 @@ pub struct PreparedEngineVideoGraph {
     /// Depth32Float 2.5D scene owns the first input and the scene camera owns the second.
     pub depth_of_field: Option<EngineVideoDepthOfFieldPlan>,
     pub layers: Vec<PreparedEngineVideoLayer>,
+    pub timeline_pairs: Vec<PreparedTimelinePairV1>,
     /// Non-rendering transform-only layers. Controllers are sampled by the same rational
     /// timeline as video layers but own no decoder, texture or pixel buffer.
     pub controllers: Vec<EngineVideoControllerPlan>,
@@ -238,8 +248,21 @@ pub struct PreparedEngineVideoGraph {
     pub particles: Vec<EngineVideoParticlePlan>,
     pub captions: Vec<EngineVideoCaptionPlan>,
     pub motion_graphics: Vec<EngineVideoMotionGraphicPlan>,
+    pub native_motion_paints: Vec<EngineVideoNativeMotionPaintPlan>,
+    pub motion_overlay_order: Vec<EngineVideoMotionOverlayOrder>,
     pub vfx_simulation: Option<EngineVfxSimulationCoverage>,
 }
+
+pub struct EngineVideoNativeMotionPaintPlan {
+    pub node_id: String,
+    pub graphic_id: String,
+    /// Position in the complete authored legacy/native Motion overlay sequence.
+    pub overlay_order: usize,
+    pub track: hao_core::engine::motion_paint_track::NativeMotionPaintTrack,
+}
+
+#[derive(Clone, Copy)]
+pub enum EngineVideoMotionOverlayOrder { Legacy(usize), NativePaint(usize) }
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -339,6 +362,8 @@ fn interpolate_lens(
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResidentVideoResourcePlan {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unified_seed_bytes: Option<u64>,
     pub schema: &'static str,
     pub width: u32,
     pub height: u32,
@@ -356,6 +381,10 @@ pub struct ResidentVideoResourcePlan {
     pub temporal_resident_bytes: u64,
     pub compositor_working_bytes: u64,
     pub overlay_bytes: u64,
+    pub native_paint_count: usize,
+    pub native_paint_cpu_bytes: u64,
+    pub native_paint_staging_bytes: u64,
+    pub native_paint_geometry_bytes: u64,
     pub particle_snapshot_bytes: u64,
     pub adjustment_working_bytes: u64,
     pub scene_depth_attachment_count: u32,
@@ -383,6 +412,41 @@ fn resident_video_resource_plan(
     scene_depth_attachment_count: u32,
     depth_of_field_pass_count: u32,
 ) -> Result<ResidentVideoResourcePlan> {
+    resident_video_resource_plan_with_paint(width, height, cache_budget_mb, video_layer_count, overlay_count,
+        particle_count, adjustment_count, matte_count, temporal_sample_count, working_bytes_per_pixel,
+        scene_depth_attachment_count, depth_of_field_pass_count, 0)
+}
+
+fn resident_video_resource_plan_with_paint(
+    width: u32, height: u32, cache_budget_mb: u64, video_layer_count: usize, overlay_count: usize,
+    particle_count: usize, adjustment_count: usize, matte_count: usize, temporal_sample_count: u32,
+    working_bytes_per_pixel: u64, scene_depth_attachment_count: u32, depth_of_field_pass_count: u32,
+    native_paint_count: usize,
+) -> Result<ResidentVideoResourcePlan> {
+    resident_video_resource_plan_inner(width, height, cache_budget_mb, video_layer_count, overlay_count,
+        particle_count, adjustment_count, matte_count, temporal_sample_count, working_bytes_per_pixel,
+        scene_depth_attachment_count, depth_of_field_pass_count, native_paint_count, false)
+}
+
+fn resident_media_free_resource_plan(
+    width: u32, height: u32, cache_budget_mb: u64, overlay_count: usize, adjustment_count: usize,
+) -> Result<ResidentVideoResourcePlan> {
+    if width == 0 || height == 0 || cache_budget_mb < 64 {
+        bail!("UNIFIED_NATIVE_MEDIA_FREE_RESOURCE_INVALID");
+    }
+    resident_video_resource_plan_inner(width, height, cache_budget_mb, 0, overlay_count,
+        0, adjustment_count, 0, 0, BGRA_BYTES_PER_PIXEL, 0, 0, 0, true)
+}
+
+fn resident_video_resource_plan_inner(
+    width: u32, height: u32, cache_budget_mb: u64, video_layer_count: usize, overlay_count: usize,
+    particle_count: usize, adjustment_count: usize, matte_count: usize, temporal_sample_count: u32,
+    working_bytes_per_pixel: u64, scene_depth_attachment_count: u32, depth_of_field_pass_count: u32,
+    native_paint_count: usize, media_free: bool,
+) -> Result<ResidentVideoResourcePlan> {
+    if native_paint_count > overlay_count || native_paint_count > 4 || (native_paint_count > 0 && working_bytes_per_pixel != 8) {
+        bail!("native paint overlays require bounded scene-linear resources");
+    }
     if scene_depth_attachment_count > 1
         || depth_of_field_pass_count > 1
         || (depth_of_field_pass_count == 1 && scene_depth_attachment_count != 1)
@@ -410,8 +474,21 @@ fn resident_video_resource_plan(
         .context("common video compositor resource size overflow")?;
     let overlay_bytes = pixel_count
         .checked_mul(BGRA_BYTES_PER_PIXEL)
-        .and_then(|bytes| bytes.checked_mul(overlay_count as u64))
+        .and_then(|bytes| bytes.checked_mul((overlay_count + native_paint_count) as u64))
         .context("common video overlay resource size overflow")?;
+    // Native paint owns one reusable f32 frame and up to two Gaussian alpha masks
+    // per overlay. The mask reservation covers offscreen halos at the raster cap;
+    // it is a conservative admission allowance, not a measured peak allocation.
+    let native_paint_cpu_bytes = pixel_count.checked_mul(16)
+        .and_then(|bytes| bytes.checked_add(hao_core::engine::motion_paint::MAX_EFFECT_MASK_BYTES))
+        .and_then(|bytes| bytes.checked_mul(native_paint_count as u64))
+        .context("native paint CPU frame budget overflow")?;
+    let native_paint_staging_bytes = pixel_count.checked_mul(8).and_then(|bytes| bytes.checked_mul(native_paint_count as u64))
+        .context("native paint staging budget overflow")?;
+    // Reserve bounded geometry/poses/owned track metadata as well as pixels.
+    // This allowance is conservative; it is not measured peak memory.
+    let native_paint_geometry_bytes = (native_paint_count as u64).checked_mul(16 * 1024 * 1024)
+        .context("native paint geometry budget overflow")?;
     let particle_snapshot_bytes = pixel_count
         .checked_mul(BGRA_BYTES_PER_PIXEL)
         .and_then(|bytes| bytes.checked_mul(particle_count as u64))
@@ -440,6 +517,9 @@ fn resident_video_resource_plan(
         .and_then(|bytes| bytes.checked_add(temporal_resident_bytes))
         .and_then(|bytes| bytes.checked_add(compositor_working_bytes))
         .and_then(|bytes| bytes.checked_add(overlay_bytes))
+        .and_then(|bytes| bytes.checked_add(native_paint_cpu_bytes))
+        .and_then(|bytes| bytes.checked_add(native_paint_staging_bytes))
+        .and_then(|bytes| bytes.checked_add(native_paint_geometry_bytes))
         .and_then(|bytes| bytes.checked_add(particle_snapshot_bytes))
         .and_then(|bytes| bytes.checked_add(adjustment_working_bytes))
         .and_then(|bytes| bytes.checked_add(scene_depth_bytes))
@@ -450,6 +530,9 @@ fn resident_video_resource_plan(
     let fixed_bytes = compositor_working_bytes
         .checked_add(temporal_resident_bytes)
         .and_then(|bytes| bytes.checked_add(overlay_bytes))
+        .and_then(|bytes| bytes.checked_add(native_paint_cpu_bytes))
+        .and_then(|bytes| bytes.checked_add(native_paint_staging_bytes))
+        .and_then(|bytes| bytes.checked_add(native_paint_geometry_bytes))
         .and_then(|bytes| bytes.checked_add(particle_snapshot_bytes))
         .and_then(|bytes| bytes.checked_add(adjustment_working_bytes))
         .and_then(|bytes| bytes.checked_add(scene_depth_bytes))
@@ -458,7 +541,7 @@ fn resident_video_resource_plan(
         .saturating_sub(fixed_bytes)
         .checked_div(bytes_per_video_layer)
         .unwrap_or(0);
-    if video_layer_count == 0 {
+    if video_layer_count == 0 && !media_free {
         bail!("common video graph requires at least one resident video layer");
     }
     if required_bytes > budget_bytes {
@@ -471,6 +554,7 @@ fn resident_video_resource_plan(
         );
     }
     Ok(ResidentVideoResourcePlan {
+        unified_seed_bytes: None,
         schema: RESIDENT_VIDEO_RESOURCE_SCHEMA,
         width,
         height,
@@ -488,6 +572,10 @@ fn resident_video_resource_plan(
         temporal_resident_bytes,
         compositor_working_bytes,
         overlay_bytes,
+        native_paint_count,
+        native_paint_cpu_bytes,
+        native_paint_staging_bytes,
+        native_paint_geometry_bytes,
         particle_snapshot_bytes,
         adjustment_working_bytes,
         scene_depth_attachment_count,
@@ -507,6 +595,7 @@ pub struct PreparedEngineVideoLayer {
     pub asset_id: String,
     pub input_path: PathBuf,
     pub timeline: EngineVideoTimelinePlan,
+    pub transition_read: Option<hao_core::engine::timeline_pair_v1::TimelineSourceReadV1>,
     pub visual: EngineVideoVisualPlan,
     /// Resolved source boundary contract. Resident working textures are straight-alpha.
     pub alpha_mode: AlphaMode,
@@ -606,6 +695,12 @@ pub struct EngineVideoCaptionPlan {
     pub bold: bool,
     pub shadow: f32,
     pub letter_spacing: f32,
+    /// The export's shadow colour (ASS BackColour); None takes `background_color`.
+    pub shadow_color: Option<String>,
+    /// libass `\blur` on the outline and the shadow (0 = hard edges).
+    pub shadow_blur: f32,
+    /// The lines TypeScript broke where the export breaks; None draws `text` as typed.
+    pub lines: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -932,6 +1027,10 @@ fn solve_destination_to_source_homography(
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EngineVideoVisualPlan {
+    #[serde(skip_serializing_if = "crate::clip_mirror::false_value")]
+    pub mirror_x: bool,
+    #[serde(skip_serializing_if = "crate::clip_mirror::false_value")]
+    pub mirror_y: bool,
     /// 0 = existing linear working buffer, 1 = legacy sRGB input, 2 = explicit Rec709 v2 input.
     pub input_transfer: u32,
     /// Keep the requested processor version even when its physical gains are all zero.
@@ -959,6 +1058,12 @@ pub struct EngineVideoVisualPlan {
     pub grade: PrimaryGrade,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub motion_blur: Option<EngineVideoMotionBlurPlan>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub floating_frame: Option<FloatingVideoFrameSpec>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub floating_node_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub floating_sample: Option<FloatingVideoFrameSample>,
     #[serde(skip)]
     pub keyframes: Vec<Transform2dKeyframe>,
 }
@@ -981,6 +1086,8 @@ pub struct EngineVideoMotionBlurPlan {
 impl Default for EngineVideoVisualPlan {
     fn default() -> Self {
         Self {
+            mirror_x: false,
+            mirror_y: false,
             input_transfer: 0,
             primary_processor_version: 1,
             translate_x: 0.0,
@@ -997,12 +1104,52 @@ impl Default for EngineVideoVisualPlan {
             shader_effects: Vec::new(),
             grade: PrimaryGrade::default(),
             motion_blur: None,
+            floating_frame: None,
+            floating_node_id: None,
+            floating_sample: None,
             keyframes: Vec::new(),
         }
     }
 }
 
 impl EngineVideoVisualPlan {
+    /// Finalize only after sampling and composing the complete post-assembly parent affine.
+    /// The source of this homography is the full canvas, not the inset video rectangle.
+    pub fn finalize_floating(&mut self, local_frame: i64) -> Result<()> {
+        let Some(spec) = self.floating_frame.as_ref() else { return Ok(()); };
+        if self.floating_sample.is_some() || self.projective_enabled || self.scene_depth.is_some()
+            || self.scene_depth_plane.is_some() || self.motion_blur.is_some()
+            || self.effect_kind != 0 || !self.shader_effects.is_empty()
+        {
+            bail!("floating frame cannot mix with an existing projection, effect, depth, or shutter stage");
+        }
+        if !self.translate_x.is_finite() || !self.translate_y.is_finite()
+            || !self.scale.is_finite() || self.scale <= 0.0001 || !self.rotation.is_finite()
+            || !self.opacity.is_finite() || !(0.0..=1.0).contains(&self.opacity)
+        {
+            bail!("floating frame post affine must be finite with positive scale and bounded opacity");
+        }
+        let sample = spec.sample(local_frame).map_err(anyhow::Error::msg)?;
+        let width = f64::from(spec.canvas_width);
+        let height = f64::from(spec.canvas_height);
+        let (sin, cos) = f64::from(self.rotation).sin_cos();
+        let scale = f64::from(self.scale);
+        let destination = sample.quad.map(|point| {
+            let x = (point[0] - 0.5) * width;
+            let y = (point[1] - 0.5) * height;
+            (scale * (cos * x - sin * y) + f64::from(self.translate_x),
+             scale * (sin * x + cos * y) + f64::from(self.translate_y))
+        });
+        let source = [(-width * 0.5, -height * 0.5), (width * 0.5, -height * 0.5),
+                      (-width * 0.5, height * 0.5), (width * 0.5, height * 0.5)];
+        self.projective = solve_destination_to_source_homography(destination, source)
+            .context("finalize sampled floating video full-canvas projection")?;
+        self.projective_enabled = true;
+        self.opacity *= sample.opacity;
+        self.floating_sample = Some(sample);
+        Ok(())
+    }
+
     pub fn apply_scene_projection(
         &mut self,
         projection: &ScenePlaneProjection,
@@ -1100,6 +1247,8 @@ impl EngineVideoVisualPlan {
             scale,
             rotation,
             opacity,
+            mirror_x: self.mirror_x,
+            mirror_y: self.mirror_y,
             projective: self.projective,
             projective_enabled: self.projective_enabled,
             shade: self.shade,
@@ -1109,6 +1258,9 @@ impl EngineVideoVisualPlan {
             shader_effects: self.shader_effects.clone(),
             grade: self.grade,
             motion_blur: self.motion_blur.clone(),
+            floating_frame: self.floating_frame.clone(),
+            floating_node_id: self.floating_node_id.clone(),
+            floating_sample: self.floating_sample,
             keyframes: Vec::new(),
         }
     }
@@ -1151,7 +1303,7 @@ fn transform_keyframe_values(keyframe: Transform2dKeyframe) -> (f32, f32, f32, f
     (
         keyframe.x,
         keyframe.y,
-        keyframe.scale_x,
+        keyframe.scale_x.abs(),
         keyframe.rotation_radians,
         keyframe.opacity,
     )
@@ -2005,7 +2157,7 @@ impl<'a> Planner<'a> {
                 if parent.is_some() {
                     bail!("unsupported engine transform parent on {}", node.id);
                 }
-                if (*scale_x - *scale_y).abs() > 0.000001 {
+                if !crate::clip_mirror::uniform_absolute_axes(*scale_x,*scale_y) {
                     bail!("non-uniform engine scale is not supported on {}", node.id);
                 }
                 let input = self.one_input(node)?.to_owned();
@@ -2016,8 +2168,10 @@ impl<'a> Planner<'a> {
                 layer.transform = Transform {
                     x: *x,
                     y: *y,
-                    scale: *scale_x,
+                    scale: scale_x.abs(),
                     rotation: *rotation_radians,
+                    projective: if *scale_x < 0.0 || *scale_y < 0.0 { crate::clip_mirror::inverse_affine(*x,*y,scale_x.abs(),*rotation_radians,*scale_x < 0.0,*scale_y < 0.0) } else { [0.0;8] },
+                    projective_enabled: *scale_x < 0.0 || *scale_y < 0.0,
                     ..Transform::default()
                 };
                 layer.opacity *= *opacity;
@@ -2211,6 +2365,7 @@ impl OperationKindName for NodeOperation {
             Self::Source { .. } => "source",
             Self::Transform2d { .. } => "transform2d",
             Self::Transform3d { .. } => "transform3d",
+            Self::FloatingVideoFrame2d { .. } => "floating_video_frame_2d",
             Self::Camera { .. } => "camera",
             Self::Light { .. } => "light",
             Self::Mask { .. } => "mask",
@@ -2218,10 +2373,12 @@ impl OperationKindName for NodeOperation {
             Self::Color { .. } => "color",
             Self::Effect { .. } => "effect",
             Self::Composite { .. } => "composite",
+            Self::TimelineTransitionV1 { .. } => "timeline_transition_v1",
             Self::Adjustment { .. } => "adjustment",
             Self::Precomposition { .. } => "precomposition",
             Self::Caption { .. } => "caption",
             Self::MotionGraphic { .. } => "motion_graphic",
+            Self::NativeMotionPaint { .. } => "native_motion_paint",
             Self::ParticleEmitter { .. } => "particle_emitter",
             Self::DepthOfField { .. } => "depth_of_field",
             Self::MotionBlur { .. } => "motion_blur",
@@ -2510,11 +2667,49 @@ pub fn prepare_video_with_effects(
     binding_dir: &Path,
     effect_bindings: &GpuEffectBindings,
 ) -> Result<PreparedEngineVideoGraph> {
+    if unified_video_program_v1::is_explicit(&graph) {
+        return unified_video_program_v1::prepare(graph, bindings, binding_dir, effect_bindings);
+    }
+    prepare_legacy_video_with_effects(graph, bindings, binding_dir, effect_bindings)
+}
+
+#[derive(Clone, Copy)]
+enum VideoLeafContractV1 { LegacyVideo, UnifiedVideo, UnifiedMediaFree }
+
+fn prepare_legacy_video_with_effects(
+    graph: EngineGraph,
+    bindings: &BTreeMap<String, PathBuf>,
+    binding_dir: &Path,
+    effect_bindings: &GpuEffectBindings,
+) -> Result<PreparedEngineVideoGraph> {
+    prepare_visual_leaves_with_effects(graph, bindings, binding_dir, effect_bindings, VideoLeafContractV1::LegacyVideo)
+}
+
+fn prepare_unified_video_leaves(
+    graph: EngineGraph, bindings: &BTreeMap<String, PathBuf>, binding_dir: &Path,
+    effect_bindings: &GpuEffectBindings, media_free: bool,
+) -> Result<PreparedEngineVideoGraph> {
+    let contract = if media_free { VideoLeafContractV1::UnifiedMediaFree } else { VideoLeafContractV1::UnifiedVideo };
+    prepare_visual_leaves_with_effects(graph, bindings, binding_dir, effect_bindings, contract)
+}
+
+fn prepare_visual_leaves_with_effects(
+    graph: EngineGraph,
+    bindings: &BTreeMap<String, PathBuf>,
+    binding_dir: &Path,
+    effect_bindings: &GpuEffectBindings,
+    contract: VideoLeafContractV1,
+) -> Result<PreparedEngineVideoGraph> {
+    let media_free = matches!(contract, VideoLeafContractV1::UnifiedMediaFree);
+    let legacy_video = matches!(contract, VideoLeafContractV1::LegacyVideo);
     if effect_bindings.schema != GPU_EFFECT_BINDINGS_SCHEMA {
         bail!(
             "unsupported GPU effect bindings schema: {}",
             effect_bindings.schema
         );
+    }
+    if graph.nodes.iter().any(|node| matches!(node.operation, NodeOperation::TimelineTransitionV1 { .. })) {
+        return timeline_pair_plan_v1::prepare(graph, bindings, binding_dir, effect_bindings);
     }
     let compiled = compile_graph(graph.clone()).map_err(anyhow::Error::msg)?;
     if !matches!(
@@ -2566,7 +2761,30 @@ pub fn prepare_video_with_effects(
             output.id
         );
     }
-    let mut composite_root = output.inputs[0].clone();
+    let (mut composite_root, display_native_paints) =
+        peel_final_display_native_paints(&nodes, &output.inputs[0], &mut visited)?;
+    let display_native_ids = display_native_paints
+        .iter()
+        .map(|paint| paint.tail.clone())
+        .collect::<BTreeSet<_>>();
+    if display_native_paints.is_empty() && graph.nodes.iter().any(|node|
+        matches!(&node.operation, NodeOperation::NativeMotionPaint { track, .. } if track.is_display_referred()))
+    {
+        bail!("display native paint must be a direct final composite suffix after ACES2 Rec.709 SDR");
+    }
+    if !display_native_paints.is_empty() {
+        let display_node = nodes.get(composite_root.as_str()).copied()
+            .context("display native paint suffix is missing its direct ACES2 input")?;
+        if !display_node.enabled || scene_25d.is_some()
+            || graph.nodes.iter().any(|node| matches!(node.operation, NodeOperation::DepthOfField { .. }))
+            || !matches!(&display_node.operation,
+                NodeOperation::Color { processor, .. }
+                    if EngineDisplayTransform::from_processor(processor)
+                        == Some(EngineDisplayTransform::Aces2Rec709Sdr))
+        {
+            bail!("display native paint requires a direct flat ACES2 Rec.709 SDR boundary without depth or DOF");
+        }
+    }
     let mut display_transform = EngineDisplayTransform::SceneLinearPreview;
     if let Some(display_node) = nodes.get(composite_root.as_str()).copied() {
         if let NodeOperation::Color {
@@ -2719,11 +2937,20 @@ pub fn prepare_video_with_effects(
     let mut branch_tails = Vec::new();
     collect_video_branch_tails(&nodes, &composite_root, &mut visited, &mut branch_tails)?;
     branch_tails.extend(post_adjustment_typography);
+    // These were authored outside the scene display transform, not relocated
+    // from its scene branch. Preserve inner-to-outer source-over order.
+    branch_tails.extend(display_native_paints);
+    if !display_native_ids.is_empty() && branch_tails.len() > 14 {
+        bail!("common video graph supports at most 14 video/particle/caption/motion-graphic branches");
+    }
     let mut layers = Vec::with_capacity(branch_tails.len());
     let mut layer_indices_by_tail = BTreeMap::<String, usize>::new();
     let mut pending_mattes = Vec::<(usize, String, MatteMode)>::new();
     let mut captions = Vec::new();
     let mut motion_graphics = Vec::new();
+    let mut native_motion_paints = Vec::new();
+    let mut motion_overlay_order = Vec::new();
+    let mut display_paint_suffix_started = false;
     let mut particles = Vec::new();
     let mut overlay_phase = 0_u8;
     for collected in branch_tails {
@@ -2732,7 +2959,15 @@ pub fn prepare_video_with_effects(
             .get(branch_tail.as_str())
             .copied()
             .with_context(|| format!("missing engine node: {branch_tail}"))?;
-        if matches!(branch.operation, NodeOperation::ParticleEmitter { .. }) {
+        if media_free && matches!(&branch.operation, NodeOperation::Source { asset_id, .. } if asset_id == "editkin.generator.transparent") {
+            if !branch.enabled || !branch.inputs.is_empty() || !matches!(collected.blend_mode, BlendMode::Normal)
+                || collected.opacity.to_bits() != 1.0_f32.to_bits() || collected.matte_tail.is_some() || collected.matte_mode.is_some()
+                || !matches!(&branch.operation, NodeOperation::Source { media_kind, input_color_space, alpha_mode, .. }
+                    if media_kind == "generator" && input_color_space.as_deref() == Some("rec709") && matches!(alpha_mode, AlphaMode::Straight))
+                || !visited.insert(branch.id.clone()) {
+                bail!("UNIFIED_NATIVE_TRANSPARENT_SEED_INVALID");
+            }
+        } else if matches!(branch.operation, NodeOperation::ParticleEmitter { .. }) {
             if !matches!(collected.blend_mode, BlendMode::Normal)
                 || (collected.opacity - 1.0).abs() > 0.000001
             {
@@ -2765,7 +3000,44 @@ pub fn prepare_video_with_effects(
             if captions.len() > 8 {
                 bail!("common video graph supports at most 8 caption overlays");
             }
+        } else if let NodeOperation::NativeMotionPaint { graphic_id, track } = &branch.operation {
+            if collected.matte_tail.is_some() || collected.matte_mode.is_some() {
+                bail!("native paint overlays cannot consume track mattes in the current resident route");
+            }
+            if !matches!(collected.blend_mode, BlendMode::Normal) || (collected.opacity - 1.0).abs() > 0.000001
+                || !branch.enabled || !branch.inputs.is_empty() || !visited.insert(branch.id.clone()) {
+                bail!("native paint requires an enabled unique source with normal composite opacity 1");
+            }
+            if !display_transform.is_aces2() {
+                bail!("native float paint needs an admitted scene-linear display route; encoded SDR is not a fallback");
+            }
+            if track.is_display_referred() {
+                if !display_native_ids.contains(&branch.id) {
+                    bail!("display native paint must be a direct final composite suffix after ACES2 Rec.709 SDR");
+                }
+                if display_transform != EngineDisplayTransform::Aces2Rec709Sdr
+                    || scene_25d.is_some() || depth_of_field.is_some()
+                {
+                    bail!("display native paint requires flat ACES2 Rec.709 SDR without depth or DOF");
+                }
+                if collected.opacity.to_bits() != 1.0_f32.to_bits() {
+                    bail!("display native paint composite requires exact opacity 1");
+                }
+                display_paint_suffix_started = true;
+            } else if display_paint_suffix_started {
+                bail!("scene native paint cannot follow the final display native paint suffix");
+            }
+            hao_core::engine::motion_paint_track::PreparedNativeMotionPaintTrack::prepare(track, graph.width, graph.height)
+                .map_err(anyhow::Error::msg)?;
+            let overlay_order = motion_overlay_order.len();
+            motion_overlay_order.push(EngineVideoMotionOverlayOrder::NativePaint(native_motion_paints.len()));
+            native_motion_paints.push(EngineVideoNativeMotionPaintPlan { node_id: branch.id.clone(), graphic_id: graphic_id.clone(), overlay_order, track: track.clone() });
+            if native_motion_paints.len() + motion_graphics.len() > 4 { bail!("common video graph supports at most 4 Motion overlays"); }
+            overlay_phase = 3;
         } else if matches!(branch.operation, NodeOperation::MotionGraphic { .. }) {
+            if display_paint_suffix_started {
+                bail!("legacy Motion cannot follow the final display native paint suffix");
+            }
             if !matches!(collected.blend_mode, BlendMode::Normal)
                 || (collected.opacity - 1.0).abs() > 0.000001
             {
@@ -2774,6 +3046,7 @@ pub fn prepare_video_with_effects(
                 );
             }
             overlay_phase = 3;
+            motion_overlay_order.push(EngineVideoMotionOverlayOrder::Legacy(motion_graphics.len()));
             motion_graphics.push(prepare_video_motion_graphic(
                 branch,
                 &mut visited,
@@ -2782,7 +3055,7 @@ pub fn prepare_video_with_effects(
                 graph.width,
                 graph.height,
             )?);
-            if motion_graphics.len() > 4 {
+            if motion_graphics.len() + native_motion_paints.len() > 4 {
                 bail!("common video graph supports at most 4 motion graphic overlays");
             }
         } else {
@@ -2819,8 +3092,12 @@ pub fn prepare_video_with_effects(
             layers.push(layer);
         }
     }
-    if layers.is_empty() {
+    if layers.is_empty() && !media_free {
         bail!("common video graph requires at least one resident video layer");
+    }
+    if media_free && (!layers.is_empty() || !bindings.is_empty() || scene_25d.is_some() || depth_of_field.is_some()
+        || !particles.is_empty() || !native_motion_paints.is_empty()) {
+        bail!("UNIFIED_NATIVE_MEDIA_FREE_PROFILE_INVALID");
     }
     if let Some(scene) = scene_25d.as_mut() {
         if !pending_mattes.is_empty()
@@ -2828,6 +3105,7 @@ pub fn prepare_video_with_effects(
             || !particles.is_empty()
             || !captions.is_empty()
             || !motion_graphics.is_empty()
+            || !native_motion_paints.is_empty()
         {
             bail!(
                 "resident 2.5D video planes cannot mix mattes, adjustments, particles, captions, or motion graphics"
@@ -2956,6 +3234,11 @@ pub fn prepare_video_with_effects(
         EngineVideoParentTarget::Layer(index) => layer_parent_targets[index],
         EngineVideoParentTarget::Controller(index) => controller_parent_targets[index],
     };
+    let any_mirror = layers.iter().any(|layer| layer.visual.mirror_x || layer.visual.mirror_y)
+        || controllers.iter().any(|controller| controller.visual.mirror_x || controller.visual.mirror_y);
+    if any_mirror && layers.iter().any(|layer| layer.visual.floating_frame.is_some() || layer.visual.motion_blur.is_some() || layer.visual.projective_enabled) {
+        bail!("mirrored common-video graphs cannot mix floating, scene projection or shutter stages");
+    }
     let all_targets = (0..layers.len())
         .map(EngineVideoParentTarget::Layer)
         .chain((0..controllers.len()).map(EngineVideoParentTarget::Controller))
@@ -3004,14 +3287,17 @@ pub fn prepare_video_with_effects(
         .iter()
         .filter(|layer| layer.matte_layer_index.is_some())
         .count();
-    if captions.iter().any(|caption| {
+    if display_paint_suffix_started && matte_count != 0 {
+        bail!("display native paint does not admit track matte mixtures");
+    }
+    if legacy_video && captions.iter().any(|caption| {
         !layers
             .iter()
             .any(|layer| frame_range_contains(&layer.timeline.range, &caption.timeline))
     }) {
         bail!("common video caption timeline must be fully covered by one resident video layer");
     }
-    if motion_graphics.iter().any(|graphic| {
+    if legacy_video && motion_graphics.iter().any(|graphic| {
         !layers
             .iter()
             .any(|layer| frame_range_contains(&layer.timeline.range, &graphic.timeline))
@@ -3020,7 +3306,12 @@ pub fn prepare_video_with_effects(
             "common video motion graphic timeline must be fully covered by one resident video layer"
         );
     }
-    if adjustments.iter().any(|adjustment| {
+    if native_motion_paints.iter().any(|paint| {
+        !layers.iter().any(|layer| frame_range_contains(&layer.timeline.range, &paint.track.timeline))
+    }) {
+        bail!("common video native paint timeline must be fully covered by one resident video layer");
+    }
+    if legacy_video && adjustments.iter().any(|adjustment| {
         !layers
             .iter()
             .any(|layer| frame_range_contains(&layer.timeline.range, &adjustment.timeline))
@@ -3143,6 +3434,7 @@ pub fn prepare_video_with_effects(
             if !adjustments.is_empty()
                 || !captions.is_empty()
                 || !motion_graphics.is_empty()
+                || !native_motion_paints.is_empty()
                 || (!particles.is_empty() && !resource_governed_particle_look)
             {
                 bail!(
@@ -3172,7 +3464,7 @@ pub fn prepare_video_with_effects(
                 && !(resource_governed_particle_look && layers.len() == 2))
             || !pre_typography_particles_valid
             || matte_count != 0
-            || captions.len() + motion_graphics.len() == 0)
+            || captions.len() + motion_graphics.len() + native_motion_paints.len() == 0)
     {
         bail!(
             "pre-typography adjustment currently requires one decoded-temporal base, at most two independent video overlays, one adjustment, exactly two legacy adjustments over the single-video base, or one resource-governed static or animated video overlay plus one to four particle emitters and up to two adjustments; third adjustments and matte mixtures remain unsupported"
@@ -3230,12 +3522,16 @@ pub fn prepare_video_with_effects(
             0
         },
     };
-    let resource_plan = resident_video_resource_plan(
+    let mut resource_plan = if media_free {
+        resident_media_free_resource_plan(graph.width, graph.height, graph.cache_budget_mb,
+            captions.len() + motion_graphics.len(), adjustments.len())?
+    } else {
+        resident_video_resource_plan_with_paint(
         graph.width,
         graph.height,
         graph.cache_budget_mb,
         layers.len(),
-        particles.len() + captions.len() + motion_graphics.len(),
+        particles.len() + captions.len() + motion_graphics.len() + native_motion_paints.len(),
         particles.len(),
         adjustments.len(),
         matte_count,
@@ -3247,7 +3543,17 @@ pub fn prepare_video_with_effects(
         },
         u32::from(scene_25d.is_some()),
         u32::from(depth_of_field.is_some()),
-    )?;
+        native_motion_paints.len(),
+    )?
+    };
+    if display_paint_suffix_started {
+        // Display-native passes replace their former scene passes. A single final
+        // output encoding is additional; existing adjustment ping-pong textures
+        // provide its storage, with no extra working allocation or v1 change.
+        resource_plan.maximum_full_frame_passes_per_present = resource_plan
+            .maximum_full_frame_passes_per_present.checked_add(1)
+            .context("display native paint final encoding pass count overflow")?;
+    }
     if display_transform.is_aces2() {
         let decoded_temporal_layers = layers
             .iter()
@@ -3277,6 +3583,7 @@ pub fn prepare_video_with_effects(
         }
     }
     Ok(PreparedEngineVideoGraph {
+        unified_program: None,
         width: graph.width,
         height: graph.height,
         coverage: EngineExecutionCoverage {
@@ -3300,12 +3607,15 @@ pub fn prepare_video_with_effects(
         scene_25d: scene_25d.map(|scene| scene.coverage),
         depth_of_field,
         layers,
+        timeline_pairs: Vec::new(),
         controllers,
         adjustments,
         adjustment_before_typography,
         particles,
         captions,
         motion_graphics,
+        native_motion_paints,
+        motion_overlay_order,
         vfx_simulation,
     })
 }
@@ -3370,7 +3680,7 @@ fn frame_range_contains(outer: &NodeFrameRange, inner: &NodeFrameRange) -> bool 
                 .saturating_add(outer.duration_frames)
 }
 
-fn prepare_video_caption(
+pub(crate) fn prepare_video_caption(
     node: &EngineNode,
     visited: &mut BTreeSet<String>,
 ) -> Result<EngineVideoCaptionPlan> {
@@ -3402,6 +3712,9 @@ fn prepare_video_caption(
         italic,
         shadow,
         letter_spacing,
+        shadow_color,
+        shadow_blur,
+        lines,
         translation,
     } = &node.operation
     else {
@@ -3409,6 +3722,12 @@ fn prepare_video_caption(
     };
     if text.chars().count() > 256 {
         bail!("common video caption text supports at most 256 characters");
+    }
+    if lines.as_ref().is_some_and(|lines| lines.is_empty() || lines.iter().map(|line| line.chars().count()).sum::<usize>() > 256) {
+        bail!("common video caption lines must be a non-empty list of at most 256 characters");
+    }
+    if !(0.0..=32.0).contains(shadow_blur) {
+        bail!("common video caption shadow blur is outside the bounded contract");
     }
     if !(8.0..=192.0).contains(font_size)
         || !(0.0..=12.0).contains(outline_width)
@@ -3444,6 +3763,9 @@ fn prepare_video_caption(
         bold: *bold,
         shadow: *shadow,
         letter_spacing: *letter_spacing,
+        shadow_color: shadow_color.clone(),
+        shadow_blur: *shadow_blur,
+        lines: lines.clone(),
     })
 }
 
@@ -3970,6 +4292,58 @@ fn collect_video_branch_tails(
     Ok(())
 }
 
+/// Peels only directly authored display-native composites at the output boundary.
+/// The lower root must subsequently resolve to the one declared ACES2 SDR node;
+/// scene-native or legacy nodes are never silently moved across that boundary.
+fn peel_final_display_native_paints(
+    nodes: &BTreeMap<&str, &EngineNode>,
+    start: &str,
+    visited: &mut BTreeSet<String>,
+) -> Result<(String, Vec<CollectedVideoBranch>)> {
+    let mut current = start.to_owned();
+    let mut paints = Vec::new();
+    loop {
+        let node = nodes.get(current.as_str()).copied()
+            .with_context(|| format!("missing engine node: {current}"))?;
+        let NodeOperation::Composite { blend_mode, opacity, matte_input, matte_mode } = &node.operation else {
+            break;
+        };
+        if node.inputs.len() != 2 {
+            break;
+        }
+        let upper = nodes.get(node.inputs[1].as_str()).copied()
+            .with_context(|| format!("missing engine node: {}", node.inputs[1]))?;
+        let NodeOperation::NativeMotionPaint { track, .. } = &upper.operation else {
+            break;
+        };
+        if !track.is_display_referred() {
+            break;
+        }
+        if !node.enabled || !matches!(blend_mode, EngineBlendMode::Normal)
+            || opacity.to_bits() != 1.0_f32.to_bits()
+            || matte_input.is_some() || matte_mode.is_some()
+        {
+            bail!("display native paint suffix requires enabled normal composites, exact opacity 1, and no matte");
+        }
+        if !visited.insert(node.id.clone()) {
+            bail!("common video graph contains a shared or cyclic composite at {}", node.id);
+        }
+        paints.push(CollectedVideoBranch {
+            tail: upper.id.clone(),
+            blend_mode: BlendMode::Normal,
+            opacity: *opacity,
+            matte_tail: None,
+            matte_mode: None,
+        });
+        if paints.len() > 4 {
+            bail!("common video graph supports at most 4 Motion overlays");
+        }
+        current = node.inputs[0].clone();
+    }
+    paints.reverse();
+    Ok((current, paints))
+}
+
 /// Peels only canonical outer caption/motion-graphic composites when their lower branch reaches
 /// an adjustment. The returned order is inner-to-outer, matching the ordinary branch collector.
 /// Nothing is marked visited until the caller commits to this exact bounded topology.
@@ -4001,7 +4375,7 @@ fn peel_post_adjustment_typography(
         };
         if !matches!(
             upper.operation,
-            NodeOperation::Caption { .. } | NodeOperation::MotionGraphic { .. }
+            NodeOperation::Caption { .. } | NodeOperation::MotionGraphic { .. } | NodeOperation::NativeMotionPaint { .. }
         ) {
             break;
         }
@@ -4103,8 +4477,8 @@ fn prepare_video_controllers(
             || !scale_y.is_finite()
             || !rotation_radians.is_finite()
             || !opacity.is_finite()
-            || (*scale_x - *scale_y).abs() > 0.000001
-            || *scale_x <= 0.0001
+            || !crate::clip_mirror::uniform_absolute_axes(*scale_x,*scale_y)
+            || scale_x.abs() <= 0.0001
             || !(0.0..=1.0).contains(opacity)
         {
             bail!(
@@ -4113,7 +4487,7 @@ fn prepare_video_controllers(
             );
         }
         for keyframe in keyframes {
-            if (keyframe.scale_x - keyframe.scale_y).abs() > 0.000001 {
+            if !crate::clip_mirror::fixed_axis_signs(keyframe.scale_x,keyframe.scale_y,*scale_x,*scale_y) {
                 bail!(
                     "common video transform controller keyframes require uniform scale on {}",
                     transform.id
@@ -4151,7 +4525,9 @@ fn prepare_video_controllers(
                 primary_processor_version: 1,
                 translate_x: *x,
                 translate_y: *y,
-                scale: *scale_x,
+                scale: scale_x.abs(),
+                mirror_x: *scale_x < 0.0,
+                mirror_y: *scale_y < 0.0,
                 rotation: *rotation_radians,
                 opacity: *opacity,
                 projective: [0.0; 8],
@@ -4163,6 +4539,9 @@ fn prepare_video_controllers(
                 shader_effects: Vec::new(),
                 grade: PrimaryGrade::default(),
                 motion_blur: None,
+                floating_frame: None,
+                floating_node_id: None,
+                floating_sample: None,
                 keyframes: keyframes.clone(),
             },
             parent_transform_node_id: parent.clone(),
@@ -4233,6 +4612,9 @@ fn prepare_video_branch(
                 grade,
             } => {
                 let physical = hao_core::engine::white_balance::is_v2(processor);
+                if visual.floating_frame.is_some() && color_seen {
+                    bail!("floating frame requires exactly one source color stage on {}", node.id);
+                }
                 if color_seen && (physical || physical_color_seen) {
                     bail!("stacked v2 source color processors require ordered execution; refusing to discard a white-balance stage on {}", node.id);
                 }
@@ -4268,6 +4650,30 @@ fn prepare_video_branch(
                 }
                 current = &node.inputs[0];
             }
+            NodeOperation::FloatingVideoFrame2d { spec } => {
+                if !matches!(display_transform, EngineDisplayTransform::Aces2Rec709Sdr)
+                    || visual.floating_frame.is_some() || color_seen || motion_blur_seen
+                    || !precompositions.is_empty() || visual.projective_enabled
+                    || visual.scene_depth.is_some() || visual.effect_kind != 0
+                    || !visual.shader_effects.is_empty() || node.inputs.len() != 1
+                {
+                    bail!("floating frame requires ACES SDR, one source-color input, and only post-assembly affine on {}", node.id);
+                }
+                spec.validate().map_err(anyhow::Error::msg)?;
+                let coded_aspect = f64::from(spec.source.width) / f64::from(spec.source.height);
+                if (spec.source.display_aspect_ratio.unwrap_or(coded_aspect) - coded_aspect).abs() > 1e-6 {
+                    bail!("floating execution does not yet admit rotated or non-square-pixel sources on {}", node.id);
+                }
+                if spec.canvas_width != canvas_width || spec.canvas_height != canvas_height
+                    || spec.timebase.numerator != timebase_numerator
+                    || spec.timebase.denominator != timebase_denominator
+                {
+                    bail!("floating frame canvas or rational clock differs from its actual graph on {}", node.id);
+                }
+                visual.floating_frame = Some(spec.clone());
+                visual.floating_node_id = Some(node.id.clone());
+                current = &node.inputs[0];
+            }
             NodeOperation::Transform2d {
                 x,
                 y,
@@ -4278,6 +4684,9 @@ fn prepare_video_branch(
                 keyframes,
                 parent,
             } => {
+                if visual.floating_frame.is_some() {
+                    bail!("floating video affine must follow assembly, not transform its source input on {}", node.id);
+                }
                 if !motion_blur_seen {
                     outer_visual_before_motion_blur = true;
                 }
@@ -4293,8 +4702,8 @@ fn prepare_video_branch(
                     || !scale_y.is_finite()
                     || !rotation_radians.is_finite()
                     || !opacity.is_finite()
-                    || (*scale_x - *scale_y).abs() > 0.000001
-                    || *scale_x <= 0.0001
+                    || !crate::clip_mirror::uniform_absolute_axes(*scale_x,*scale_y)
+                    || scale_x.abs() <= 0.0001
                     || !(0.0..=1.0).contains(opacity)
                 {
                     bail!(
@@ -4310,11 +4719,13 @@ fn prepare_video_branch(
                 }
                 visual.translate_x = *x;
                 visual.translate_y = *y;
-                visual.scale = *scale_x;
+                visual.scale = scale_x.abs();
+                visual.mirror_x = *scale_x < 0.0;
+                visual.mirror_y = *scale_y < 0.0;
                 visual.rotation = *rotation_radians;
                 visual.opacity = *opacity;
                 for keyframe in keyframes {
-                    if (keyframe.scale_x - keyframe.scale_y).abs() > 0.000001 {
+                    if !crate::clip_mirror::fixed_axis_signs(keyframe.scale_x,keyframe.scale_y,*scale_x,*scale_y) {
                         bail!(
                             "common video transform keyframes require uniform scale on {}",
                             node.id
@@ -4484,6 +4895,15 @@ fn prepare_video_branch(
                 let range = timeline.clone().with_context(|| {
                     format!("common video source {} requires a timeline", node.id)
                 })?;
+                if let Some(spec) = visual.floating_frame.as_ref() {
+                    if !color_seen || visual.input_transfer != 2 || visual.primary_processor_version != 2
+                        || range != spec.timeline || !precompositions.is_empty()
+                        || visual.motion_blur.is_some() || visual.projective_enabled
+                        || visual.scene_depth.is_some() || !visual.shader_effects.is_empty()
+                    {
+                        bail!("floating frame source timeline or assembly ordering differs from the actual leaf on {}", node.id);
+                    }
+                }
                 if precompositions.iter().any(|(_, _, timeline)| {
                     timeline.timeline_start_frame != range.timeline_start_frame
                         || timeline.duration_frames != range.duration_frames
@@ -4530,6 +4950,7 @@ fn prepare_video_branch(
                         timebase_numerator,
                         timebase_denominator,
                     },
+                    transition_read: None,
                     visual,
                     transform_node_id,
                     parent_transform_node_id,
@@ -4650,6 +5071,261 @@ impl EngineVideoTimelinePlan {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn floating_fixture_wire() -> serde_json::Value {
+        serde_json::json!({
+            "schema":"editkin.engine-graph/v1", "graphId":"floating-shared-original-fixture",
+            "width":960,"height":540,"timebase":{"numerator":1,"denominator":30},
+            "workingFormat":"rgba16_float","cacheBudgetMb":128,"outputNode":"output",
+            "nodes":[
+                {"id":"source","inputs":[],"enabled":true,"kind":"source","assetId":"original",
+                 "mediaKind":"video","inputColorSpace":"rec709","timeline":{"timelineStartFrame":12,"sourceStartFrame":31,"durationFrames":90}},
+                // Floating assembly admits exactly one Rec709/v2 source boundary with explicit white-balance stops,
+                // matching the TS producer (identity DEFAULT_COLOR plus whiteBalanceRed/Green/Blue).
+                {"id":"source-color","inputs":["source"],"enabled":true,"kind":"color",
+                 "processor":"editkin-rec709-to-linear-rec709-primary/v2","inputSpace":"rec709","workingSpace":"linear_rec709","outputSpace":"linear_rec709",
+                 "grade":{"brightness":0,"contrast":1,"saturation":1,"hue":0,"exposure":0,"temperature":0,"tint":0,"pivot":0.5,
+                    "shadows":0,"highlights":0,"blacks":0,"whites":0,"whiteBalanceRed":0,"whiteBalanceGreen":0,"whiteBalanceBlue":0}},
+                {"id":"floating","inputs":["source-color"],"enabled":true,"kind":"floating_video_frame_2d",
+                 "spec":{"schema":"editkin.native-floating-video-frame/v1",
+                    "frame":{"schema":"editkin.floating-video-frame/v2","style":"matte","aspect":"source","mediaFit":"contain",
+                        "size":0.5,"yawDegrees":8,"pitchDegrees":-4,"orbit":{"amplitudeDegrees":8,"periodSeconds":3}},
+                    "source":{"width":1920,"height":1080,"displayAspectRatio":1.7777777777777777},
+                    "timeline":{"timelineStartFrame":12,"sourceStartFrame":31,"durationFrames":90},
+                    "canvasWidth":960,"canvasHeight":540,"timebase":{"numerator":1,"denominator":30}}},
+                {"id":"post-affine","inputs":["floating"],"enabled":true,"kind":"transform2d",
+                    "x":37,"y":-19,"scaleX":0.8,"scaleY":0.8,"rotationRadians":0.23,"opacity":0.7},
+                {"id":"display","inputs":["post-affine"],"enabled":true,"kind":"color",
+                    "processor":"editkin-ocio-aces2-linear-rec709-to-rec709-sdr/v1","inputSpace":"linear_rec709","workingSpace":"ACEScct","outputSpace":"rec709_sdr"},
+                {"id":"output","inputs":["display"],"enabled":true,"kind":"output","format":"rgba16_float"}
+            ]
+        })
+    }
+
+    #[test]
+    fn floating_video_native_lowering_keeps_actual_clock_source_and_post_affine() {
+        let graph: EngineGraph = serde_json::from_value(floating_fixture_wire()).unwrap();
+        let compiled = compile_graph(graph.clone()).unwrap();
+        assert!(compiled.feature_families.contains(&"floating_video_frame_2d"));
+        let prepared = prepare_video(graph, &BTreeMap::from([("original".into(), PathBuf::from("original.mp4"))]), Path::new(".")).unwrap();
+        let layer = &prepared.layers[0];
+        let spec = layer.visual.floating_frame.as_ref().unwrap();
+        assert_eq!(spec.timeline, layer.timeline.range);
+        assert_eq!(layer.visual.floating_node_id.as_deref(), Some("floating"));
+        assert_eq!((layer.visual.input_transfer, layer.visual.primary_processor_version), (2, 2), "floating source must cross the Rec709/v2 boundary");
+        assert!(layer.visual.floating_sample.is_none(), "lowering must wait for the completed parent affine");
+        let mut sampled = layer.visual.sample(30);
+        let expected = spec.sample(30).unwrap();
+        sampled.finalize_floating(30).unwrap();
+        assert!((sampled.opacity - 0.7 * expected.opacity).abs() < 0.000001);
+        let (sin, cos) = 0.23_f64.sin_cos();
+        for (index, point) in expected.quad.into_iter().enumerate() {
+            let x = (point[0] - 0.5) * 960.0;
+            let y = (point[1] - 0.5) * 540.0;
+            let destination = (0.8 * (cos*x - sin*y) + 37.0, 0.8 * (sin*x + cos*y) - 19.0);
+            let h = sampled.projective.map(f64::from);
+            let denominator = h[6]*destination.0 + h[7]*destination.1 + 1.0;
+            let observed = ((h[0]*destination.0+h[1]*destination.1+h[2])/denominator,
+                            (h[3]*destination.0+h[4]*destination.1+h[5])/denominator);
+            let source = [(-480.0,-270.0),(480.0,-270.0),(-480.0,270.0),(480.0,270.0)][index];
+            assert!((observed.0-source.0).abs() < 0.002 && (observed.1-source.1).abs() < 0.002);
+        }
+        assert!(sampled.finalize_floating(30).is_err(), "never double-apply phase or projection");
+    }
+
+    #[test]
+    fn floating_video_native_rejects_clock_order_disabled_and_hdr_mixes() {
+        let bindings = BTreeMap::from([("original".into(), PathBuf::from("original.mp4"))]);
+        let base = floating_fixture_wire();
+        for (path, value) in [
+            ("/nodes/2/spec/timeline/sourceStartFrame", serde_json::json!(32)),
+            ("/nodes/2/spec/timebase/denominator", serde_json::json!(60)),
+            ("/nodes/2/spec/canvasWidth", serde_json::json!(958)),
+            ("/nodes/2/enabled", serde_json::json!(false)),
+            ("/nodes/1/processor", serde_json::json!("editkin-srgb-to-linear-rec709-primary/v1")),
+        ] {
+            let mut bad = base.clone(); *bad.pointer_mut(path).unwrap() = value;
+            assert!(prepare_video(serde_json::from_value(bad).unwrap(), &bindings, Path::new(".")).is_err());
+        }
+        let mut wrong_order = base.clone();
+        wrong_order["nodes"][2]["inputs"] = serde_json::json!(["source"]);
+        wrong_order["nodes"][1]["inputs"] = serde_json::json!(["floating"]);
+        wrong_order["nodes"][3]["inputs"] = serde_json::json!(["source-color"]);
+        assert!(prepare_video(serde_json::from_value(wrong_order).unwrap(), &bindings, Path::new(".")).is_err());
+        for (processor, space) in [
+            ("editkin-ocio-aces2-linear-rec709-to-rec2100-hlg-1000/v1","rec2100_hlg_1000"),
+            ("editkin-ocio-aces2-linear-rec709-to-rec2100-pq-1000/v1","rec2100_pq_1000")
+        ] {
+            let mut bad=base.clone(); bad["nodes"][4]["processor"]=serde_json::json!(processor); bad["nodes"][4]["outputSpace"]=serde_json::json!(space);
+            assert!(prepare_video(serde_json::from_value(bad).unwrap(), &bindings, Path::new(".")).is_err());
+        }
+        let mut effect=base.clone();
+        effect["nodes"].as_array_mut().unwrap().push(serde_json::json!({"id":"unsupported-effect","inputs":["post-affine"],"enabled":true,"kind":"effect","pluginId":"editkin.builtin.mono_halftone","abiVersion":1,"temporalRadius":0,"parameters":{}}));
+        effect["nodes"][4]["inputs"]=serde_json::json!(["unsupported-effect"]);
+        assert!(prepare_video(serde_json::from_value(effect).unwrap(), &bindings, Path::new(".")).is_err());
+    }
+
+    #[test]
+    fn ordinary_native_visual_serialization_and_sampling_do_not_add_floating_state() {
+        let ordinary=EngineVideoVisualPlan::default();
+        let before=serde_json::to_value(&ordinary).unwrap();
+        assert!(before.get("floatingFrame").is_none() && before.get("floatingNodeId").is_none() && before.get("floatingSample").is_none());
+        let mut sampled=ordinary.sample(14); sampled.finalize_floating(14).unwrap();
+        assert_eq!(before,serde_json::to_value(sampled).unwrap());
+    }
+
+    #[test]
+    fn native_paint_resources_include_float_pixels_and_geometry_before_admission() {
+        let plan = resident_video_resource_plan_with_paint(960, 540, 128, 1, 1, 0, 0, 0, 0, 8, 0, 0, 1).unwrap();
+        assert_eq!(plan.overlay_bytes, 518_400 * 8);
+        assert_eq!(plan.native_paint_cpu_bytes, 518_400 * 16 + 67_108_864);
+        assert_eq!(plan.native_paint_staging_bytes, 518_400 * 8);
+        assert_eq!(plan.native_paint_geometry_bytes, 16 * 1024 * 1024);
+        assert_eq!(plan.required_bytes, 131_578_880);
+        assert!(resident_video_resource_plan_with_paint(960, 540, 125, 1, 1, 0, 0, 0, 0, 8, 0, 0, 1).is_err());
+        assert!(resident_video_resource_plan_with_paint(960, 540, 64, 1, 1, 0, 0, 0, 0, 4, 0, 0, 1).is_err());
+        assert!(resident_video_resource_plan_with_paint(960, 540, 64, 1, 0, 0, 0, 0, 0, 8, 0, 0, 1).is_err());
+    }
+
+    #[test]
+    fn native_paint_common_route_preserves_order_and_rejects_uncovered_or_encoded_paths() {
+        let track = serde_json::json!({
+            "schema":"editkin.native-motion-paint-track/v1", "sourceSignature":"original bounded geometry fixture",
+            "timeline":{"timelineStartFrame":2,"sourceStartFrame":0,"durationFrames":4},
+            "scene":{"width":960,"height":540,"background":[0,0,0,0],"max_scale":1,
+                "layers":[{"id":"shape","path":{"fill_rule":"non_zero","commands":[
+                    {"type":"M","x":0,"y":0},{"type":"L","x":20,"y":0},
+                    {"type":"L","x":20,"y":20},{"type":"L","x":0,"y":20},{"type":"Z"}]},
+                    "paint":{"kind":"solid","color":[1,0,0,1]},"clips":[]}]},
+            "frames":[[{"x":30,"y":30,"scale":1,"opacity":1}],[{"x":31,"y":30,"scale":1,"opacity":1}],
+                [{"x":32,"y":30,"scale":1,"opacity":1}],[{"x":33,"y":30,"scale":1,"opacity":1}]]
+        });
+        let mut wire = serde_json::json!({
+            "schema":"editkin.engine-graph/v1","graphId":"native-paint-common-route","width":960,"height":540,
+            "timebase":{"numerator":1,"denominator":30},"workingFormat":"rgba16_float","cacheBudgetMb":256,
+            "nodes":[
+                {"id":"source","inputs":[],"enabled":true,"kind":"source","assetId":"video","mediaKind":"video","inputColorSpace":"rec709","timeline":{"timelineStartFrame":0,"sourceStartFrame":0,"durationFrames":60}},
+                {"id":"transform","inputs":["source"],"enabled":true,"kind":"transform2d","x":0,"y":0,"scaleX":1,"scaleY":1,"rotationRadians":0,"opacity":1},
+                {"id":"ink-back","inputs":[],"enabled":true,"kind":"native_motion_paint","graphicId":"back","track":track},
+                {"id":"composite-back","inputs":["transform","ink-back"],"enabled":true,"kind":"composite","blendMode":"normal","opacity":1},
+                {"id":"ink-front","inputs":[],"enabled":true,"kind":"native_motion_paint","graphicId":"front","track":track},
+                {"id":"composite-front","inputs":["composite-back","ink-front"],"enabled":true,"kind":"composite","blendMode":"normal","opacity":1},
+                {"id":"display","inputs":["composite-front"],"enabled":true,"kind":"color","processor":"editkin-ocio-aces2-linear-rec709-to-rec709-sdr/v1","inputSpace":"linear_rec709","workingSpace":"ACEScct","outputSpace":"rec709_sdr"},
+                {"id":"output","inputs":["display"],"enabled":true,"kind":"output","format":"rgba16_float"}],"outputNode":"output"
+        });
+        let bindings = BTreeMap::from([("video".into(), PathBuf::from("video.mp4"))]);
+        let prepared = prepare_video(serde_json::from_value(wire.clone()).unwrap(), &bindings, Path::new(".")).unwrap();
+        assert_eq!(prepared.native_motion_paints.len(), 2);
+        assert_eq!(prepared.native_motion_paints[0].graphic_id, "back");
+        assert_eq!(prepared.native_motion_paints[1].graphic_id, "front");
+        assert_eq!(prepared.native_motion_paints.iter().map(|paint| paint.overlay_order).collect::<Vec<_>>(), vec![0, 1]);
+        assert!(matches!(prepared.motion_overlay_order.as_slice(), [EngineVideoMotionOverlayOrder::NativePaint(0), EngineVideoMotionOverlayOrder::NativePaint(1)]));
+        let mut display_wire = wire.clone();
+        display_wire["nodes"][4]["track"]["schema"] = serde_json::json!("editkin.native-motion-paint-track/v2");
+        display_wire["nodes"][4]["track"]["colorIntent"] = serde_json::json!("display_rec709_sdr");
+        display_wire["nodes"][5]["inputs"] = serde_json::json!(["display", "ink-front"]);
+        display_wire["nodes"][6]["inputs"] = serde_json::json!(["composite-back"]);
+        display_wire["nodes"][7]["inputs"] = serde_json::json!(["composite-front"]);
+        let display_prepared = prepare_video(serde_json::from_value(display_wire.clone()).unwrap(), &bindings, Path::new(".")).unwrap();
+        assert!(!display_prepared.native_motion_paints[0].track.is_display_referred());
+        assert!(display_prepared.native_motion_paints[1].track.is_display_referred());
+        assert_eq!(display_prepared.native_motion_paints[1].overlay_order, 1);
+        assert_eq!(display_prepared.resource_plan.required_bytes, prepared.resource_plan.required_bytes,
+            "display composition reuses existing working textures");
+        assert_eq!(display_prepared.resource_plan.maximum_full_frame_passes_per_present,
+            prepared.resource_plan.maximum_full_frame_passes_per_present + 1);
+        let mut pre_aces = wire.clone();
+        pre_aces["nodes"][4]["track"]["schema"] = serde_json::json!("editkin.native-motion-paint-track/v2");
+        pre_aces["nodes"][4]["track"]["colorIntent"] = serde_json::json!("display_rec709_sdr");
+        let error = prepare_video(serde_json::from_value(pre_aces).unwrap(), &bindings, Path::new(".")).err().unwrap();
+        assert!(error.to_string().contains("direct final composite suffix after ACES2"), "{error}");
+        let mut two_display = display_wire.clone();
+        two_display["nodes"][2]["track"]["schema"] = serde_json::json!("editkin.native-motion-paint-track/v2");
+        two_display["nodes"][2]["track"]["colorIntent"] = serde_json::json!("display_rec709_sdr");
+        two_display["nodes"][3]["inputs"] = serde_json::json!(["display", "ink-back"]);
+        two_display["nodes"][5]["inputs"] = serde_json::json!(["composite-back", "ink-front"]);
+        two_display["nodes"][6]["inputs"] = serde_json::json!(["transform"]);
+        let two_display_prepared = prepare_video(serde_json::from_value(two_display.clone()).unwrap(), &bindings, Path::new(".")).unwrap();
+        assert_eq!(two_display_prepared.native_motion_paints.iter().map(|paint| paint.graphic_id.as_str()).collect::<Vec<_>>(), vec!["back", "front"]);
+        assert_eq!(two_display_prepared.native_motion_paints.iter().map(|paint| paint.overlay_order).collect::<Vec<_>>(), vec![0, 1]);
+        let mut scene_after_display = two_display.clone();
+        scene_after_display["nodes"][4]["track"]["schema"] = serde_json::json!("editkin.native-motion-paint-track/v1");
+        scene_after_display["nodes"][4]["track"].as_object_mut().unwrap().remove("colorIntent");
+        let error = prepare_video(serde_json::from_value(scene_after_display).unwrap(), &bindings, Path::new(".")).err().unwrap();
+        assert!(error.to_string().contains("direct final composite suffix after ACES2"), "{error}");
+        let mut legacy_after_display = two_display.clone();
+        legacy_after_display["nodes"][4] = serde_json::json!({
+            "id":"ink-front", "inputs":[], "enabled":true, "kind":"motion_graphic", "graphicId":"front",
+            "graphicKind":"card", "text":"Original fixture", "timeline":{"timelineStartFrame":2,"sourceStartFrame":0,"durationFrames":4},
+            "x":0.08,"y":0.09,"width":0.48,"fontSize":54,"fontFamily":"Noto Sans TC","fontWeight":800,
+            "letterSpacing":0,"outlineWidth":3,"shadowDepth":3,"cornerRadius":18,
+            "textColor":"#FFFFFFFF","backgroundColor":"#10151FEE","accentColor":"#A8FF3EFF",
+            "animation":"fade","trackingMode":"anchor","offsetX":0,"offsetY":0
+        });
+        let error = prepare_video(serde_json::from_value(legacy_after_display).unwrap(), &bindings, Path::new(".")).err().unwrap();
+        assert!(error.to_string().contains("direct final composite suffix after ACES2"), "{error}");
+        let mut near_one = display_wire.clone();
+        near_one["nodes"][5]["opacity"] = serde_json::json!(0.9999999);
+        let error = prepare_video(serde_json::from_value(near_one).unwrap(), &bindings, Path::new(".")).err().unwrap();
+        assert!(error.to_string().contains("exact opacity 1"), "{error}");
+        for (processor, output_space) in [
+            ("editkin-ocio-aces2-linear-rec709-to-rec2100-pq-1000/v1", "rec2100_pq_1000"),
+            ("editkin-ocio-aces2-linear-rec709-to-rec2100-hlg-1000/v1", "rec2100_hlg_1000"),
+        ] {
+            let mut hdr = display_wire.clone();
+            hdr["nodes"][6]["processor"] = serde_json::json!(processor);
+            hdr["nodes"][6]["outputSpace"] = serde_json::json!(output_space);
+            let error = prepare_video(serde_json::from_value(hdr).unwrap(), &bindings, Path::new(".")).err().unwrap();
+            assert!(error.to_string().contains("direct flat ACES2 Rec.709 SDR"), "{error}");
+        }
+        let mut display_matte = display_wire.clone();
+        display_matte["nodes"][5]["matteInput"] = serde_json::json!("transform");
+        display_matte["nodes"][5]["matteMode"] = serde_json::json!("alpha");
+        let error = prepare_video(serde_json::from_value(display_matte).unwrap(), &bindings, Path::new(".")).err().unwrap();
+        assert!(error.to_string().contains("exact opacity 1, and no matte"), "{error}");
+        let mut display_effect = display_wire.clone();
+        display_effect["nodes"][5]["inputs"] = serde_json::json!(["display", "paint-effect"]);
+        display_effect["nodes"].as_array_mut().unwrap().push(serde_json::json!({
+            "id":"paint-effect", "inputs":["ink-front"], "enabled":true,
+            "kind":"effect", "pluginId":"editkin.builtin.mono_halftone", "abiVersion":1,
+            "temporalRadius":0, "parameters":{}
+        }));
+        let error = prepare_video(serde_json::from_value(display_effect).unwrap(), &bindings, Path::new(".")).err().unwrap();
+        assert!(error.to_string().contains("direct final composite suffix after ACES2"), "{error}");
+        let mut display_3d = display_wire.clone();
+        display_3d["nodes"][1] = serde_json::json!({
+            "id":"transform", "inputs":["source"], "enabled":true, "kind":"transform3d",
+            "position":[0,0,0], "rotationRadians":[0,0,0], "scale":[1,1,1]
+        });
+        display_3d["nodes"].as_array_mut().unwrap().extend([
+            serde_json::json!({"id":"camera", "inputs":[], "enabled":true, "kind":"camera",
+                "position":[0,0,4], "target":[0,0,0], "up":[0,1,0],
+                "verticalFovRadians":1, "near":0.1, "far":100}),
+            serde_json::json!({"id":"ambient", "inputs":[], "enabled":true, "kind":"light",
+                "lightKind":"ambient", "color":[1,1,1], "intensity":0.4,
+                "position":[0,0,0], "direction":[0,0,-1]}),
+            serde_json::json!({"id":"directional", "inputs":[], "enabled":true, "kind":"light",
+                "lightKind":"directional", "color":[1,1,1], "intensity":0.6,
+                "position":[0,0,4], "direction":[0,0,-1]}),
+        ]);
+        let error = prepare_video(serde_json::from_value(display_3d).unwrap(), &bindings, Path::new(".")).err().unwrap();
+        assert!(error.to_string().contains("direct flat ACES2 Rec.709 SDR"), "{error}");
+        let mut uncovered = wire.clone();
+        uncovered["nodes"][4]["track"]["timeline"]["timelineStartFrame"] = serde_json::json!(59);
+        let error = prepare_video(serde_json::from_value(uncovered).unwrap(), &bindings, Path::new(".")).err().unwrap();
+        assert!(error.to_string().contains("fully covered"));
+        let mut matte = wire.clone();
+        matte["nodes"][5]["matteInput"] = serde_json::json!("transform");
+        matte["nodes"][5]["matteMode"] = serde_json::json!("alpha");
+        let error = prepare_video(serde_json::from_value(matte).unwrap(), &bindings, Path::new(".")).err().unwrap();
+        // The canonical outer typography guard rejects this earlier than the
+        // downstream native branch. Keep the observed production stage exact.
+        assert!(error.to_string().contains("post-adjustment typography composite requires normal blend, opacity 1, and no matte"), "{error}");
+        wire["nodes"].as_array_mut().unwrap().remove(6);
+        wire["nodes"][6]["inputs"] = serde_json::json!(["composite-front"]);
+        let error = prepare_video(serde_json::from_value(wire).unwrap(), &bindings, Path::new(".")).err().unwrap();
+        assert!(error.to_string().contains("native float paint needs an admitted scene-linear"));
+    }
 
     #[test]
     fn white_balance_graph_versions_and_source_transfer_fail_closed() {
@@ -6255,6 +6931,36 @@ mod tests {
             Err(error) => error,
         };
         assert!(error.to_string().contains("final visual node"));
+    }
+
+    #[test]
+    fn caption_plan_carries_the_export_lines_shadow_colour_and_blur() {
+        let node = |extra: serde_json::Value| {
+            let mut node = serde_json::json!({
+                "id": "caption:cue", "inputs": [], "enabled": true, "kind": "caption", "cueId": "cue",
+                "text": "這碗湯頭真的很濃，喝完全身都暖起來",
+                "timeline": { "timelineStartFrame": 0, "sourceStartFrame": 0, "durationFrames": 60 },
+                "fontFamily": "Noto Sans TC", "fontSize": 95, "textColor": "#FFFFFF", "outlineColor": "#00000073",
+                "outlineWidth": 3, "backgroundColor": "#00000000", "alignment": 2, "marginVertical": 300,
+                "bold": true, "italic": false, "shadow": 4, "letterSpacing": 0
+            });
+            node.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            serde_json::from_value::<EngineNode>(node).unwrap()
+        };
+        let shorts = prepare_video_caption(&node(serde_json::json!({
+            "shadowColor": "#00000099", "shadowBlur": 4, "lines": ["這碗湯頭真的很濃，", "喝完全身都暖起來"]
+        })), &mut BTreeSet::new()).unwrap();
+        assert_eq!(shorts.text, "這碗湯頭真的很濃，喝完全身都暖起來");
+        assert_eq!(shorts.lines.as_deref(), Some(["這碗湯頭真的很濃，".to_string(), "喝完全身都暖起來".to_string()].as_slice()));
+        assert_eq!((shorts.shadow_color.as_deref(), shorts.shadow_blur), (Some("#00000099"), 4.0));
+        // A graph without the fields (older writer or the long-form default) keeps the backgroundColor shadow, hard.
+        let legacy = prepare_video_caption(&node(serde_json::json!({})), &mut BTreeSet::new()).unwrap();
+        assert_eq!((legacy.shadow_color, legacy.shadow_blur, legacy.lines), (None, 0.0, None));
+        // The ASS writer never emits more than \blur32.
+        let error = prepare_video_caption(&node(serde_json::json!({ "shadowBlur": 33 })), &mut BTreeSet::new()).unwrap_err();
+        assert!(error.to_string().contains("shadow blur"), "{error}");
+        let error = prepare_video_caption(&node(serde_json::json!({ "lines": [] })), &mut BTreeSet::new()).unwrap_err();
+        assert!(error.to_string().contains("caption lines"), "{error}");
     }
 
     #[test]

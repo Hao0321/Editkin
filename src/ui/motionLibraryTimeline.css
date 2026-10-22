@@ -1,0 +1,43 @@
+/* Cut points on the timeline lanes (TimelineCutPointsV1): hover button, transition window + diamond, edge handles, menu. */
+.ml-cuts{position:absolute;inset:0;z-index:11;pointer-events:none}
+.ml-cut-add{position:absolute;top:50%;display:grid;place-items:center;width:18px;height:18px;margin:-9px 0 0 -9px;padding:0;border:1px solid var(--line-strong);border-radius:50%;
+  background:var(--surface);color:var(--accent);box-shadow:0 2px 8px rgba(0,0,0,.28);cursor:pointer;pointer-events:auto;animation:ml-cut-pop .12s ease-out}
+.ml-cut-add:hover,.ml-cut-add:focus-visible{border-color:var(--surface);background:var(--ink);color:var(--surface);outline:none;transform:scale(1.15)}
+@keyframes ml-cut-pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+.ml-cut-window{position:absolute;top:50%;height:16px;margin-top:-8px;border:1px solid color-mix(in srgb,var(--accent-ink) 78%,transparent);border-radius:8px;
+  background:color-mix(in srgb,var(--accent-ink) 22%,transparent);box-shadow:0 1px 4px rgba(0,0,0,.18);pointer-events:none;box-sizing:border-box}
+.ml-cut-window[data-kernel="matte"]{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--accent-ink) 38%,transparent) 0 4px,color-mix(in srgb,var(--accent-ink) 14%,transparent) 4px 8px)}
+.ml-cut-window[data-selected]{border:2px solid var(--accent-ink);background:color-mix(in srgb,var(--accent-ink) 34%,transparent);box-shadow:0 0 0 2px var(--ink),0 2px 8px rgba(0,0,0,.3)}
+.ml-cut-diamond{position:absolute;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;padding:0;border:0;background:transparent;cursor:pointer;pointer-events:auto}
+.ml-cut-diamond::before{content:"";position:absolute;left:4px;top:4px;width:10px;height:10px;box-sizing:border-box;transform:rotate(45deg);
+  border:2px solid var(--ink);border-radius:2px;background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.ml-cut-diamond:hover::before,.ml-cut-diamond:focus-visible::before{background:var(--accent-soft);border-color:var(--accent)}
+.ml-cut-diamond:focus-visible{outline:none}
+.ml-cut-diamond[aria-pressed="true"]::before{background:var(--ink);border-color:var(--surface);box-shadow:0 0 0 2px var(--ink)}
+.ml-cut-edge{position:absolute;top:-4px;bottom:-4px;width:8px;cursor:ew-resize;pointer-events:auto;touch-action:none}
+.ml-cut-edge.is-before{left:-4px}.ml-cut-edge.is-after{right:-4px}
+.ml-cut-edge::after{content:"";position:absolute;top:3px;bottom:3px;left:3px;width:2px;border-radius:2px;background:var(--accent-ink);opacity:0;transition:opacity .1s}
+.ml-cut-window:hover .ml-cut-edge::after,.ml-cut-window[data-selected] .ml-cut-edge::after,.ml-cut-window[data-resizing] .ml-cut-edge::after{opacity:1}
+.ml-cut-readout{position:absolute;bottom:100%;left:50%;margin-bottom:4px;padding:1px 6px;border-radius:6px;background:var(--ink);color:var(--surface);font-size:10.5px;font-weight:800;
+  transform:translateX(-50%);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ml-cut-job{position:absolute;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border:2px solid color-mix(in srgb,var(--surface) 40%,transparent);border-top-color:var(--surface);
+  border-radius:50%;animation:ml-cut-spin .8s linear infinite;pointer-events:none}
+.ml-cut-job.is-alone{z-index:1}
+@keyframes ml-cut-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ml-cut-job{animation-duration:2.4s}.ml-cut-add{animation:none}}
+.ml-cut-menu{position:fixed;z-index:2100;display:flex;flex-direction:column;min-width:196px;padding:5px;border:1px solid var(--line);border-radius:11px;background:var(--surface-1);box-shadow:var(--shadow)}
+.ml-cut-menu button{display:flex;align-items:center;gap:9px;height:34px;padding:0 9px;border:0;border-radius:7px;background:transparent;color:var(--ink);font-size:12.5px;font-weight:700;text-align:left;cursor:pointer}
+.ml-cut-menu button small{margin-left:auto;color:var(--muted)}
+.ml-cut-menu button:hover:not(:disabled),.ml-cut-menu button:focus-visible{outline:none;background:var(--accent-soft);color:var(--accent)}
+.ml-cut-menu button:disabled{color:var(--disabled-ink);cursor:default}
+.ml-cut-menu hr{width:100%;height:1px;margin:4px 0;border:0;background:var(--line)}
+/* Simple mode's 「動態素材」 entry and the panel's loading line (loaded with the shell, before the library chunk). */
+.ml-entry{display:flex;align-items:center;gap:10px;width:100%;min-height:58px;margin:8px 0 2px;padding:9px 12px 9px 9px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));
+  border-radius:13px;background:linear-gradient(135deg,var(--accent-soft),var(--surface-1) 72%);color:var(--ink);text-align:left;cursor:pointer;transition:border-color .12s,box-shadow .12s,transform .12s}
+.ml-entry:hover,.ml-entry:focus-visible{border-color:var(--accent);box-shadow:0 6px 18px var(--accent-shadow);transform:translateY(-1px);outline:none}
+.ml-entry-mark{display:grid;place-items:center;flex:0 0 auto;width:38px;height:38px;border-radius:11px;background:var(--accent);color:var(--accent-ink)}
+.ml-entry>span:nth-child(2){display:flex;flex:1 1 auto;flex-direction:column;gap:2px;min-width:0}
+.ml-entry strong{font-size:14px}
+.ml-entry small{overflow:hidden;color:var(--muted);font-size:11.5px;text-overflow:ellipsis;white-space:nowrap}
+.ml-entry b{color:var(--accent);font-size:16px}
+.ml-panel-loading{display:grid;flex:1 1 auto;place-items:center;color:var(--muted);font-size:12.5px}

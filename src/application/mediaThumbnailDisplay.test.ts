@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { cp, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { useTempRoots } from "../test/tempRoot.mjs";
 import { generateMediaDerivatives } from "./mediaDerivatives";
 import { CURRENT_MEDIA_PREVIEW_RECIPE, browserProxyColorPlan, browserThumbnailFilters } from "./mediaDerivativeColor";
 
@@ -34,9 +35,10 @@ function centerRgb(path: string, video: boolean) {
   expect(data.length).toBe(12);
   return [0, 1, 2].map(channel => (data[channel] + data[channel + 3] + data[channel + 6] + data[channel + 9]) / 4);
 }
+// Removed when each test finishes unless EDITKIN_TEST_EVIDENCE_ROOT keeps them.
+const temp = useTempRoots();
 async function fixture(transfer: string, colored = false) {
-  const base = resolve(".rd/hdr-display-20260901"); await mkdir(base, { recursive: true });
-  const root = await mkdtemp(join(base, "thumbnail-test-"));
+  const root = await temp.create("thumbnail-test-", { parent: resolve(".rd/hdr-display-20260901") });
   const source = join(root, "source.mp4"), hdr = transfer !== "bt709";
   ff(["-f", "lavfi", "-i", `nullsrc=s=96x64:r=10:d=0.5,format=yuv420p10le,geq=lum=502:cb=${colored ? 600 : 512}:cr=${colored ? 440 : 512}`,
     "-c:v", "libx264", "-threads", "2", "-crf", "0", "-pix_fmt", "yuv420p10le",

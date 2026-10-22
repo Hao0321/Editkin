@@ -15,8 +15,8 @@
         "title": "Editkin",
         "width": 1440,
         "height": 900,
-        "minWidth": 1080,
-        "minHeight": 720,
+        "minWidth": 800,
+        "minHeight": 560,
         "backgroundColor": "#eaf2ff"
       }
     ],

@@ -1,0 +1,9 @@
+/* Match the existing ColorWorkspace selects; retain its panel/actions/layout. */
+.color-lut-slot { min-width: 0; }
+.color-lut-slot select, .color-lut-slot label { min-width: 0; max-width: 100%; }
+.color-lut-slot select { width: 100%; }
+.color-lut-slot input[type="text"] { width: 100%; min-width: 0; height: 38px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--ink); padding: 6px 8px; }
+.color-lut-slot details { display: grid; gap: 10px; }
+.color-lut-slot details label { display: grid; gap: 6px; color: var(--muted); font-size: 10px; }
+.color-lut-slot small { display: block; overflow-wrap: anywhere; }
+.color-lut-slot .grade-v2-actions { grid-template-columns: repeat(2,minmax(0,1fr)); }

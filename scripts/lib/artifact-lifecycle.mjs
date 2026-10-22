@@ -277,7 +277,7 @@ async function inspectNsis({ root, installerPath, sourcePackRoot, sourcePersonal
     const sbomReport = validateSpdx(sbom, { productVersion: expectedVersion });
     if (sbomReport.status !== "GREEN") findings.push(...sbomReport.findings.map((item) => ({ ...item, code: `sbom-${item.code}` })));
     const sbomNames = new Set(sbom.packages?.map((item) => item.name));
-    for (const id of ["noto-sans-tc", "noto-serif-tc", "lxgw-wenkai-mono-tc", "bebas-neue", "fredoka"]) {
+    for (const id of ["noto-sans-tc", "noto-serif-tc", "lxgw-wenkai-mono-tc", "bebas-neue", "fredoka", "lxgw-wenkai-tc"]) {
       if (!sbomNames.has(`font-${id}`)) findings.push({ code: "sbom-missing-open-font", id });
     }
     const deliveredExecutablePath = resolve(workspace, "editkin.exe");
@@ -351,7 +351,7 @@ async function inspectNsis({ root, installerPath, sourcePackRoot, sourcePersonal
     const actualPlugins = await fileMap(resolve(workspace, "plugins"));
     findings.push(...compareFileMaps(expectedPlugins, actualPlugins, "nsis-plugins"));
     const fontManifest = JSON.parse(await readFile(resolve(extractedFontPackRoot, "editkin-open-fonts.json"), "utf8"));
-    if (fontManifest?.schemaVersion !== 2 || fontManifest?.id !== "studio.hao.editkin-open-fonts" || fontManifest?.fonts?.length !== 5) {
+    if (fontManifest?.schemaVersion !== 2 || fontManifest?.id !== "studio.hao.editkin-open-fonts" || fontManifest?.fonts?.length !== 6) {
       findings.push({ code: "open-font-manifest-contract", actual: { schemaVersion: fontManifest?.schemaVersion, id: fontManifest?.id, fonts: fontManifest?.fonts?.length } });
     } else {
       const families = new Set();
@@ -366,7 +366,7 @@ async function inspectNsis({ root, installerPath, sourcePackRoot, sourcePersonal
       // Validate the v2 static face grid, SFNT names/weights, license hashes and
       // closed-world payload using the same checker as the font build.
       const fontCheck = JSON.parse(run(process.execPath, [resolve(root, "scripts/open-font-gate.mjs"), extractedFontPackRoot], { cwd: root }));
-      if (fontCheck.status !== "VERIFIED_FONT_ASSET_CONTRACT_ONLY" || fontCheck.faceCount !== 43) {
+      if (fontCheck.status !== "VERIFIED_FONT_ASSET_CONTRACT_ONLY" || fontCheck.faceCount !== 44) {
         findings.push({ code: "open-font-static-face-contract" });
       }
     }

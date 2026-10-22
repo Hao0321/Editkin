@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-inspect-gpu-preview-playback"
+description = "Enables the inspect_gpu_preview_playback command without any pre-configured scope."
+commands.allow = ["inspect_gpu_preview_playback"]
+
+[[permission]]
+identifier = "deny-inspect-gpu-preview-playback"
+description = "Denies the inspect_gpu_preview_playback command without any pre-configured scope."
+commands.deny = ["inspect_gpu_preview_playback"]
