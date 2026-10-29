@@ -1,10 +1,11 @@
-import test from 'node:test';
+import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { useTempRoots } from '../src/test/tempRoot.mjs';
 import { inventory, previewColor, buildPersonalVisualPack,applyVisualCatalog } from './build-personal-visual-pack.mjs';
 import {createHash} from 'node:crypto';
+const temp=useTempRoots(after);
 
 test('curation is source-bound, metadata-only and cannot rename retired history into new source identity',()=>{
  const assets=[{sourceFilename:'capcut-editing.mp4',sha256:'a'.repeat(64),path:'original.mp4',derivatives:{revision:'unchanged'},redistributable:false}];
@@ -16,7 +17,7 @@ test('curation is source-bound, metadata-only and cannot rename retired history 
 });
 
 test('closed-world enumeration includes nested/case-insensitive videos and explicitly excludes other files', async()=>{
-  const root=await mkdtemp(join(tmpdir(),'private-visual-inventory-'));
+  const root=await temp.create('private-visual-inventory-');
   await mkdir(join(root,'nested'));
   for(const path of ['freedom_workshop.mov','VID_20260423151917318.mp4','nested/UPPER.MP4','notes.txt'])await writeFile(join(root,path),'fixture');
   const rows=await inventory(root);
@@ -33,6 +34,6 @@ test('HDR must use explicit transform; incomplete HDR cannot masquerade as Rec70
   assert.equal(previewColor({}).status,'unmeasured-source-color');
 });
 test('existing output is never overwritten and no encoder is launched',async()=>{
-  const root=await mkdtemp(join(tmpdir(),'private-visual-noclobber-'));
+  const root=await temp.create('private-visual-noclobber-');
   await assert.rejects(buildPersonalVisualPack({sourceRoot:root,outputRoot:root,ffmpeg:'must-not-execute'}),/already exists/);
 });

@@ -60,7 +60,7 @@ function identityGrade(value: unknown): boolean {
 
 export function containsSceneLinearMedia(project: EditProject): boolean {
   const assets = new Map(project.assets.map((asset) => [asset.id, asset] as const));
-  return project.tracks.some((track) => track.kind === "video" && !track.muted
+  return project.tracks.some((track) => track.kind === "video" && !track.hidden
     && track.clips.some((clip) => assets.get(clip.assetId)?.color?.interpretation === "linear_rec709"));
 }
 
@@ -72,7 +72,10 @@ export function buildAces2SdrVideoRenderRequest(input: EditProject): Aces2SdrVid
   return request as Aces2SdrVideoRenderRequest;
 }
 
-export function buildAces2DisplayVideoRenderRequest(input: EditProject): Aces2DisplayVideoRenderRequest {
+export function buildAces2DisplayVideoRenderRequest(input: EditProject, options?: { longTimeline?: true }): Aces2DisplayVideoRenderRequest {
+  if (input.colorManagement?.mode === "aces2" && input.colorManagement.outputTransform === "rec709_sdr" && input.colorManagement.rec709DisplayPolicy === "phone-bt1886") {
+    throw new Error("Phone BT.1886 SDR is not implemented by the native scene-linear output processor; use the supported FFmpeg phone route");
+  }
   if (!containsSceneLinearMedia(input)) throw new Error("原生 ACES 2 SDR 輸出需要 scene-linear Rec.709 EXR 素材。");
   const outputTransform = input.colorManagement?.outputTransform ?? "rec709_sdr";
   if (!(outputTransform in NATIVE_PROCESSORS)) throw new Error("原生 ACES 2 display 輸出尚未校準 P3 D65；請使用 Rec.709 SDR、HLG 或 PQ。");
@@ -82,7 +85,7 @@ export function buildAces2DisplayVideoRenderRequest(input: EditProject): Aces2Di
   // remain display-referred and subtitle typography stays single-color by contract.
   visual.captions = [];
   visual.motionGraphics = [];
-  const base = buildOpenExrSequenceRenderRequest(visual);
+  const base = buildOpenExrSequenceRenderRequest(visual, options);
   const unsupported = base.graph.nodes.find((node) => !["source", "transform2d", "color", "composite", "output"].includes(node.kind));
   if (unsupported) throw new Error(`原生 ACES 2 SDR 尚未校準 ${unsupported.kind} 節點；請先關閉該效果或輸出 OpenEXR。`);
   const graded = base.graph.nodes.find((node) => node.kind === "color" && !identityGrade(node.grade));

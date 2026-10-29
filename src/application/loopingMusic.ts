@@ -9,6 +9,21 @@ export interface LoopingMusicPlan {
   lastClipId?: string;
 }
 
+export const MUSIC_BED_TRACK_IDS: readonly string[] = ["audio-music-a", "audio-music-b"];
+
+/**
+ * How long the music bed must be: the picture (every non-audio track, captions, graphics, scenes, 3D), never the bed
+ * itself. projectDuration also counts the previous bed, so a re-run after trimming used to keep the old length (B7).
+ * A project with no picture (audio only) falls back to its non-music audio.
+ */
+export function musicBedDuration(project: EditProject): number {
+  const music = (clip: EditProject["tracks"][number]["clips"][number]) => project.assets.find((asset) => asset.id === clip.assetId)?.role === "background-music";
+  const picture = projectDuration({ ...project, tracks: project.tracks.filter((track) => track.kind !== "audio") });
+  if (picture > 0) return picture;
+  return projectDuration({ ...project, tracks: project.tracks.filter((track) => track.kind === "audio" && !MUSIC_BED_TRACK_IDS.includes(track.id))
+    .map((track) => ({ ...track, clips: track.clips.filter((clip) => !music(clip)) })) });
+}
+
 export function buildLoopingMusicPlan(
   project: EditProject,
   asset: MediaAsset,
@@ -16,10 +31,10 @@ export function buildLoopingMusicPlan(
 ): LoopingMusicPlan {
   const frame = 1 / project.fps;
   if (!Number.isFinite(asset.duration) || asset.duration < frame) throw new Error("配樂長度不足一個 frame，無法鋪設時間軸");
-  const targetDuration = Math.max(frame, projectDuration(project) || Math.min(asset.duration, 60));
+  const targetDuration = Math.max(frame, musicBedDuration(project) || Math.min(asset.duration, 60));
   const crossfade = Math.min(1.2, asset.duration / 5, targetDuration / 5);
   const commands: EditorCommand[] = [];
-  for (const track of project.tracks.filter((item) => item.id === "audio-music-a" || item.id === "audio-music-b")) {
+  for (const track of project.tracks.filter((item) => MUSIC_BED_TRACK_IDS.includes(item.id))) {
     commands.push(...track.clips.map((clip): EditorCommand => ({ type: "delete_clip", clipId: clip.id })), { type: "delete_track", trackId: track.id });
   }
   commands.push(

@@ -154,7 +154,7 @@ function WorkspaceStage() {
         onNew={notConnected} onOpen={notConnected} onSave={notConnected} onUndo={notConnected} onRedo={notConnected}
         onExport={notConnected} onExportOpenExrSequence={notConnected} onExportAlphaMaster={notConnected}
         onOpenAgentConnect={notConnected} onAutoEdit={notConnected} onMobileRemote={notConnected}
-        onCheckUpdates={notConnected} onDirectorConsole={notConnected} onHelp={notConnected}
+        onCheckUpdates={notConnected} onHelp={notConnected}
         workspaceControls={<WorkspaceControls layout={layout}
           onPreset={(preset) => { remember({ type: "preset", preset }); setLayout({ ...WORKSPACE_PRESETS[preset] }); }}
           onPatch={(patch) => { remember({ type: "workspace-patch", patch }); setLayout((current) => normalizeWorkspaceLayout({ ...current, ...patch, preset: "custom" })); }}

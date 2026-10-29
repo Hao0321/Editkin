@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-acknowledge-gpu-preview-playback"
+description = "Enables the acknowledge_gpu_preview_playback command without any pre-configured scope."
+commands.allow = ["acknowledge_gpu_preview_playback"]
+
+[[permission]]
+identifier = "deny-acknowledge-gpu-preview-playback"
+description = "Denies the acknowledge_gpu_preview_playback command without any pre-configured scope."
+commands.deny = ["acknowledge_gpu_preview_playback"]

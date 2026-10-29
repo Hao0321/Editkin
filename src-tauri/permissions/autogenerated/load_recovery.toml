@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-load-recovery"
+description = "Enables the load_recovery command without any pre-configured scope."
+commands.allow = ["load_recovery"]
+
+[[permission]]
+identifier = "deny-load-recovery"
+description = "Denies the load_recovery command without any pre-configured scope."
+commands.deny = ["load_recovery"]

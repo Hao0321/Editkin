@@ -387,6 +387,8 @@ describe("production GPU render graph adapter", () => {
     project.assets[0].width = 960; project.assets[0].height = 540; project.assets[0].uri = "C:/fixtures/matte.mp4";
     const matte = project.tracks[0].clips[0];
     matte.creative = { effectPresetIds: [], nativeEffectInstances: [createTransformMotionBlurInstance()] };
+    // The matte source is also drawn here (D3 opt-out); otherwise the matted target would be the first drawn layer.
+    matte.layer = { enabled: true, blendMode: "normal", role: "content", showMatteSource: true };
     const targetAsset = { ...structuredClone(project.assets[0]), id: "asset-temporal-matte-target", uri: "C:/fixtures/target.mp4" };
     const target = structuredClone(matte);
     target.id = "clip-temporal-matte-target"; target.assetId = targetAsset.id; target.trackId = "track-temporal-matte-target";

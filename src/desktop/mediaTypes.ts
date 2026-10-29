@@ -1,5 +1,6 @@
 import type { EditProject, EditorialProfileId, MediaAsset, MediaDerivatives, OpticalAlphaRefinementAggregate } from "../domain/types";
 import type { ProductAutoRotoRouteReceipt } from "../application/autoRotoProductContract";
+import type { ProjectFileIdentityV1 } from "../domain/projectFileIdentityV1";
 
 export interface PickedMedia {
   asset: MediaAsset;
@@ -10,6 +11,7 @@ export interface OpenProjectResult {
   canceled: boolean;
   path?: string;
   project?: EditProject;
+  fileIdentity?: ProjectFileIdentityV1 | null;
   runtimeUrls?: Record<string, string>;
 }
 
@@ -17,6 +19,7 @@ export interface SaveProjectResult {
   canceled: boolean;
   path?: string;
   project?: EditProject;
+  fileIdentity?: ProjectFileIdentityV1 | null;
 }
 
 export interface RenderProjectResult {
@@ -64,19 +67,126 @@ export interface NativeEffectPreviewResult {
   effectReceipt: unknown;
 }
 
+/** Where a native agent setup attempt stopped (src-tauri/src/agent_connect.rs SetupStep). */
+export type AgentSetupStep = "detect" | "prepare_runtime" | "probe" | "write_config" | "health_check";
+
+/** Why it stopped (src-tauri/src/agent_connect.rs FailureCode). */
+export type AgentSetupFailureCode =
+  | "AGENT_APP_NOT_FOUND" | "RUNTIME_FILES_MISSING" | "RUNTIME_PROBE_FAILED" | "WORKSPACE_NOT_WRITABLE"
+  | "WORKSPACE_CHOICE_EXPIRED" | "WORKSPACE_UNSAFE"
+  | "CONFIG_WRITE_REFUSED" | "CONFIG_ALREADY_EXISTS_DIFFERENT" | "HEALTH_CHECK_FAILED" | "UNKNOWN";
+
+export interface AgentSetupFailure {
+  step: AgentSetupStep;
+  code: AgentSetupFailureCode;
+  /** The underlying message (CLI output, probe stderr tail…): at most 2 KB, the user profile shown as %USERPROFILE%
+   *  on Windows and ~ on macOS. */
+  detail: string;
+  /** This attempt's log, `<app data>/logs/agent-connect-<UTC timestamp>.log` (the newest ten are kept). */
+  logPath?: string;
+}
+
+/** Live progress of a setup attempt (the connection screen's three steps; the runtime probe is part of the first). */
+export interface AgentSetupProgress {
+  step: "prepare_runtime" | "write_config" | "health_check";
+  state: "running" | "done" | "failed";
+}
+
+/** Optional second argument of copyAgentSetup. */
+export interface AgentSetupRequest {
+  /**
+   * The token from suggestAgentWorkspace / pickAgentWorkspace (opaque, single use, valid 10 minutes, main window
+   * only). The setup never accepts a folder path from the page. Absent: the native command shows its own picker.
+   * Unknown, used or expired → failure.code WORKSPACE_CHOICE_EXPIRED (「請再選一次資料夾」).
+   */
+  workspaceToken?: string;
+  /** Receives running / done for each step, and failed for the step that stopped. */
+  onProgress?: (event: AgentSetupProgress) => void;
+}
+
+/** A folder chosen natively, as the page may show it; only `token` goes back to copyAgentSetup. */
+export interface AgentWorkspaceChoice {
+  token: string;
+  /** The folder's own name, e.g. 「Editkin 作品」. */
+  displayName: string;
+  displayPath: string;
+}
+
+/** suggestAgentWorkspace: the last connected folder, else Documents\Editkin 作品 on Windows or ~/Movies/Editkin 作品
+ *  on macOS (created only by the setup). */
+export interface AgentWorkspaceSuggestion extends AgentWorkspaceChoice {
+  exists: boolean;
+  remembered: boolean;
+}
+
+/** pickAgentWorkspace: canceled, a usable choice, or a folder refused as unsafe (drive root, profile root, system). */
+export type AgentWorkspacePick =
+  | { canceled: true }
+  | ({ canceled: false } & AgentWorkspaceChoice)
+  | { canceled: false; refused: true; code: "WORKSPACE_UNSAFE" | "UNKNOWN"; message: string; displayName: string; displayPath: string };
+
+/** The Video Autopilot Skill: optional for connecting; the UI may offer it as a next step. */
+export interface AgentVaSkillStatus {
+  installed: boolean;
+  /** Always false from the native side: connecting never requires the Skill. */
+  required?: false;
+  kitUrl?: string;
+  /** The installed SKILL.md, or where Editkin will read it once installed (already given to the agent). */
+  skillPath?: string;
+  detail?: string;
+}
+
 export interface AgentSetupResult {
   canceled: boolean;
   target?: "codex" | "claude";
   workspace?: string;
-  status?: "installed" | "already_configured" | "command_copied" | "failed";
+  /**
+   * `installed`: Editkin's entry was added or replaced (see `configChange`). `already_installed`: the agent already
+   * had exactly this entry (nothing changed). `command_copied`: automatic setup failed and the clipboard verifiably
+   * holds `fallbackCommand`; never sent otherwise.
+   */
+  status?: "installed" | "already_configured" | "already_installed" | "command_copied" | "failed";
   message?: string;
+  /** Legacy summary of `failure.code` (cli_missing, workspace, unknown); `kit_missing` is no longer produced natively. */
+  cause?: "kit_missing" | "cli_missing" | "workspace" | "unknown";
+  /** Same text as `failure.detail` (kept for 查看原因). */
+  detail?: string;
+  /** Where to get the Video Autopilot Kit (sent with `kit_missing`, from the native preflight). */
+  kitUrl?: string;
+  /** Present on every native failure: where it stopped and why. */
+  failure?: AgentSetupFailure;
+  vaSkill?: AgentVaSkillStatus;
+  /** This attempt's log file (also inside `failure`). */
+  logPath?: string;
+  /** What the attempt did to the agent's `editkin` entry; other MCP servers are never touched. */
+  configChange?: "added" | "replaced" | "unchanged";
+  replacedExisting?: boolean;
+  /**
+   * The manual fallback: either `claude mcp add --scope user editkin -e …` / `codex mcp add editkin --env …`, or
+   * `cmd /d /c call "<…\Connect Editkin to ….cmd>" --no-pause`. Identical meaning when pasted into cmd.exe, Windows
+   * PowerShell 5.1 or PowerShell 7. Offered only when the agent did not accept the entry.
+   */
+  fallbackCommand?: string;
+  /** The generated script behind the fallback (double-clickable): `Connect Editkin to ….cmd` on Windows,
+   *  `Connect Editkin to ….command` on macOS (opens in Terminal). */
+  fallbackScriptPath?: string;
+  /**
+   * Which shell `fallbackCommand` / the script is written for, present whenever either is: "windows_shell" =
+   * paste into 命令提示字元 or PowerShell, double-click the .cmd in 檔案總管; "posix_shell" (macOS) = paste into
+   * 「終端機」 (zsh or bash), double-click the .command in Finder.
+   */
+  fallbackKind?: "windows_shell" | "posix_shell";
+  /** True only after the clipboard was written and read back equal to `fallbackCommand`. */
+  clipboardWritten?: boolean;
   apiKeyRequired?: false;
   usesCurrentSession?: boolean;
   health?: "connected" | "configured" | "manual_step" | "failed";
   runtimeVerified?: boolean;
   runtimeToolCount?: number;
-  autopilotPlanSchema?: string;
-  liveInvocationBinding?: string;
+  /** null when the Video Autopilot Skill is not installed (the live contract needs it; connecting does not). */
+  autopilotPlanSchema?: string | null;
+  liveInvocationBinding?: string | null;
+  generationPointerIdentity?: string;
   verification?: string;
   starterPrompt?: string;
   clientRestartRequired?: boolean;
@@ -147,6 +257,8 @@ export type RemoteAgentLaunchStatus = RemoteAgentLaunchStatusBase & ({
 export type BatchAutoEditJobStatus = "queued" | "running" | "completed" | "failed";
 
 export interface BatchAutoEditJob {
+  /** Native runtime-only engine owner; never restored from persisted progress. */
+  operationId?: string;
   id: string;
   sourcePath: string;
   sourceName: string;
@@ -209,15 +321,20 @@ export interface AutomaticCaptionDesktopRequest {
   sourceSha256?: string;
   language?: string;
   translationTarget?: "en";
+  /** Chinese cue text defaults to Taiwan Traditional ("zh-TW") in every UI locale; "original" keeps recognizer text. */
+  script?: "zh-TW" | "original";
 }
 
 export interface AutomaticCaptionDesktopResult {
   cues: Array<{ start: number; end: number; text: string; translation?: { text: string; language: "en" } }>;
+  /** Malformed recognizer blocks that were skipped; the other cues are complete. */
+  skippedCaptionBlocks?: Array<{ block: number; reason: string; window?: number }>;
   engine: string;
   modelId: string;
   modelSha256: string;
   language: string;
   translationTarget?: "en";
+  scriptConversion?: "s2twp";
   analyzedSeconds: number;
   elapsedMs: number;
   modelDownloaded: boolean;

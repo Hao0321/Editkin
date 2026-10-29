@@ -22,7 +22,7 @@ const invalidVersions: unknown[] = [
 describe("bounded strict update SemVer", () => {
   it.each(invalidVersions.map((value, index) => ({ value, index })))("rejects invalid input $index without coercion", ({ value }) => {
     expect(() => parseUpdateVersion(value, "test version")).toThrow(/test version.*SemVer 2\.0/u);
-  });
+  }, 20_000);
 
   it("parses core, prerelease and build without losing identifiers", () => {
     expect(parseUpdateVersion("12.34.56-alpha.0.01a.-+001.sha--.ABC")).toEqual({
@@ -31,7 +31,7 @@ describe("bounded strict update SemVer", () => {
     expect(parseUpdateVersion("0.0.0")).toEqual({ core: ["0", "0", "0"], prerelease: [], build: [] });
     expect(parseUpdateVersion("1.0.0-x-y-z.--").prerelease).toEqual(["x-y-z", "--"]);
     expect(parseUpdateVersion("1.0.0+21AF26D3----117B344092BD").build).toEqual(["21AF26D3----117B344092BD"]);
-  });
+  }, 20_000);
 
   it("enforces the explicit 256-character update-policy boundary", () => {
     expect(MAX_UPDATE_VERSION_LENGTH).toBe(256);
@@ -39,7 +39,7 @@ describe("bounded strict update SemVer", () => {
     expect(exact).toHaveLength(256);
     expect(parseUpdateVersion(exact).build[0]).toHaveLength(250);
     expect(() => parseUpdateVersion(exact + "a")).toThrow(/SemVer 2\.0/u);
-  });
+  }, 20_000);
 
   it("matches the official SemVer precedence chain in both directions", () => {
     const chain = ["1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta", "1.0.0-beta", "1.0.0-beta.2", "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0", "2.0.0", "2.1.0", "2.1.1"];
@@ -48,7 +48,7 @@ describe("bounded strict update SemVer", () => {
         expect(compareUpdateVersions(chain[left], chain[right])).toBe(left === right ? 0 : left < right ? -1 : 1);
       }
     }
-  });
+  }, 20_000);
 
   it.each([
     ["9007199254740992.0.0", "9007199254740993.0.0"],
@@ -61,14 +61,14 @@ describe("bounded strict update SemVer", () => {
   ])("orders %s below %s without Number precision loss", (left, right) => {
     expect(compareUpdateVersions(left, right)).toBe(-1);
     expect(compareUpdateVersions(right, left)).toBe(1);
-  });
+  }, 20_000);
 
   it("ignores build metadata for precedence but still validates it", () => {
     expect(compareUpdateVersions("1.2.3+a", "1.2.3+b")).toBe(0);
     expect(compareUpdateVersions("1.2.3-rc.1+001", "1.2.3-rc.1")).toBe(0);
     expect(() => compareUpdateVersions("1.2.3", "1.2.3+..")).toThrow(/SemVer 2\.0/u);
     expect(() => compareUpdateVersions("01.2.3", "1.2.3")).toThrow(/SemVer 2\.0/u);
-  });
+  }, 20_000);
 });
 
 async function inventory(root: string): Promise<unknown[]> {

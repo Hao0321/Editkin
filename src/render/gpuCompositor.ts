@@ -1,8 +1,15 @@
+import { hasExecutableUnifiedLayerOrderV1 } from "../application/unifiedLayerExecutionAdmissionV1";
+import { nativePairAssetIdsV1, reserveNativePairResourcesV1, timelineTransitionNativeDeclineV1 } from "./timelineTransitionNativeV1";
+import { hasClipMirrors } from "../domain/clipMirrors";
+import { projectContainsProofStillV1 } from "../domain/proofStillV1";
 import { animatedClipState, validateProject } from "../domain/editGraph";
 import { DEFAULT_COLOR, particleSimulationEmitters } from "../domain/types";
 import type { ColorAdjustments, EditProject, LayerBlendMode, MediaAsset, TimelineClip, Transform2D } from "../domain/types";
 import { buildEngineRenderGraph, motionGraphicTracking, type EngineNode, type EngineRenderGraph } from "./engineGraph";
+import { matteOnlySourceIdsV1 } from "../domain/trackMatteSourcesV1";
 import { isTransformMotionBlurInstance, transformMotionBlurParameters } from "../domain/transformMotionBlur";
+import type { PreparedNativeMotionPaint } from "../motion/nativeMotionPaint";
+import { nativeFloatingVideoFrameSpec, type PreparedNativeFloatingVideoFrames } from "./nativeFloatingVideoFrame";
 export * from "./gpuCompositorAdmission";
 import type { GpuEnginePreviewGraph, GpuEngineVideoPreviewGraph, GpuVideoPreviewSource } from "./gpuCompositorAdmission";
 import {
@@ -15,6 +22,14 @@ import {
   resolveNativeVideoPrecompositions,
 } from "./gpuCompositorAdmission";
 
+
+/** Color Grade v2 is baked for FFmpeg export and the GradedMedia preview; the native GPU
+ * executors do not run it yet, so every GPU route declines instead of dropping the grade. */
+function projectUsesColorGradeV2(project: EditProject): boolean {
+  if ([project, ...project.compositions].some(owner => owner.colorManagement?.mode === "aces2" && owner.colorManagement.rec709DisplayPolicy === "phone-bt1886")) return true;
+  return [project.tracks, ...project.compositions.map(composition => composition.tracks)]
+    .some(tracks => tracks.some(track => track.clips.some(clip => clip.gradeV2 !== undefined)));
+}
 
 export type GpuLayerSource =
   | { kind: "solid"; color: [number, number, number, number] }
@@ -77,7 +92,11 @@ export function gpuLayerPropertyBuffer(graph: GpuRenderGraph): GpuLayerPropertyB
 }
 
 export function buildGpuEnginePreviewGraph(project: EditProject, playhead: number): GpuEnginePreviewGraph | undefined {
-  if ([project.tracks, ...project.compositions.map(composition => composition.tracks)].some(tracks => tracks.some(track => track.clips.some(clip => clip.floatingFrame)))) return undefined;
+  if (hasExecutableUnifiedLayerOrderV1(project)) return undefined;
+  // Proof stills: the native executors cannot draw source-pixel redaction (design P3); decline.
+  if (projectContainsProofStillV1(project)) return undefined;
+  if (projectUsesColorGradeV2(project)) return undefined;
+  if (project.scene3d?.enabled || [project.tracks, ...project.compositions.map(composition => composition.tracks)].some(tracks => tracks.some(track => track.clips.some(clip => clip.floatingFrame)))) return undefined;
   if (project.colorManagement?.mode === "aces2" || project.captions.length || project.motionGraphics.length || !commonGpuEffectsSupported(project)) return undefined;
   const scene25d = project.scene25d?.enabled === true;
   const particleSimulation = project.particleSimulation?.enabled === true;
@@ -87,7 +106,7 @@ export function buildGpuEnginePreviewGraph(project: EditProject, playhead: numbe
     // fall back instead of repeatedly feeding a graph that native correctly rejects.
     try { validateProject(project); } catch { return undefined; }
   }
-  const clips = project.tracks.filter((track) => track.kind === "video" && !track.muted).flatMap((track) => track.clips);
+  const clips = project.tracks.filter((track) => track.kind === "video" && !track.hidden).flatMap((track) => track.clips);
   if (!clips.length) return undefined;
   const assets = new Map(project.assets.map((asset) => [asset.id, asset]));
   const unsupported = clips.some((clip) => {
@@ -99,7 +118,7 @@ export function buildGpuEnginePreviewGraph(project: EditProject, playhead: numbe
       || Boolean((!scene25d && clip.layer?.parentClipId) || clip.layer?.trackMatte)
       || Boolean(clip.creative?.lookPresetId || clip.creative?.transitionIn || clip.creative?.transitionOut);
   });
-  if (unsupported) return undefined;
+  if (unsupported || (scene25d && clips.some(clip => hasClipMirrors(clip.transform)))) return undefined;
   const graph = buildEngineRenderGraph(project);
   if (graph.audio) return undefined;
   const assetBindings = Object.fromEntries(clips.map((clip) => [clip.assetId, nativeMediaPath(assets.get(clip.assetId)!.uri)!]));
@@ -128,15 +147,32 @@ export function buildGpuEnginePreviewGraph(project: EditProject, playhead: numbe
  * Multiple sources preserve all twelve typed blend modes and independent static visual branches. Only the
  * independent audio graph is omitted because this hook owns visual preview only.
  */
-export function buildGpuEngineVideoPreviewGraph(project: EditProject, playhead: number): GpuEngineVideoPreviewGraph | undefined {
-  if ([project.tracks, ...project.compositions.map(composition => composition.tracks)].some(tracks => tracks.some(track => track.clips.some(clip => clip.floatingFrame)))) return undefined;
+export function buildGpuEngineVideoPreviewGraph(project: EditProject, playhead: number, nativeMotionPaint?: PreparedNativeMotionPaint,
+  nativeFloatingVideoFrames?: PreparedNativeFloatingVideoFrames, nativeTimelineTransitionVersion?: 1): GpuEngineVideoPreviewGraph | undefined {
+  if (hasExecutableUnifiedLayerOrderV1(project)) return undefined;
+  if (projectContainsProofStillV1(project)) return undefined;
+  if ((project.timelineTransitions?.length && nativeTimelineTransitionVersion !== 1) || timelineTransitionNativeDeclineV1(project)) return undefined;
+  if (projectUsesColorGradeV2(project)) return undefined;
+  const floatingClips = project.tracks.flatMap(track => track.clips).filter(clip => clip.floatingFrame);
+  if (project.scene3d?.enabled || project.compositions.some(composition => composition.tracks.some(track => track.clips.some(clip => clip.floatingFrame)))
+    || (floatingClips.length > 0 && !nativeFloatingVideoFrames)
+    || (nativeFloatingVideoFrames && !floatingClips.length)) return undefined;
+  if (nativeFloatingVideoFrames) {
+    try { for (const clip of floatingClips) nativeFloatingVideoFrameSpec(project, nativeFloatingVideoFrames, clip.id); }
+    catch { return undefined; }
+  }
   const sceneLinearAces2 = project.colorManagement?.mode === "aces2";
+  const pairedAssets = nativeTimelineTransitionVersion === 1 ? nativePairAssetIdsV1(project) : new Set<string>();
+  if (pairedAssets.size && (!sceneLinearAces2 || project.scene25d?.enabled || project.scene3d?.enabled)) return undefined;
   if ((sceneLinearAces2 && (!(["rec709_sdr", "rec2100_pq_1000"] as const).includes(project.colorManagement?.outputTransform as "rec709_sdr" | "rec2100_pq_1000")
       || project.colorManagement?.configId !== "studio-config-v4.0.0_aces-v2.0_ocio-v2.5"))
-    || !commonVideoCaptionsSupported(project) || !commonVideoMotionGraphicsSupported(project)) return undefined;
+    || !commonVideoCaptionsSupported(project) || !commonVideoMotionGraphicsSupported(project, nativeMotionPaint)) return undefined;
   const resolved = resolveNativeVideoPrecompositions(project);
   if (!resolved || (sceneLinearAces2 && resolved.markers.length > 0)) return undefined;
   const executionProject = resolved.project;
+  const executionClips = executionProject.tracks.flatMap(track => track.clips);
+  if (executionClips.some(clip => hasClipMirrors(clip.transform)) && (executionProject.scene25d?.enabled || executionProject.particleSimulation?.enabled
+    || executionClips.some(clip => clip.floatingFrame || clip.creative?.nativeEffectInstances?.some(instance => instance.enabled && isTransformMotionBlurInstance(instance))))) return undefined;
   const scene25d = executionProject.scene25d?.enabled === true;
   if (scene25d) {
     try { validateProject(executionProject); } catch { return undefined; }
@@ -151,9 +187,18 @@ export function buildGpuEngineVideoPreviewGraph(project: EditProject, playhead: 
     if (interpretation !== "rec709" && interpretation !== "auto") return undefined;
     if (interpretation === "auto") asset.color = { ...asset.color, interpretation: "rec709" };
   }
-  const clips = executionProject.tracks.filter((track) => track.kind === "video" && !track.muted).flatMap((track) => track.clips);
+  // Track matte sources draw nothing (design D3) and may sit on a hidden track: they are admitted as matte inputs only
+  // (the shared EngineGraph builds their source nodes and skips them in the layer composite).
+  const matteOnly = matteOnlySourceIdsV1(executionProject);
+  const hiddenMatteSources = matteOnly.size ? executionProject.tracks.filter((track) => track.kind === "video" && track.hidden)
+    .flatMap((track) => track.clips).filter((clip) => matteOnly.has(clip.id)) : [];
+  const clips = [...hiddenMatteSources, ...executionProject.tracks.filter((track) => track.kind === "video" && !track.hidden).flatMap((track) => track.clips)];
   if (clips.length < 1) return undefined;
   const contentClips = clips.filter((clip) => (clip.layer?.role ?? "content") === "content");
+  const drawnContentClips = contentClips.filter((clip) => !matteOnly.has(clip.id));
+  // The resident video executor seeds its stack with the first drawn layer and has no transparent seed outside unified
+  // programs, so a matted first layer (its matte source draws nothing) falls back instead of losing its matte.
+  if (drawnContentClips[0]?.layer?.trackMatte) return undefined;
   const controllerClips = clips.filter((clip) => clip.layer?.role === "controller");
   const adjustmentClips = clips.filter((clip) => clip.layer?.role === "adjustment");
   if (!contentClips.length || adjustmentClips.length > 4
@@ -218,22 +263,27 @@ export function buildGpuEngineVideoPreviewGraph(project: EditProject, playhead: 
       && overlayProxyWidth! <= (asset.width ?? project.width) && overlayProxyHeight! <= (asset.height ?? project.height);
     const useOverlayProxy = contentClips.length >= 6 && contentClips.indexOf(clip) > 0 && maximumScale <= .25
       && Math.abs(executionProject.fps - 30) <= .05 && overlayProxyValid;
-    const inputPath = useOverlayProxy ? overlayProxyPath : proxyPath && proxyAspectValid ? proxyPath : originalPath;
+    // A floating source owns its measured original DAR. Canvas/proportional proxy
+    // admission is a different contract and cannot substitute its media here.
+    const pairNeedsOriginal = pairedAssets.has(clip.assetId);
+    const inputPath = clip.floatingFrame || pairNeedsOriginal ? originalPath : useOverlayProxy ? overlayProxyPath : proxyPath && proxyAspectValid ? proxyPath : originalPath;
     const gpuEffects = enabledGpuEffectGraphs(clip);
     const safeVisual = commonVideoTransformSupported(transform)
       && commonVideoEffectStackSupported(effects, gpuEffects.length)
       && commonVideoGradeSupported(clip.color) && !clip.layout && !clip.masks?.some((mask) => mask.enabled) && !clip.chromaKey?.enabled
       && (clip.layer?.enabled ?? true)
-      && (contentClips.indexOf(clip) > 0 || (clip.layer?.blendMode ?? "normal") === "normal")
+      && (drawnContentClips.indexOf(clip) !== 0 || (clip.layer?.blendMode ?? "normal") === "normal")
       && commonVideoAnimationSupported(clip, executionProject.fps)
       && commonVideoTransformMotionBlurSupported(clip)
       && !hasEnabledCpuNativeEffect(clip)
       && !creative?.lookPresetId
       && !creative?.transitionIn && !creative?.transitionOut;
-    if (!asset || !inputPath || asset.width !== project.width || asset.height !== project.height || !safeVisual) return undefined;
+    if (!asset || !asset.width || !asset.height || !inputPath || (!clip.floatingFrame && (asset.width !== project.width || asset.height !== project.height)) || !safeVisual) return undefined;
     if (assetBindings[asset.id] && assetBindings[asset.id] !== inputPath) return undefined;
     assetBindings[asset.id] = inputPath;
-    decoderDimensions[asset.id] = useOverlayProxy
+    decoderDimensions[asset.id] = clip.floatingFrame || pairNeedsOriginal
+      ? { width: asset.width!, height: asset.height!, source: "original" }
+      : useOverlayProxy
       ? { width: overlayProxyWidth!, height: overlayProxyHeight!, source: "overlay-proxy" }
       : proxyPath && proxyAspectValid
       ? { width: proxyWidth!, height: proxyHeight!, source: "proxy" }
@@ -247,13 +297,25 @@ export function buildGpuEngineVideoPreviewGraph(project: EditProject, playhead: 
   }
   if (!commonVideoParentingSupported([...contentClips, ...controllerClips])) return undefined;
   const completeGraph = applyResolvedPrecompositionMarkers(buildEngineRenderGraph(executionProject,
-    !sceneLinearAces2 && !scene25d ? { rec709PrimaryVersion: 2 } : undefined), resolved.markers);
-  const graph: EngineRenderGraph = { ...completeGraph, audio: undefined };
+    { ...(!sceneLinearAces2 && !scene25d ? { rec709PrimaryVersion: 2 as const } : {}),
+      ...(nativeMotionPaint ? { nativeMotionPaint } : {}),
+      ...(nativeFloatingVideoFrames ? { nativeFloatingVideoFrames } : {}),
+      ...(pairedAssets.size ? { nativeTimelineTransitionVersion: 1 as const } : {}) }), resolved.markers);
+  // The resident native paint consumer and its actual float textures operate in
+  // RGBA16F. The generic ACES graph may request RGBA32F for other renderers;
+  // declare this resident execution contract explicitly without changing the
+  // saved project or silently treating float paint as encoded SDR.
+  const nativePaintExecution = completeGraph.nodes.some(node => node.kind === "native_motion_paint");
+  const nativePairExecution = completeGraph.nodes.some(node => node.kind === "timeline_transition_v1");
+  const graph: EngineRenderGraph = { ...completeGraph, audio: undefined,
+    ...(nativePaintExecution || nativePairExecution ? { workingFormat: "rgba16_float" as const,
+      nodes: completeGraph.nodes.map(node => node.kind === "output" ? { ...node, format: "rgba16_float" } : node) } : {}) };
   const particleNodes = graph.nodes.filter((node) => node.kind === "particle_emitter");
   const particleCount = particleNodes.length;
   const particleCeiling = particleNodes.reduce((sum, node) => sum + Number(node.maxParticles ?? 0), 0);
   if (particleCount > 4 || particleCeiling > 192) return undefined;
-  const overlayCount = graph.nodes.filter((node) => node.kind === "particle_emitter" || node.kind === "caption" || node.kind === "motion_graphic").length;
+  const nativePaintCount = graph.nodes.filter(node => node.kind === "native_motion_paint").length;
+  const overlayCount = graph.nodes.filter((node) => node.kind === "particle_emitter" || node.kind === "caption" || node.kind === "motion_graphic" || node.kind === "native_motion_paint").length;
   const matteCount = contentClips.filter((clip) => clip.layer?.trackMatte).length;
   const decodedTemporalNodes = graph.nodes.filter((node) => node.kind === "motion_blur" && node.sourceSampling === "decoded_temporal");
   if (decodedTemporalNodes.length > 1) return undefined;
@@ -317,11 +379,11 @@ export function buildGpuEngineVideoPreviewGraph(project: EditProject, playhead: 
       || (matteCount > 0 && !resourceGovernedTemporalMatte && !legacyPackedTemporalMatteSource)) return undefined;
   }
   const temporalSampleCount = decodedTemporalNodes.length ? Number(decodedTemporalNodes[0].samples) : 0;
-  const resources = estimateGpuEngineVideoResources(graph.width, graph.height, graph.cacheBudgetMb, contentClips.length, overlayCount, adjustmentClips.length, matteCount, particleCount, temporalSampleCount, sceneLinearAces2 ? 8 : 4);
+  const resources = reserveNativePairResourcesV1(estimateGpuEngineVideoResources(graph.width, graph.height, graph.cacheBudgetMb, contentClips.length, overlayCount, adjustmentClips.length, matteCount, particleCount, temporalSampleCount, sceneLinearAces2 ? 8 : 4, 0, 0, nativePaintCount), nativePairExecution ? executionProject.timelineTransitions?.length ?? 0 : 0, contentClips.length);
   if (!resources || resources.requiredBytes > resources.budgetBytes || contentClips.length > resources.maxVideoLayers) return undefined;
   const timelineFrame = Math.max(0, Math.round(playhead * graph.timebase.denominator / graph.timebase.numerator));
   return {
-    structureKey: `${graph.graphId}:${JSON.stringify(assetBindings)}`,
+    structureKey: `${graph.graphId}:${JSON.stringify(assetBindings)}${nativeFloatingVideoFrames ? `:${JSON.stringify(graph.nodes.filter(node => node.kind === "floating_video_frame_2d"))}` : ""}`,
     graph,
     assetBindings,
     decoderDimensions,
@@ -339,19 +401,22 @@ export function buildGpuEngineVideoPreviewGraph(project: EditProject, playhead: 
 }
 
 export function buildGpuRenderGraph(project: EditProject, playhead: number): GpuRenderGraph | undefined {
+  if (hasExecutableUnifiedLayerOrderV1(project)) return undefined;
+  if (projectContainsProofStillV1(project)) return undefined;
+  if (projectUsesColorGradeV2(project)) return undefined;
   // The packed RGBA8 compositor does not yet execute the generated OCIO stages. Routing an
   // ACES project through it would silently display unmanaged pixels, so use the WebGL2 OCIO
   // preview until the native float compositor owns the same processor contract.
   if (project.colorManagement?.mode === "aces2") return undefined;
   const clips = project.tracks
-    .filter((track) => track.kind === "video" && !track.muted)
+    .filter((track) => track.kind === "video" && !track.hidden)
     .flatMap((track) => track.clips)
     .filter((clip) => (clip.layer?.enabled ?? true) && (clip.layer?.role ?? "content") === "content" && playhead >= clip.timelineStart && playhead < clip.timelineStart + clip.duration);
   const assets = new Map(project.assets.map((asset) => [asset.id, asset]));
   if (!clips.length || clips.some((clip) => {
     const asset = assets.get(clip.assetId);
     const state = animatedClipState(clip, playhead - clip.timelineStart, project.fps);
-    return asset?.kind !== "image" || !nativeMediaPath(asset.uri) || !defaultColor(state.color) || Boolean(clip.layout) || Boolean(clip.masks?.some((mask) => mask.enabled)) || Boolean(clip.chromaKey?.enabled)
+    return hasClipMirrors(state.transform) || asset?.kind !== "image" || !nativeMediaPath(asset.uri) || !defaultColor(state.color) || Boolean(clip.layout) || Boolean(clip.masks?.some((mask) => mask.enabled)) || Boolean(clip.chromaKey?.enabled)
       || Boolean(clip.creative?.lookPresetId || clip.creative?.effectPresetIds.length || clip.creative?.nativeEffectInstances?.some((instance) => instance.enabled) || clip.creative?.transitionIn || clip.creative?.transitionOut);
   })) return undefined;
   const layers: GpuRenderLayer[] = [{
@@ -379,9 +444,12 @@ export function buildGpuRenderGraph(project: EditProject, playhead: number): Gpu
  * continue through the compatible preview until the native graph consumes video textures.
  */
 export function buildGpuVideoPreviewSource(project: EditProject, playhead: number): GpuVideoPreviewSource | undefined {
+  if (hasExecutableUnifiedLayerOrderV1(project)) return undefined;
+  if (projectContainsProofStillV1(project)) return undefined;
+  if (projectUsesColorGradeV2(project)) return undefined;
   if (project.colorManagement?.mode === "aces2") return undefined;
   const activeClips = project.tracks
-    .filter((track) => track.kind === "video" && !track.muted)
+    .filter((track) => track.kind === "video" && !track.hidden)
     .flatMap((track) => track.clips)
     .filter((clip) => (clip.layer?.enabled ?? true) && playhead >= clip.timelineStart && playhead < clip.timelineStart + clip.duration);
   if (activeClips.length !== 1) return undefined;
@@ -389,7 +457,7 @@ export function buildGpuVideoPreviewSource(project: EditProject, playhead: numbe
   const asset = project.assets.find((candidate) => candidate.id === clip.assetId);
   const state = animatedClipState(clip, playhead - clip.timelineStart, project.fps);
   const creative = clip.creative;
-  const visuallyUnmodified = state.transform.x === 0 && state.transform.y === 0
+  const visuallyUnmodified = !hasClipMirrors(state.transform) && state.transform.x === 0 && state.transform.y === 0
     && state.transform.scale === 1 && state.transform.rotation === 0 && state.transform.opacity === 1
     && defaultColor(state.color) && !clip.layout && !clip.masks?.some((mask) => mask.enabled) && !clip.chromaKey?.enabled
     && (clip.layer?.blendMode ?? "normal") === "normal" && (clip.layer?.role ?? "content") === "content"

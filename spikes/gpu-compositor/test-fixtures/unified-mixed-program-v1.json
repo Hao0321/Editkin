@@ -1,0 +1,59 @@
+{
+  "schema": "editkin.unified-native-composite/v1",
+  "graphId": "project:editkin-demo:r0:layer-order-v1:4.0.2.5.1.3",
+  "outputNode": "output:main",
+  "steps": [
+    {
+      "kind": "caption",
+      "index": 0,
+      "tailId": "caption:caption22",
+      "sourceNodeId": "caption:caption22",
+      "blendMode": "normal",
+      "opacity": 1
+    },
+    {
+      "kind": "video",
+      "index": 0,
+      "tailId": "color:clip-demo",
+      "sourceNodeId": "source:clip-demo",
+      "blendMode": "normal",
+      "opacity": 1
+    },
+    {
+      "kind": "adjustment",
+      "index": 0,
+      "nodeId": "adjustment:adjustA22",
+      "tailId": "color:adjustA22",
+      "nodeIds": [
+        "color:adjustA22",
+        "adjustment:adjustA22"
+      ]
+    },
+    {
+      "kind": "motion_graphic",
+      "index": 0,
+      "tailId": "motion-graphic:graphic22",
+      "sourceNodeId": "motion-graphic:graphic22",
+      "blendMode": "normal",
+      "opacity": 1
+    },
+    {
+      "kind": "video",
+      "index": 1,
+      "tailId": "color:upper22",
+      "sourceNodeId": "source:upper22",
+      "blendMode": "normal",
+      "opacity": 1
+    },
+    {
+      "kind": "adjustment",
+      "index": 1,
+      "nodeId": "adjustment:adjustB22",
+      "tailId": "color:adjustB22",
+      "nodeIds": [
+        "color:adjustB22",
+        "adjustment:adjustB22"
+      ]
+    }
+  ]
+}

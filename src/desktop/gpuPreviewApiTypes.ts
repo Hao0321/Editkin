@@ -1,5 +1,5 @@
-import type { GpuCompositionResult, GpuEnginePreviewLoadResult, GpuEngineVideoPreviewLoadResult } from "./gpuTypes";
-import type { GpuEngineVideoPresentedFrame, GpuVideoPresentedFrame, GpuVideoPreviewFrame, GpuVideoStagedFrame } from "./gpuFrameTypes";
+import type { GpuCompositionResult, GpuEnginePreviewLoadResult, GpuEngineVideoPreviewLoadResult, GpuResidentEngineStatus } from "./gpuTypes";
+import type { GpuEngineVideoPresentedFrame, GpuEngineVideoPngPreviewFrame, GpuVideoPresentedFrame, GpuVideoPreviewFrame, GpuVideoStagedFrame } from "./gpuFrameTypes";
 import type { GpuNativePreviewSurface, GpuNativePreviewSurfaceRequest } from "./nativePreviewTypes";
 
 export interface NativeGpuPlaybackEvent {
@@ -18,6 +18,7 @@ export interface NativeGpuPlaybackEvent {
 }
 
 export interface GpuPreviewApi {
+  gpuEngineStatus?: () => Promise<GpuResidentEngineStatus>;
   startGpuPreviewPlayback?: (sessionId: string, range: { startFrame: number; endFrame: number; audioGeneration?: number; audioOwnerId?:number }, onEvent?: (event: NativeGpuPlaybackEvent) => void | Promise<void>) => Promise<NativeGpuPlaybackEvent>;
   stopGpuPreviewPlayback?: (generation: number) => Promise<{ stopped: boolean }>;
   inspectGpuPreviewPlayback?: (generation: number, diagnostic?: boolean) => Promise<NativeGpuPlaybackEvent & { frameReceipt?: GpuEngineVideoPresentedFrame["receipt"] }>;
@@ -25,6 +26,8 @@ export interface GpuPreviewApi {
   loadGpuEnginePreviewSession?: (sessionId: string, graph: import("../render/engineGraph").EngineRenderGraph, assetBindings: Record<string, string>, timelineFrame: number) => Promise<GpuEnginePreviewLoadResult>;
   updateGpuEnginePreviewFrame?: (sessionId: string, timelineFrame: number) => Promise<{ sessionId: string; timelineFrame: number; updated: true; layers: number }>;
   loadGpuEngineVideoPreviewSession?: (sessionId: string, graph: import("../render/engineGraph").EngineRenderGraph, assetBindings: Record<string, string>, timelineFrame: number) => Promise<GpuEngineVideoPreviewLoadResult>;
+  loadGpuEngineVideoFramePreviewSession?: (sessionId: string, graph: import("../render/engineGraph").EngineRenderGraph, assetBindings: Record<string, string>, timelineFrame: number) => Promise<GpuEngineVideoPreviewLoadResult>;
+  renderGpuEngineVideoPreviewFrame?: (sessionId: string, timelineFrame: number, toleranceSeconds: number) => Promise<GpuEngineVideoPngPreviewFrame>;
   presentGpuEngineVideoPreviewFrame?: (sessionId: string, timelineFrame: number, toleranceSeconds: number) => Promise<GpuEngineVideoPresentedFrame>;
   releaseGpuEngineVideoPreviewSession?: (sessionId: string) => Promise<{ sessionId: string; released: boolean; fences: { retiredFenceCount: number; retiredSubmissionSequences: number[]; pendingFenceCount: number } }>;
   updateGpuPreviewProperties?: (sessionId: string, params: import("../render/gpuCompositor").GpuLayerPropertyBuffer[]) => Promise<{ sessionId: string; updated: true; layers: number }>;

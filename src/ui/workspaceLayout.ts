@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type WorkspacePreset = "simple" | "edit" | "color" | "focus" | "custom";
 export type WorkspaceTextSize = "comfortable" | "large";
@@ -19,8 +19,15 @@ const STORAGE_KEY = "editkin.workspace-layout.v1";
 const dimension = (value: unknown, fallback: number, minimum: number, maximum: number) => typeof value === "number" && Number.isFinite(value) ? Math.max(minimum, Math.min(maximum, value)) : fallback;
 const visibility = (value: unknown, fallback: boolean) => typeof value === "boolean" ? value : fallback;
 
+/**
+ * Simple mode's timeline is tall enough for its one-row toolbar, the ruler, a two-row 標題與圖卡 lane, the 主畫面
+ * track and a horizontal scroll bar (see workspaceLayout.test.ts). On a short window the grid gives the preview its
+ * minimum first (accessibleWorkspace.css), and the timeline takes what is left.
+ */
+export const SIMPLE_TIMELINE_HEIGHT = 288;
+
 export const WORKSPACE_PRESETS: Record<Exclude<WorkspacePreset, "custom">, WorkspaceLayoutState> = {
-  simple: { preset: "simple", mediaVisible: true, inspectorVisible: false, automationVisible: false, timelineVisible: true, mediaWidth: 360, inspectorWidth: 340, timelineHeight: 200, textSize: "large" },
+  simple: { preset: "simple", mediaVisible: true, inspectorVisible: false, automationVisible: false, timelineVisible: true, mediaWidth: 360, inspectorWidth: 340, timelineHeight: SIMPLE_TIMELINE_HEIGHT, textSize: "large" },
   edit: { preset: "edit", mediaVisible: true, inspectorVisible: true, automationVisible: false, timelineVisible: true, mediaWidth: 300, inspectorWidth: 400, timelineHeight: 326, textSize: "large" },
   color: { preset: "color", mediaVisible: false, inspectorVisible: true, automationVisible: false, timelineVisible: true, mediaWidth: 300, inspectorWidth: 420, timelineHeight: 246, textSize: "large" },
   focus: { preset: "focus", mediaVisible: false, inspectorVisible: false, automationVisible: false, timelineVisible: true, mediaWidth: 280, inspectorWidth: 350, timelineHeight: 210, textSize: "large" },
@@ -53,7 +60,13 @@ function readWorkspaceLayout(): WorkspaceLayoutState {
 
 export function useWorkspaceLayout() {
   const [layout, setLayout] = useState<WorkspaceLayoutState>(readWorkspaceLayout);
-  useEffect(() => { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(layout)); }, [layout]);
+  const latest = useRef(layout);
+  latest.current = layout;
+  const flush = useCallback(() => {
+    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(latest.current)); } catch { /* Keep usable in memory. */ }
+  }, []);
+  useEffect(() => { const timer = window.setTimeout(flush, 160); return () => window.clearTimeout(timer); }, [layout, flush]);
+  useEffect(() => { window.addEventListener("pagehide", flush); return () => { window.removeEventListener("pagehide", flush); flush(); }; }, [flush]);
   const choosePreset = useCallback((preset: Exclude<WorkspacePreset, "custom">) => setLayout(WORKSPACE_PRESETS[preset]), []);
   const patch = useCallback((value: Partial<WorkspaceLayoutState>) => setLayout((current) => normalizeWorkspaceLayout({ ...current, ...value, preset: "custom" })), []);
   const resize = useCallback((panel: "media" | "inspector" | "timeline", delta: number) => setLayout((current) => normalizeWorkspaceLayout({

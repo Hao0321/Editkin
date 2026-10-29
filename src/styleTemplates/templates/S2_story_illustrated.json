@@ -1,0 +1,99 @@
+{
+  "schema": "editkin.style-template/v1",
+  "id": "S2_story_illustrated",
+  "revision": 4,
+  "names": { "zh": "故事插畫・知識講述", "en": "Illustrated story" },
+  "reference": "R2 (talking head to illustrated story): mixed-weight captions built word by word in the negative space, keyword in an amber highlight box or huge and glowing lemon, blur-in serif opener, warm light leaks, punch-ins",
+  "videoTypes": ["knowledge", "story", "podcast_clip"],
+  "palette": {
+    "bg": "#1B1510",
+    "ink": "#1B1510",
+    "paper": "#FFF8EC",
+    "accent": "#E49A1C",
+    "accent2": "#9C6418",
+    "highlight": "#E8DA26",
+    "script": "#E8DA26"
+  },
+  "fonts": {
+    "display": { "font": "display", "weight": 900 },
+    "serif": { "font": "serif", "weight": 900 },
+    "script": { "font": "hand" },
+    "body": { "font": "display", "weight": 500 },
+    "mono": { "font": "mono" }
+  },
+  "components": {
+    "caption": {
+      "leadFont": "body",
+      "keywordFont": "display",
+      "leadSize": 0.06,
+      "keywordScale": 3.6,
+      "leadColor": "paper",
+      "leadTracking": 0,
+      "keywordTracking": -0.04,
+      "lineGap": 0.3,
+      "leadMaxEm": 8,
+      "treatments": ["highlightBox", "glow", "size"],
+      "defaultTreatment": "highlightBox",
+      "keywordEntry": "pop",
+      "leadEntry": "blurIn",
+      "boxPadding": 0.09,
+      "boxRadius": 0.06,
+      "scriptRotation": -5,
+      "scriptScale": 0.92,
+      "readability": { "minContrast": 4.5, "ladder": ["scrim", "box", "boxAll"], "scrimOpacity": 0.35, "alwaysShadow": true },
+      "exitSeconds": 0.2
+    },
+    "section": {
+      "defaultStyle": "bleed",
+      "font": "serif",
+      "color": "paper",
+      "bleed": 0.06,
+      "size": 0.38,
+      "scrim": 0.38,
+      "punchCard": { "plate": "accent", "text": "ink", "font": "serif" },
+      "defaultSeconds": 1.8
+    },
+    "lightLeak": { "colors": ["#FFB75E", "#FF8040", "#E8503A", "#C8342E"], "defaultSeconds": 1.1, "peak": 0.7, "origin": "bottom" },
+    "punchIn": { "scale": 1.12, "attackSeconds": 0.2, "curve": "expoOut" },
+    "explainer": {
+      "font": "display", "textFont": "body", "em": 0.046,
+      "pill": { "plate": "accent", "text": "ink" },
+      "chips": { "active": "accent", "activeText": "ink", "idle": "bg", "idleText": "paper" },
+      "card": { "plate": "paper", "line": "ink" },
+      "prompt": { "plate": "bg", "text": "paper" },
+      "cursor": { "fill": "paper", "outline": "ink" }
+    },
+    "annotation": { "stroke": "paper", "strokeWidth": 0.0075, "dash": true, "pin": "accent", "marker": "accent", "label": "ink", "labelPlate": "paper", "font": "script" },
+    "insert": { "radius": 0.02, "border": "paper", "borderWidth": 0.006, "shadow": 0.5, "pipScale": 0.5, "paper": "paper", "divider": "accent" },
+    "stage": { "desk": "#B98A5E", "paper": "#F6EBD3", "leaf": "#4F7A3A", "captionColor": "accent2", "captionFont": "serif" },
+    "sound": { "gainDb": -16, "minGapSeconds": 0.8, "cues": {
+      "keyword": "sfx:editkin-procedural-v1-pop-01", "section": "sfx:editkin-procedural-v1-riser-02", "punchCard": "sfx:editkin-procedural-v1-impact-01",
+      "leak": "sfx:editkin-procedural-v1-whoosh-02", "punchIn": "sfx:editkin-procedural-v1-whoosh-01", "click": "sfx:editkin-procedural-v1-tick-01",
+      "type": "sfx:editkin-procedural-v1-tick-03", "cards": "sfx:editkin-procedural-v1-pop-02", "pin": "sfx:editkin-procedural-v1-ding-02",
+      "arrow": "sfx:editkin-procedural-v1-whoosh-04", "stage": "sfx:editkin-procedural-v1-pop-05", "insert": "sfx:editkin-procedural-v1-whoosh-03" } },
+    "look": {
+      "filmLookId": "hfl2_vlog_soft_film",
+      "strength": 0.85,
+      "byGenre": {
+        "food": { "filmLookId": "hfl2_food_warm_appetite", "strength": 0.8 },
+        "night": { "filmLookId": "hfl2_night_city_teal", "strength": 0.6 }
+      }
+    }
+  },
+  "editorial": {
+    "maxTreatmentsPer2s": 2,
+    "minKeywordHoldSeconds": 0.6,
+    "keywordDensity": { "min": 0.35, "max": 0.85 },
+    "phraseTailSeconds": 0.3,
+    "placement": {
+      "policy": "negative_space",
+      "titleSafe": 0.05,
+      "faceMargin": 0.03,
+      "portraitUiBottom": 0.2,
+      "portraitUiRight": 0.12,
+      "minScale": 0.55
+    }
+  },
+  "artStatus": "pending",
+  "notes": "Phase A first version. Palette measured from R2: amber box #E49A1C, lemon glow #E8DA26, ochre #9C6418 (stage captions on paper, Phase B). Illustration stage, props and dashed arrows are Phase B (C4, C6)."
+}

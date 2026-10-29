@@ -9,6 +9,7 @@ import { inspectAuthenticode } from "./authenticode.mjs";
 import { PRODUCT_RELEASE_SCOPE, computeBuildInputIdentity, computeBuildOutputIdentity } from "./build-input-identity.mjs";
 import { validateSpdx } from "./sbom.mjs";
 import { inspectExtractedPayload } from "./security-hardening.mjs";
+import { PRODUCT_AGENT_RUNTIME_DIRECTORY, productAgentRuntimeResources } from "./agent-launcher-closure.mjs";
 
 const MANAGED_RUNTIME = [
   ["runtime/node.exe", "vendor/node/win32-x64/node.exe"],
@@ -37,10 +38,12 @@ const MANAGED_RUNTIME = [
   ["runtime/THIRD_PARTY_NOTICES.md", "release/THIRD_PARTY_NOTICES.md"],
 ];
 
-const MANAGED_AGENT_CONNECT = [
-  ["agent-runtime-v3/agent-setup-contract.json", "src/shared/agentSetupContract.json"],
-  ["agent-runtime-v3/launcher.mjs", "scripts/editkin-product-mcp-launcher.mjs"],
-];
+// The launcher, every module it imports and the embedded contract, derived from
+// the launcher's import graph so the payload check cannot lag a new import.
+function managedAgentConnect(root) {
+  return productAgentRuntimeResources(root)
+    .map(({ source, destination }) => [`${PRODUCT_AGENT_RUNTIME_DIRECTORY}/${destination}`, source]);
+}
 
 async function sha256(path) {
   const hash = createHash("sha256");
@@ -240,6 +243,7 @@ async function inspectNsis({ root, installerPath, sourcePackRoot, sourcePersonal
   const sevenZipIdentity = await identity(sevenZipPath);
   const toolFindings = verifyToolIdentity(toolReceipt, { packageVersion: packageJson.version, ...sevenZipIdentity });
   if (toolFindings.length) return { status: "BLOCK", tool: { path: toolReceipt.sevenZip.path, ...sevenZipIdentity }, findings: toolFindings };
+  const managedAgentConnectFiles = managedAgentConnect(root);
   const workspace = await mkdtemp(join(tmpdir(), "editkin-nsis-payload-"));
   try {
     const listing = run(sevenZipPath, ["l", "-slt", installerPath]);
@@ -248,7 +252,7 @@ async function inspectNsis({ root, installerPath, sourcePackRoot, sourcePersonal
     const required = [
       "editkin.exe",
       ...MANAGED_RUNTIME.map(([path]) => path),
-      ...MANAGED_AGENT_CONNECT.map(([path]) => path),
+      ...managedAgentConnectFiles.map(([path]) => path),
       "creative-packs/hao-creator-library/editkin-pack.json",
       "personal-packs/hao-music-library/editkin-personal-music.json",
       "font-packs/editkin-open-fonts/editkin-open-fonts.json",
@@ -268,7 +272,7 @@ async function inspectNsis({ root, installerPath, sourcePackRoot, sourcePersonal
     Object.assign(actualRuntime, await fileMap(extractedRuntime));
     findings.push(...compareFileMaps(expectedRuntime, actualRuntime, "nsis-runtime"));
     const expectedAgentConnect = {};
-    for (const [payload, source] of MANAGED_AGENT_CONNECT) {
+    for (const [payload, source] of managedAgentConnectFiles) {
       expectedAgentConnect[payload.slice("agent-runtime-v3/".length)] = await identity(resolve(root, source));
     }
     const actualAgentConnect = await fileMap(resolve(workspace, "agent-runtime-v3"));
@@ -277,7 +281,7 @@ async function inspectNsis({ root, installerPath, sourcePackRoot, sourcePersonal
     const sbomReport = validateSpdx(sbom, { productVersion: expectedVersion });
     if (sbomReport.status !== "GREEN") findings.push(...sbomReport.findings.map((item) => ({ ...item, code: `sbom-${item.code}` })));
     const sbomNames = new Set(sbom.packages?.map((item) => item.name));
-    for (const id of ["noto-sans-tc", "noto-serif-tc", "lxgw-wenkai-mono-tc", "bebas-neue", "fredoka"]) {
+    for (const id of ["noto-sans-tc", "noto-serif-tc", "lxgw-wenkai-mono-tc", "bebas-neue", "fredoka", "lxgw-wenkai-tc"]) {
       if (!sbomNames.has(`font-${id}`)) findings.push({ code: "sbom-missing-open-font", id });
     }
     const deliveredExecutablePath = resolve(workspace, "editkin.exe");
@@ -351,7 +355,7 @@ async function inspectNsis({ root, installerPath, sourcePackRoot, sourcePersonal
     const actualPlugins = await fileMap(resolve(workspace, "plugins"));
     findings.push(...compareFileMaps(expectedPlugins, actualPlugins, "nsis-plugins"));
     const fontManifest = JSON.parse(await readFile(resolve(extractedFontPackRoot, "editkin-open-fonts.json"), "utf8"));
-    if (fontManifest?.schemaVersion !== 2 || fontManifest?.id !== "studio.hao.editkin-open-fonts" || fontManifest?.fonts?.length !== 5) {
+    if (fontManifest?.schemaVersion !== 2 || fontManifest?.id !== "studio.hao.editkin-open-fonts" || fontManifest?.fonts?.length !== 6) {
       findings.push({ code: "open-font-manifest-contract", actual: { schemaVersion: fontManifest?.schemaVersion, id: fontManifest?.id, fonts: fontManifest?.fonts?.length } });
     } else {
       const families = new Set();
@@ -366,7 +370,7 @@ async function inspectNsis({ root, installerPath, sourcePackRoot, sourcePersonal
       // Validate the v2 static face grid, SFNT names/weights, license hashes and
       // closed-world payload using the same checker as the font build.
       const fontCheck = JSON.parse(run(process.execPath, [resolve(root, "scripts/open-font-gate.mjs"), extractedFontPackRoot], { cwd: root }));
-      if (fontCheck.status !== "VERIFIED_FONT_ASSET_CONTRACT_ONLY" || fontCheck.faceCount !== 43) {
+      if (fontCheck.status !== "VERIFIED_FONT_ASSET_CONTRACT_ONLY" || fontCheck.faceCount !== 44) {
         findings.push({ code: "open-font-static-face-contract" });
       }
     }

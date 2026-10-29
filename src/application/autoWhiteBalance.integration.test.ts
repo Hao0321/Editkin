@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, expect, it } from "vitest";
+import { REPO_TMP, useTempRoots } from "../test/tempRoot.mjs";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { createEmptyProject } from "../domain/editGraph";
@@ -20,9 +21,9 @@ import { bindCurrentDesignEvidence } from "./testCurrentDesignEvidence";
 const app = fileURLToPath(new URL("../../", import.meta.url));
 const ffmpegPath = join(app, "vendor/ffmpeg/win32-x64/ffmpeg.exe"), ffprobePath = join(app, "vendor/ffmpeg/win32-x64/ffprobe.exe");
 const roi = { x: .25, y: .25, width: .5, height: .5 };
+const temp = useTempRoots();
 async function makeFixture(cast: [number, number, number] = [137, 128, 119]) {
-  await mkdir(join(app, ".rd/tmp"), { recursive: true });
-  const root = await mkdtemp(join(app, ".rd/tmp/white-balance-")), source = join(root, "declared-neutral-cast.mp4");
+  const root = await temp.create("white-balance-", { parent: REPO_TMP }), source = join(root, "declared-neutral-cast.mp4");
   // Independently specified RGB cast, not output from gradeRgb or a production inverse.
   const pixels = Buffer.alloc(128 * 96 * 3);
   for (let i = 0; i < pixels.length; i += 3) pixels.set(cast, i);

@@ -1,0 +1,10 @@
+{
+  "schema": "editkin.blend-kernel-render-identity/v1",
+  "capturedBeforeKernel": true,
+  "values": {
+    "rec709-ffv1": "0cb4f0b86d4e95795369ceaa3dda31a87f4376adaff7f4d6771ca0e8d6ef3784",
+    "rec709-libx264": "2f50600897cf7fc1714488a3b9296c1ba0799416bc744dd8e2898317fb6a0c09",
+    "rec709-alpha16-ffv1": "47a81468183c214aa5acf87a6088041c296316937ffe8e1f69c52ddf0f8eaa8f",
+    "aces2-phone-ffv1": "4b4b7c14902f5d3df9ab79d6ccaa2f285960ba240432632860ef59ee6e474222"
+  }
+}

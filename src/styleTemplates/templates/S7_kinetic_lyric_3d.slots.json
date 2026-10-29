@@ -1,0 +1,50 @@
+{
+  "schema": "editkin.style-template/v1",
+  "id": "S7_kinetic_lyric_3d",
+  "revision": 2,
+  "stub": false,
+  "names": { "zh": "動態歌詞・品牌節奏", "en": "Kinetic Lyric 3D" },
+  "reference": "R7 (kinetic lyric / brand motion, one hue): a giant extruded word landing on the beat with a thin orbit ring, a paper band carrying a phrase, a fisheye ring tunnel, a camera that never stops; after a whip pan, a title lock-up with a circle frame and corner brackets above bouncing primitives on a grid floor",
+  "videoTypes": ["brand_promo", "launch", "music_lyric", "channel_trailer"],
+  "palette": { "bg": "#480818", "ink": "#580828", "paper": "#F8D8E8", "accent": "#F868A8" },
+  "art": { "styleframes": ".rd/benchmarks/style-system-20261022/styleframes/ (S7_A, S7_B, S7_A_16x9, S7_reskin)", "engine": "mesh3d (src/motion/mesh3d*.ts on Mesh3dWorkerPoolV1: text_extrude, band_text, grid tunnel with fisheye, orbit and bounce keyframe helpers, soft shadows, AO) + the template compositor" },
+  "slots": {
+    "text": [
+      { "id": "word", "label": { "zh-TW": "立體大字", "en": "Hero word", "es": "Palabra principal", "ja": "立体の大きな語", "ko": "입체 큰 글자" },
+        "maxLength": 6, "role": "display", "required": true, "bind": [{ "component": "mesh3dKineticLyric", "target": "hero.word", "as": "mesh_text_extruded" }] },
+      { "id": "band", "label": { "zh-TW": "環帶文字", "en": "Band text", "es": "Texto de la banda", "ja": "バンドの文字", "ko": "띠 글자" },
+        "maxLength": 24, "role": "serif", "required": false, "bind": [{ "component": "mesh3dLyricBand", "target": "band.text", "as": "mesh_text_band" }] },
+      { "id": "label", "label": { "zh-TW": "角落品牌字", "en": "Corner label", "es": "Etiqueta de esquina", "ja": "コーナーラベル", "ko": "코너 라벨" },
+        "maxLength": 16, "role": "display", "required": false, "bind": [{ "component": "mesh3dKineticLyric", "target": "label.top", "as": "svg_text" }] },
+      { "id": "labelSub", "label": { "zh-TW": "角落手寫字", "en": "Corner script", "es": "Manuscrito de esquina", "ja": "コーナーの手書き", "ko": "코너 손글씨" },
+        "maxLength": 8, "role": "script", "required": false, "bind": [{ "component": "mesh3dKineticLyric", "target": "label.sub", "as": "svg_text" }] },
+      { "id": "display", "label": { "zh-TW": "收尾大標（有填才有第二幕）", "en": "Lock-up title (adds the second act)", "es": "Título final (añade el segundo acto)", "ja": "締めのタイトル（入力で第2幕）", "ko": "마무리 제목 (입력 시 2막)" },
+        "maxLength": 10, "role": "display", "required": false, "bind": [{ "component": "mesh3dKineticLyric", "target": "lockup.display", "as": "svg_text" }] },
+      { "id": "script", "label": { "zh-TW": "收尾手寫字", "en": "Lock-up script", "es": "Manuscrito final", "ja": "締めの手書き", "ko": "마무리 손글씨" },
+        "maxLength": 8, "role": "script", "required": false, "bind": [{ "component": "mesh3dKineticLyric", "target": "lockup.script", "as": "svg_text" }] },
+      { "id": "kicker", "label": { "zh-TW": "收尾小標", "en": "Lock-up kicker", "es": "Antetítulo final", "ja": "締めのキッカー", "ko": "마무리 키커" },
+        "maxLength": 16, "role": "display", "required": false, "bind": [{ "component": "mesh3dKineticLyric", "target": "lockup.kicker", "as": "svg_text" }] }
+    ],
+    "color": [
+      { "role": "paper", "label": { "zh-TW": "紙色（環帶、地面）", "en": "Paper (band, floor)", "es": "Papel (banda, suelo)", "ja": "紙の色（帯・床）", "ko": "종이 색 (띠, 바닥)" },
+        "bind": [{ "component": "mesh3dLyricBand", "target": "band.ribbon", "as": "material_color" }, { "component": "mesh3dKineticLyric", "target": "floor.material", "as": "material_color" }] },
+      { "role": "ink", "label": { "zh-TW": "墨色（字、線）", "en": "Ink (type, lines)", "es": "Tinta (texto, líneas)", "ja": "インク（文字・線）", "ko": "잉크 (글자, 선)" },
+        "bind": [{ "component": "mesh3dLyricBand", "target": "band.text", "as": "material_color" }, { "component": "mesh3dKineticLyric", "target": "lockup.ink", "as": "svg_fill" }] },
+      { "role": "bg", "label": { "zh-TW": "舞台底色", "en": "Stage colour", "es": "Color del escenario", "ja": "ステージの色", "ko": "무대 색" },
+        "bind": [{ "component": "mesh3dKineticLyric", "target": "stage.background", "as": "material_color" }] },
+      { "role": "accent", "label": { "zh-TW": "主色（大字、光環）", "en": "Accent (hero word, ring)", "es": "Acento (palabra, anillo)", "ja": "アクセント（大きな語・リング）", "ko": "강조색 (큰 글자, 링)" },
+        "bind": [{ "component": "mesh3dKineticLyric", "target": "hero.material", "as": "material_color" }, { "component": "mesh3dKineticLyric", "target": "light.fill", "as": "light_color" },
+          { "component": "mesh3dKineticLyric", "target": "tunnel.lines", "as": "emissive_color" }] }
+    ],
+    "image": []
+  },
+  "clip": {
+    "component": { "id": "mesh3dKineticLyric", "renderer": "mesh3d", "revision": 1 },
+    "parts": [{ "id": "mesh3dLyricBand", "renderer": "mesh3d", "revision": 1 }],
+    "output": "opaque",
+    "seconds": { "default": 4, "min": 1.5, "max": 15 },
+    "formats": ["portrait", "landscape"]
+  },
+  "artStatus": "certified",
+  "notes": "Built 2026-10-23 on the mesh3d engine (slots/mesh3dKineticLyric.ts). No picture slots: the frames parameterise no images (every pixel is engine 3D or type). The script role has no licence-clear Latin script face; the hand role (LXGW WenKai TC) is thickened into a marker stroke. Art certified 2026-10-29 (Hao: 「通過」): auto-picked for its video types."
+}

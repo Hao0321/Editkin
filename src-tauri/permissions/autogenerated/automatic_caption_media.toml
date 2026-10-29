@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-automatic-caption-media"
+description = "Enables the automatic_caption_media command without any pre-configured scope."
+commands.allow = ["automatic_caption_media"]
+
+[[permission]]
+identifier = "deny-automatic-caption-media"
+description = "Denies the automatic_caption_media command without any pre-configured scope."
+commands.deny = ["automatic_caption_media"]

@@ -1,3 +1,5 @@
+import { buildClipAudioGainAutomation } from "./clipAudioAutomation";
+import { trackAudioAudible } from "../domain/trackState";
 import {createHash, randomUUID} from "node:crypto";
 import {mkdir, open, realpath, rename, rmdir, unlink, writeFile} from "node:fs/promises";
 import {dirname, isAbsolute, join, resolve} from "node:path";
@@ -95,7 +97,7 @@ export async function compileNativeAudioProjectPlan(project: EditProject, option
       const skip = (reason: string) => {omitted.push({clipId: clip.id, reason});};
       if (seenClips.has(clip.id)) throw new Error("音訊專案包含重複片段 ID");
       seenClips.add(clip.id);
-      if (track.muted || clip.volume === 0 || clip.layer?.enabled === false || (clip.layer?.role ?? "content") !== "content") {
+      if (!trackAudioAudible(project, track) || clip.volume === 0 || clip.layer?.enabled === false || (clip.layer?.role ?? "content") !== "content") {
         skip("muted-or-disabled"); continue;
       }
       if (!Number.isFinite(clip.volume) || clip.volume < 0 || clip.volume > 10 ** (48 / 20)) throw new Error("音訊片段音量不合法");
@@ -120,7 +122,10 @@ export async function compileNativeAudioProjectPlan(project: EditProject, option
       const source: CatalogAudioSource = {id, path: identity.path, bytes: identity.bytes, sha256: identity.sha256,
         timelineStartFrame: begin, sourceStartFrame, durationFrames: end - begin, audioStreamIndex: 0,
         bus: asset.role === "background-music" ? "music" : "voice", gainDb: gainDb(clip.volume)};
-      if (source.bus === "music") {
+      if (clip.audioEnvelope) {
+        source.gainAutomation = {property: "gainDb", points: buildClipAudioGainAutomation(clip, {music: source.bus === "music"})
+          .map(point => ({sample: point.sample, value: point.valueDb, interpolation: "linear" as const}))};
+      } else if (source.bus === "music") {
         // Use the existing native preview's single authoritative music fade rule,
         // but quantize the clip edges once so adjacent clips cannot gain a sample.
         const quantized: TimelineClip = {...clip, timelineStart: begin / RATE, duration: (end - begin) / RATE};

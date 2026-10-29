@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-cancel-render-job"
+description = "Enables the cancel_render_job command without any pre-configured scope."
+commands.allow = ["cancel_render_job"]
+
+[[permission]]
+identifier = "deny-cancel-render-job"
+description = "Denies the cancel_render_job command without any pre-configured scope."
+commands.deny = ["cancel_render_job"]

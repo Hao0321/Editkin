@@ -28,7 +28,7 @@ export async function inspectPinnedWindowsProductRuntime(root = process.cwd()) {
   const ffmpegManifest = JSON.parse(await readFile(resolve(base, "vendor/ffmpeg/win32-x64/manifest.json"), "utf8"));
   const whisperManifest = JSON.parse(await readFile(resolve(base, "vendor/whisper/win32-x64/manifest.json"), "utf8"));
   if (!String(nodeManifest.source).startsWith("https://nodejs.org/dist/") || nodeManifest.version !== "22.23.2") throw new Error("Pinned Node publisher/version policy mismatch");
-  if (ffmpegManifest.source !== "https://www.gyan.dev/ffmpeg/builds/" || ffmpegManifest.license !== "GPLv3") throw new Error("Pinned FFmpeg publisher/license policy mismatch");
+  if (!String(ffmpegManifest.source).startsWith("https://github.com/BtbN/FFmpeg-Builds/releases/tag/") || ffmpegManifest.license !== "GPLv3" || ffmpegManifest.nvenc?.api !== "13.0") throw new Error("Pinned FFmpeg publisher/license/NVENC API policy mismatch");
   if (!String(whisperManifest.source).startsWith("https://github.com/ggml-org/whisper.cpp/releases/") || whisperManifest.license !== "MIT") throw new Error("Pinned Whisper publisher/license policy mismatch");
   const requested = [
     { path: "vendor/node/win32-x64/node.exe", expectedBytes: Number((await fileIdentity(resolve(base, "vendor/node/win32-x64/node.exe"))).bytes), expectedSha256: nodeManifest.nodeExeSha256 },

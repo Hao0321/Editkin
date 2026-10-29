@@ -18,6 +18,7 @@ import {
 import { materializeConvergedTemporalLook } from "./nativeEffectTemporalLook";
 import { rationalFps, replaceRenderSegmentRangeWithGap, safeId, videoSegments } from "./nativeEffectMaterializationSupport";
 import type { NativeEffectRenderReceipt, NativeEffectRenderRuntime } from "./nativeEffectTypes";
+import { assertProofStillRouteV1 } from "../render/proofStillRouteV1";
 
 export { videoSegments } from "./nativeEffectMaterializationSupport";
 
@@ -33,6 +34,8 @@ export async function materializeNativeEffectSegments(
     && segment.clip.creative?.nativeEffectInstances?.some((instance) => instance.enabled)
   ));
   if (!targets.length) return undefined;
+  // Materialization (and its GPU overlay compositing) reads raw source pixels before any redaction.
+  assertProofStillRouteV1(project, "native-effect-materialization");
   if (project.colorManagement?.mode === "aces2") throw new Error("第三方效果尚未宣告 ACES scene-linear contract，已阻擋輸出");
   for (const segment of targets) {
     const enabled = segment.clip.creative?.nativeEffectInstances?.filter((instance) => instance.enabled) ?? [];
@@ -56,10 +59,10 @@ export async function materializeNativeEffectSegments(
   const registry = externalInstances.some((instance) => instance.runtimeType !== "gpu_effect_graph")
     ? await discoverInstalledPlugins(runtime.pluginRoots) : { schema: "editkin.plugin-registry/v1" as const, plugins: [], diagnostics: [] };
   const fps = rationalFps(project.fps);
-  const formalContentClips = project.tracks.filter((track) => track.kind === "video" && !track.muted)
+  const formalContentClips = project.tracks.filter((track) => track.kind === "video" && !track.hidden)
     .flatMap((track) => track.clips)
     .filter((candidate) => (candidate.layer?.role ?? "content") === "content" && candidate.layer?.enabled !== false);
-  const formalAdjustmentClips = project.tracks.filter((track) => track.kind === "video" && !track.muted)
+  const formalAdjustmentClips = project.tracks.filter((track) => track.kind === "video" && !track.hidden)
     .flatMap((track) => track.clips)
     .filter((candidate) => candidate.layer?.role === "adjustment" && candidate.layer.enabled !== false);
   const receipts: NativeEffectRenderReceipt["clips"] = [];

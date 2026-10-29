@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-recover-gpu-device"
+description = "Enables the recover_gpu_device command without any pre-configured scope."
+commands.allow = ["recover_gpu_device"]
+
+[[permission]]
+identifier = "deny-recover-gpu-device"
+description = "Denies the recover_gpu_device command without any pre-configured scope."
+commands.deny = ["recover_gpu_device"]

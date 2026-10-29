@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-compile-plugin-tool"
+description = "Enables the compile_plugin_tool command without any pre-configured scope."
+commands.allow = ["compile_plugin_tool"]
+
+[[permission]]
+identifier = "deny-compile-plugin-tool"
+description = "Denies the compile_plugin_tool command without any pre-configured scope."
+commands.deny = ["compile_plugin_tool"]

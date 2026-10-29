@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-release-input-manifest"
+description = "Enables the release_input_manifest command without any pre-configured scope."
+commands.allow = ["release_input_manifest"]
+
+[[permission]]
+identifier = "deny-release-input-manifest"
+description = "Denies the release_input_manifest command without any pre-configured scope."
+commands.deny = ["release_input_manifest"]

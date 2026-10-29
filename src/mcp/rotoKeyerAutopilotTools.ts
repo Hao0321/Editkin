@@ -18,14 +18,16 @@ import type { ChromaKeySettings } from "../domain/types";
 import { editorCommandSchema } from "../domain/schema";
 import { findAsset } from "../domain/editGraph";
 import { creativePackRoot, errorResult, personalMusicRoot, personalVisualRoot, textResult } from "./toolRuntime";
-import { readProject, resolveWorkspaceMediaPath } from "./storage";
+import { readProject, resolveProjectAssetReadPath } from "./storage";
+import { advertisedEditorCommandSchema, compactAdvertisedInput } from "./advertisedSchema";
+import type { EditProject } from "../domain/types";
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
 
-async function resolveAssetSource(uri: string): Promise<string> {
-  const creativeId = creativeAssetIdFromUri(uri);
+async function resolveAssetSource(project: EditProject, asset: { id: string; uri: string }): Promise<string> {
+  const creativeId = creativeAssetIdFromUri(asset.uri);
   if (creativeId) return (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath;
-  return resolveWorkspaceMediaPath(uri);
+  return resolveProjectAssetReadPath(project, asset);
 }
 
 function runtime() {
@@ -60,7 +62,7 @@ export function registerRotoKeyerAutopilotTools(server: McpServer): void {
         inspectRotoKeyerMaterialEvidence(project, runtime().cacheRoot, materialId, semanticReceiptSha256),
       ]);
       const sourceAsset = findAsset(project, material.packet.source.assetId);
-      await verifyRotoKeyerSourceFile(await resolveAssetSource(sourceAsset.uri), material.packet.source.sourceSha256);
+      await verifyRotoKeyerSourceFile(await resolveAssetSource(project, sourceAsset), material.packet.source.sourceSha256);
       return textResult({
         status: "GREEN",
         capability,
@@ -89,14 +91,15 @@ export function registerRotoKeyerAutopilotTools(server: McpServer): void {
       if (!clip || !asset || clip.assetId !== asset.id || (asset.derivatives?.sourceSha256 && asset.derivatives.sourceSha256 !== receipt.sourceSha256)) {
         throw new Error("Roto／Keyer evidence 不是目前專案 revision 的素材");
       }
-      await verifyRotoKeyerSourceFile(await resolveAssetSource(asset.uri), receipt.sourceSha256);
+      await verifyRotoKeyerSourceFile(await resolveAssetSource(project, asset), receipt.sourceSha256);
       return textResult({ status: "GREEN", receipt });
     } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("build_autopilot_roto_keyer_decision", {
     description: "為 no-op、手動遮罩或自研 green／blue screen keyer 建立 exact-command、capability、evidence、Token budget 與 pending human-review 綁定。這個工具只產生 v4 plan fragment，不修改專案；Screen Keyer 在無幕、幕色不一致或 evidence 含糊時 fail closed。",
-    inputSchema: z.object({
+    // W2-1: tools/list advertises manualCommand compactly; every call is still validated by this full schema.
+    inputSchema: compactAdvertisedInput("build_autopilot_roto_keyer_decision", z.object({
       projectPath: z.string(),
       materialId: sha256Schema,
       evidenceReceiptSha256: sha256Schema,
@@ -105,7 +108,16 @@ export function registerRotoKeyerAutopilotTools(server: McpServer): void {
       screen: z.enum(["green", "blue"]).optional(),
       settings: z.unknown().optional(),
       manualCommand: editorCommandSchema.optional(),
-    }),
+    }), z.object({
+      projectPath: z.string(),
+      materialId: sha256Schema,
+      evidenceReceiptSha256: sha256Schema,
+      route: z.enum(["no_op", "manual_mask", "self_authored_screen_keyer"]),
+      decisionContextTokens: z.number().int().min(1).max(400),
+      screen: z.enum(["green", "blue"]).optional(),
+      settings: z.unknown().optional(),
+      manualCommand: advertisedEditorCommandSchema.optional(),
+    })),
   }, async ({ projectPath, materialId, evidenceReceiptSha256, route, decisionContextTokens, screen, settings, manualCommand }) => {
     try {
       const [project, evidence, capability, invocation] = await Promise.all([
@@ -115,7 +127,7 @@ export function registerRotoKeyerAutopilotTools(server: McpServer): void {
         readLiveAutopilotIdentity(),
       ]);
       const sourceAsset = findAsset(project, evidence.assetId);
-      await verifyRotoKeyerSourceFile(await resolveAssetSource(sourceAsset.uri), evidence.sourceSha256);
+      await verifyRotoKeyerSourceFile(await resolveAssetSource(project, sourceAsset), evidence.sourceSha256);
       const built = await buildRotoKeyerDecision(project, evidence, capability, {
         route,
         decisionContextTokens,
@@ -166,7 +178,7 @@ export function registerRotoKeyerAutopilotTools(server: McpServer): void {
         readLiveAutopilotIdentity(),
       ]);
       const asset = findAsset(project, evidence.assetId);
-      const sourcePath = await resolveAssetSource(asset.uri);
+      const sourcePath = await resolveAssetSource(project, asset);
       const prepared = await prepareAutopilotAutoRoto(project, sourcePath, evidence, capability, input, paths);
       return textResult({
         status: "PLAN_FRAGMENT_READY",

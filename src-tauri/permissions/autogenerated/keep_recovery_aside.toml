@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-keep-recovery-aside"
+description = "Enables the keep_recovery_aside command without any pre-configured scope."
+commands.allow = ["keep_recovery_aside"]
+
+[[permission]]
+identifier = "deny-keep-recovery-aside"
+description = "Denies the keep_recovery_aside command without any pre-configured scope."
+commands.deny = ["keep_recovery_aside"]

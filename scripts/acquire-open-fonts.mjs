@@ -10,6 +10,8 @@ const fonts = [
   { id: "lxgw-wenkai-mono-tc", family: "LXGW WenKai Mono TC", file: "LXGWWenKaiMonoTC-Regular.ttf", directory: "lxgwwenkaimonotc", sha256: "ea6707f71c862f4f255cbe510148b676ca8f5360872633de88694f8004f3f8b3" },
   { id: "bebas-neue", family: "Bebas Neue", file: "BebasNeue-Regular.ttf", directory: "bebasneue", sha256: "08e4623805102d819f58601e46e345648846075e363b2ceb23313c2d1c83ec73" },
   { id: "fredoka", family: "Fredoka", file: "Fredoka[wdth,wght].ttf", directory: "fredoka", sha256: "2ba02e68b152868aef9ba28e24b3648c7d457fe6f25c761f2c2c53fb61a73fc8" },
+  // Hao's verified travel/nature face; pinned from the creator's local OFL copy (v1.330). A bootstrap fetch must match this hash.
+  { id: "lxgw-wenkai-tc", family: "LXGW WenKai TC", file: "LXGWWenKaiTC-Bold.ttf", directory: "lxgwwenkaitc", sha256: "5abc12ecb4252a81b9ddf19b4c8a303cd9fe01695d6d1681628e5a3662639220" },
 ];
 
 const licenseHashes = [
@@ -18,6 +20,7 @@ const licenseHashes = [
   "4fff27d35db0e22cd81d58da6f20e09f415cf354a3338e3cf1fc0eb9222c7174",
   "72082f6cb4d04be2ecf7cc7d9e1e7d73787f0af8a5a278a47cade70c16b78341",
   "5c9e7eee5c6b25f4b05b8d53b2e470ea4962f9ced742d044a98f7d95d1375bab",
+  "1f87656911594714a58fe3025514485a3244a62c242d7712164d403872782fd4",
 ];
 
 async function fetchBytes(url) {

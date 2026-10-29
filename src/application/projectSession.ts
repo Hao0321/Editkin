@@ -2,6 +2,18 @@ import { createHistory, type EditorHistory } from "../domain/history";
 import {synchronizeHistoricalDerivatives, type AcceptedDerivativeUpdate} from "./mediaDerivativeHistory";
 import { applyCommand } from "../domain/commands";
 import type { EditProject, MediaDerivatives } from "../domain/types";
+import { isProjectFileIdentityV1, type ProjectFileIdentityV1 } from "../domain/projectFileIdentityV1";
+
+function acceptedDiskIdentity(project: EditProject, value?: ProjectFileIdentityV1 | null, recoveryCleanUpdatedAt?: string): Readonly<ProjectFileIdentityV1> | undefined {
+  if (value == null) return undefined;
+  const matchesGraph = value.revision === project.revision && value.updatedAt === project.updatedAt;
+  const matchesRecoveryBase = recoveryCleanUpdatedAt !== undefined && value.updatedAt === recoveryCleanUpdatedAt
+    && Number.isSafeInteger(project.revision) && project.revision >= value.revision;
+  if (!isProjectFileIdentityV1(value) || value.projectId !== project.id || !matchesGraph && !matchesRecoveryBase) {
+    throw new Error("檔案內容憑證與專案回應不一致；未接納這次磁碟狀態。");
+  }
+  return Object.freeze({ ...value });
+}
 
 export interface ProjectSessionSnapshot {
   sessionId: number;
@@ -10,9 +22,36 @@ export interface ProjectSessionSnapshot {
   cleanUpdatedAt: string;
   dirty: boolean;
   diskRevision: number;
+  diskFileIdentity?: Readonly<ProjectFileIdentityV1>;
   savePending: boolean;
   recoveryOwner: object;
   contentOwner: object;
+  /** Set when this session began by adopting another program's single-revision write as one Undo step (ROADMAP J4). */
+  externalWrite?: { label: string; revisionBefore: number; revisionAfter: number; writtenUpdatedAt: string };
+}
+
+/** Label of the one Undo step for an external write that has no committed receipt to name it. */
+export const EXTERNAL_WRITE_UNDO_LABEL = "外部修改";
+
+/** The clean content an external write replaced, kept as exactly one Undo step, and that step's label. */
+export interface ExternalWriteUndo {
+  previous: EditProject;
+  label: string;
+}
+
+/** Only the same project, exactly one revision later, is a single-revision external write. */
+export function isSingleRevisionExternalWrite(previous: EditProject, next: EditProject): boolean {
+  return previous.id === next.id && Number.isSafeInteger(previous.revision) && next.revision === previous.revision + 1;
+}
+
+/**
+ * The adopted write's label while the next Undo would take exactly that write back; otherwise undefined. Undo and Redo
+ * keep a state's updatedAt (they only rewrite its revision) and every new command stamps a later one, so the written
+ * state is recognised by its updatedAt one step above the bottom of the history.
+ */
+export function nextUndoExternalWriteLabel(snapshot: ProjectSessionSnapshot): string | undefined {
+  const write = snapshot.externalWrite;
+  return write && snapshot.history.past.length === 1 && snapshot.history.present.updatedAt === write.writtenUpdatedAt ? write.label : undefined;
 }
 
 export interface ProjectTask {
@@ -26,23 +65,28 @@ export interface SaveRequest {
   readonly submittedProject: EditProject;
   readonly projectPath?: string;
   readonly saveAs: boolean;
+  readonly expectedFileIdentity?: Readonly<ProjectFileIdentityV1>;
 }
 
 export interface ProjectSaveResult {
   canceled?: boolean;
   path?: string;
   project?: EditProject;
+  fileIdentity?: ProjectFileIdentityV1 | null;
 }
 
 /** One synchronous window-local owner: async I/O never owns later editor content. */
-export function createProjectSession(initial: EditProject, initialPath?: string) {
+export function createProjectSession(initial: EditProject, initialPath?: string, initialIdentity?: ProjectFileIdentityV1 | null) {
   let cleanProject: EditProject | undefined = initial;
   let snapshot: ProjectSessionSnapshot = {
     sessionId: 1, history: createHistory(initial), projectPath: initialPath,
     cleanUpdatedAt: initial.updatedAt, dirty: false, diskRevision: initial.revision,
+    diskFileIdentity: initialPath ? acceptedDiskIdentity(initial, initialIdentity) : undefined,
     savePending: false, recoveryOwner: {}, contentOwner: {},
   };
   let pending: { request: SaveRequest; completed: boolean } | undefined;
+  // Armed only while a reload hands this exact opened project to the host's load callback (adoptExternalWrite).
+  let armedExternalWrite: (ExternalWriteUndo & { next: EditProject }) | undefined;
   const listeners = new Set<() => void>();
   const publish = (next: ProjectSessionSnapshot) => {
     snapshot = next;
@@ -99,14 +143,26 @@ export function createProjectSession(initial: EditProject, initialPath?: string)
         future: synchronizeProjects(snapshot.history.future),
       }, dirty: present !== cleanProject, recoveryOwner: {}, contentOwner: sourceChanged ? {} : snapshot.contentOwner });
     },
-    replaceProject: (project: EditProject, path?: string, options: { dirty?: boolean; cleanUpdatedAt?: string } = {}) => {
+    replaceProject: (project: EditProject, path?: string, options: { dirty?: boolean; cleanUpdatedAt?: string; undoFrom?: ExternalWriteUndo; fileIdentity?: ProjectFileIdentityV1 | null } = {}) => {
+      const diskFileIdentity = path ? acceptedDiskIdentity(project, options.fileIdentity, options.dirty ? options.cleanUpdatedAt : undefined) : undefined;
+      const requested = options.undoFrom ?? (armedExternalWrite?.next === project ? armedExternalWrite : undefined);
+      // ROADMAP J4: a clean single-revision external write keeps the replaced content as exactly one Undo step.
+      // Anything else (dirty, another project, a revision jump) starts a fresh history, as before.
+      const undoFrom = requested && !options.dirty && isSingleRevisionExternalWrite(requested.previous, project) ? requested : undefined;
       cleanProject = options.dirty ? undefined : project;
       publish({
-        sessionId: snapshot.sessionId + 1, history: createHistory(project), projectPath: path,
+        sessionId: snapshot.sessionId + 1, history: undoFrom ? { ...createHistory(project), past: [undoFrom.previous] } : createHistory(project), projectPath: path,
         cleanUpdatedAt: options.cleanUpdatedAt ?? project.updatedAt,
-        dirty: project !== cleanProject, diskRevision: project.revision,
+        dirty: project !== cleanProject, diskRevision: diskFileIdentity?.revision ?? project.revision,
+        diskFileIdentity,
         savePending: Boolean(pending), recoveryOwner: {}, contentOwner: {},
+        ...(undoFrom ? { externalWrite: { label: undoFrom.label, revisionBefore: undoFrom.previous.revision, revisionAfter: project.revision, writtenUpdatedAt: project.updatedAt } } : {}),
       });
+    },
+    /** Runs the host's load callback with this one opened project armed for adoption as a single Undo step. */
+    adoptExternalWrite: (undo: ExternalWriteUndo & { next: EditProject }, load: () => void) => {
+      armedExternalWrite = undo;
+      try { load(); } finally { armedExternalWrite = undefined; }
     },
     beginSave: (saveAs = false): SaveRequest | undefined => {
       if (pending) return undefined;
@@ -114,7 +170,8 @@ export function createProjectSession(initial: EditProject, initialPath?: string)
       const project = structuredClone(submittedProject);
       // Undo/Redo and a just-completed save must use the acknowledged disk version.
       project.revision = snapshot.diskRevision;
-      const request = Object.freeze({ sessionId: snapshot.sessionId, project, submittedProject, projectPath: snapshot.projectPath, saveAs });
+      const request = Object.freeze({ sessionId: snapshot.sessionId, project, submittedProject, projectPath: snapshot.projectPath, saveAs,
+        expectedFileIdentity: !saveAs && snapshot.diskFileIdentity ? Object.freeze({ ...snapshot.diskFileIdentity }) : undefined });
       pending = { request, completed: false };
       publish({ ...snapshot, savePending: true });
       return request;
@@ -125,6 +182,7 @@ export function createProjectSession(initial: EditProject, initialPath?: string)
         || !Number.isSafeInteger(saved.project.revision) || saved.project.revision <= request.project.revision) {
         throw new Error("儲存回應缺少有效的專案路徑、內容或新版本；目前修改仍保留，請再試一次。");
       }
+      const diskFileIdentity = acceptedDiskIdentity(saved.project, saved.fileIdentity);
       pending.completed = true;
       cleanProject = saved.project;
       const current = snapshot.history;
@@ -134,6 +192,7 @@ export function createProjectSession(initial: EditProject, initialPath?: string)
       publish({
         ...snapshot, history: { ...current, present }, projectPath: saved.path,
         cleanUpdatedAt: saved.project.updatedAt, diskRevision: saved.project.revision,
+        diskFileIdentity,
         dirty: present !== cleanProject, recoveryOwner: {},
       });
       return true;

@@ -1,0 +1,207 @@
+{
+  "provenance": "Synthetic5-frame real Rust CLI instrument fixture; no real-footage quality or human approval",
+  "native": {
+    "schema": "editkin.auto-roto-matte/v2",
+    "engine": "editkin-native-roto-edge/v2",
+    "qualityState": "diagnostic",
+    "sampleTimeKind": "analysis-grid-not-decoder-pts",
+    "width": 32,
+    "height": 24,
+    "frameCount": 5,
+    "analysisFps": 4.0,
+    "initialFrame": 2,
+    "sourceRawSha256": "d8c3ee3cbf48de53a7b43a40e89ca61dd8415c39a4b5a028cd8efd739f384c77",
+    "alphaFormat": "gray16le",
+    "alphaPath": "matte-sequence.alpha16le",
+    "straightRgbPath": "foreground.rgb24",
+    "alphaBytes": 7680,
+    "straightRgbBytes": 11520,
+    "coarseEngine": "editkin-native-color-temporal-roto/v1",
+    "coarseRouting": {
+      "schema": "editkin.region-memory-routing/v1",
+      "requested": "guarded_experimental",
+      "executed": "guarded_experimental",
+      "candidateAttempted": true,
+      "deterministicFallback": false
+    },
+    "correctionStrokesApplied": 0,
+    "correctedFrames": [],
+    "edgeSettings": {
+      "bandRadius": 2,
+      "localRadius": 8,
+      "motionThreshold": 0.08,
+      "temporalStability": 0.15,
+      "temporalGate": 0.18,
+      "despill": true,
+      "motionBlurEdges": true,
+      "alpha16": true
+    },
+    "frames": [
+      {
+        "frame": 0,
+        "time": 0.0,
+        "alphaPath": "frame-000000.png",
+        "confidence": 0.9884319,
+        "manualPixelsRestored": 0,
+        "edgeRefinement": {
+          "schema": "editkin.roto-edge-refinement/v2",
+          "engine": "editkin-roto-edge/v2",
+          "opticalEngine": "editkin-self-authored-texture-aware-optical-alpha-refiner/v3",
+          "qualityState": "diagnostic",
+          "alphaPrecision": "float-solve-to-unorm16",
+          "rgbPrecision": "decoded-rgb8-local-recovery",
+          "edgeBandPixels": 332,
+          "motionBandPixels": 0,
+          "solvedPixels": 332,
+          "directionalColorSolvedPixels": 332,
+          "unsupportedPixels": 0,
+          "temporallyBlendedPixels": 0,
+          "decontaminatedPixels": 0,
+          "unsupportedColorPixels": 0,
+          "settings": {
+            "bandRadius": 2,
+            "localRadius": 8,
+            "motionThreshold": 0.08,
+            "temporalStability": 0.15,
+            "temporalGate": 0.18,
+            "despill": true,
+            "motionBlurEdges": true,
+            "alpha16": true
+          }
+        }
+      },
+      {
+        "frame": 1,
+        "time": 0.25,
+        "alphaPath": "frame-000001.png",
+        "confidence": 0.9877017,
+        "manualPixelsRestored": 0,
+        "edgeRefinement": {
+          "schema": "editkin.roto-edge-refinement/v2",
+          "engine": "editkin-roto-edge/v2",
+          "opticalEngine": "editkin-self-authored-texture-aware-optical-alpha-refiner/v3",
+          "qualityState": "diagnostic",
+          "alphaPrecision": "float-solve-to-unorm16",
+          "rgbPrecision": "decoded-rgb8-local-recovery",
+          "edgeBandPixels": 332,
+          "motionBandPixels": 170,
+          "solvedPixels": 332,
+          "directionalColorSolvedPixels": 332,
+          "unsupportedPixels": 0,
+          "temporallyBlendedPixels": 162,
+          "decontaminatedPixels": 0,
+          "unsupportedColorPixels": 0,
+          "settings": {
+            "bandRadius": 2,
+            "localRadius": 8,
+            "motionThreshold": 0.08,
+            "temporalStability": 0.15,
+            "temporalGate": 0.18,
+            "despill": true,
+            "motionBlurEdges": true,
+            "alpha16": true
+          }
+        }
+      },
+      {
+        "frame": 2,
+        "time": 0.5,
+        "alphaPath": "frame-000002.png",
+        "confidence": 0.9822395,
+        "manualPixelsRestored": 0,
+        "edgeRefinement": {
+          "schema": "editkin.roto-edge-refinement/v2",
+          "engine": "editkin-roto-edge/v2",
+          "opticalEngine": "editkin-self-authored-texture-aware-optical-alpha-refiner/v3",
+          "qualityState": "diagnostic",
+          "alphaPrecision": "float-solve-to-unorm16",
+          "rgbPrecision": "decoded-rgb8-local-recovery",
+          "edgeBandPixels": 332,
+          "motionBandPixels": 170,
+          "solvedPixels": 332,
+          "directionalColorSolvedPixels": 332,
+          "unsupportedPixels": 0,
+          "temporallyBlendedPixels": 162,
+          "decontaminatedPixels": 0,
+          "unsupportedColorPixels": 0,
+          "settings": {
+            "bandRadius": 2,
+            "localRadius": 8,
+            "motionThreshold": 0.08,
+            "temporalStability": 0.15,
+            "temporalGate": 0.18,
+            "despill": true,
+            "motionBlurEdges": true,
+            "alpha16": true
+          }
+        }
+      },
+      {
+        "frame": 3,
+        "time": 0.75,
+        "alphaPath": "frame-000003.png",
+        "confidence": 0.9883228,
+        "manualPixelsRestored": 0,
+        "edgeRefinement": {
+          "schema": "editkin.roto-edge-refinement/v2",
+          "engine": "editkin-roto-edge/v2",
+          "opticalEngine": "editkin-self-authored-texture-aware-optical-alpha-refiner/v3",
+          "qualityState": "diagnostic",
+          "alphaPrecision": "float-solve-to-unorm16",
+          "rgbPrecision": "decoded-rgb8-local-recovery",
+          "edgeBandPixels": 332,
+          "motionBandPixels": 180,
+          "solvedPixels": 332,
+          "directionalColorSolvedPixels": 332,
+          "unsupportedPixels": 0,
+          "temporallyBlendedPixels": 152,
+          "decontaminatedPixels": 0,
+          "unsupportedColorPixels": 0,
+          "settings": {
+            "bandRadius": 2,
+            "localRadius": 8,
+            "motionThreshold": 0.08,
+            "temporalStability": 0.15,
+            "temporalGate": 0.18,
+            "despill": true,
+            "motionBlurEdges": true,
+            "alpha16": true
+          }
+        }
+      },
+      {
+        "frame": 4,
+        "time": 1.0,
+        "alphaPath": "frame-000004.png",
+        "confidence": 0.9884353,
+        "manualPixelsRestored": 0,
+        "edgeRefinement": {
+          "schema": "editkin.roto-edge-refinement/v2",
+          "engine": "editkin-roto-edge/v2",
+          "opticalEngine": "editkin-self-authored-texture-aware-optical-alpha-refiner/v3",
+          "qualityState": "diagnostic",
+          "alphaPrecision": "float-solve-to-unorm16",
+          "rgbPrecision": "decoded-rgb8-local-recovery",
+          "edgeBandPixels": 332,
+          "motionBandPixels": 170,
+          "solvedPixels": 332,
+          "directionalColorSolvedPixels": 332,
+          "unsupportedPixels": 0,
+          "temporallyBlendedPixels": 162,
+          "decontaminatedPixels": 0,
+          "unsupportedColorPixels": 0,
+          "settings": {
+            "bandRadius": 2,
+            "localRadius": 8,
+            "motionThreshold": 0.08,
+            "temporalStability": 0.15,
+            "temporalGate": 0.18,
+            "despill": true,
+            "motionBlurEdges": true,
+            "alpha16": true
+          }
+        }
+      }
+    ]
+  }
+}

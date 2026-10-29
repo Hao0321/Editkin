@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-resident-audio-capabilities"
+description = "Enables the resident_audio_capabilities command without any pre-configured scope."
+commands.allow = ["resident_audio_capabilities"]
+
+[[permission]]
+identifier = "deny-resident-audio-capabilities"
+description = "Denies the resident_audio_capabilities command without any pre-configured scope."
+commands.deny = ["resident_audio_capabilities"]

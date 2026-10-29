@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-update-gpu-engine-preview-frame"
+description = "Enables the update_gpu_engine_preview_frame command without any pre-configured scope."
+commands.allow = ["update_gpu_engine_preview_frame"]
+
+[[permission]]
+identifier = "deny-update-gpu-engine-preview-frame"
+description = "Denies the update_gpu_engine_preview_frame command without any pre-configured scope."
+commands.deny = ["update_gpu_engine_preview_frame"]

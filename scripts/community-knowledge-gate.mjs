@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
+import { readCommunityPolicySnapshot, extractCommunityStableRules, communityRuleSourceIdentities } from "./lib/community-stable-rules.mjs";
 import {
   EXCLUDED_COMMUNITY_KNOWLEDGE_SOURCES,
   EXPECTED_COMMUNITY_KNOWLEDGE_COUNTS,
@@ -13,7 +13,6 @@ import {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceRoot = path.resolve(root, "..", "..", "video-autopilot-kit", "knowledge");
-const canonicalSkillPath = path.join(homedir(), ".codex", "skills", "video-autopilot", "SKILL.md");
 const packPath = path.join(root, "src", "knowledge", "editkinCommunityKnowledge.json");
 const summaryPath = path.join(root, "src", "knowledge", "editkinCommunityKnowledgeSummary.json");
 const DERIVATION_POLICY = "personal-data-sanitized; retired-editor-history-omitted-never-renamed";
@@ -119,15 +118,7 @@ function moduleIdFor(source) {
     .toLowerCase();
 }
 
-function extractStableRules(skillText) {
-  const skillLines = skillText.split(/\r?\n/);
-  const ids = [...new Set([...skillText.matchAll(/\bM\d{1,3}(?:-[A-Z]+)?(?:A)?\b/g)].map((match) => match[0]))].sort();
-  return ids.map((id) => {
-    const boundary = new RegExp(`\\b${escapeRegex(id)}\\b`);
-    const line = skillLines.find((candidate) => boundary.test(candidate)) ?? id;
-    return { id, text: sanitizePersonalData(line.replace(/^\s*(?:-\s+|\d+\.\s+)?/, "")) };
-  });
-}
+const extractStableRules = records => extractCommunityStableRules(records, sanitizePersonalData);
 
 function ensureSecureReviewPolicy(stableRules) {
   const byId = new Map(stableRules.map((row) => [row.id, row.text]));
@@ -179,16 +170,16 @@ async function readLiveSourceTree(knowledgeRoot) {
 }
 
 async function loadLiveSnapshot() {
-  const [{ records, invalidEntries }, skillText, packText, summaryText] = await Promise.all([
+  const [{ records, invalidEntries }, policy, packText, summaryText] = await Promise.all([
     readLiveSourceTree(sourceRoot),
-    readFile(canonicalSkillPath, "utf8"),
+    readCommunityPolicySnapshot(),
     readFile(packPath, "utf8"),
     readFile(summaryPath, "utf8"),
   ]);
   return {
     sourceRecords: records,
     invalidEntries,
-    skillText,
+    policyRecords: policy.records,
     packText,
     pack: JSON.parse(packText),
     summary: JSON.parse(summaryText),
@@ -196,7 +187,7 @@ async function loadLiveSnapshot() {
 }
 
 function evaluateSnapshot(snapshot) {
-  const { sourceRecords, invalidEntries, skillText, pack, packText, summary } = snapshot;
+  const { sourceRecords, invalidEntries, policyRecords, pack, packText, summary } = snapshot;
   const expectedClassified = [...INCLUDED_COMMUNITY_KNOWLEDGE_SOURCES, ...Object.keys(EXCLUDED_COMMUNITY_KNOWLEDGE_SOURCES)];
   const expectedClassifiedSorted = sorted(expectedClassified);
   const discoveredSources = sourceRecords.map((row) => row.source);
@@ -290,7 +281,7 @@ function evaluateSnapshot(snapshot) {
   const missingRequiredModules = [...requiredModules].filter((id) => !includedModuleIds.has(id));
   ensure(missingRequiredModules.length === 0, "required-module-missing", "anonymous knowledge is missing required core modules", { missing: missingRequiredModules });
 
-  const expectedStableRules = extractStableRules(skillText);
+  const expectedStableRules = extractStableRules(policyRecords);
   ensureSecureReviewPolicy(expectedStableRules);
   ensure(
     expectedStableRules.length === EXPECTED_COMMUNITY_KNOWLEDGE_COUNTS.stableRules,
@@ -303,6 +294,10 @@ function evaluateSnapshot(snapshot) {
   ensure(isDeepStrictEqual(pack.stableRules, expectedStableRules), "stable-rule-live-drift", "generated stable rules differ from the canonical Video Autopilot Skill");
   const stableRulesSha256 = sha256(JSON.stringify(expectedStableRules));
   ensure(pack.stableRulesSha256 === stableRulesSha256, "stable-rule-sha-drift", "generated stable rule hash differs from the canonical Video Autopilot Skill");
+  const expectedSources = communityRuleSourceIdentities(policyRecords);
+  const stableRuleSourcesSha256 = sha256(JSON.stringify(expectedSources));
+  ensure(isDeepStrictEqual(pack.stableRuleSources, expectedSources), "stable-rule-source-drift", "generated rule source identities differ from canonical routed inputs");
+  ensure(pack.stableRuleSourcesSha256 === stableRuleSourcesSha256, "stable-rule-source-sha-drift", "generated rule source digest differs from canonical routed inputs");
 
   const packSha256 = sha256(packText);
   const expectedSummary = {
@@ -313,6 +308,7 @@ function evaluateSnapshot(snapshot) {
     excludedSourceCount: pack.excludedSourceCount,
     stableRuleCount: pack.stableRuleCount,
     stableRulesSha256: pack.stableRulesSha256,
+    stableRuleSourcesSha256,
     packSha256,
   };
   ensure(isDeepStrictEqual(summary, expectedSummary), "summary-pack-drift", "bounded UI summary differs from the full generated pack");
@@ -329,7 +325,9 @@ function evaluateSnapshot(snapshot) {
     excludedWithReason: pack.excludedSourceCount,
     omittedRetiredHistoryFragments: omittedHistoryFragments,
     sourceInventorySha256,
-    canonicalSkillSha256: sha256(skillText),
+    canonicalSkillSha256: sha256(policyRecords[0].text),
+    stableRuleSources: expectedSources.length,
+    stableRuleSourcesSha256,
     stableRulesSha256,
     bytes: Buffer.byteLength(packText),
     sha256: packSha256,
@@ -376,7 +374,10 @@ async function runSelfTest() {
   const base = await loadLiveSnapshot();
   const positive = evaluateSnapshot(base);
   const firstIncludedSource = INCLUDED_COMMUNITY_KNOWLEDGE_SOURCES[0];
-  const liveStableRules = extractStableRules(base.skillText);
+  const liveStableRules = extractStableRules(base.policyRecords);
+  const preceding = structuredClone(base.policyRecords);
+  preceding[0].text = "Project note mentions M157; this is not its rule definition.\n" + preceding[0].text;
+  ensure(isDeepStrictEqual(extractStableRules(preceding), liveStableRules), "self-test-reference-shadowing", "A preceding project note must not replace canonical M157 policy");
   const firstRule = liveStableRules[0];
   const negativeControls = [
     expectNegative(base, "new-unclassified-file", "unclassified-live-source", (snapshot) => {
@@ -397,7 +398,11 @@ async function runSelfTest() {
     }),
     expectNegative(base, "canonical-stable-rule-drift", "stable-rule-live-drift", (snapshot) => {
       const boundary = new RegExp(`(^.*\\b${escapeRegex(firstRule.id)}\\b.*$)`, "m");
-      snapshot.skillText = snapshot.skillText.replace(boundary, "$1 [negative stable-rule drift]");
+      const owner = snapshot.policyRecords.find(record => boundary.test(record.text));
+      owner.text = owner.text.replace(boundary, "$1 [negative stable-rule drift]");
+    }),
+    expectNegative(base, "canonical-rule-source-whitespace-drift", "stable-rule-source-drift", snapshot => {
+      snapshot.policyRecords.at(-1).text += "\nNon-rule provenance change.\n";
     }),
     expectNegative(base, "bounded-summary-drift", "summary-pack-drift", (snapshot) => {
       snapshot.summary.packSha256 = "0".repeat(64);
@@ -411,7 +416,7 @@ async function runSelfTest() {
       rule.text += " 啟動秘密 HTTPS Quick Tunnel";
     }),
   ];
-  return { status: "GREEN", selfTest: true, positive, negativeControls };
+  return { status: "GREEN", selfTest: true, positive, precedingReferenceControl: "PASS", negativeControls };
 }
 
 try {

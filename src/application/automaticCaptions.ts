@@ -8,10 +8,18 @@ import { tmpdir } from "node:os";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { analyzeSegmentedCaptions } from "./segmentedCaptions";
+import { selectedWhisperModelV1, withWhisperModelRuntimeV1 } from "./whisperModelChoiceV1";
+import { ensurePinnedModelFileV1 } from "./whisperPinnedDownloadV1";
 import { runAnalysisProcess } from "./analysisProcess";
-import type { AutomaticCaptionAnalysisResult, AutomaticCaptionCue, AutomaticCaptionRequest, AutomaticCaptionResult, AutomaticCaptionRuntime, RawWhisperTranscript } from "./automaticCaptionTypes";
+import type { AutomaticCaptionAnalysisResult, AutomaticCaptionCue, AutomaticCaptionRequest, AutomaticCaptionResult, AutomaticCaptionRuntime, CaptionScript, RawWhisperTranscript, SkippedCaptionBlock, SkippedCaptionBlockReason } from "./automaticCaptionTypes";
 import { assertLocalMediaPath } from "../shared/localMediaPath";
-export type { AutomaticCaptionAnalysisResult, AutomaticCaptionCue, AutomaticCaptionRequest, AutomaticCaptionResult, AutomaticCaptionRecognition, AutomaticCaptionRuntime, RawWhisperTranscript } from "./automaticCaptionTypes";
+import { AUTOMATIC_CAPTION_EMPTY_MESSAGE } from "./automaticCaptionOutcome";
+import { captionScriptTarget, convertCaptionCuesScript } from "./captionScriptConversion";
+export { captionScriptTarget } from "./captionScriptConversion";
+export type { AutomaticCaptionAnalysisResult, AutomaticCaptionCue, AutomaticCaptionRequest, AutomaticCaptionResult, AutomaticCaptionRecognition, AutomaticCaptionRuntime, CaptionScript, CaptionScriptConversion, RawWhisperTranscript, SkippedCaptionBlock } from "./automaticCaptionTypes";
+
+/** v7: cached cues may hold s2twp-converted text and the cache key binds the target script. */
+export const AUTOMATIC_CAPTION_CACHE_SCHEMA = 7;
 
 export interface WhisperModelDescriptor {
   id: string;
@@ -34,14 +42,15 @@ export const PINNED_WHISPER_MODEL: WhisperModelDescriptor = {
 export class EmptyAutomaticCaptionError extends Error {
   readonly code = "AUTOMATIC_CAPTION_EMPTY";
   constructor(readonly result: AutomaticCaptionAnalysisResult) {
-    super("辨識已完成，但沒有可用逐字稿；未產生字幕。這不代表已確認素材沒有語音");
+    super(AUTOMATIC_CAPTION_EMPTY_MESSAGE);
     this.name = "EmptyAutomaticCaptionError";
   }
 }
 
+/** Thrown only when no block of a nonempty recognizer output is valid SRT; single bad blocks are skipped. */
 export class AutomaticCaptionParseError extends Error {
   readonly code = "AUTOMATIC_CAPTION_PARSE";
-  constructor(block: number) {
+  constructor(readonly block: number, readonly rawTranscript?: RawWhisperTranscript) {
     super(`Whisper SRT 第 ${block} 段格式或時間不合法；已停止分析，未將錯誤當成空逐字稿`);
     this.name = "AutomaticCaptionParseError";
   }
@@ -76,6 +85,8 @@ export function configuredWhisperCliPath(runtime: Pick<AutomaticCaptionRuntime, 
  * No runtime is launched and no model is downloaded by this inspection.
  */
 export async function automaticCaptionRuntimeSha256(runtime: AutomaticCaptionRuntime): Promise<string> {
+  runtime = withWhisperModelRuntimeV1(runtime, undefined, PINNED_WHISPER_MODEL);
+  const selectedModel = selectedWhisperModelV1(runtime.whisperModel, PINNED_WHISPER_MODEL);
   const digest = (value: string) => createHash("sha256").update(value).digest("hex");
   async function fileIdentity(path: string | undefined) {
     if (!path) return { state: "unconfigured" };
@@ -115,8 +126,8 @@ export async function automaticCaptionRuntimeSha256(runtime: AutomaticCaptionRun
   return digest(JSON.stringify({
     schema: "editkin.speech-runtime-identity/v1",
     ffmpeg: await fileIdentity(runtime.ffmpegPath), cli: await fileIdentity(cli), libraries,
-    model: await fileIdentity(runtime.modelPath?.trim() || join(runtime.modelRoot, PINNED_WHISPER_MODEL.fileName)),
-    expectedModelSha256: PINNED_WHISPER_MODEL.sha256,
+    model: await fileIdentity(runtime.modelPath?.trim() || join(runtime.modelRoot, selectedModel.fileName)),
+    expectedModelSha256: selectedModel.sha256,
   }));
 }
 
@@ -263,46 +274,72 @@ function stripSrtMarkup(input: string): string {
   return plain.join("");
 }
 
-export function parseWhisperSrt(input: string, duration = Number.POSITIVE_INFINITY): AutomaticCaptionCue[] {
+interface ParsedWhisperSrt { cues: AutomaticCaptionCue[]; skipped: SkippedCaptionBlock[]; validBlocks: number }
+
+/**
+ * One malformed block (ambient-noise output, a stray text line, a zero-length or broken timestamp) is
+ * skipped and reported; every valid block is kept. Only output with no valid block at all is a parse
+ * failure, so a broken file is never mistaken for an empty transcript.
+ */
+function parseWhisperSrtBlocks(input: string, duration: number): ParsedWhisperSrt {
+  const parsed: ParsedWhisperSrt = { cues: [], skipped: [], validBlocks: 0 };
   const normalized = input.replace(/^\uFEFF/, "").replaceAll("\r\n", "\n").trim();
-  if (!normalized) return [];
-  const cues: AutomaticCaptionCue[] = [];
+  if (!normalized) return parsed;
   for (const [index, block] of normalized.split(/\n\s*\n/).entries()) {
+    const skip = (reason: SkippedCaptionBlockReason) => { parsed.skipped.push({ block: index + 1, reason }); };
     const lines = block.split("\n");
+    const timingLines = lines.filter((line) => line.includes("-->")).length;
+    if (!timingLines) { skip("missing-timing"); continue; }
+    if (timingLines > 1) { skip("multiple-timing"); continue; }
     const timingIndex = lines.findIndex((line) => line.includes("-->"));
-    if ((timingIndex !== 0 && timingIndex !== 1) || (timingIndex === 1 && !/^\d+$/.test(lines[0].trim()))
-      || lines.filter((line) => line.includes("-->")).length !== 1) throw new AutomaticCaptionParseError(index + 1);
+    if (timingIndex > 1 || (timingIndex === 1 && !/^\d+$/.test(lines[0].trim()))) { skip("invalid-index"); continue; }
     const timestamps = lines[timingIndex].split("-->");
-    if (timestamps.length !== 2) throw new AutomaticCaptionParseError(index + 1);
+    if (timestamps.length !== 2) { skip("invalid-time"); continue; }
     const [startText, endText] = timestamps;
     const start = parseTimestamp(startText ?? "");
     const end = parseTimestamp((endText ?? "").trim().split(/\s+/)[0]);
+    if (start === undefined || end === undefined) { skip("invalid-time"); continue; }
+    if (end <= start) { skip("non-positive-duration"); continue; }
     // Whisper SRT can contain formatting tags. A single pass removes complete
     // tags without allowing removed fragments to form a new tag.
     const text = stripSrtMarkup(lines.slice(timingIndex + 1).join(" ")).replace(/\s+/g, " ").trim();
-    if (start === undefined || end === undefined || end <= start || !text) throw new AutomaticCaptionParseError(index + 1);
+    if (!text) { skip("empty-text"); continue; }
+    parsed.validBlocks += 1;
     // Preserve the existing exact marker policy; this is not a speech detector.
     // The complete original output is retained by parseWhisperRecognition.
     if (/^[[(](?:silence|music|noise|applause|inaudible|blank audio)[\])]$/i.test(text)) continue;
     const clampedStart = Math.max(0, Math.min(duration, start));
     const clampedEnd = Math.max(clampedStart, Math.min(duration, end));
-    if (clampedEnd > clampedStart) cues.push({ start: clampedStart, end: clampedEnd, text });
+    if (clampedEnd > clampedStart) parsed.cues.push({ start: clampedStart, end: clampedEnd, text });
   }
-  return cues;
+  return parsed;
+}
+
+function rawWhisperTranscript(input: string): RawWhisperTranscript {
+  return { format: "srt", text: input, sha256: createHash("sha256").update(input, "utf8").digest("hex") };
+}
+
+export function parseWhisperSrt(input: string, duration = Number.POSITIVE_INFINITY): AutomaticCaptionCue[] {
+  const parsed = parseWhisperSrtBlocks(input, duration);
+  if (parsed.skipped.length && !parsed.validBlocks) throw new AutomaticCaptionParseError(parsed.skipped[0].block);
+  return parsed.cues;
 }
 
 export function parseWhisperRecognition(input: string, duration: number): Pick<AutomaticCaptionAnalysisResult, "cues" | "recognition" | "rawTranscript"> {
-  const cues = parseWhisperSrt(input, duration);
+  const parsed = parseWhisperSrtBlocks(input, duration);
+  const rawTranscript = rawWhisperTranscript(input);
+  if (parsed.skipped.length && !parsed.validBlocks) throw new AutomaticCaptionParseError(parsed.skipped[0].block, rawTranscript);
+  const skipped = parsed.skipped.length ? { skippedBlocks: parsed.skipped } : {};
   return {
-    cues,
-    recognition: cues.length
-      ? { status: "usable-cues", audioContent: "unverified" }
-      : { status: "empty", audioContent: "unverified", reason: "recognition-completed-without-usable-cues" },
-    rawTranscript: { format: "srt", text: input, sha256: createHash("sha256").update(input, "utf8").digest("hex") },
+    cues: parsed.cues,
+    recognition: parsed.cues.length
+      ? { status: "usable-cues", audioContent: "unverified", ...skipped }
+      : { status: "empty", audioContent: "unverified", reason: "recognition-completed-without-usable-cues", ...skipped },
+    rawTranscript,
   };
 }
 
-function validateCaptionRequest(request: AutomaticCaptionRequest): { language: string; translationTarget?: "en" } {
+function validateCaptionRequest(request: AutomaticCaptionRequest): { language: string; translationTarget?: "en"; script: CaptionScript } {
   if (!request.sourcePath || !Number.isFinite(request.sourceStart) || request.sourceStart < 0) throw new Error("自動字幕素材起點不合法");
   if (!Number.isFinite(request.duration) || request.duration <= 0 || request.duration > 24 * 3600) throw new Error("自動字幕素材時長不合法");
   const language = (request.language?.trim().toLowerCase() || "auto");
@@ -310,7 +347,14 @@ function validateCaptionRequest(request: AutomaticCaptionRequest): { language: s
   const translationTarget = request.translationTarget;
   if (translationTarget !== undefined && translationTarget !== "en") throw new Error("目前本機雙語字幕只支援翻譯成英文");
   if (translationTarget === "en" && language === "en") throw new Error("來源已指定為英文，不需要再翻譯成英文");
-  return { language, translationTarget };
+  return { language, translationTarget, script: captionScriptTarget(request.script) };
+}
+
+/** Converts only cue text; rawTranscript/rawTranslation/segmentation evidence keep the recognizer's text. */
+function withCaptionScript(result: AutomaticCaptionAnalysisResult, language: string, script: CaptionScript): AutomaticCaptionAnalysisResult {
+  const { scriptConversion: _unconverted, ...unconverted } = result;
+  const converted = convertCaptionCuesScript(result.cues, language, script);
+  return { ...unconverted, cues: converted.cues, ...(converted.scriptConversion ? { scriptConversion: converted.scriptConversion } : {}) };
 }
 
 function captureProcess(executable: string, args: string[], timeoutMs = 10_000, signal?: AbortSignal): Promise<{ stdout: string; stderr: string }> {
@@ -496,10 +540,10 @@ function runWhisperFilter(
   })();
 }
 
-function validCachedResult(value: unknown, request: AutomaticCaptionRequest, language: string, translationTarget?: "en"): value is Omit<AutomaticCaptionAnalysisResult, "cacheHit" | "elapsedMs" | "modelDownloaded"> {
+function validCachedResult(value: unknown, request: AutomaticCaptionRequest, language: string, translationTarget: "en" | undefined, model: WhisperModelDescriptor, script: CaptionScript): value is Omit<AutomaticCaptionAnalysisResult, "cacheHit" | "elapsedMs" | "modelDownloaded"> {
   if (!value || typeof value !== "object") return false;
   const result = value as Partial<AutomaticCaptionAnalysisResult>;
-  if (!(result.modelId === PINNED_WHISPER_MODEL.id && result.modelSha256 === PINNED_WHISPER_MODEL.sha256
+  if (!(result.modelId === model.id && result.modelSha256 === model.sha256
     && result.language === language && result.translationTarget === translationTarget && result.analyzedSeconds === request.duration && Array.isArray(result.cues)
     && (result.acceleration === "cpu" || result.acceleration === "gpu") && typeof result.engine === "string"
     && result.rawTranscript?.format === "srt" && typeof result.rawTranscript.text === "string")) return false;
@@ -515,7 +559,10 @@ function validCachedResult(value: unknown, request: AutomaticCaptionRequest, lan
       expectedCues = mergeBilingualCues(expectedCues, translated.cues);
       if (expectedCues.some((cue) => !cue.translation?.text.trim())) return false;
     } else if (result.rawTranslation !== undefined) return false;
-    return JSON.stringify(result.cues) === JSON.stringify(expectedCues);
+    // Cached cues must be exactly the deterministic script conversion of the raw recognizer text.
+    const expected = convertCaptionCuesScript(expectedCues, language, script);
+    if (result.scriptConversion !== expected.scriptConversion) return false;
+    return JSON.stringify(result.cues) === JSON.stringify(expected.cues);
   } catch { return false; }
 }
 
@@ -525,32 +572,40 @@ export async function analyzeAutomaticCaptionTranscript(
 ): Promise<AutomaticCaptionAnalysisResult> {
   assertLocalMediaPath(request.sourcePath);
   const startedAt = Date.now();
-  runtime = { ...runtime, whisperCliPath: configuredWhisperCliPath(runtime) };
-  const { language, translationTarget } = validateCaptionRequest(request);
+  runtime = { ...withWhisperModelRuntimeV1(runtime, request.whisperModel, PINNED_WHISPER_MODEL), whisperCliPath: configuredWhisperCliPath(runtime) };
+  const selectedModel = selectedWhisperModelV1(runtime.whisperModel, PINNED_WHISPER_MODEL);
+  const { language, translationTarget, script } = validateCaptionRequest(request);
   runtime.signal?.throwIfAborted();
+  const expectedPath = resolve(runtime.modelRoot, selectedModel.fileName);
+  const selectedPath = runtime.modelPath ? resolve(runtime.modelPath) : expectedPath;
+  const isDefaultPath = process.platform === "win32" ? selectedPath.toLowerCase() === expectedPath.toLowerCase() : selectedPath === expectedPath;
+  const preparedMedium = runtime.whisperModel === "medium" ? await ensurePinnedModelFileV1({ ...runtime, modelPath: isDefaultPath ? undefined : runtime.modelPath }, selectedModel) : undefined;
   if (request.duration > 60) {
     await assertAutomaticCaptionRuntime(runtime, translationTarget);
-    await ensureWhisperModel(runtime);
+    if (!preparedMedium) await ensureWhisperModel(runtime, selectedModel);
     const identity = await automaticCaptionRuntimeSha256(runtime), source = await stat(request.sourcePath);
-    const result = await analyzeSegmentedCaptions(request, runtime, analyzeAutomaticCaptionTranscript, parseWhisperRecognition);
+    // Windows stay in recognizer script; Chinese detection and conversion run once on the merged transcript.
+    const merged = await analyzeSegmentedCaptions({ ...request, script: "original" }, runtime, analyzeAutomaticCaptionTranscript, parseWhisperRecognition);
     runtime.signal?.throwIfAborted();
     const after = await stat(request.sourcePath);
     if (source.size !== after.size || source.mtimeMs !== after.mtimeMs || source.ctimeMs !== after.ctimeMs
       || identity !== await automaticCaptionRuntimeSha256(runtime)) throw Error("來源或語音辨識依賴在分段期間改變，未合併失效逐字稿");
-    return result;
+    const result = withCaptionScript(merged, language, script);
+    return preparedMedium ? { ...result, modelDownloaded: result.modelDownloaded || preparedMedium.downloaded } : result;
   }
   await access(request.sourcePath);
   await access(runtime.ffmpegPath);
   const sourceStat = await stat(request.sourcePath);
   const cacheIdentity = {
-    schemaVersion: 6,
+    schemaVersion: AUTOMATIC_CAPTION_CACHE_SCHEMA,
     segmentationPolicy: whisperCaptionSegmentation(language),
     source: request.sourceSha256 ?? { path: resolve(request.sourcePath), bytes: sourceStat.size, modifiedMs: sourceStat.mtimeMs },
     sourceStart: request.sourceStart,
     duration: request.duration,
     language,
     translationTarget,
-    modelSha256: PINNED_WHISPER_MODEL.sha256,
+    script,
+    modelSha256: selectedModel.sha256,
     runtimeSha256: await automaticCaptionRuntimeSha256(runtime),
   };
   const cacheKey = createHash("sha256").update(JSON.stringify(cacheIdentity)).digest("hex");
@@ -558,13 +613,13 @@ export async function analyzeAutomaticCaptionTranscript(
   if (cachePath) {
     try {
       const cached = JSON.parse(await readFile(cachePath, "utf8")) as { schemaVersion?: number; result?: unknown };
-      if (cached.schemaVersion === 6 && validCachedResult(cached.result, request, language, translationTarget)) {
+      if (cached.schemaVersion === AUTOMATIC_CAPTION_CACHE_SCHEMA && validCachedResult(cached.result, request, language, translationTarget, selectedModel, script)) {
         return { ...cached.result, elapsedMs: Date.now() - startedAt, modelDownloaded: false, cacheHit: true };
       }
     } catch { /* invalid cache is a miss */ }
   }
   const captionRuntime = await assertAutomaticCaptionRuntime(runtime, translationTarget);
-  const model = await ensureWhisperModel(runtime);
+  const model = preparedMedium ?? await ensureWhisperModel(runtime, selectedModel);
   runtime.signal?.throwIfAborted();
   const executionRuntimeSha256 = await automaticCaptionRuntimeSha256(runtime);
   const outputPath = join(dirname(model.path), `.editkin-transcript-${process.pid}-${randomUUID()}.srt`);
@@ -593,16 +648,19 @@ export async function analyzeAutomaticCaptionTranscript(
       rawTranslation = translated.rawTranscript;
       if (cues.some((cue) => !cue.translation?.text.trim())) throw new Error("英文翻譯沒有完整對齊原文，已停止套用，避免產生缺行字幕");
     }
+    // rawTranscript stays exactly as the recognizer wrote it; only cue text is converted.
+    const scripted = convertCaptionCuesScript(cues, language, script);
     const result: AutomaticCaptionAnalysisResult = {
-      cues,
+      cues: scripted.cues,
       recognition: recognition.recognition,
       rawTranscript: recognition.rawTranscript,
       ...(rawTranslation ? { rawTranslation } : {}),
-      engine: `${captionRuntime.engine === "ffmpeg-filter" ? "ffmpeg-whisper.cpp" : "whisper-cli"}-${PINNED_WHISPER_MODEL.id}${translationTarget ? "+whisper-cli-translate-en" : ""}`,
-      modelId: PINNED_WHISPER_MODEL.id,
-      modelSha256: PINNED_WHISPER_MODEL.sha256,
+      engine: `${captionRuntime.engine === "ffmpeg-filter" ? "ffmpeg-whisper.cpp" : "whisper-cli"}-${selectedModel.id}${translationTarget ? "+whisper-cli-translate-en" : ""}`,
+      modelId: selectedModel.id,
+      modelSha256: selectedModel.sha256,
       language,
       translationTarget,
+      ...(scripted.scriptConversion ? { scriptConversion: scripted.scriptConversion } : {}),
       analyzedSeconds: request.duration,
       elapsedMs: Date.now() - startedAt,
       modelDownloaded: model.downloaded,
@@ -620,7 +678,7 @@ export async function analyzeAutomaticCaptionTranscript(
       const completedPath = join(dirname(cachePath), `${completedKey}.json`);
       await mkdir(dirname(cachePath), { recursive: true });
       const temporary = `${completedPath}.${process.pid}.${randomUUID()}.tmp`;
-      await writeFile(temporary, `${JSON.stringify({ schemaVersion: 6, result: { ...result, elapsedMs: undefined, modelDownloaded: undefined, cacheHit: undefined } })}\n`, "utf8");
+      await writeFile(temporary, `${JSON.stringify({ schemaVersion: AUTOMATIC_CAPTION_CACHE_SCHEMA, result: { ...result, elapsedMs: undefined, modelDownloaded: undefined, cacheHit: undefined } })}\n`, "utf8");
       try { await rename(temporary, completedPath); } catch {
         try { await access(completedPath); } catch (error) { throw error; }
       } finally { await rm(temporary, { force: true }); }
@@ -637,6 +695,7 @@ export async function transcribeAutomaticCaptions(
   assertLocalMediaPath(request.sourcePath);
   const result = await analyzeAutomaticCaptionTranscript(request, runtime);
   if (result.recognition.status === "empty") throw new EmptyAutomaticCaptionError(result);
-  const { recognition: _recognition, rawTranscript: _rawTranscript, rawTranslation: _rawTranslation, ...captions } = result;
-  return captions;
+  const { recognition, rawTranscript: _rawTranscript, rawTranslation: _rawTranslation, ...captions } = result;
+  // Skipped malformed blocks travel with the captions so the caller can report them.
+  return recognition.skippedBlocks?.length ? { ...captions, skippedCaptionBlocks: recognition.skippedBlocks } : captions;
 }

@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
+import { useTempRoots } from "../test/tempRoot.mjs";
 import { inspectMedia } from "./inspectMedia";
 import { probeMedia } from "../render/ffmpegMedia";
 
@@ -29,10 +30,10 @@ function run(executable: string, args: string[]) {
   return result;
 }
 
+// Removed after the file unless EDITKIN_TEST_EVIDENCE_ROOT keeps it.
+const temp = useTempRoots();
 beforeAll(async () => {
-  const evidence = join(app, ".rd/ui-library-20260831/orientation");
-  await mkdir(evidence, { recursive: true });
-  root = await mkdtemp(join(evidence, "test-"));
+  root = await temp.create("test-", { parent: join(app, ".rd/ui-library-20260831/orientation") });
   for (const [width, height] of [[96, 64], [64, 96]]) {
     run(ffmpeg, ["-v", "error", "-f", "lavfi", "-i", `testsrc2=s=${width}x${height}:r=4:d=0.5`, "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv", "-bsf:v", "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0", join(root, `base-${width}.mp4`)]);
   }

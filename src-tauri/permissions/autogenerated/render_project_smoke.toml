@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-render-project-smoke"
+description = "Enables the render_project_smoke command without any pre-configured scope."
+commands.allow = ["render_project_smoke"]
+
+[[permission]]
+identifier = "deny-render-project-smoke"
+description = "Denies the render_project_smoke command without any pre-configured scope."
+commands.deny = ["render_project_smoke"]

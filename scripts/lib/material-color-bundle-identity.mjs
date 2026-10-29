@@ -3,24 +3,28 @@ import {lstat,mkdir,writeFile,rename,realpath} from "node:fs/promises";
 import {createHash,randomUUID} from "node:crypto";
 import {resolve,dirname,basename,relative,isAbsolute} from "node:path";
 import {fileURLToPath} from "node:url";
-import {readRegularFile} from "./regular-file.mjs";
+import {readMaterialColorBoundedFile,readMaterialColorImplementationRegistry} from "./material-color-runtime-pair.mjs";
 const defaultRoot=fileURLToPath(new URL("../../",import.meta.url));
 const digest=bytes=>createHash("sha256").update(bytes).digest("hex");
 async function readInputs(root){
+  const canonical=await readMaterialColorImplementationRegistry();
   const base=resolve(root,"src/application"),listPath=resolve(base,"materialColorImplementationPaths.json");
-  const listStat=await lstat(listPath);if(!listStat.isFile()||listStat.isSymbolicLink()||listStat.size>65536)throw Error("invalid-material-color-build-inputs");
+  const listStat=await lstat(listPath);if(!listStat.isFile()||listStat.isSymbolicLink()||listStat.nlink!==1||listStat.size>65536)throw Error("invalid-material-color-build-inputs");
   const sourceRoot=await realpath(resolve(root,"src"));
-  const list=JSON.parse((await readRegularFile(listPath)).toString("utf8"));
-  // 33 includes the shared display-transfer implementation. Runtime validation
-  // still requires the exact ordered registry; this is only an allocation cap.
-  if(!Array.isArray(list)||!list.length||list.length>33||new Set(list).size!==list.length)throw Error("invalid-material-color-build-inputs");
-  return Promise.all(list.map(async name=>{
+  const list=JSON.parse((await readMaterialColorBoundedFile(listPath,65536)).toString("utf8"));
+  if(!Array.isArray(list)||!list.length||list.length>canonical.length||new Set(list).size!==list.length)throw Error("invalid-material-color-build-inputs");
+  const paths=list.map(name=>{
     if(typeof name!=="string"||name.includes("\\")||isAbsolute(name))throw Error("invalid-material-color-build-input-path");
     const path=resolve(base,name),scope=relative(resolve(root,"src"),path);
     if(scope.startsWith("..")||isAbsolute(scope))throw Error("outside-material-color-build-input");
-    const stat=await lstat(path);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>8*1024*1024)throw Error("invalid-material-color-build-input-file");
+    return {name,path};
+  });
+  // Exact ordered membership prevents a caller registry from defining its own unknown inputs.
+  if(list.length!==canonical.length||list.some((name,index)=>name!==canonical[index]))throw Error("invalid-material-color-build-inputs");
+  return Promise.all(paths.map(async({name,path})=>{
+    const stat=await lstat(path);if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||stat.size>8*1024*1024)throw Error("invalid-material-color-build-input-file");
     const actualScope=relative(sourceRoot,await realpath(path));if(actualScope.startsWith("..")||isAbsolute(actualScope))throw Error("aliased-material-color-build-input");
-    return {name,sha256:digest(await readRegularFile(path))};
+    return {name,sha256:digest(await readMaterialColorBoundedFile(path,8*1024*1024,{allowEmpty:true}))};
   }));
 }
 /** Build one ESM Node bundle; emitted bytes and sidecar are one integrity unit.

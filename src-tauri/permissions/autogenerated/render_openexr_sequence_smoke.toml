@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-render-openexr-sequence-smoke"
+description = "Enables the render_openexr_sequence_smoke command without any pre-configured scope."
+commands.allow = ["render_openexr_sequence_smoke"]
+
+[[permission]]
+identifier = "deny-render-openexr-sequence-smoke"
+description = "Denies the render_openexr_sequence_smoke command without any pre-configured scope."
+commands.deny = ["render_openexr_sequence_smoke"]

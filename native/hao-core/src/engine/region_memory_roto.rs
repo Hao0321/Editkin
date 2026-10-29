@@ -2,6 +2,9 @@ use super::optical_alpha::{OpticalAlphaReceipt, OpticalAlphaSettings, refine_opt
 use super::roto::{MatteFrame, MatteRefine, refine_matte};
 use serde::Serialize;
 
+#[path = "region_memory_roto_stream.rs"]
+pub mod streaming;
+
 pub const REGION_MEMORY_ROTO_ENGINE: &str = "editkin-self-authored-region-memory-roto/v1";
 
 #[derive(Clone, Copy, Debug)]

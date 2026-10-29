@@ -13,6 +13,9 @@ use std::fs;
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
+#[path = "auto_roto_stream.rs"]
+pub mod streaming;
+
 #[cfg(feature = "auto-roto-research-onnx")]
 type OptionalResearchSession = OnnxRotoSession;
 #[cfg(not(feature = "auto-roto-research-onnx"))]
@@ -75,6 +78,8 @@ pub struct AutoRotoRequest {
     pub onnx_pack: Option<OnnxRotoPackRequest>,
     #[serde(default)]
     pub region_memory_policy: RegionMemoryRoutePolicy,
+    #[serde(default)]
+    pub edge_refine: Option<super::roto_edge_v2::RotoEdgeSettingsV2>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -483,7 +488,7 @@ fn paint_correction_disc(
     }
 }
 
-fn apply_frame_corrections(matte: &mut MatteFrame, corrections: &[RotoCorrectionStroke]) {
+pub(super) fn apply_frame_corrections(matte: &mut MatteFrame, corrections: &[RotoCorrectionStroke]) {
     let frame = matte.frame as usize;
     for stroke in corrections.iter().filter(|stroke| stroke.frame == frame) {
         let shortest = matte.width.min(matte.height) as f64;
@@ -1023,6 +1028,7 @@ fn run_fixed_baseline_streaming(request: AutoRotoRequest) -> Result<AutoRotoRece
 }
 
 pub fn run_auto_roto(request: AutoRotoRequest) -> Result<AutoRotoReceipt, String> {
+    if request.edge_refine.is_some() { return Err("edgeRefine requires the explicit v2 CLI dispatcher".into()); }
     if !request.analysis_fps.is_finite()
         || request.analysis_fps <= 0.0
         || request.analysis_fps > 120.0
@@ -1366,6 +1372,7 @@ mod tests {
             #[cfg(feature = "auto-roto-research-onnx")]
             onnx_pack: None,
             region_memory_policy: RegionMemoryRoutePolicy::FixedBaseline,
+            edge_refine: None,
         })
         .unwrap();
         let sequence = fs::read(&receipt.sequence_path).unwrap();
@@ -1471,6 +1478,7 @@ mod tests {
             #[cfg(feature = "auto-roto-research-onnx")]
             onnx_pack: None,
             region_memory_policy: RegionMemoryRoutePolicy::GuardedExperimental,
+            edge_refine: None,
         })
         .unwrap();
         assert_eq!(receipt.alpha_refinement.engine, OPTICAL_ALPHA_ENGINE);

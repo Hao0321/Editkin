@@ -1,0 +1,2700 @@
+{
+ "schema": "editkin.motion-library-module-variants/v1",
+ "text": [
+  {
+   "id": "T01",
+   "name": "爆裂登場",
+   "family": "impact",
+   "roles": [
+    "impact",
+    "hook",
+    "emphasis"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：爆發",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T02",
+   "name": "逐字閃現",
+   "family": "impact",
+   "roles": [
+    "impact",
+    "hook"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：別停下",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T03",
+   "name": "印章蓋下",
+   "family": "impact",
+   "roles": [
+    "impact"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：確定 / 通過 / 完成",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T04",
+   "name": "重拳推進",
+   "family": "impact",
+   "roles": [
+    "impact",
+    "hook"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：突破",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T05",
+   "name": "動態堆疊",
+   "family": "impact",
+   "roles": [
+    "impact",
+    "title"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：衝過夜晚 / 就是現在 / 出發",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T06",
+   "name": "彈性拉伸",
+   "family": "impact",
+   "roles": [
+    "impact"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：伸展",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T07",
+   "name": "穿越縮放",
+   "family": "impact",
+   "roles": [
+    "impact",
+    "chapter"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：未來 / 光 / 維度",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T08",
+   "name": "擠壓回彈",
+   "family": "impact",
+   "roles": [
+    "impact"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：彈力 / 反彈",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T09",
+   "name": "巨字跑馬燈",
+   "family": "flow",
+   "roles": [
+    "flow"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：東京夜行・ / TOKYO NIGHT RIDE",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T10",
+   "name": "直書逆流",
+   "family": "flow",
+   "roles": [
+    "flow"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：靜寂 / 疾走",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T11",
+   "name": "重複字浪",
+   "family": "flow",
+   "roles": [
+    "flow"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：流行",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T12",
+   "name": "斜帶字流",
+   "family": "flow",
+   "roles": [
+    "flow"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：黎明之前",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T13",
+   "name": "文字緞帶",
+   "family": "flow",
+   "roles": [
+    "flow"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：乘著浪・",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T14",
+   "name": "跑馬看板",
+   "family": "flow",
+   "roles": [
+    "flow"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：本日限定 / 搶先公開 / 新發售 / 預約受理中",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T15",
+   "name": "三層直書",
+   "family": "flow",
+   "roles": [
+    "flow"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：街燈 / 夜雨 / 夜",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T16",
+   "name": "交叉膠帶",
+   "family": "flow",
+   "roles": [
+    "flow"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：禁止進入・KEEP OUT",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T17",
+   "name": "文字隧道",
+   "family": "depth",
+   "roles": [
+    "depth"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：宇宙",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T18",
+   "name": "文字長廊",
+   "family": "depth",
+   "roles": [
+    "depth"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：前進・",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T19",
+   "name": "文字圓柱",
+   "family": "depth",
+   "roles": [
+    "depth"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：繼續前進",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T20",
+   "name": "文字漩渦",
+   "family": "depth",
+   "roles": [
+    "depth"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：漩渦",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T21",
+   "name": "環形字隧道",
+   "family": "depth",
+   "roles": [
+    "depth"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：光之環・",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T22",
+   "name": "文字軌道",
+   "family": "depth",
+   "roles": [
+    "depth"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：軌道",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T23",
+   "name": "文字方塊",
+   "family": "depth",
+   "roles": [
+    "depth"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：春 / 夏 / 秋 / 冬",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T24",
+   "name": "立體擠出",
+   "family": "depth",
+   "roles": [
+    "depth"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：立體；不是 VA 預設（Hao 裁定），只能點名使用",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T25",
+   "name": "翻牌看板",
+   "family": "switch",
+   "roles": [
+    "switch",
+    "travel"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：出發時刻",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T26",
+   "name": "翻轉卡片",
+   "family": "switch",
+   "roles": [
+    "switch"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：日出 / 晴天",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T27",
+   "name": "打字機",
+   "family": "switch",
+   "roles": [
+    "switch",
+    "teaching"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：在天亮之前 / 再見",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T28",
+   "name": "拉霸轉輪",
+   "family": "switch",
+   "roles": [
+    "switch",
+    "game"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：大吉！",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T29",
+   "name": "數字滾輪",
+   "family": "switch",
+   "roles": [
+    "switch",
+    "stats"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：累計 / 12,480 / 人",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T30",
+   "name": "標題快訊",
+   "family": "switch",
+   "roles": [
+    "switch",
+    "news"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：快報 / 正式發表 / 明天上線 / 敬請期待",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T31",
+   "name": "LED 跑馬字",
+   "family": "switch",
+   "roles": [
+    "switch"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：最新消息",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T32",
+   "name": "上下分裂",
+   "family": "switch",
+   "roles": [
+    "switch"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：外表 / 真心",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T33",
+   "name": "描邊字流",
+   "family": "style",
+   "roles": [
+    "style"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：疾風怒濤・",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T34",
+   "name": "故障切片",
+   "family": "style",
+   "roles": [
+    "style",
+    "game"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：崩壞",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T35",
+   "name": "圖紋字窗",
+   "family": "style",
+   "roles": [
+    "style"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：祭典",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T36",
+   "name": "長影字",
+   "family": "style",
+   "roles": [
+    "style"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：光與影",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T37",
+   "name": "液體注滿",
+   "family": "style",
+   "roles": [
+    "style"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：滿",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T38",
+   "name": "螢光筆重點",
+   "family": "style",
+   "roles": [
+    "style",
+    "emphasis",
+    "teaching"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：文字的力量",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T39",
+   "name": "雙色反轉",
+   "family": "style",
+   "roles": [
+    "style"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：反轉",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T40",
+   "name": "殘影軌跡",
+   "family": "style",
+   "roles": [
+    "style"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：殘像",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T41",
+   "name": "雷擊登場",
+   "family": "drama",
+   "roles": [
+    "drama",
+    "hook",
+    "impact",
+    "opening"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：轟雷",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T42",
+   "name": "雷射切割",
+   "family": "drama",
+   "roles": [
+    "drama",
+    "impact"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：斬斷",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T43",
+   "name": "擲硬幣",
+   "family": "drama",
+   "roles": [
+    "drama",
+    "game"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：正面反面",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T44",
+   "name": "爆裂四散",
+   "family": "drama",
+   "roles": [
+    "drama",
+    "impact",
+    "exit"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：炸裂四散",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T45",
+   "name": "粒子消散",
+   "family": "drama",
+   "roles": [
+    "drama",
+    "exit"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：消散",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T46",
+   "name": "心跳脈動",
+   "family": "drama",
+   "roles": [
+    "drama"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：心跳",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T47",
+   "name": "文字萬花筒",
+   "family": "drama",
+   "roles": [
+    "drama",
+    "music_video"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：萬花筒",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T48",
+   "name": "倒數重擊",
+   "family": "drama",
+   "roles": [
+    "drama",
+    "opening",
+    "countdown",
+    "impact"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：3 / 2 / 1 / 出發！",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T49",
+   "name": "波浪字",
+   "family": "play",
+   "roles": [
+    "play"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：海浪起伏",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T50",
+   "name": "定格動畫",
+   "family": "play",
+   "roles": [
+    "play"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：定格動畫",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T51",
+   "name": "文字雨",
+   "family": "play",
+   "roles": [
+    "play"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：雨落下來風吹過去雲散開了光透出來 / 雨風雲光",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T52",
+   "name": "放大鏡",
+   "family": "play",
+   "roles": [
+    "play",
+    "explainer"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：放大鏡看細節",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T53",
+   "name": "亂碼解碼",
+   "family": "play",
+   "roles": [
+    "play"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：解碼完成",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T54",
+   "name": "骨牌倒下",
+   "family": "play",
+   "roles": [
+    "play"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：骨牌倒下",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T55",
+   "name": "流光漸層",
+   "family": "play",
+   "roles": [
+    "play",
+    "title"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：流光溢彩",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T56",
+   "name": "圓環字",
+   "family": "play",
+   "roles": [
+    "play",
+    "logo"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：旋轉",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T57",
+   "name": "水面倒影",
+   "family": "physics",
+   "roles": [
+    "physics"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：倒影",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T58",
+   "name": "跳跳字",
+   "family": "physics",
+   "roles": [
+    "physics",
+    "music_video"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：跳動的字",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T59",
+   "name": "迎風旗幟",
+   "family": "physics",
+   "roles": [
+    "physics"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：迎風飄揚",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T60",
+   "name": "重力反轉",
+   "family": "physics",
+   "roles": [
+    "physics"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：重力反轉",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T61",
+   "name": "磁力吸附",
+   "family": "physics",
+   "roles": [
+    "physics",
+    "logo",
+    "entrance"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：吸引力",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T62",
+   "name": "脈衝字陣",
+   "family": "physics",
+   "roles": [
+    "physics"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：響",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T63",
+   "name": "字重漸粗",
+   "family": "physics",
+   "roles": [
+    "physics",
+    "emphasis"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：越來越粗",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T64",
+   "name": "摺扇展開",
+   "family": "physics",
+   "roles": [
+    "physics",
+    "entrance"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：展",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T65",
+   "name": "卡拉OK跳球",
+   "family": "rhythm",
+   "roles": [
+    "rhythm",
+    "lyrics",
+    "caption"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：跟著節奏唱",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T66",
+   "name": "鐘擺字",
+   "family": "rhythm",
+   "roles": [
+    "rhythm"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：搖搖晃晃",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T67",
+   "name": "像素溶解",
+   "family": "rhythm",
+   "roles": [
+    "rhythm"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：像素化",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T68",
+   "name": "旋轉換字",
+   "family": "rhythm",
+   "roles": [
+    "rhythm"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：春／夏／秋／冬 / 四季輪轉",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T69",
+   "name": "疾馳殘影",
+   "family": "rhythm",
+   "roles": [
+    "rhythm",
+    "entrance",
+    "exit"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：疾馳",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T70",
+   "name": "市松翻轉",
+   "family": "rhythm",
+   "roles": [
+    "rhythm"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：格",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T71",
+   "name": "無限軌道",
+   "family": "rhythm",
+   "roles": [
+    "rhythm"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：繞圈圈",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T72",
+   "name": "洗牌重排",
+   "family": "rhythm",
+   "roles": [
+    "rhythm",
+    "game"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：重新排列",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T73",
+   "name": "漩渦吸入",
+   "family": "mood",
+   "roles": [
+    "mood"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：時間在這裡旋轉",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T74",
+   "name": "顫抖平息",
+   "family": "mood",
+   "roles": [
+    "mood"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：瑟瑟發抖",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T75",
+   "name": "彈性伸縮",
+   "family": "mood",
+   "roles": [
+    "mood"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：伸縮自如",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T76",
+   "name": "墨跡暈開",
+   "family": "mood",
+   "roles": [
+    "mood",
+    "entrance",
+    "exit"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：墨跡暈開",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T77",
+   "name": "文字集合",
+   "family": "mood",
+   "roles": [
+    "mood",
+    "title",
+    "intro",
+    "entrance",
+    "exit"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：集合！",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T78",
+   "name": "字體拼貼",
+   "family": "mood",
+   "roles": [
+    "mood"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：春夏秋冬晴雨風雪",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T79",
+   "name": "崩塌落下",
+   "family": "mood",
+   "roles": [
+    "mood",
+    "ending",
+    "exit"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：崩塌落下",
+   "artStatus": "certified"
+  },
+  {
+   "id": "T80",
+   "name": "輕飄浮動",
+   "family": "mood",
+   "roles": [
+    "mood"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "必須自己傳 lines；範例字只示範格式，不可當內容：輕飄飄",
+   "artStatus": "certified"
+  }
+ ],
+ "transition": [
+  {
+   "id": "X01",
+   "name": "色塊掃換",
+   "family": "sweep",
+   "roles": [
+    "transition",
+    "sweep"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X02",
+   "name": "斜角掃換",
+   "family": "sweep",
+   "roles": [
+    "transition",
+    "sweep"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X03",
+   "name": "多條紋掃換",
+   "family": "sweep",
+   "roles": [
+    "transition",
+    "sweep"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X04",
+   "name": "鋸齒掃換",
+   "family": "sweep",
+   "roles": [
+    "transition",
+    "sweep"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X05",
+   "name": "斜切掃換",
+   "family": "sweep",
+   "roles": [
+    "transition",
+    "sweep"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X06",
+   "name": "柱狀掃換",
+   "family": "sweep",
+   "roles": [
+    "transition",
+    "sweep"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X07",
+   "name": "筆刷掃換",
+   "family": "sweep",
+   "roles": [
+    "transition",
+    "sweep"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X08",
+   "name": "布幕拉合",
+   "family": "sweep",
+   "roles": [
+    "transition",
+    "sweep"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X09",
+   "name": "圓形擴散",
+   "family": "shape",
+   "roles": [
+    "transition",
+    "shape"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X10",
+   "name": "方塊拼換",
+   "family": "shape",
+   "roles": [
+    "transition",
+    "shape"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X11",
+   "name": "光圈快門",
+   "family": "shape",
+   "roles": [
+    "transition",
+    "shape"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X12",
+   "name": "時鐘掃換",
+   "family": "shape",
+   "roles": [
+    "transition",
+    "shape"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X13",
+   "name": "菱形擴散",
+   "family": "shape",
+   "roles": [
+    "transition",
+    "shape"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X14",
+   "name": "星形擴散",
+   "family": "shape",
+   "roles": [
+    "transition",
+    "shape"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X15",
+   "name": "風車旋轉",
+   "family": "shape",
+   "roles": [
+    "transition",
+    "shape"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X16",
+   "name": "四角合攏",
+   "family": "shape",
+   "roles": [
+    "transition",
+    "shape"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X17",
+   "name": "液面上升",
+   "family": "fluid_impact",
+   "roles": [
+    "transition",
+    "fluid_impact"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X18",
+   "name": "顏料滴落",
+   "family": "fluid_impact",
+   "roles": [
+    "transition",
+    "fluid_impact"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X19",
+   "name": "漣漪擴散",
+   "family": "fluid_impact",
+   "roles": [
+    "transition",
+    "fluid_impact"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X20",
+   "name": "文字穿越",
+   "family": "fluid_impact",
+   "roles": [
+    "transition",
+    "fluid_impact",
+    "impact",
+    "title"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "畫面固定出現「轉場」，不會被自動選到，只能點名使用",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X21",
+   "name": "衝擊閃光",
+   "family": "fluid_impact",
+   "roles": [
+    "transition",
+    "fluid_impact",
+    "impact"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X22",
+   "name": "波浪分界",
+   "family": "fluid_impact",
+   "roles": [
+    "transition",
+    "fluid_impact"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X23",
+   "name": "鋸齒分界",
+   "family": "fluid_impact",
+   "roles": [
+    "transition",
+    "fluid_impact",
+    "impact"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X24",
+   "name": "圓形分裂",
+   "family": "fluid_impact",
+   "roles": [
+    "transition",
+    "fluid_impact"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X25",
+   "name": "上下錯位",
+   "family": "panel",
+   "roles": [
+    "transition",
+    "panel"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X26",
+   "name": "左右滾動",
+   "family": "panel",
+   "roles": [
+    "transition",
+    "panel"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X27",
+   "name": "三分骨牌",
+   "family": "panel",
+   "roles": [
+    "transition",
+    "panel"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X28",
+   "name": "四格輪換",
+   "family": "panel",
+   "roles": [
+    "transition",
+    "panel"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X29",
+   "name": "滑入面板",
+   "family": "panel",
+   "roles": [
+    "transition",
+    "panel"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X30",
+   "name": "斜向面板",
+   "family": "panel",
+   "roles": [
+    "transition",
+    "panel"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X31",
+   "name": "十字開門",
+   "family": "panel",
+   "roles": [
+    "transition",
+    "panel"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X32",
+   "name": "棋盤翻轉",
+   "family": "panel",
+   "roles": [
+    "transition",
+    "panel"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X33",
+   "name": "斜線分割",
+   "family": "mosaic",
+   "roles": [
+    "transition",
+    "mosaic"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X34",
+   "name": "馬賽克閃切",
+   "family": "mosaic",
+   "roles": [
+    "transition",
+    "mosaic"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X35",
+   "name": "框架堆疊",
+   "family": "mosaic",
+   "roles": [
+    "transition",
+    "mosaic"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X36",
+   "name": "等化器柱",
+   "family": "mosaic",
+   "roles": [
+    "transition",
+    "mosaic"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X37",
+   "name": "橫帶流動",
+   "family": "mosaic",
+   "roles": [
+    "transition",
+    "mosaic"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X38",
+   "name": "九宮翻轉",
+   "family": "mosaic",
+   "roles": [
+    "transition",
+    "mosaic"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X39",
+   "name": "層框擴張",
+   "family": "mosaic",
+   "roles": [
+    "transition",
+    "mosaic"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "X40",
+   "name": "條帶洗牌",
+   "family": "mosaic",
+   "roles": [
+    "transition",
+    "mosaic"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "high",
+   "use": "",
+   "artStatus": "certified"
+  }
+ ],
+ "background": [
+  {
+   "id": "B01",
+   "name": "網點擴散",
+   "family": "halftone",
+   "roles": [
+    "background",
+    "halftone"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B02",
+   "name": "網點波浪",
+   "family": "halftone",
+   "roles": [
+    "background",
+    "halftone"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B03",
+   "name": "美漫網點",
+   "family": "halftone",
+   "roles": [
+    "background",
+    "halftone"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B04",
+   "name": "網點掃過",
+   "family": "halftone",
+   "roles": [
+    "background",
+    "halftone"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B05",
+   "name": "螺旋網點",
+   "family": "halftone",
+   "roles": [
+    "background",
+    "halftone"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B06",
+   "name": "網點同心環",
+   "family": "halftone",
+   "roles": [
+    "background",
+    "halftone"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B07",
+   "name": "網點棋盤",
+   "family": "halftone",
+   "roles": [
+    "background",
+    "halftone"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B08",
+   "name": "網點太陽",
+   "family": "halftone",
+   "roles": [
+    "background",
+    "halftone"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B09",
+   "name": "透視網格",
+   "family": "grid",
+   "roles": [
+    "background",
+    "grid"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B10",
+   "name": "網格無限推進",
+   "family": "grid",
+   "roles": [
+    "background",
+    "grid"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B11",
+   "name": "網格波動",
+   "family": "grid",
+   "roles": [
+    "background",
+    "grid"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B12",
+   "name": "旋轉網格",
+   "family": "grid",
+   "roles": [
+    "background",
+    "grid"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B13",
+   "name": "等角網格",
+   "family": "grid",
+   "roles": [
+    "background",
+    "grid"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B14",
+   "name": "蜂巢網格",
+   "family": "grid",
+   "roles": [
+    "background",
+    "grid"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B15",
+   "name": "圖騰拼磚",
+   "family": "grid",
+   "roles": [
+    "background",
+    "grid"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B16",
+   "name": "編織網格",
+   "family": "grid",
+   "roles": [
+    "background",
+    "grid"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B17",
+   "name": "速度線",
+   "family": "lines",
+   "roles": [
+    "background",
+    "lines"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B18",
+   "name": "水平律動線",
+   "family": "lines",
+   "roles": [
+    "background",
+    "lines"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B19",
+   "name": "集中線",
+   "family": "lines",
+   "roles": [
+    "background",
+    "lines"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B20",
+   "name": "波浪線",
+   "family": "lines",
+   "roles": [
+    "background",
+    "lines"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B21",
+   "name": "干涉漣漪",
+   "family": "lines",
+   "roles": [
+    "background",
+    "lines"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B22",
+   "name": "扭轉條紋",
+   "family": "lines",
+   "roles": [
+    "background",
+    "lines"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B23",
+   "name": "線框隧道",
+   "family": "lines",
+   "roles": [
+    "background",
+    "lines"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B24",
+   "name": "交叉斜線",
+   "family": "lines",
+   "roles": [
+    "background",
+    "lines"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B25",
+   "name": "圓點彈跳",
+   "family": "shapes",
+   "roles": [
+    "background",
+    "shapes"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B26",
+   "name": "漂浮圖形",
+   "family": "shapes",
+   "roles": [
+    "background",
+    "shapes"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B27",
+   "name": "多邊形隧道",
+   "family": "shapes",
+   "roles": [
+    "background",
+    "shapes"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B28",
+   "name": "軌道圖形",
+   "family": "shapes",
+   "roles": [
+    "background",
+    "shapes"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B29",
+   "name": "萬花筒",
+   "family": "shapes",
+   "roles": [
+    "background",
+    "shapes"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B30",
+   "name": "彩紙飄落",
+   "family": "shapes",
+   "roles": [
+    "background",
+    "shapes"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B31",
+   "name": "流體色塊",
+   "family": "shapes",
+   "roles": [
+    "background",
+    "shapes"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B32",
+   "name": "風車群",
+   "family": "shapes",
+   "roles": [
+    "background",
+    "shapes"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "medium",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B33",
+   "name": "極簡色塊",
+   "family": "minimal",
+   "roles": [
+    "background",
+    "minimal"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B34",
+   "name": "極簡圓",
+   "family": "minimal",
+   "roles": [
+    "background",
+    "minimal"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B35",
+   "name": "包浩斯圖形",
+   "family": "minimal",
+   "roles": [
+    "background",
+    "minimal"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B36",
+   "name": "極簡弧線",
+   "family": "minimal",
+   "roles": [
+    "background",
+    "minimal"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B37",
+   "name": "極簡條紋",
+   "family": "minimal",
+   "roles": [
+    "background",
+    "minimal"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B38",
+   "name": "極簡方塊",
+   "family": "minimal",
+   "roles": [
+    "background",
+    "minimal"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B39",
+   "name": "極簡波線",
+   "family": "minimal",
+   "roles": [
+    "background",
+    "minimal"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "",
+   "artStatus": "certified"
+  },
+  {
+   "id": "B40",
+   "name": "嵌套方框",
+   "family": "minimal",
+   "roles": [
+    "background",
+    "minimal"
+   ],
+   "formats": [
+    "portrait",
+    "landscape",
+    "square"
+   ],
+   "intensity": "low",
+   "use": "",
+   "artStatus": "certified"
+  }
+ ]
+}

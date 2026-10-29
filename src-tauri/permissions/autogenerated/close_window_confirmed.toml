@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-close-window-confirmed"
+description = "Enables the close_window_confirmed command without any pre-configured scope."
+commands.allow = ["close_window_confirmed"]
+
+[[permission]]
+identifier = "deny-close-window-confirmed"
+description = "Denies the close_window_confirmed command without any pre-configured scope."
+commands.deny = ["close_window_confirmed"]

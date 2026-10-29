@@ -104,7 +104,9 @@ pub fn selected_agent_workspace(selected: Option<&Path>) -> Result<Option<AgentW
 
 #[derive(Debug)]
 pub struct AgentSetupInvocation {
-    pub command: String,
+    /// The same arguments as one line that cmd.exe, PowerShell 5.1 and PowerShell 7 all pass unchanged, or None when
+    /// a value has no such spelling (agent_connect then offers its generated script instead).
+    pub direct_command: Option<String>,
     pub args: Vec<String>,
     pub environment: Vec<(String, String)>,
 }
@@ -138,8 +140,30 @@ pub struct ProductAgentGenerationActivation {
     previous_pointer: Option<Vec<u8>>,
 }
 
-fn ps_quote(text: &str) -> String {
-    format!("'{}'", text.replace('\'', "''"))
+/// The agent CLI arguments that add Editkin as a user-scoped stdio server. Claude uses `mcp add` with one `-e` per
+/// variable instead of `mcp add-json`: no JSON has to survive a shell, and the name must precede `-e` because Claude
+/// reads `-e` as a list that would swallow it.
+pub fn agent_add_arguments(
+    target: &str,
+    executable: &str,
+    launcher: &str,
+    environment: &[(String, String)],
+) -> Vec<String> {
+    let (mut args, flag) = if target == "codex" {
+        (vec!["mcp".into(), "add".into(), "editkin".into()], "--env")
+    } else {
+        (
+            ["mcp", "add", "--scope", "user", "editkin"]
+                .map(str::to_string)
+                .to_vec(),
+            "-e",
+        )
+    };
+    for (key, value) in environment {
+        args.extend([flag.to_string(), format!("{key}={value}")]);
+    }
+    args.extend(["--".to_string(), executable.to_string(), launcher.to_string()]);
+    args
 }
 
 /// Pure formatting: this never reads host config/environment or runs a CLI.
@@ -187,43 +211,11 @@ pub fn build_agent_setup_invocation(
     if &actual_environment_keys != expected_environment_keys {
         return Err("Agent 環境設定不符合 closed-world contract；未變更 AI 設定".into());
     }
-    let (command, args) = if target == "codex" {
-        let flags = environment
-            .iter()
-            .map(|(key, value)| format!("--env {}", ps_quote(&format!("{key}={value}"))))
-            .collect::<Vec<_>>()
-            .join(" ");
-        let command = format!(
-            "codex mcp add editkin {flags} -- {} {}",
-            ps_quote(executable),
-            ps_quote(launcher)
-        );
-        let mut args = ["mcp", "add", "editkin"].map(str::to_string).to_vec();
-        for (key, value) in &environment {
-            args.extend(["--env".into(), format!("{key}={value}")]);
-        }
-        args.extend(["--".into(), executable.into(), launcher.into()]);
-        (command, args)
-    } else {
-        let env_json = environment
-            .iter()
-            .map(|(key, value)| (key.clone(), Value::String(value.clone())))
-            .collect::<serde_json::Map<_, _>>();
-        let config =
-            json!({ "type": "stdio", "command": executable, "args": [launcher], "env": env_json })
-                .to_string();
-        let command = format!(
-            "claude mcp add-json --scope user editkin {}",
-            ps_quote(&config)
-        );
-        let mut args = ["mcp", "add-json", "--scope", "user", "editkin"]
-            .map(str::to_string)
-            .to_vec();
-        args.push(config);
-        (command, args)
-    };
+    let args = agent_add_arguments(target, executable, launcher, &environment);
+    // Written for the shell of the system Editkin runs on (cmd/PowerShell, or zsh/bash on macOS).
+    let direct_command = crate::agent_connect::FallbackShell::CURRENT.render_command(target, &args);
     Ok(AgentSetupInvocation {
-        command,
+        direct_command,
         args,
         environment,
     })
@@ -546,11 +538,16 @@ fn directory_record(
     Ok(json!({ "path": path_text(&path)?, "role": role }))
 }
 
-pub fn activate_product_agent_generation(
-    state_root: &Path,
+/// The canonical manifest of the generation the installed files form right now.
+struct InstalledGeneration {
+    generation_id: String,
+    manifest_bytes: Vec<u8>,
+}
+
+fn installed_generation(
     paths: &ProductAgentGenerationPaths,
     embedded_contract_bytes: &[u8],
-) -> Result<ProductAgentGenerationActivation, String> {
+) -> Result<InstalledGeneration, String> {
     let resource_root =
         canonical_resource_path(&paths.resource_root, None, true, "Agent resource root")?;
     let embedded_contract =
@@ -605,6 +602,74 @@ pub fn activate_product_agent_generation(
     if manifest_bytes.len() as u64 > PRODUCT_AGENT_MAX_MANIFEST_BYTES {
         return Err("Agent generation manifest 超過上限".into());
     }
+    Ok(InstalledGeneration {
+        generation_id,
+        manifest_bytes,
+    })
+}
+
+/// What a start-up check did to the active generation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GenerationRepair {
+    /// No agent was ever connected on this machine: nothing to repair.
+    NoActiveGeneration,
+    /// The active generation already records exactly the installed files.
+    Current,
+    /// The active generation recorded other files (an update replaced launcher.mjs, mcp.mjs, the sidecars or the
+    /// tools); it was re-activated from the installed files. The agents' own configuration still points at the
+    /// stable launcher and state folder, so it stays valid and is not touched.
+    Repaired { pointer_identity: String },
+}
+
+/// After an update the active generation still records the previous release's file hashes and the launcher
+/// refuses it ("changed" / "failed SHA-256"). Re-activate it from the installed files, exactly as a connect would,
+/// when (and only when) its manifest differs from the installed one.
+pub fn repair_product_agent_generation(
+    state_root: &Path,
+    paths: &ProductAgentGenerationPaths,
+    embedded_contract_bytes: &[u8],
+) -> Result<GenerationRepair, String> {
+    let Some(pointer_bytes) = read_bounded_file(
+        &state_root.join(PRODUCT_AGENT_POINTER_NAME),
+        PRODUCT_AGENT_MAX_POINTER_BYTES,
+        "Agent active pointer",
+    )?
+    else {
+        return Ok(GenerationRepair::NoActiveGeneration);
+    };
+    let active_manifest = validate_pointer_bytes(&pointer_bytes).ok().and_then(|pointer| {
+        let directory = pointer.get("generationDirectoryName")?.as_str()?.to_string();
+        let expected = pointer.get("manifestSha256")?.as_str()?.to_string();
+        let bytes = read_bounded_file(
+            &state_root
+                .join("generations")
+                .join(directory)
+                .join(PRODUCT_AGENT_MANIFEST_NAME),
+            PRODUCT_AGENT_MAX_MANIFEST_BYTES,
+            "Agent generation manifest",
+        )
+        .ok()??;
+        (sha256_bytes(&bytes) == expected).then_some(bytes)
+    });
+    let installed = installed_generation(paths, embedded_contract_bytes)?;
+    if active_manifest.as_deref() == Some(installed.manifest_bytes.as_slice()) {
+        return Ok(GenerationRepair::Current);
+    }
+    let activation = activate_product_agent_generation(state_root, paths, embedded_contract_bytes)?;
+    Ok(GenerationRepair::Repaired {
+        pointer_identity: activation.pointer_identity,
+    })
+}
+
+pub fn activate_product_agent_generation(
+    state_root: &Path,
+    paths: &ProductAgentGenerationPaths,
+    embedded_contract_bytes: &[u8],
+) -> Result<ProductAgentGenerationActivation, String> {
+    let InstalledGeneration {
+        generation_id,
+        manifest_bytes,
+    } = installed_generation(paths, embedded_contract_bytes)?;
     let manifest_sha256 = sha256_bytes(&manifest_bytes);
     let state_root = ensure_generation_state_root(state_root)?;
     let personal_visual =
@@ -804,7 +869,11 @@ mod tests {
         assert!(!selected.path().to_string_lossy().starts_with(r"\\?\"));
     }
 
-    fn invocation(target: &str, workspace: &AgentWorkspace) -> AgentSetupInvocation {
+    fn invocation_with(
+        target: &str,
+        workspace: &AgentWorkspace,
+        plugin_roots: &str,
+    ) -> AgentSetupInvocation {
         let expected = [
             "EDITKIN_PLUGIN_ROOTS",
             "EDITKIN_WORKSPACE",
@@ -820,67 +889,91 @@ mod tests {
             workspace,
             vec![
                 ("ELECTRON_RUN_AS_NODE".into(), "1".into()),
-                (
-                    "EDITKIN_PLUGIN_ROOTS".into(),
-                    r"D:\插件 $tools & 配色\".into(),
-                ),
+                ("EDITKIN_PLUGIN_ROOTS".into(), plugin_roots.into()),
             ],
             &expected,
         )
         .unwrap()
     }
 
+    fn invocation(target: &str, workspace: &AgentWorkspace) -> AgentSetupInvocation {
+        invocation_with(target, workspace, r"D:\插件 $tools & 配色\")
+    }
+
     #[test]
-    fn codex_text_and_argument_array_follow_each_explicit_workspace() {
+    fn codex_argument_array_and_direct_command_follow_each_explicit_workspace() {
         let root = OwnedDirectory::new();
-        for name in ["旅行 空格 & $work", "Hao's 工作區 (二)"] {
+        for name in ["旅行 空格 & 作品", "Hao's 工作區 (二)"] {
             let selected = selected_agent_workspace(Some(&root.child(name)))
                 .unwrap()
                 .unwrap();
-            let result = invocation("codex", &selected);
+            let result = invocation_with("codex", &selected, r"D:\插件 & 配色;E:\plugins");
             let value = format!("EDITKIN_WORKSPACE={}", selected.path().to_str().unwrap());
-            assert!(result.args.iter().any(|arg| arg == &value));
-            assert!(result
-                .command
-                .contains(&format!("--env {}", ps_quote(&value))));
+            assert_eq!(&result.args[..3], ["mcp", "add", "editkin"]);
+            assert!(result.args.windows(2).any(|pair| pair[0] == "--env" && pair[1] == value));
             assert_eq!(
-                result.args.last().unwrap(),
-                r"C:\Program Files\Editkin\agent-runtime-v3\launcher.mjs"
+                &result.args[result.args.len() - 3..],
+                [
+                    "--",
+                    r"C:\Program Files\Editkin\node.exe",
+                    r"C:\Program Files\Editkin\agent-runtime-v3\launcher.mjs"
+                ]
             );
-            assert!(result.command.ends_with(
-                "-- 'C:\\Program Files\\Editkin\\node.exe' 'C:\\Program Files\\Editkin\\agent-runtime-v3\\launcher.mjs'"
-            ));
-            assert!(!result.command.contains("OPENAI_API_KEY"));
+            let command = result.direct_command.expect("plain paths have a universal spelling");
+            assert!(command.starts_with("codex mcp add editkin --env ELECTRON_RUN_AS_NODE=1 "));
+            assert!(!command.contains("OPENAI_API_KEY"));
+            if cfg!(windows) {
+                assert!(command.contains(&format!("--env \"{value}\"")));
+                assert!(command.ends_with(
+                    "-- \"C:\\Program Files\\Editkin\\node.exe\" \"C:\\Program Files\\Editkin\\agent-runtime-v3\\launcher.mjs\""
+                ));
+                assert!(!command.contains('\''.to_string().repeat(2).as_str()));
+            } else {
+                // zsh/bash: single quotes, `'` written '\''.
+                let quoted = format!("'{}'", value.replace('\'', r"'\''"));
+                assert!(command.contains(&format!("--env {quoted}")), "{command}");
+                assert!(command.ends_with(
+                    r"-- 'C:\Program Files\Editkin\node.exe' 'C:\Program Files\Editkin\agent-runtime-v3\launcher.mjs'"
+                ));
+            }
         }
     }
 
     #[test]
-    fn claude_json_and_powershell_text_preserve_unicode_apostrophe_and_trailing_slash() {
+    fn claude_add_arguments_preserve_unicode_apostrophe_and_trailing_slash_without_json() {
         let root = OwnedDirectory::new();
         let selected = selected_agent_workspace(Some(&root.child("Hao's 工作區 & $tools")))
             .unwrap()
             .unwrap();
         let result = invocation("claude", &selected);
-        let raw = result.args.last().unwrap();
-        let config: Value = serde_json::from_str(raw).unwrap();
         assert_eq!(
-            config["env"]["EDITKIN_WORKSPACE"],
-            selected.path().to_str().unwrap()
+            result.args,
+            [
+                "mcp".to_string(),
+                "add".into(),
+                "--scope".into(),
+                "user".into(),
+                "editkin".into(),
+                "-e".into(),
+                "ELECTRON_RUN_AS_NODE=1".into(),
+                "-e".into(),
+                r"EDITKIN_PLUGIN_ROOTS=D:\插件 $tools & 配色\".into(),
+                "-e".into(),
+                format!("EDITKIN_WORKSPACE={}", selected.path().to_str().unwrap()),
+                "--".into(),
+                r"C:\Program Files\Editkin\node.exe".into(),
+                r"C:\Program Files\Editkin\agent-runtime-v3\launcher.mjs".into(),
+            ]
         );
-        assert_eq!(
-            config["env"]["EDITKIN_PLUGIN_ROOTS"],
-            r"D:\插件 $tools & 配色\"
-        );
-        assert_eq!(
-            config["args"][0],
-            r"C:\Program Files\Editkin\agent-runtime-v3\launcher.mjs"
-        );
-        assert_eq!(
-            result.command,
-            format!("claude mcp add-json --scope user editkin {}", ps_quote(raw))
-        );
-        assert!(result.command.contains("Hao''s"));
-        assert!(!raw.contains("ANTHROPIC_API_KEY"));
+        assert!(!result.args.iter().any(|arg| arg.starts_with('{') || arg == "add-json"));
+        if cfg!(windows) {
+            // `$` and a trailing `\` have no spelling that cmd.exe, PowerShell 5.1 and 7 all keep.
+            assert_eq!(result.direct_command, None);
+        } else {
+            // zsh/bash single quotes keep `$`, `&` and a trailing `\` as they are.
+            assert!(result.direct_command.unwrap().contains(r"'EDITKIN_PLUGIN_ROOTS=D:\插件 $tools & 配色\'"));
+        }
+        assert!(!result.args.iter().any(|arg| arg.contains("ANTHROPIC_API_KEY")));
     }
 
     #[test]
@@ -1021,6 +1114,126 @@ mod tests {
             first_pointer
         );
         assert_ne!(first_pointer, second_pointer);
+    }
+
+    /// Runs the repository's launcher (scripts/editkin-product-mcp-launcher.mjs) against `state_root` with real
+    /// Node: every pointer, manifest, file-record, Node-manifest and entrypoint-identity check runs as shipped;
+    /// only the final module evaluation is replaced by a hook that serves the verified bytes once.
+    fn launcher_verdict(state_root: &Path, paths: &ProductAgentGenerationPaths) -> Value {
+        let canonical = |path: &Path| interoperable_canonical_path(&fs::canonicalize(path).unwrap()).unwrap();
+        let node = std::env::var_os("EDITKIN_TEST_NODE").expect("test runtime must be explicitly configured");
+        let launcher = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("scripts")
+            .join("editkin-product-mcp-launcher.mjs");
+        let script = state_root.parent().unwrap().join("verify-with-launcher.mjs");
+        fs::write(
+            &script,
+            r#"import { pathToFileURL } from "node:url";
+const [launcher, stateRoot, nodePath, selfPath] = process.argv.slice(2);
+const { launchProductMcpGeneration } = await import(pathToFileURL(launcher).href);
+let hooks;
+try {
+  const result = await launchProductMcpGeneration({
+    stateRoot, runningExecutable: nodePath, selfPath,
+    registerHooks: (registered) => { hooks = registered; return { deregister() {} }; },
+    importModule: async (url) => { hooks.load(url, {}, () => { throw new Error("unexpected nextLoad"); }); },
+  });
+  process.stdout.write(JSON.stringify({ ok: true, status: result.status }));
+} catch (error) {
+  process.stdout.write(JSON.stringify({ ok: false, error: String(error?.message ?? error) }));
+}
+"#,
+        )
+        .unwrap();
+        let output = std::process::Command::new(&node)
+            .arg(&script)
+            .arg(&launcher)
+            // Canonical spellings, as the generation records them (macOS temp is /var → /private/var).
+            .arg(canonical(state_root))
+            .arg(canonical(&paths.node))
+            .arg(canonical(&paths.launcher))
+            .output()
+            .unwrap();
+        serde_json::from_slice(&output.stdout).unwrap_or_else(|_| {
+            panic!(
+                "launcher verdict unreadable: {}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            )
+        })
+    }
+
+    /// A Node manifest and entrypoint-identity sidecar that bind the fixture files the way release builds do.
+    fn bind_launcher_sidecars(paths: &ProductAgentGenerationPaths) {
+        let node = std::env::var_os("EDITKIN_TEST_NODE").expect("test runtime must be explicitly configured");
+        let version = std::process::Command::new(&node)
+            .args(["-p", "process.versions.node"])
+            .output()
+            .unwrap();
+        let version = String::from_utf8(version.stdout).unwrap().trim().to_string();
+        let node_sha = sha256_bytes(&fs::read(&paths.node).unwrap());
+        fs::write(
+            &paths.node_manifest,
+            json!({ "nodeExeSha256": node_sha, "version": version }).to_string(),
+        )
+        .unwrap();
+        let entrypoint = fs::read(&paths.entrypoint).unwrap();
+        fs::write(
+            &paths.entrypoint_identity,
+            json!({ "bundle": {
+                "file": paths.entrypoint.file_name().unwrap().to_string_lossy(),
+                "size": entrypoint.len(),
+                "sha256": sha256_bytes(&entrypoint),
+            } })
+            .to_string(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn an_update_repairs_the_active_generation_and_the_launcher_accepts_it_again() {
+        let root = OwnedDirectory::new();
+        let (state_root, paths, contract) = product_generation_fixture(&root);
+        bind_launcher_sidecars(&paths);
+        assert_eq!(
+            repair_product_agent_generation(&state_root, &paths, &contract).unwrap(),
+            GenerationRepair::NoActiveGeneration,
+            "never connected: nothing to repair"
+        );
+        // 0.15.0 connected once.
+        activate_product_agent_generation(&state_root, &paths, &contract).unwrap();
+        let first = launcher_verdict(&state_root, &paths);
+        assert_eq!(first["ok"], true, "{first}");
+        assert_eq!(
+            repair_product_agent_generation(&state_root, &paths, &contract).unwrap(),
+            GenerationRepair::Current
+        );
+        let generations = fs::read_dir(state_root.join("generations")).unwrap().count();
+
+        // The update replaces the launcher, the MCP bundle (and its identity sidecar) and a tool.
+        fs::write(&paths.launcher, b"// launcher of the next release\n").unwrap();
+        fs::write(&paths.entrypoint, b"export const release = 2;\n").unwrap();
+        fs::write(&paths.ffmpeg, b"ffmpeg of the next release\n").unwrap();
+        bind_launcher_sidecars(&paths);
+        let refused = launcher_verdict(&state_root, &paths);
+        assert_eq!(refused["ok"], false);
+        let error = refused["error"].as_str().unwrap();
+        assert!(error.contains("changed") || error.contains("SHA-256"), "{error}");
+
+        let repaired = repair_product_agent_generation(&state_root, &paths, &contract).unwrap();
+        assert!(matches!(repaired, GenerationRepair::Repaired { .. }), "{repaired:?}");
+        let accepted = launcher_verdict(&state_root, &paths);
+        assert_eq!(accepted["ok"], true, "{accepted}");
+        assert_eq!(accepted["status"], "GREEN_PRODUCT_MCP_GENERATION_STARTED");
+        assert_eq!(fs::read_dir(state_root.join("generations")).unwrap().count(), generations + 1);
+        // Idempotent: a second start-up finds it current and writes nothing.
+        let pointer = fs::read(state_root.join(PRODUCT_AGENT_POINTER_NAME)).unwrap();
+        assert_eq!(
+            repair_product_agent_generation(&state_root, &paths, &contract).unwrap(),
+            GenerationRepair::Current
+        );
+        assert_eq!(fs::read(state_root.join(PRODUCT_AGENT_POINTER_NAME)).unwrap(), pointer);
     }
 
     #[test]

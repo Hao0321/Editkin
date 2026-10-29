@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-decode-gpu-video-preview-frame"
+description = "Enables the decode_gpu_video_preview_frame command without any pre-configured scope."
+commands.allow = ["decode_gpu_video_preview_frame"]
+
+[[permission]]
+identifier = "deny-decode-gpu-video-preview-frame"
+description = "Denies the decode_gpu_video_preview_frame command without any pre-configured scope."
+commands.deny = ["decode_gpu_video_preview_frame"]

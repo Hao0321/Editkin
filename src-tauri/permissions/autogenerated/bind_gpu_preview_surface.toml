@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-bind-gpu-preview-surface"
+description = "Enables the bind_gpu_preview_surface command without any pre-configured scope."
+commands.allow = ["bind_gpu_preview_surface"]
+
+[[permission]]
+identifier = "deny-bind-gpu-preview-surface"
+description = "Denies the bind_gpu_preview_surface command without any pre-configured scope."
+commands.deny = ["bind_gpu_preview_surface"]

@@ -1,4 +1,5 @@
 import type { NativeEffectRenderReceipt } from "../plugins/nativeEffectTypes";
+import type { SelectedNativeVideoRuntimeIdentity } from "../application/selectedNativeVideoRuntime";
 import type { ResidentSceneLinearVideoSequenceReceipt } from "./residentSceneLinearVideoSequence";
 import type {
   HighBitDepthAlphaDeliveryReceipt,
@@ -15,15 +16,35 @@ export interface RenderOptions {
   autoRotoCacheRoot?: string;
   nativeCorePath?: string;
   gpuCompositorPath?: string;
+  selectedNativeVideoRuntime?: SelectedNativeVideoRuntimeIdentity;
   preferGpu?: boolean;
+  /** Hard total deadline. Omit it: the default deadline scales with the rendered duration (no fixed cap). */
   timeoutMs?: number;
+  /** How long a watched encoder may show no progress before the export is stopped (default 10 minutes). */
+  stallTimeoutMs?: number;
+  /** Directory for temporary work files; defaults to EDITKIN_RENDER_WORK_ROOT or a hidden folder next to the output. */
+  workRoot?: string;
+  signal?: AbortSignal;
   fontRoot?: string;
   colorRoot?: string;
   pluginRoots?: string[];
   deliveryProfile?: RenderDeliveryProfile;
+  /** Resident SDR transport. SHORT renders never set it (legacy PNG sequence); the LONG router (>= 30 min) selects
+   * stream v2, or v3 once WP-B provides it. An explicit caller may still opt in. */
+  residentStreamVersion?: 2 | 3;
+  /** LONG-render (>= 30 min) controls for tests and MCP; the desktop never sets it. */
+  longRender?: import("./longRenderContractsV1").LongRenderOptionsV1;
 }
 
 export interface RenderResult {
+  residentStreamV3Pipeline?: import("./residentSceneLinearVideoStreamV3").ResidentStreamPipelineV3;
+  chunkedCompositePipeline?: import("./chunkedCompositeExportV1").ChunkedCompositeReceiptV1;
+  chunkedSceneLinearPipeline?: import("./chunkedSceneLinearSequenceV1").ChunkedSceneLinearSequenceReceiptV1;
+  mesh3dPipeline?: import("./mesh3dReceipt").Mesh3dRenderReceipt;
+  /** Rec.709 2.5D / particle export through the native image engine graph (scene25dNativeExportV1). */
+  nativeImageEngine?: import("./scene25dNativeExportV1").Scene25dImageEngineReceiptV1;
+  /** Authored clip speeds/curves baked through the source-clock cache (timeRemapExportV1), with each clip's audio behaviour. */
+  timeRemap?: import("./timeRemapExportV1").TimeRemapExportReceiptV1;
   artifactIdentity?: import("./renderArtifactIdentity").RenderArtifactIdentity;
   outputPath: string;
   duration: number;
@@ -48,8 +69,11 @@ export interface RenderResult {
     lastFrameSha256?: string;
   };
   residentVideoPipeline?: ResidentSceneLinearVideoSequenceReceipt;
+  residentStreamPipeline?: import("./residentSceneLinearVideoProject").ResidentSceneLinearVideoProjectResult<VideoEncoder>["residentStreamPipeline"];
   nativeAudio?: NativeFinalAudioReceipt;
   alphaDelivery?: HighBitDepthAlphaDeliveryReceipt;
+  /** Present only for LONG renders (>= 30 min): route, guard, journal, publish and per-stage receipts. */
+  longRender?: import("./longRenderContractsV1").LongRenderReceiptV1;
 }
 
 export interface NativeFinalAudioReceipt {
@@ -73,4 +97,4 @@ export interface NativeFinalAudioReceipt {
   claimBoundary: string;
 }
 
-export type VideoEncoder = "h264_nvenc" | "h264_videotoolbox" | "libx264" | "hevc_nvenc" | "hevc_videotoolbox" | "libx265" | "prores_ks";
+export type VideoEncoder = "h264_nvenc" | "h264_videotoolbox" | "libx264" | "hevc_nvenc" | "hevc_videotoolbox" | "libx265" | "prores_ks" | "ffv1";

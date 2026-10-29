@@ -7,6 +7,7 @@ import {fileURLToPath} from "node:url";
 import {autoWhiteBalanceReferencePlan,autoColorCandidateFilters} from "./autoColorFrame";
 import {sourceLinearWhiteBalancePlan} from "../render/sourceLinearWhiteBalance";
 import {DEFAULT_COLOR,type MediaAsset} from "../domain/types";
+import {EVIDENCE_ENV} from "../test/tempRoot.mjs";
 const app=fileURLToPath(new URL("../../",import.meta.url)),exe=resolve(app,"vendor/ffmpeg/win32-x64/ffmpeg.exe");
 const evidence:unknown[]=[];
 const count=512*64;
@@ -32,7 +33,8 @@ function run(asset:MediaAsset,input:Buffer,filters:string[],size:number,label:st
  expect(result.stdout.length).toBe(size*16);return result.stdout;
 }
 const read=(b:Buffer,n:number,index:number)=>[2,0,1,3].map(plane=>b.readFloatLE((plane*n+index)*4));
-afterAll(()=>{const dir=resolve(app,".rd/linear-white-balance-20260831");mkdirSync(dir,{recursive:true});writeFileSync(resolve(dir,`float-resize-evidence-${Date.now()}.json`),JSON.stringify({scope:"engineering-raw-float-resize-not-user-video",exe,exeSha256:createHash("sha256").update(readFileSync(exe)).digest("hex"),evidence},null,2));});
+// Evidence JSON is written only when EDITKIN_TEST_EVIDENCE_ROOT names a folder to keep it in.
+afterAll(()=>{const dir=process.env[EVIDENCE_ENV];if(!dir)return;mkdirSync(dir,{recursive:true});writeFileSync(resolve(dir,`float-resize-evidence-${Date.now()}.json`),JSON.stringify({scope:"engineering-raw-float-resize-not-user-video",exe,exeSha256:createHash("sha256").update(readFileSync(exe)).digest("hex"),evidence},null,2));});
 describe("actual source-linear WB 512x64 to 256x32 FLOAT surface",()=>{
  it.each(["rec709","hlg","pq"] as const)("preserves %s zero-source portrait precision (PQ reference remains blocked)",kind=>{
   const asset=source(kind),landscape=pixels(kind),portrait=Buffer.alloc(landscape.length);

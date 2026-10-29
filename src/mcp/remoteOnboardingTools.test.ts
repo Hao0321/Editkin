@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { access, appendFile, link, mkdir, mkdtemp, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { access, appendFile, link, mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { useTempRoots } from "../test/tempRoot.mjs";
 import { listRemoteProviderConnectorStatus, registerRemoteOnboardingTools } from "./remoteOnboardingTools";
 import { validateRemoteOrigin } from "./remoteOnboarding/network";
 import { type PrepareRemoteSetupInput } from "./remoteOnboarding/proposal";
@@ -11,8 +11,9 @@ import { remoteSetupPaths } from "./remoteOnboarding/stateFiles";
 import { getRemoteSetupStatus } from "./remoteOnboarding/status";
 import { verifyRemoteAccess } from "./remoteOnboarding/verify";
 
+const temp = useTempRoots();
 async function fixtureEnvironment() {
-  const root = await mkdtemp(join(tmpdir(), "editkin-remote-onboarding-"));
+  const root = await temp.create("editkin-remote-onboarding-");
   return {
     EDITKIN_AGENT_STATE_ROOT: join(root, "agent-runtime-v3"),
     EDITKIN_REMOTE_AGENT_JOB_ID: "a".repeat(32),

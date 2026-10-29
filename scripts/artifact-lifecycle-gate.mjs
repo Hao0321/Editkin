@@ -1,5 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import { inspectDistributionArtifacts } from "./lib/artifact-lifecycle.mjs";
 import {
   inspectWindowsTauriCandidatePrimaryArtifacts,
@@ -44,6 +44,7 @@ const report = await inspectDistributionArtifacts({
 });
 const output = resolve(args.output ?? resolve(root, `../../.rd/benchmarks/editkin-artifact-lifecycle-${version}-windows-x64.json`));
 const evidence = { ...report, artifactTarget, productVersion: version, generatedAt: new Date().toISOString() };
+await mkdir(dirname(output), { recursive: true });
 await writeFile(output, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
 process.stdout.write(`${JSON.stringify({ ...evidence, evidencePath: output })}\n`);
 if (report.status !== "GREEN") process.exitCode = 1;

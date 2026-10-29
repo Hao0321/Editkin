@@ -61,6 +61,7 @@ fn request(
         contrast: 1.7,
         corrections,
         region_memory_policy: RegionMemoryRoutePolicy::FixedBaseline,
+        edge_refine: None,
     }
 }
 

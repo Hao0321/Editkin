@@ -49,7 +49,8 @@ describe("nonblocking material jobs (control fixtures, not media quality)", () =
       const two = await manager.start(request, runtime);
       expect(two.coalesced).toBe(true); expect(two.job.jobId).toBe(one.job.jobId); expect(calls).toBe(1);
       expect((await manager.status(one.job.jobId)).state).toBe("RUNNING");
-      await expect(manager.start({ ...request, clipId: "other" }, runtime)).rejects.toThrow("已有素材分析");
+      // A different request no longer waits for this one (W2-3, B3b): it prepares in parallel in its own slot.
+      expect((await manager.start({ ...request, clipId: "other" }, runtime)).coalesced).toBe(false);
       finish(); await until(async () => (await manager.status(one.job.jobId)).state === "COMPLETED");
       expect((await manager.status(one.job.jobId)).result?.materialId).toBe(packet.materialId);
     } finally { finish(); }

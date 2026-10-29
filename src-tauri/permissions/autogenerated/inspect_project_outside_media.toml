@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-inspect-project-outside-media"
+description = "Enables the inspect_project_outside_media command without any pre-configured scope."
+commands.allow = ["inspect_project_outside_media"]
+
+[[permission]]
+identifier = "deny-inspect-project-outside-media"
+description = "Denies the inspect_project_outside_media command without any pre-configured scope."
+commands.deny = ["inspect_project_outside_media"]

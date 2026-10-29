@@ -1,0 +1,23 @@
+/** Task 2 wave C: mirrors and linked timeline clips. */
+export const INTERFACE_MESSAGES: ReadonlyArray<readonly [string,string,string,string,string]> = [
+  ["水平翻轉","Flip horizontally","Voltear horizontalmente","左右反転","좌우 뒤집기"],
+  ["垂直翻轉","Flip vertically","Voltear verticalmente","上下反転","상하 뒤집기"],
+  ["已更新片段翻轉，可一次復原。","Updated the clip flip. Undo once to restore.","Se actualizó el volteo del clip. Deshaz una vez para restaurar.","クリップの反転を更新しました。1回の取り消しで戻せます。","클립 뒤집기를 업데이트했습니다. 한 번 실행 취소하면 복원됩니다."],
+  ["請選取一般影片或圖片片段來翻轉。","Select a regular video or image clip to flip.","Selecciona un clip normal de vídeo o imagen para voltearlo.","通常の動画または画像クリップを選んで反転してください。","일반 영상 또는 이미지 클립을 선택해 뒤집으세요."],
+  ["這段是標題模板管理的片段，尚未能安全翻轉；原專案保持不變。","This clip is managed by a title template. It cannot yet be flipped safely; the project is unchanged.","Este clip pertenece a una plantilla de títulos. Aún no se puede voltear con seguridad; el proyecto no cambia.","このクリップはタイトルテンプレートで管理されています。安全に反転できないため、プロジェクトは変更しません。","이 클립은 제목 템플릿이 관리합니다. 아직 안전하게 뒤집을 수 없어 프로젝트를 유지합니다."],
+  ["這段使用立體、浮動框或快門效果，尚未能安全翻轉；原專案保持不變。","This clip uses 3D, a floating frame or a shutter effect. It cannot yet be flipped safely; the project is unchanged.","Este clip usa 3D, marco flotante o efecto de obturador. Aún no se puede voltear con seguridad; el proyecto no cambia.","このクリップには3D、フローティング枠、シャッター効果があります。安全に反転できないため、プロジェクトは変更しません。","이 클립은 3D, 플로팅 프레임 또는 셔터 효과를 사용합니다. 아직 안전하게 뒤집을 수 없어 프로젝트를 유지합니다."],
+  ["連結","Link","Vincular","リンク","연결"],
+  ["取消連結","Unlink","Desvincular","リンク解除","연결 해제"],
+  ["連結的片段","Linked clips","Clips vinculados","リンクされたクリップ","연결된 클립"],
+  ["請選取至少兩個片段來連結。","Select at least two clips to link.","Selecciona al menos dos clips para vincularlos.","リンクするクリップを2つ以上選択してください。","연결할 클립을 두 개 이상 선택하세요."],
+  ["連結的片段需要一起修改，請先解鎖所有軌道。","Linked clips must be edited together. Unlock all their tracks first.","Los clips vinculados deben editarse juntos. Desbloquea primero todas sus pistas.","リンクされたクリップは一緒に編集します。先にすべてのトラックのロックを解除してください。","연결된 클립은 함께 수정해야 합니다. 먼저 모든 트랙의 잠금을 해제하세요."],
+  ["這組包含標題模板管理的片段，尚未能安全連結調整；原專案保持不變。","This group contains clips managed by a title template. Linked editing is not yet safe; the project is unchanged.","Este grupo contiene clips de una plantilla de títulos. La edición vinculada aún no es segura; el proyecto no cambia.","このグループにはタイトルテンプレートが管理するクリップが含まれます。安全に連動編集できないため、プロジェクトは変更しません。","이 그룹에는 제목 템플릿이 관리하는 클립이 있습니다. 아직 안전하게 연결 편집할 수 없어 프로젝트를 유지합니다."],
+  ["這個操作還不能安全套用到整組片段，請先取消連結；原專案保持不變。","This operation cannot yet be applied safely to the entire group. Unlink it first; the project is unchanged.","Esta operación aún no se puede aplicar con seguridad a todo el grupo. Desvincúlalo primero; el proyecto no cambia.","この操作はグループ全体に安全に適用できません。先にリンクを解除してください。プロジェクトは変更しません。","이 작업은 아직 그룹 전체에 안전하게 적용할 수 없습니다. 먼저 연결을 해제하세요. 프로젝트는 유지됩니다."],
+  ["已連結選取的片段，可一次復原。","Linked the selected clips. Undo once to restore.","Se vincularon los clips seleccionados. Deshaz una vez para restaurar.","選択したクリップをリンクしました。1回の取り消しで戻せます。","선택한 클립을 연결했습니다. 한 번 실행 취소하면 복원됩니다."],
+  ["已取消片段連結，可一次復原。","Unlinked the clips. Undo once to restore.","Se desvincularon los clips. Deshaz una vez para restaurar.","クリップのリンクを解除しました。1回の取り消しで戻せます。","클립 연결을 해제했습니다. 한 번 실행 취소하면 복원됩니다."],
+  ["請選取一般影片、圖片或聲音片段來連結。","Select regular video, image or audio clips to link.","Selecciona clips normales de vídeo, imagen o audio para vincularlos.","通常の動画、画像、音声クリップを選択してリンクしてください。","일반 영상, 이미지 또는 오디오 클립을 선택해 연결하세요."],
+  ["片段連結代號無效。","The clip link identifier is invalid.","El identificador del vínculo de clips no es válido.","クリップのリンク識別子が無効です。","클립 연결 식별자가 유효하지 않습니다."],
+  ["片段連結代號已存在，請重新連結。","The clip link identifier already exists. Link the clips again.","El identificador del vínculo ya existe. Vuelve a vincular los clips.","クリップのリンク識別子は既に存在します。もう一度リンクしてください。","클립 연결 식별자가 이미 있습니다. 클립을 다시 연결하세요."],
+  ["分割位置必須在每段連結片段的內部；原專案保持不變。","The split point must be inside every linked clip; the project is unchanged.","El punto de división debe estar dentro de cada clip vinculado; el proyecto no cambia.","分割位置はリンクされたすべてのクリップの内部に必要です。プロジェクトは変更しません。","분할 위치는 모든 연결 클립 내부에 있어야 합니다. 프로젝트는 유지됩니다."],
+  ["無法更新片段連結。","Could not update the clip links.","No se pudieron actualizar los vínculos de clips.","クリップのリンクを更新できませんでした。","클립 연결을 업데이트할 수 없습니다."],
+];

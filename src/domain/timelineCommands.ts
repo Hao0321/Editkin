@@ -1,3 +1,7 @@
+import { shiftedClipAudioEnvelope } from "./clipAudioEnvelope";
+import { applyClipAudioEnvelope } from "./clipAudioCommands";
+import { applyTrackSolo } from "./trackState";
+import { reorderedTrackLayersV1 } from "./trackLayerOrderV1";
 import {
   alignTime,
   animatedClipState,
@@ -14,9 +18,15 @@ import { assertHaoExpression } from "./expression";
 import { applySmartCutToClip } from "./smartCut";
 import { sliceClipVisuals } from "./clipSlicing";
 import { applyFastCommand } from "./fastCommands";
+import { applyClipExtension, applyClipSlip } from "./clipSourceEdits";
 import type { EditorCommand } from "./commandTypes";
+import { applyRippleDelete } from "./rippleDelete";
+import { applyClipRetime } from "./clipRetime";
+import { applyClipTimeRemapCommandV1, assertClipTimeRemapEditSupportedV1 } from "./clipTimeRemapCommandsV1";
 
 export function applyTimelineCommand(project: EditProject, command: EditorCommand): boolean {
+  assertClipTimeRemapEditSupportedV1(project, command);
+  if (applyClipTimeRemapCommandV1(project, command)) return true;
   switch (command.type) {
     case "import_asset": {
       if (project.assets.some((asset) => asset.id === command.asset.id)) {
@@ -36,13 +46,19 @@ export function applyTimelineCommand(project: EditProject, command: EditorComman
     case "add_clip": {
       findAsset(project, command.clip.assetId);
       const track = findTrack(project, command.clip.trackId);
-      track.clips.push({ ...command.clip, layer: { ...DEFAULT_CLIP_LAYER, ...command.clip.layer }, expressions: { ...command.clip.expressions } });
+      // Later commands in the same batch can edit keyframes/masks. Never retain
+      // their arrays from the caller's reusable preparation packet.
+      track.clips.push({ ...structuredClone(command.clip), layer: { ...DEFAULT_CLIP_LAYER, ...command.clip.layer }, expressions: { ...command.clip.expressions } });
       track.clips.sort((a, b) => a.timelineStart - b.timelineStart);
       break;
     }
     case "add_track": {
       if (project.tracks.some((track) => track.id === command.track.id)) throw new EditGraphError(`軌道 id 已存在：${command.track.id}`);
-      project.tracks.push(structuredClone(command.track));
+      const added = structuredClone(command.track);
+      // A picture track added muted keeps its picture (mute is sound only) and says so, so reopening the project
+      // does not read it as a project saved before the split, where muted also hid the picture.
+      if (added.kind === "video" && added.muted && added.hidden === undefined) added.hidden = false;
+      project.tracks.push(added);
       break;
     }
     case "precompose_clips": {
@@ -134,14 +150,31 @@ export function applyTimelineCommand(project: EditProject, command: EditorComman
       track.name = name;
       break;
     }
+    case "reorder_tracks": {
+      project.tracks = reorderedTrackLayersV1(project, command.trackIds);
+      break;
+    }
     case "toggle_track_lock": {
       const track = findTrack(project, command.trackId);
       track.locked = !track.locked;
       break;
     }
+    case "set_track_solo": {
+      applyTrackSolo(project, command.trackId, command.solo);
+      break;
+    }
     case "toggle_track_mute": {
       const track = findTrack(project, command.trackId);
+      // Mute is sound only. A video track then states its picture explicitly, so a muted track that still shows its
+      // picture is never read as a project saved before the split (migrateProject turns that old form into hidden).
+      if (track.kind === "video" && track.hidden === undefined) track.hidden = false;
       track.muted = !track.muted;
+      break;
+    }
+    case "toggle_track_hidden": {
+      const track = findTrack(project, command.trackId);
+      if (track.kind !== "video") throw new EditGraphError("只有畫面軌可以隱藏畫面。");
+      track.hidden = !track.hidden;
       break;
     }
     case "split_clip": {
@@ -161,7 +194,8 @@ export function applyTimelineCommand(project: EditProject, command: EditorComman
         { clipId: clip.id, start: 0, end: leftDuration },
         { clipId: command.newClipId, start: leftDuration, end: clip.duration },
       ]);
-      const splitState = animatedClipState(clip, leftDuration);
+      // Expressions run on top of the stored values at preview and export; storing their result applies them twice.
+      const splitState = animatedClipState({ ...clip, expressions: {} }, leftDuration);
       const originalKeyframes = structuredClone(clip.keyframes);
       const originalCreative = structuredClone(clip.creative);
       clip.duration = leftDuration;
@@ -198,6 +232,7 @@ export function applyTimelineCommand(project: EditProject, command: EditorComman
         keyframes: originalKeyframes.filter((keyframe) => keyframe.time > leftDuration)
           .map((keyframe) => ({ ...keyframe, id: `${command.newClipId}-${keyframe.id}`, time: alignTime(keyframe.time - leftDuration, project.fps), transform: { ...keyframe.transform }, color: { ...keyframe.color } })),
       };
+      if (clip.audioEnvelope) right.audioEnvelope = shiftedClipAudioEnvelope(clip, leftDuration);
       track.clips.push(right);
       track.clips.sort((a, b) => a.timelineStart - b.timelineStart);
       break;
@@ -213,38 +248,8 @@ export function applyTimelineCommand(project: EditProject, command: EditorComman
       break;
     }
     case "ripple_delete_clip": {
-      const clip = findClip(project, command.clipId);
-      const sourceTrack = findTrack(project, clip.trackId);
-      if (sourceTrack.locked) throw new EditGraphError("鎖定的軌道不能刪除片段");
-      const rippleStart = alignTime(clip.timelineStart + clip.duration, project.fps);
-      const rippleDuration = clip.duration;
-      sourceTrack.clips = sourceTrack.clips.filter((item) => item.id !== clip.id);
-      for (const candidate of project.tracks.flatMap((item) => item.clips)) {
-        if (candidate.layer?.parentClipId === clip.id) candidate.layer.parentClipId = undefined;
-        if (candidate.layer?.trackMatte?.sourceClipId === clip.id) candidate.layer.trackMatte = undefined;
-      }
-      const affectedTracks = sourceTrack.id === "video-main"
-        ? project.tracks.filter((track) => !track.locked && track.kind !== "caption")
-        : [sourceTrack];
-      for (const track of affectedTracks) {
-        for (const item of track.clips) {
-          if (item.timelineStart + 1e-6 >= rippleStart) {
-            item.timelineStart = alignTime(Math.max(0, item.timelineStart - rippleDuration), project.fps);
-          }
-        }
-        track.clips.sort((left, right) => left.timelineStart - right.timelineStart);
-      }
-      if (sourceTrack.id === "video-main") {
-        for (const caption of project.captions) {
-          if (caption.start + 1e-6 >= rippleStart) caption.start = alignTime(Math.max(0, caption.start - rippleDuration), project.fps);
-        }
-        for (const graphic of project.motionGraphics) {
-          if (graphic.timelineStart + 1e-6 >= rippleStart) graphic.timelineStart = alignTime(Math.max(0, graphic.timelineStart - rippleDuration), project.fps);
-        }
-        for (const marker of project.director.markers) {
-          if (marker.time + 1e-6 >= rippleStart) marker.time = alignTime(Math.max(0, marker.time - rippleDuration), project.fps);
-        }
-      }
+      // Never refused for overlap, never deletes picture or sound on another track (see rippleDelete.ts).
+      applyRippleDelete(project, command.clipId);
       break;
     }
     case "move_clip": {
@@ -272,9 +277,11 @@ export function applyTimelineCommand(project: EditProject, command: EditorComman
       if (seconds <= 0 || seconds >= clip.duration) {
         throw new EditGraphError("裁掉長度必須大於 0 且小於片段時長");
       }
-      const trimState = animatedClipState(clip, seconds);
+      // Authored values only: expressions are applied again on top at preview and export.
+      const trimState = animatedClipState({ ...clip, expressions: {} }, seconds);
       const [masks] = sliceClipVisuals(project, clip, [{ clipId: clip.id, start: seconds, end: clip.duration }]);
       clip.masks = masks;
+      if (clip.audioEnvelope) clip.audioEnvelope = shiftedClipAudioEnvelope(clip, seconds);
       clip.sourceStart = alignTime(clip.sourceStart + seconds, project.fps);
       clip.duration = alignTime(clip.duration - seconds, project.fps);
       if (clip.creative?.transitionIn && clip.creative.transitionIn.duration > clip.duration) clip.creative.transitionIn.duration = clip.duration;
@@ -297,6 +304,22 @@ export function applyTimelineCommand(project: EditProject, command: EditorComman
       if (clip.creative?.transitionIn && clip.creative.transitionIn.duration > clip.duration) clip.creative.transitionIn.duration = clip.duration;
       if (clip.creative?.transitionOut && clip.creative.transitionOut.duration > clip.duration) clip.creative.transitionOut.duration = clip.duration;
       clip.keyframes = clip.keyframes.filter((keyframe) => keyframe.time <= clip.duration);
+      break;
+    }
+    case "extend_clip": {
+      applyClipExtension(project, command);
+      break;
+    }
+    case "slip_clip": {
+      applyClipSlip(project, command);
+      break;
+    }
+    case "retime_clip": {
+      applyClipRetime(project, command);
+      break;
+    }
+    case "set_clip_audio_envelope": {
+      applyClipAudioEnvelope(project, command);
       break;
     }
     case "set_clip_volume": {

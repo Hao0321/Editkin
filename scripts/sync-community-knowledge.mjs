@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readCommunityPolicySnapshot, assertCommunityPolicyCurrent, extractCommunityStableRules, communityRuleSourceIdentities } from "./lib/community-stable-rules.mjs";
 import {
   EXCLUDED_COMMUNITY_KNOWLEDGE_SOURCES,
   EXPECTED_COMMUNITY_KNOWLEDGE_COUNTS,
@@ -11,7 +12,6 @@ import {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceRoot = path.resolve(root, "..", "..", "video-autopilot-kit", "knowledge");
-const skillPath = path.join(process.env.USERPROFILE ?? "", ".codex", "skills", "video-autopilot", "SKILL.md");
 const outputPath = path.join(root, "src", "knowledge", "editkinCommunityKnowledge.json");
 const summaryPath = path.join(root, "src", "knowledge", "editkinCommunityKnowledgeSummary.json");
 
@@ -116,14 +116,9 @@ if (modules.length !== EXPECTED_COMMUNITY_KNOWLEDGE_COUNTS.includedModules || ex
   throw new Error(`community knowledge classification cardinality drifted: included=${modules.length} excluded=${excluded.length}`);
 }
 
-const skillText = await readFile(skillPath, "utf8");
-const skillLines = skillText.split(/\r?\n/);
-const stableRuleIds = [...new Set([...skillText.matchAll(/\bM\d{1,3}(?:-[A-Z]+)?(?:A)?\b/g)].map((match) => match[0]))].sort();
-const stableRules = stableRuleIds.map((id) => {
-  const boundary = new RegExp(`\\b${id.replace("-", "\\-")}\\b`);
-  const line = skillLines.find((candidate) => boundary.test(candidate)) ?? id;
-  return { id, text: sanitizePersonalData(line.replace(/^\s*(?:-\s+|\d+\.\s+)?/, "")) };
-});
+const policy = await readCommunityPolicySnapshot();
+const stableRules = extractCommunityStableRules(policy.records, sanitizePersonalData);
+const stableRuleSources = communityRuleSourceIdentities(policy.records);
 if (stableRules.length !== EXPECTED_COMMUNITY_KNOWLEDGE_COUNTS.stableRules) {
   throw new Error(`stable rule cardinality drifted: expected ${EXPECTED_COMMUNITY_KNOWLEDGE_COUNTS.stableRules}, received ${stableRules.length}`);
 }
@@ -136,6 +131,8 @@ const pack = {
   excludedSourceCount: excluded.length,
   stableRuleCount: stableRules.length,
   stableRulesSha256: sha256(JSON.stringify(stableRules)),
+  stableRuleSources,
+  stableRuleSourcesSha256: sha256(JSON.stringify(stableRuleSources)),
   modules,
   stableRules,
   excluded,
@@ -149,8 +146,10 @@ const summary = {
   excludedSourceCount: pack.excludedSourceCount,
   stableRuleCount: pack.stableRuleCount,
   stableRulesSha256: pack.stableRulesSha256,
+  stableRuleSourcesSha256: pack.stableRuleSourcesSha256,
   packSha256: sha256(payload),
 };
+await assertCommunityPolicyCurrent(policy);
 await mkdir(path.dirname(outputPath), { recursive: true });
 await Promise.all([
   writeFile(outputPath, payload, "utf8"),

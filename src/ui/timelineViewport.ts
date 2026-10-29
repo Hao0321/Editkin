@@ -1,3 +1,5 @@
+import { buildTimelineIntervalEndTree, visitTimelineIntervalEnds, type TimelineIntervalEndTree } from "./timelineIntervalEndTree";
+
 export interface TimelineInterval {
   start: number;
   end: number;
@@ -9,6 +11,8 @@ export interface TimelineIntervalIndex<T> {
   starts: number[];
   prefixMaxEnd: number[];
   positions: Map<T, number>;
+  /** Derived immutable snapshot; optional so legacy/manual indexes remain queryable. */
+  endTree?: TimelineIntervalEndTree;
 }
 
 function lowerBound(values: number[], target: number): number {
@@ -27,12 +31,18 @@ export function buildTimelineIntervalIndex<T>(source: T[], interval: (item: T) =
     .sort((left, right) => left.interval.start - right.interval.start || left.interval.end - right.interval.end);
   const prefixMaxEnd: number[] = [];
   let maximum = Number.NEGATIVE_INFINITY;
+  let hasNestedEnd = false;
   for (const pair of pairs) {
+    if (pair.interval.end < maximum) hasNestedEnd = true;
     maximum = Math.max(maximum, pair.interval.end);
     prefixMaxEnd.push(maximum);
   }
   const items = pairs.map((pair) => pair.item);
-  return { items, intervals: pairs.map((pair) => pair.interval), starts: pairs.map((pair) => pair.interval.start), prefixMaxEnd, positions: new Map(items.map((item, position) => [item, position])) };
+  const intervals = pairs.map((pair) => pair.interval);
+  const index: TimelineIntervalIndex<T> = { items, intervals, starts: pairs.map((pair) => pair.interval.start), prefixMaxEnd, positions: new Map(items.map((item, position) => [item, position])) };
+  // With monotonic ends the original prefix bounds already visit only overlaps.
+  if (hasNestedEnd) index.endTree = buildTimelineIntervalEndTree(intervals);
+  return index;
 }
 
 export function queryTimelineIntervalIndex<T>(index: TimelineIntervalIndex<T>, visibleStart: number, visibleEnd: number): T[] {
@@ -41,8 +51,15 @@ export function queryTimelineIntervalIndex<T>(index: TimelineIntervalIndex<T>, v
   const last = lowerBound(index.starts, visibleEnd);
   if (first >= last) return [];
   const output: T[] = [];
-  for (let cursor = first; cursor < last; cursor += 1) {
-    if (index.intervals[cursor].end > visibleStart) output.push(index.items[cursor]);
+  if (index.endTree) {
+    visitTimelineIntervalEnds(index.endTree, first, last, visibleStart, position => {
+      if (index.intervals[position].end > visibleStart) output.push(index.items[position]);
+    });
+  } else {
+    // Older callers can still supply the original public index shape.
+    for (let cursor = first; cursor < last; cursor += 1) {
+      if (index.intervals[cursor].end > visibleStart) output.push(index.items[cursor]);
+    }
   }
   return output;
 }
@@ -66,3 +83,4 @@ export function retainTimelineSelection<T extends { id: string }>(visible: T[], 
   // which causes WebView2 to lose pointer capture mid-drag. Keep index order.
   return [...visible.slice(0, low), selected, ...visible.slice(low)];
 }
+

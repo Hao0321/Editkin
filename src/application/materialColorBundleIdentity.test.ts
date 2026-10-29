@@ -1,23 +1,25 @@
 import {beforeAll,expect,it} from "vitest";
 import {build} from "esbuild";
 import {spawnSync} from "node:child_process";
-import {mkdir,mkdtemp,readFile,writeFile,readdir,copyFile} from "node:fs/promises";
+import {mkdir,readFile,writeFile,readdir,copyFile} from "node:fs/promises";
 import {resolve,join} from "node:path";
 import {fileURLToPath} from "node:url";
 import {pathToFileURL} from "node:url";
 import {Client} from "@modelcontextprotocol/client";
 import {StdioClientTransport} from "@modelcontextprotocol/client/stdio";
 import {buildMaterialColorBundle} from "../../scripts/lib/material-color-bundle-identity.mjs";
+import {REPO_TMP,useTempRoots} from "../test/tempRoot.mjs";
 import {createEmptyProject} from "../domain/editGraph";
 import {DEFAULT_COLOR,DEFAULT_TRANSFORM} from "../domain/types";
 import {colorBytesSha,getMaterialColorRuntimeIdentity} from "./materialColorSamplingRuntime";
 import {verifyMaterialColorReceipt} from "./materialColorSamplingValidation";
 const app=fileURLToPath(new URL("../../",import.meta.url)),runtime={ffmpegPath:resolve(app,"vendor/ffmpeg/win32-x64/ffmpeg.exe"),ffprobePath:resolve(app,"vendor/ffmpeg/win32-x64/ffprobe.exe")};
 let dir:string,bundle:string,sidecar:string,requestFile:string;let request:Record<string,unknown>;
+const temp=useTempRoots();
 const entry=`import {readFile} from 'node:fs/promises';import {sampleMaterialColor} from './src/application/materialColorSampling.ts';const args=JSON.parse(await readFile(process.argv[2],'utf8'));console.log(JSON.stringify(await sampleMaterialColor(args.request,args.runtime)));`;
 function execute(path:string){const child=spawnSync(process.execPath,[path,requestFile],{cwd:dir,encoding:"utf8",timeout:60000,maxBuffer:1024*1024});expect(child.error).toBeUndefined();expect(child.status,child.stderr).toBe(0);return JSON.parse(child.stdout);}
 beforeAll(async()=>{
-  await mkdir(resolve(app,".rd/tmp"),{recursive:true});dir=await mkdtemp(resolve(app,".rd/tmp/color-bundle-"));
+  dir=await temp.create("color-bundle-",{parent:REPO_TMP});
   const source=join(dir,"tagged sdr.mp4");const ff=spawnSync(runtime.ffmpegPath,["-v","error","-f","lavfi","-i","testsrc2=s=64x96:r=10:d=2","-c:v","libx264","-qp","0","-x264-params","colorprim=bt709:transfer=bt709:colormatrix=bt709:range=tv",source],{windowsHide:true,timeout:30000});expect(ff.status,ff.stderr.toString()).toBe(0);
   request={sourcePath:source,sourceSha256:colorBytesSha(await readFile(source)),sourceStart:.1,duration:1,kind:"video",sceneCount:1,sceneCountVerified:true,sceneCuts:[],samples:[{id:"a",time:.01,sceneIndex:0}]};
   requestFile=join(dir,"request.json");await writeFile(requestFile,JSON.stringify({request,runtime}));

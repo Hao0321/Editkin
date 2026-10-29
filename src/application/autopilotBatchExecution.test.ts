@@ -129,7 +129,7 @@ describe("current v4 batch transactional runner", () => {
     expect((await f.run()).completed).toBe(1);
     await expect(readFile(f.manifest.items[0].outputPath)).rejects.toThrow();
   });
-  it("returns an async job before render completes, stops at an item boundary and resumes from the journal", async () => {
+  it("returns an async job before render completes, cancels before promotion and resumes from the journal", async () => {
     const f = await fixture();
     const manager = new AutopilotBatchJobManager();
     const originalRender = f.runtime.render;
@@ -151,22 +151,116 @@ describe("current v4 batch transactional runner", () => {
     expect(manager.get(started.jobId).status).toBe("RUNNING");
     expect(manager.cancel(started.jobId).status).toBe("CANCEL_REQUESTED");
     releaseRender();
-    await vi.waitFor(() => expect(manager.get(started.jobId).status).toBe("STOPPED"));
-    expect(f.counts).toEqual({ audit: 1, apply: 1, render: 1, verify: 1 });
-    expect(await readFile(f.manifest.items[0].outputPath, "utf8")).toBe("video:one");
+    expect((await manager.wait(started.jobId, 120_000)).status).toBe("STOPPED");
+    expect(f.counts).toEqual({ audit: 1, apply: 1, render: 1, verify: 0 });
+    await expect(readFile(f.manifest.items[0].outputPath)).rejects.toThrow();
+    const interrupted = await readAutopilotBatchState(f.statePath, f.manifest);
+    expect(interrupted!.items[0].phase).toBe("rendering");
+    expect(await readFile(interrupted!.items[0].candidatePath!, "utf8")).toBe("video:one");
     await expect(readFile(f.manifest.items[1].outputPath)).rejects.toThrow();
     expect(manager.cancel(started.jobId).status).toBe("STOPPED");
     const restarted = new AutopilotBatchJobManager();
     const resumed = restarted.start(f.manifest, f.statePath, f.runtime);
-    await vi.waitFor(() => expect(restarted.get(resumed.jobId).status).toBe("REVIEW_REQUIRED"));
-    expect(f.counts).toEqual({ audit: 2, apply: 2, render: 2, verify: 2 });
-  });
+    expect((await restarted.wait(resumed.jobId, 120_000)).status).toBe("REVIEW_REQUIRED");
+    expect(f.counts).toEqual({ audit: 2, apply: 2, render: 3, verify: 2 });
+  }, 120_000); // Real fsynced journal writes and OS project locks: seconds on a busy shared disk.
+  it("returns an async job before render completes, stops at an item boundary and resumes from the journal", async () => {
+    const f = await fixture();
+    const manager = new AutopilotBatchJobManager();
+    const originalAudit = f.runtime.audit, originalApply = f.runtime.apply, originalRender = f.runtime.render;
+    const itemCounts: Record<string, { apply: number; render: number }> = {
+      one: { apply: 0, render: 0 }, two: { apply: 0, render: 0 },
+    };
+    const receiptPath = (id: string) => join(f.root, `${id}.boundary-commit.json`);
+    let enterFirst!: () => void, releaseFirst!: () => void;
+    let enterSecond!: () => void, releaseSecond!: () => void;
+    const firstEntered = new Promise<void>(resolve => { enterFirst = resolve; });
+    const firstHeld = new Promise<void>(resolve => { releaseFirst = resolve; });
+    const secondEntered = new Promise<void>(resolve => { enterSecond = resolve; });
+    const secondHeld = new Promise<void>(resolve => { releaseSecond = resolve; });
+    let holdSecond = true;
+    // This runtime port uses a disk-backed test commit receipt bound to exact plan/project bytes.
+    f.runtime.apply = async (item, plan, audit) => {
+      itemCounts[item.id].apply++;
+      const committed = await originalApply(item, plan, audit);
+      const receipt = { ...committed, schema: "test.batch-boundary-commit/v1", state: "committed",
+        planSha256: (await f.runtime.readPlan(item)).sha256, projectSha256: sha(await readFile(item.projectPath, "utf8")) };
+      await writeFile(receiptPath(item.id), JSON.stringify(receipt), { flag: "wx" });
+      return receipt;
+    };
+    f.runtime.reconcile = async (item, planSha256) => {
+      let receipt: Record<string, unknown>;
+      try { receipt = JSON.parse(await readFile(receiptPath(item.id), "utf8")); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
+      if (receipt.id !== item.id || receipt.state !== "committed" || receipt.planSha256 !== planSha256
+        || receipt.projectSha256 !== sha(await readFile(item.projectPath, "utf8"))) return undefined;
+      return receipt;
+    };
+    f.runtime.render = async (...args) => {
+      itemCounts[args[0].id].render++;
+      if (args[0].id === "one") { enterFirst(); await firstHeld; }
+      return originalRender(...args);
+    };
+    f.runtime.audit = async (...args) => {
+      if (args[0].id === "two" && holdSecond) { enterSecond(); await secondHeld; }
+      return originalAudit(...args);
+    };
+    const started = manager.start(f.manifest, f.statePath, f.runtime);
+    try {
+      expect(started.status).toBe("RUNNING");
+      expect(started.result).toBeUndefined();
+      expect(f.counts).toEqual({ audit: 0, apply: 0, render: 0, verify: 0 });
+      await firstEntered;
+      expect(manager.get(started.jobId).status).toBe("RUNNING");
+      await expect(readFile(f.manifest.items[0].outputPath)).rejects.toThrow();
+      releaseFirst();
+      await secondEntered;
+      const firstJournal = await readAutopilotBatchState(f.statePath, f.manifest);
+      if (!firstJournal) throw new Error("Missing committed first-item journal");
+      expect(firstJournal.items[0].phase).toBe("review_required");
+      expect(firstJournal.items[0].executionReceipt).toMatchObject({ id: "one", state: "committed" });
+      expect(firstJournal.items[1].phase).toBe("queued");
+      expect(firstJournal.items[1].executionReceipt).toBeUndefined();
+      const protectedPaths = [f.manifest.items[0].projectPath, f.manifest.items[0].outputPath, receiptPath("one")];
+      const protectedBytes = await Promise.all(protectedPaths.map(path => readFile(path)));
+      expect(itemCounts).toEqual({ one: { apply: 1, render: 1 }, two: { apply: 0, render: 0 } });
+      expect(manager.cancel(started.jobId).status).toBe("CANCEL_REQUESTED");
+      holdSecond = false; releaseSecond();
+      expect((await manager.wait(started.jobId, 120_000)).status).toBe("STOPPED");
+      expect(manager.get(started.jobId).result).toMatchObject({ stopped: true, completed: 1 });
+      expect(await Promise.all(protectedPaths.map(path => readFile(path)))).toEqual(protectedBytes);
+      expect(await readFile(f.manifest.items[1].projectPath, "utf8")).toBe("original:two");
+      await expect(readFile(f.manifest.items[1].outputPath)).rejects.toThrow();
+      await expect(readFile(receiptPath("two"))).rejects.toThrow();
+      expect(itemCounts.two).toEqual({ apply: 0, render: 0 });
+      // A fresh registry and cleared process-local map must resume from disk, not remembered commits.
+      f.commits.clear();
+      const resumedManager = new AutopilotBatchJobManager();
+      expect(() => resumedManager.get(started.jobId)).toThrow("找不到");
+      const resumed = resumedManager.start(f.manifest, f.statePath, f.runtime);
+      expect(resumed.jobId).not.toBe(started.jobId);
+      expect((await resumedManager.wait(resumed.jobId, 120_000)).status).toBe("REVIEW_REQUIRED");
+      expect(resumedManager.get(resumed.jobId).result?.completed).toBe(2);
+      expect(itemCounts).toEqual({ one: { apply: 1, render: 1 }, two: { apply: 1, render: 1 } });
+      expect(await Promise.all(protectedPaths.map(path => readFile(path)))).toEqual(protectedBytes);
+      expect(await readFile(f.manifest.items[1].outputPath, "utf8")).toBe("video:two");
+      const finalJournal = await readAutopilotBatchState(f.statePath, f.manifest);
+      expect(finalJournal?.items[0]).toEqual(firstJournal.items[0]);
+      expect(finalJournal?.items[1].phase).toBe("review_required");
+    } finally {
+      releaseFirst(); releaseSecond();
+      if (!manager.get(started.jobId).finishedAt) {
+        manager.cancel(started.jobId);
+        expect((await manager.wait(started.jobId, 120_000)).finishedAt).toBeDefined();
+      }
+    }
+  }, 120_000); // Real fsynced journal writes and OS project locks: seconds on a busy shared disk.
   it("reports a fatal async job failure without claiming completion", async () => {
     const f = await fixture();
     f.runtime.validatePaths = async () => { throw new Error("invalid batch path"); };
     const manager = new AutopilotBatchJobManager();
     const started = manager.start(f.manifest, f.statePath, f.runtime);
-    await vi.waitFor(() => expect(manager.get(started.jobId).status).toBe("FAILED"));
+    expect((await manager.wait(started.jobId, 120_000)).status).toBe("FAILED");
     expect(manager.get(started.jobId).error).toContain("invalid batch path");
     await expect(readAutopilotBatchState(f.statePath, f.manifest)).resolves.toBeUndefined();
   });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CreativeLibraryAsset } from "../application/creativeLibrary";
-import { selectAutomaticMusicAsset } from "./musicSelection";
+import { automaticMusicPreferences, selectAutomaticMusicAsset } from "./musicSelection";
 
 const music = (id: string, name: string, category: string, duration: number, bpm: number, suggestedUse: string): CreativeLibraryAsset => ({
   id: `music:${id}`,
@@ -32,5 +32,16 @@ describe("automatic music selection", () => {
       preferHighEnergy: true,
     });
     expect(selected?.id).toBe("music:toy");
+  });
+
+  it("maps the creator's genre to the same library hints as auto_add_music", () => {
+    const library = [music("travel", "歐洲街道", "出國", 120, 100, "general/explain"), music("toy", "機器人、模型", "玩具開箱", 120, 100, "general/explain")];
+    const pick = (profile: Parameters<typeof automaticMusicPreferences>[0]) => selectAutomaticMusicAsset(library, { projectName: "第三天", duration: 30, targetBpm: 100, ...automaticMusicPreferences(profile) })?.id;
+    expect(pick("travel")).toBe("music:travel");
+    expect(pick("gaming")).toBe("music:toy");
+    expect(automaticMusicPreferences("gaming").preferHighEnergy).toBe(true);
+    expect(automaticMusicPreferences("food").contentHints).toEqual(["food", "美食", "料理"]);
+    expect(automaticMusicPreferences("podcast_no_face").contentHints).toContain("訪談");
+    expect(automaticMusicPreferences("auto")).toEqual({ contentHints: [] });
   });
 });

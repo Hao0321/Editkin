@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-replace-resident-audio"
+description = "Enables the replace_resident_audio command without any pre-configured scope."
+commands.allow = ["replace_resident_audio"]
+
+[[permission]]
+identifier = "deny-replace-resident-audio"
+description = "Denies the replace_resident_audio command without any pre-configured scope."
+commands.deny = ["replace_resident_audio"]

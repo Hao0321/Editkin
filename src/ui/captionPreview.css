@@ -1,18 +1,33 @@
+/* The caption preview draws the export's libass layout (PreviewCaption + render/captionLayout): every line box
+   comes from its block's own line-height, so the container adds no padding, gap, box or shadow of its own. */
 .preview-caption {
-  display: grid;
-  gap: 3px;
-  justify-items: stretch;
+  display: block;
   width: auto;
-  padding: .12em .35em .18em;
-  border-radius: .22em;
-  line-height: 1.18;
-  white-space: pre-line;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  /* Lines arrive already broken where the export breaks them; wrapping here is only a safety net. */
+  white-space: pre-wrap;
+  /* Its own compositing layer: grayscale antialiasing like libass, never colour-fringed LCD text. */
+  will-change: transform;
 }
 
-.preview-caption > span {
+/* Stacked copies of the same text (shadow, outline or box, then the readable fill on top) share one width, so
+   their lines break identically; positioned siblings paint in this order. */
+.preview-caption-layer {
+  position: relative;
+}
+
+.preview-caption-layer[aria-hidden="true"] {
+  position: absolute;
+  inset: 0;
+}
+
+.preview-caption-layer > span {
   display: block;
 }
 
-.preview-caption-translation {
-  line-height: 1.15;
+.preview-caption-box {
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }

@@ -1,9 +1,10 @@
 import { expect,it,vi } from "vitest";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir,mkdtemp,readFile,writeFile } from "node:fs/promises";
+import { mkdir,readFile,writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { REPO_TMP,useTempRoots } from "../test/tempRoot.mjs";
 import { createDemoProject } from "../domain/demo";
 import { createClipMask } from "../domain/masks";
 import { floorFrameRateSampleIndex,rationalRate } from "../domain/clipAlphaPlan";
@@ -16,6 +17,7 @@ import * as sampling from "./pixelMatteSampling";
 const app=fileURLToPath(new URL("../../",import.meta.url));
 const ff=resolve(app,"vendor/ffmpeg/win32-x64/ffmpeg.exe"),fp=resolve(app,"vendor/ffmpeg/win32-x64/ffprobe.exe");
 const sha=(b:Uint8Array)=>createHash("sha256").update(b).digest("hex");
+const temp=useTempRoots();
 function run(args:string[],input?:Buffer) {
   const r=spawnSync(ff,args,{input,windowsHide:true,timeout:30000,maxBuffer:8*1024*1024});
   if(r.status!==0)throw Error(r.stderr.toString());return r.stdout;
@@ -40,8 +42,7 @@ async function fixture(cacheRoot:string) {
 }
 
 it.each([...([24,25,30,60,24000/1001,30000/1001].map(fps=>({fps,mutant:false}))),{fps:30,mutant:true}])("public verified-artifact compositor sequence $fps (old-rounding mutant=$mutant)",async ({fps,mutant})=>{
-  await mkdir(resolve(app,".rd/tmp"),{recursive:true});
-  const cacheRoot=await mkdtemp(resolve(app,".rd/tmp/pixel-matte-compositor-"));
+  const cacheRoot=await temp.create("pixel-matte-compositor-",{parent:REPO_TMP});
   const matte=await fixture(cacheRoot),source=resolve(cacheRoot,"source.mp4");
   run(["-v","error","-f","lavfi","-i",`color=c=white:s=16x16:r=${fps}:d=4`,"-c:v","libx264",source]);
   const project=createDemoProject();project.width=16;project.height=16;project.fps=fps;

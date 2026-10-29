@@ -1,0 +1,135 @@
+import { createHash } from "node:crypto";
+import { describe, expect, it } from "vitest";
+import { getMotionLibraryItem, motionBackgroundLoopSeconds } from "../../catalog";
+import { generateMotionFrame } from "../../frames";
+import { resolveMotionLibraryParams } from "../../params";
+import type { BackgroundMotionItem, MotionFrameSize } from "../../types";
+import { B30_LOOP_CYCLES, B30_LOOP_SECONDS, fallPosition } from "./B30_confettiFall";
+
+const ID = "B30";
+const PORTRAIT: MotionFrameSize = { width: 1080, height: 1920 };
+const LANDSCAPE: MotionFrameSize = { width: 1920, height: 1080 };
+const FORMATS = { portrait: PORTRAIT, landscape: LANDSCAPE } as const;
+
+/** Golden SVG SHA-256 at 5 fixed times × 2 formats (default params). Regenerate only for an intentional, reviewed art change
+ * and bump the item's revision. */
+const TIMES = [0, 0.5, 1.3, 2.75, 3.9] as const;
+const GOLDEN: Record<keyof typeof FORMATS, readonly string[]> = {
+  portrait: [
+    "d1789f835395aa2e295ec1de0582215e7c16020c8f0b55cdfc41f46ee7590767",
+    "6cf58874459b8b2fe99e25644e6322e7a812dfa3886e912e20bbd53203fb3cb1",
+    "cc656c6c1d21a543c962e386aaf121058cec6847db19d40ce2cb2e97fbc18a45",
+    "8cefb42c028e7907441c7c0141e9decf3ac216679c43ac86701e7df927f6d87b",
+    "6024d7b2a6eb48f79433ee487b13c1e16007f17f745e2ddff17476f821649f07",
+  ],
+  landscape: [
+    "eaae589a9b07160536e0536da349357a67079d40d5df13680ff5e0d85e9935ed",
+    "a147ea58108bf74731a38292578c4c7f3f10738ffeee455f17d1e3bc231b367b",
+    "c68541036ded23ce1ba29c9367d87ac85b05b6cd919118868034cb9f6de568cd",
+    "759ec5ebfbfad7b201c8eea56c290e06ba9b615bb065851584b6de42718855dd",
+    "d6355f0cf4920b333a0788af7df69079ec101d6c5d478caf61ffa0d090df8337",
+  ],
+};
+
+const item = getMotionLibraryItem(ID) as BackgroundMotionItem;
+const frame = (t: number, size: MotionFrameSize = PORTRAIT, input?: unknown) => generateMotionFrame(item, resolveMotionLibraryParams(item, input), t, size);
+const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+/** The seamless period at these params: the base loop, stretched by 1, 2 or 4 where the speed needs it (DESIGN §8). */
+const period = (input?: unknown) => motionBackgroundLoopSeconds(item, resolveMotionLibraryParams(item, input));
+/** The params a loop must survive (ART_DIRECTION §7: speed and density never break the loop). */
+const LOOP_VARIANTS: readonly unknown[] = [undefined, { speed: 0.5 }, { speed: 2 }, { density: 0.5 }, { density: 2 }];
+/** A frame's numbers (colours stripped), sorted: its geometry as a multiset, independent of drawing order. */
+const numbers = (svg: string) => (svg.replace(/#[0-9A-Fa-f]{6}/g, "").match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number).sort((a, b) => a - b);
+function maxDifference(a: readonly number[], b: readonly number[]): number {
+  let worst = 0;
+  for (let index = 0; index < a.length; index += 1) worst = Math.max(worst, Math.abs(a[index] - b[index]));
+  return worst;
+}
+/** Every pixel painted: an opaque, full-frame base rect is the first thing drawn (after defs), so everything else lands on it. */
+function paintsEveryPixel(svg: string, size: MotionFrameSize, base: string): boolean {
+  const header = `<svg xmlns="http://www.w3.org/2000/svg" width="${size.width}" height="${size.height}" viewBox="0 0 ${size.width} ${size.height}">`;
+  if (!svg.startsWith(header) || !/^#[0-9A-F]{6}$/.test(base)) return false;
+  let rest = svg.slice(header.length);
+  if (rest.startsWith("<defs>")) rest = rest.slice(rest.indexOf("</defs>") + "</defs>".length);
+  return rest.startsWith(`<rect x="0" y="0" width="${size.width}" height="${size.height}" fill="${base}"/>`);
+}
+
+describe("B30 Confetti Fall", () => {
+  const palette = item.defaultParams.palette;
+
+  for (const [format, size] of Object.entries(FORMATS) as Array<[keyof typeof FORMATS, MotionFrameSize]>) {
+    it(`${format} matches its golden hashes at ${TIMES.join(", ")} s`, () => {
+      expect(TIMES.map(t => sha256(frame(t, size)))).toEqual(GOLDEN[format]);
+    });
+  }
+
+  it("loops seamlessly: t = period equals t = 0 at default, ×0.5 and ×2 speed and density, in both formats", () => {
+    expect([item.loopSeconds, item.loopCycles, period()]).toEqual([B30_LOOP_SECONDS, B30_LOOP_CYCLES, B30_LOOP_SECONDS]);
+    expect(item.revision).toBe(1);
+    for (const size of [PORTRAIT, LANDSCAPE]) {
+      for (const input of LOOP_VARIANTS) {
+        const start = frame(0, size, input), label = `${size.width}x${size.height} ${JSON.stringify(input)}`;
+        expect(frame(period(input), size, input), label).toBe(start);
+        expect(frame(2 * period(input), size, input), label).toBe(start);
+        expect(frame(period(input) / 3, size, input), label).not.toBe(start);
+      }
+    }
+  });
+
+  it("is continuous across the seam: the instant before the loop point matches t = 0 to a fraction of a pixel", () => {
+    for (const size of [PORTRAIT, LANDSCAPE]) {
+      for (const input of LOOP_VARIANTS) {
+        const before = numbers(frame(period(input) - 1e-5, size, input)), start = numbers(frame(0, size, input));
+        expect(before.length, JSON.stringify(input)).toBe(start.length);
+        expect(maxDifference(before, start), JSON.stringify(input)).toBeLessThan(0.25);
+      }
+    }
+  });
+
+  it("paints every pixel: an opaque, full-frame accent card (ART_DIRECTION §10, base A) under everything", () => {
+    for (const size of [PORTRAIT, LANDSCAPE]) {
+      for (const t of TIMES) expect(paintsEveryPixel(frame(t, size), size, palette.accent)).toBe(true);
+    }
+    expect(frame(1, PORTRAIT, { palette: { theme: "swiss_blue" } })).not.toBe(frame(1));
+  });
+
+  it("generates a 1080×1920 frame well under the 20 ms budget (bound 60 ms for a loaded machine)", () => {
+    frame(0.2);
+    const started = performance.now();
+    for (let index = 0; index < 30; index += 1) frame((index / 30) * B30_LOOP_SECONDS);
+    expect((performance.now() - started) / 30).toBeLessThan(60);
+  });
+
+  it("speed is a true rate (×2 at t/2 and ×0.5 at 2t both show ×1 at t); density changes the frame; deterministic per seed", () => {
+    expect(frame(0.2, PORTRAIT, { speed: 2 })).toBe(frame(0.4));
+    expect(frame(0.8, PORTRAIT, { speed: 0.5 })).toBe(frame(0.4));
+    expect(frame(0.4, PORTRAIT, { speed: 0.5 })).not.toBe(frame(0.4));
+    expect(frame(1.3, PORTRAIT, { density: 2 })).not.toBe(frame(1.3));
+    expect(frame(1.3, LANDSCAPE, { seed: 7 })).toBe(frame(1.3, LANDSCAPE, { seed: 7 }));
+    for (const input of [{ seed: 7 }, { energy: "hype" }]) {
+      expect(frame(1.3, LANDSCAPE, input), JSON.stringify(input)).not.toBe(frame(1.3, LANDSCAPE));
+    }
+  });
+
+  it("falls a whole number of times per cycle", () => {
+    expect(fallPosition(0, 1, 0.25)).toBe(0.25);
+    expect(fallPosition(0.5, 2, 0.25)).toBe(0.25);
+    expect(fallPosition(0.4, 1, 0.8)).toBeCloseTo(0.2, 12);
+  });
+
+  it("drops chunky cream, ink and deep-shade pieces that never flip into slivers (H.264-safe)", () => {
+    for (const t of [0.3, 1.3, 2.75]) {
+      const svg = frame(t);
+      const groups = [...svg.matchAll(/<path d="([^"]*)" fill="(#[0-9A-F]{6})"\/>/g)];
+      expect(groups.map(([, , fill]) => fill)).toEqual([palette.accent2, palette.ink, palette.paper]);
+      for (const [, d] of groups) {
+        for (const piece of d.split("Z").filter(Boolean)) {
+          const pts = [...piece.matchAll(/[ML](-?[\d.]+) (-?[\d.]+)/g)].map(([, x, y]) => [Number(x), Number(y)]);
+          const side = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+          expect(Math.min(side(pts[0], pts[1]), side(pts[1], pts[2]))).toBeGreaterThan(5);
+        }
+      }
+      expect(groups.reduce((sum, [, d]) => sum + d.split("Z").filter(Boolean).length, 0)).toBeGreaterThan(30);
+    }
+  });
+});

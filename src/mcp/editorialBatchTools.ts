@@ -14,6 +14,7 @@ import { acquireProjectLock } from "../application/projectFiles";
 import { batchFileSha256, materializeEditorialProject, readEditorialRenderReceipt } from "../application/editorialBatchResume";
 import { errorResult, textResult } from "./toolRuntime";
 import { resolveWorkspaceMediaPath, workspaceRoot } from "./storage";
+import { bindProjectMediaForRender } from "./renderMediaBinding";
 
 async function sha256(path: string): Promise<string> {
   return batchFileSha256(path);
@@ -140,13 +141,14 @@ export function registerEditorialBatchTools(server: McpServer): void {
         try { await access(outputPath); occupied = true; } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
         if (occupied) throw new Error(`${item.deliverable.id} 有未綁定收據的輸出；拒絕覆蓋，請使用新的输出資料夾`);
         const render = await exportVideo({
-          project: item.project,
+          // Read exactly the media that was checked (renderMediaBinding.ts); outside files only when granted.
+          project: await bindProjectMediaForRender(item.project),
           outputPath,
           options: {
             ffmpegPath,
             ffprobePath,
             preferGpu,
-            timeoutMs: 20 * 60_000,
+            // No fixed 20-minute cap: the renderer's deadline scales with the Reel's duration plus a stall watchdog.
             fontRoot: process.env.EDITKIN_FONT_ROOT ?? resolve(process.cwd(), "public/fonts"),
             colorRoot: process.env.EDITKIN_COLOR_ROOT ?? resolve(process.cwd(), "public/color/aces2"),
           },

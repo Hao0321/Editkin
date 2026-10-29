@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-stage-gpu-video-preview-at-time"
+description = "Enables the stage_gpu_video_preview_at_time command without any pre-configured scope."
+commands.allow = ["stage_gpu_video_preview_at_time"]
+
+[[permission]]
+identifier = "deny-stage-gpu-video-preview-at-time"
+description = "Denies the stage_gpu_video_preview_at_time command without any pre-configured scope."
+commands.deny = ["stage_gpu_video_preview_at_time"]

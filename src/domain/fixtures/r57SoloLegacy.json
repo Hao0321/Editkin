@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 9,
+  "revision": 0,
+  "id": "r56-solo-legacy-golden",
+  "name": "我的第一支影片",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "editorialProfile": "auto",
+  "colorManagement": {
+    "mode": "rec709",
+    "workingSpace": "ACEScct",
+    "outputTransform": "rec709_sdr",
+    "configId": "studio-config-v4.0.0_aces-v2.0_ocio-v2.5"
+  },
+  "assets": [
+    {
+      "id": "asset-demo",
+      "name": "Editkin 示範素材",
+      "kind": "video",
+      "uri": "demo-source.mp4",
+      "duration": 12,
+      "width": 960,
+      "height": 540
+    }
+  ],
+  "compositions": [],
+  "tracks": [
+    {
+      "id": "video-main",
+      "name": "主畫面",
+      "kind": "video",
+      "locked": false,
+      "muted": false,
+      "clips": [
+        {
+          "id": "clip-demo",
+          "assetId": "asset-demo",
+          "trackId": "video-main",
+          "timelineStart": 0,
+          "sourceStart": 0,
+          "duration": 12,
+          "volume": 1,
+          "transform": {
+            "x": 0,
+            "y": 0,
+            "scale": 1,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "color": {
+            "brightness": 0,
+            "contrast": 1,
+            "saturation": 1,
+            "hue": 0,
+            "exposure": 0,
+            "temperature": 0,
+            "tint": 0,
+            "whiteBalanceRed": 0,
+            "whiteBalanceGreen": 0,
+            "whiteBalanceBlue": 0,
+            "pivot": 0.5,
+            "shadows": 0,
+            "highlights": 0,
+            "blacks": 0,
+            "whites": 0
+          },
+          "keyframes": []
+        }
+      ]
+    },
+    {
+      "id": "audio-main",
+      "name": "聲音",
+      "kind": "audio",
+      "locked": false,
+      "muted": false,
+      "clips": []
+    },
+    {
+      "id": "caption-main",
+      "name": "字幕",
+      "kind": "caption",
+      "locked": false,
+      "muted": false,
+      "clips": []
+    }
+  ],
+  "captions": [],
+  "captionStyle": {
+    "presetId": "clean_caption",
+    "fontFamily": "Noto Sans TC",
+    "fontSize": 54,
+    "color": "#FFFFFF",
+    "outlineColor": "#000000",
+    "outlineWidth": 4,
+    "alignment": 2,
+    "marginV": 72,
+    "bold": true,
+    "italic": false,
+    "shadow": 1,
+    "backgroundColor": "#00000000",
+    "letterSpacing": 0,
+    "translationFontFamily": "Noto Sans TC",
+    "translationFontSize": 36,
+    "translationColor": "#DCE8FF",
+    "translationBold": true,
+    "translationItalic": false
+  },
+  "motionTracks": [],
+  "motionGraphics": [],
+  "director": {
+    "schema": "editkin.director-console/v1",
+    "reviewState": "draft",
+    "markers": [],
+    "updatedAt": "2026-10-11T10:15:17.956Z"
+  },
+  "updatedAt": "2026-10-11T00:00:00.000Z"
+}

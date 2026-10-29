@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-template-short-prepare"
+description = "Enables the template_short_prepare command without any pre-configured scope."
+commands.allow = ["template_short_prepare"]
+
+[[permission]]
+identifier = "deny-template-short-prepare"
+description = "Denies the template_short_prepare command without any pre-configured scope."
+commands.deny = ["template_short_prepare"]

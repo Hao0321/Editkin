@@ -4,8 +4,50 @@ import { applyCommand } from "../domain/commands";
 import { buildShortFormTemplateCommand, SHORT_FORM_TEMPLATES } from "./shortFormTemplates";
 import { CINEMATIC_LANGUAGE_RECIPES } from "../creative/cinematicLanguage";
 import { isTemplateGeneratedCaption, isTemplateGeneratedMarker } from "./templateLifecycle";
+import { createHistory, dispatchCommand, redo, undo } from "../domain/history";
+import { decodeProjectBytes, encodeProjectBytes } from "./projectCodec";
 
 describe("short-form template compiler", () => {
+  it("keeps separately authored heading/body fonts for matching copy through one Undo/Redo and the project codec", () => {
+    const source = createDemoProject(); source.width = 1080; source.height = 1920;
+    const before = structuredClone(source);
+    let i = 0;
+    const command = buildShortFormTemplateCommand(source, "editorial_steps", prefix => `${prefix}-${i++}`, {
+      title: "同樣文案", body: "同樣文案", headingFont: "Noto Sans TC", bodyFont: "Noto Serif TC", textColor: "#123456",
+      progress: { steps: 6, activeStep: 1 },
+    });
+    const history = dispatchCommand(createHistory(source), command, "authored-font-roles");
+    expect(history.past).toEqual([source]);
+    expect(undo(history).present).toEqual(source);
+    expect(redo(undo(history)).present).toEqual(history.present);
+    const reopened = decodeProjectBytes(encodeProjectBytes(history.present));
+    expect(reopened.motionGraphics.find(graphic => graphic.name === "章節逐字標題")).toMatchObject({ text: "同樣文案", fontFamily: "Noto Sans TC", textColor: "#123456" });
+    expect(reopened.motionGraphics.find(graphic => graphic.name === "章節重點")).toMatchObject({ text: "同樣文案", fontFamily: "Noto Serif TC", textColor: "#123456" });
+    expect(reopened.assets).toEqual(before.assets);
+    expect(reopened.captions).toEqual(before.captions);
+    expect(reopened.tracks[0].clips[0].sourceStart).toBe(before.tracks[0].clips[0].sourceStart);
+    expect(reopened.tracks[0].clips[0].duration).toBe(before.tracks[0].clips[0].duration);
+    expect(source).toEqual(before);
+  });
+  it("uses creator copy, palette, chapter and animation rate without inventing subtitles or changing media speed", () => {
+    const source = createDemoProject(); source.width = 1080; source.height = 1920;
+    let i = 0;
+    const result = applyCommand(source, buildShortFormTemplateCommand(source, "editorial_steps", p => `${p}-${i++}`, {
+      title: "實際內容的重點", body: "已核對的補充說明", accentColor: "#966144", surfaceColor: "#F4F0E8", motionSpeed: .7,
+      progress: { steps: 4, activeStep: 3 },
+    }));
+    expect(result.motionGraphics.some(graphic => graphic.text === "實際內容的重點")).toBe(true);
+    expect(result.motionGraphics.some(graphic => graphic.text === "已核對的補充說明")).toBe(true);
+    const progress = result.motionGraphics.find(graphic => graphic.vectorV2?.kind === "step_progress")?.vectorV2;
+    expect(progress?.kind === "step_progress" && progress.activeStep).toBe(3);
+    expect(result.motionGraphics.find(graphic => graphic.vectorV2?.kind === "step_progress")?.accentColor).toBe("#966144");
+    expect(result.motionGraphics.find(graphic => graphic.vectorV2?.kind === "panel")?.backgroundColor).toBe("#F4F0E8");
+    expect(result.captions).toEqual(source.captions);
+    expect(result.tracks[0].clips[0].sourceStart).toBe(source.tracks[0].clips[0].sourceStart);
+    expect(result.tracks[0].clips[0].duration).toBe(source.tracks[0].clips[0].duration);
+    expect(result.motionGraphics.find(graphic => graphic.text === "實際內容的重點")?.motionV2?.entrance.durationFrames).toBe(11);
+    expect(() => buildShortFormTemplateCommand(source, "editorial_steps", p => p, { title: " " })).toThrow(/短標題/);
+  });
   it("compiles every template to editable EditGraph commands", () => {
     for (const template of SHORT_FORM_TEMPLATES) {
       let nextId = 0;

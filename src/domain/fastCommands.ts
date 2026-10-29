@@ -1,6 +1,9 @@
 import type { EditorCommand } from "./commandTypes";
+import { applyClipGradeSnapshotFastV1 } from "./clipGradeSnapshotV1";
+import { assertClipMirrorPatch } from "./clipMirrors";
 import { alignTime, animatedClipState, EditGraphError, validateClipForTrack, validateMediaAsset } from "./editGraph";
 import { DEFAULT_CLIP_LAYER, type EditProject, type MediaAsset, type TimelineClip, type TimelineTrack } from "./types";
+import { TRACK_LOCKED_MESSAGE } from "./trackLock";
 
 const EPSILON = 1e-6;
 
@@ -149,6 +152,7 @@ function applyFastAddClip(input: EditProject, command: Extract<EditorCommand, { 
   if (!input.assets.some((asset) => asset.id === source.assetId)) throw new EditGraphError(`找不到素材：${source.assetId}`);
   const trackIndex = input.tracks.findIndex((track) => track.id === source.trackId);
   if (trackIndex < 0) throw new EditGraphError(`找不到軌道：${source.trackId}`);
+  if (input.tracks[trackIndex].locked) throw new EditGraphError(TRACK_LOCKED_MESSAGE);
   if (input.tracks.some((track) => track.clips.some((clip) => clip.id === source.id))) throw new EditGraphError(`重複片段 id：${source.id}`);
   const clip: TimelineClip = {
     ...source,
@@ -209,7 +213,7 @@ function applyFastPictureInPictureTrack(
   // This route is intentionally the exact UI PIP shape: one empty, unlocked
   // video track plus one independent layout clip. Rich layer graphs, masks,
   // effects, transitions, 2.5D, or pre-populated tracks use full validation.
-  if (input.scene25d?.enabled || sourceTrack.kind !== "video" || sourceTrack.locked || sourceTrack.muted
+  if (input.scene25d?.enabled || sourceTrack.kind !== "video" || sourceTrack.locked || sourceTrack.muted || sourceTrack.hidden
     || !sourceTrack.id.trim() || !sourceTrack.name.trim() || sourceTrack.clips.length !== 0
     || sourceClip.trackId !== sourceTrack.id || sourceClip.layout === undefined
     || !isIndependentClip(sourceClip, true)) return undefined;
@@ -241,7 +245,7 @@ function applyFastClipProperty(input: EditProject, command: EditorCommand): Edit
   const location = locateClip(input, "clipId" in command ? command.clipId : "");
   const clip = cloneClip(location.clip);
   if (command.type === "set_clip_volume") clip.volume = command.volume;
-  if (command.type === "update_clip_transform") clip.transform = { ...clip.transform, ...command.patch };
+  if (command.type === "update_clip_transform") { assertClipMirrorPatch(input, clip, command.patch); clip.transform = { ...clip.transform, ...command.patch }; }
   if (command.type === "set_clip_color") clip.color = { ...clip.color, ...command.patch };
   if (command.type === "add_keyframe") {
     if (clip.keyframes.some((keyframe) => keyframe.id === command.keyframe.id)) throw new EditGraphError(`關鍵幀 id 已存在：${command.keyframe.id}`);
@@ -290,7 +294,8 @@ function applyFastTrim(input: EditProject, command: Extract<EditorCommand, { typ
   const seconds = alignTime(command.seconds, input.fps);
   if (seconds <= 0 || seconds >= clip.duration) throw new EditGraphError("裁掉長度必須大於 0 且小於片段時長");
   if (command.type === "trim_clip_start") {
-    const trimState = animatedClipState(clip, seconds);
+    // Authored values only: expressions are applied again on top at preview and export (same as trim_clip_start).
+    const trimState = animatedClipState({ ...clip, expressions: {} }, seconds);
     clip.sourceStart = alignTime(clip.sourceStart + seconds, input.fps);
     clip.duration = alignTime(clip.duration - seconds, input.fps);
     clip.transform = trimState.transform;
@@ -318,6 +323,7 @@ function applyFastTrim(input: EditProject, command: Extract<EditorCommand, { typ
 }
 
 export function applyFastCommand(input: EditProject, command: EditorCommand): EditProject | undefined {
+  if (command.type === "paste_clip_grade_v1") return applyClipGradeSnapshotFastV1(input, command);
   if (command.type === "add_clip") return applyFastAddClip(input, command);
   if (command.type === "batch") {
     const children = command.commands;
@@ -344,7 +350,7 @@ export function applyFastCommand(input: EditProject, command: EditorCommand): Ed
     const clip = locateClip(input, command.clipId).clip;
     // Temporal mask/track edits require the shared slice plan and whole-graph
     // validation. Keep the low-allocation path only for independent clips.
-    if (clip.masks?.length || input.motionTracks.some((track) => track.clipId === clip.id)) return undefined;
+    if (clip.audioEnvelope || clip.masks?.length || input.motionTracks.some((track) => track.clipId === clip.id)) return undefined;
     return applyFastTrim(input, command);
   }
   return undefined;

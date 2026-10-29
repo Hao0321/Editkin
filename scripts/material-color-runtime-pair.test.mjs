@@ -1,34 +1,36 @@
-import {test} from 'node:test';
+import {test,after} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,writeFile,readFile,readdir,appendFile,copyFile,rename} from 'node:fs/promises';
-import {resolve,join} from 'node:path';
+import {mkdir,writeFile,readFile,readdir,appendFile,copyFile,rename} from 'node:fs/promises';
+import {join} from 'node:path';
+import {REPO_TMP,useTempRoots} from '../src/test/tempRoot.mjs';
 import {createHash} from 'node:crypto';
-import {stageMaterialColorRuntimePair,verifyMaterialColorRuntimePair,MATERIAL_COLOR_SIDECAR} from './lib/material-color-runtime-pair.mjs';
+import {stageMaterialColorRuntimePair,verifyMaterialColorRuntimePair,MATERIAL_COLOR_SIDECAR,readMaterialColorImplementationRegistry} from './lib/material-color-runtime-pair.mjs';
 import {createSnapshotManifest,validateSnapshotManifest,EDITKIN_RELEASE_RUNTIME_FILES,SNAPSHOT_TOP_LEVEL_DIRECTORIES} from './lib/editkin-mcp-generation-contract.mjs';
 import {PRODUCT_REQUIRED_OUTPUT_PATHS} from './lib/build-input-identity.mjs';
 import {buildMaterialColorBundle} from './lib/material-color-bundle-identity.mjs';
 import {importVerifiedMaterialColorGeneration} from './lib/material-color-generation-bridge.mjs';
 const sha=x=>createHash('sha256').update(x).digest('hex');
-test('current 33-name pair includes display transfer and stages unchanged',async()=>{
+const temp=useTempRoots(after);
+test('current canonical registry pair includes display transfer and stages unchanged',async()=>{
   const names=JSON.parse(await readFile('src/application/materialColorImplementationPaths.json','utf8'));
-  assert.equal(names.length,33);assert.equal(names.filter(n=>n==='../color/displayTransfer.ts').length,1);
+  assert.deepEqual(names,[...await readMaterialColorImplementationRegistry()]);assert.equal(names.filter(n=>n==='../color/displayTransfer.ts').length,1);
   const f=await fixture();f.manifest.implementations=names.map(name=>({name,sha256:'a'.repeat(64)}));
   await writeFile(`${f.bundle}.material-color-identity.json`,JSON.stringify(f.manifest));
   await stageMaterialColorRuntimePair(f.bundle,f.target);
   assert.deepEqual(await verifyMaterialColorRuntimePair(f.target),await verifyMaterialColorRuntimePair(f.bundle));
 });
-for(const mutation of ['34-inputs','33-duplicate','33-path-escape','33-absolute-path'])test(`current registry ${mutation} rejects before stage`,async()=>{
+for(const mutation of ['extra-input','duplicate-input','path-escape','absolute-path'])test(`current registry ${mutation} rejects before stage`,async()=>{
   const names=JSON.parse(await readFile('src/application/materialColorImplementationPaths.json','utf8'));
-  assert.equal(names.length,33);const f=await fixture();f.manifest.implementations=names.map(name=>({name,sha256:'a'.repeat(64)}));
-  if(mutation==='34-inputs')f.manifest.implementations.push({name:'extra.ts',sha256:'b'.repeat(64)});
-  if(mutation==='33-duplicate')f.manifest.implementations[32]={...f.manifest.implementations[0]};
-  if(mutation==='33-path-escape')f.manifest.implementations[25].name='../../color/displayTransfer.ts';
-  if(mutation==='33-absolute-path')f.manifest.implementations[25].name='D:/color/displayTransfer.ts';
+  assert.deepEqual(names,[...await readMaterialColorImplementationRegistry()]);const f=await fixture();f.manifest.implementations=names.map(name=>({name,sha256:'a'.repeat(64)}));
+  if(mutation==='extra-input')f.manifest.implementations.push({name:'extra.ts',sha256:'b'.repeat(64)});
+  if(mutation==='duplicate-input')f.manifest.implementations[names.length-1]={...f.manifest.implementations[0]};
+  if(mutation==='path-escape')f.manifest.implementations[names.indexOf('../color/displayTransfer.ts')].name='../../color/displayTransfer.ts';
+  if(mutation==='absolute-path')f.manifest.implementations[names.indexOf('../color/displayTransfer.ts')].name='D:/color/displayTransfer.ts';
   await writeFile(`${f.bundle}.material-color-identity.json`,JSON.stringify(f.manifest));
   await assert.rejects(stageMaterialColorRuntimePair(f.bundle,f.target),/invalid-material-color-pair-implementations/);
   assert.equal((await readdir(f.root)).includes('stage'),false);
 });
-async function fixture(){await mkdir('.rd/tmp',{recursive:true});const root=await mkdtemp(resolve('.rd/tmp/sidecar-stage-'));const source=join(root,'source');await mkdir(source);const bundle=join(source,'mcp.mjs'),bytes=Buffer.from('export const ownedFixture = true;\n');await writeFile(bundle,bytes);const manifest={schema:'editkin.material-color-bundle/v1',bundle:{file:'mcp.mjs',size:bytes.length,sha256:sha(bytes)},implementations:[{name:'fixture.ts',sha256:'a'.repeat(64)}]};await writeFile(`${bundle}.material-color-identity.json`,JSON.stringify(manifest));return {root,bundle,manifest,target:join(root,'stage/mcp.mjs')};}
+async function fixture(){const root=await temp.create('sidecar-stage-',{parent:REPO_TMP});const source=join(root,'source');await mkdir(source);const bundle=join(source,'mcp.mjs'),bytes=Buffer.from('export const ownedFixture = true;\n');await writeFile(bundle,bytes);const manifest={schema:'editkin.material-color-bundle/v1',bundle:{file:'mcp.mjs',size:bytes.length,sha256:sha(bytes)},implementations:[{name:'fixture.ts',sha256:'a'.repeat(64)}]};await writeFile(`${bundle}.material-color-identity.json`,JSON.stringify(manifest));return {root,bundle,manifest,target:join(root,'stage/mcp.mjs')};}
 test('actual staging pair copies unchanged bounded bytes',async()=>{const f=await fixture();const identity=await stageMaterialColorRuntimePair(f.bundle,f.target);assert.deepEqual(identity,await verifyMaterialColorRuntimePair(f.bundle));assert.deepEqual((await readdir(join(f.root,'stage'))).sort(),['mcp.mjs',MATERIAL_COLOR_SIDECAR].sort());});
 for(const mutation of ['missing','bundle-tamper','sidecar-hash','sidecar-size','sidecar-name','unknown-key','duplicate-input'])test(`${mutation} rejects before creating stage`,async()=>{const f=await fixture();if(mutation==='missing'){const {unlink}=await import('node:fs/promises');await unlink(`${f.bundle}.material-color-identity.json`);}else if(mutation==='bundle-tamper')await appendFile(f.bundle,'tamper');else{if(mutation==='sidecar-hash')f.manifest.bundle.sha256='b'.repeat(64);if(mutation==='sidecar-size')f.manifest.bundle.size++;if(mutation==='sidecar-name')f.manifest.bundle.file='../mcp.mjs';if(mutation==='unknown-key')f.manifest.extra=true;if(mutation==='duplicate-input')f.manifest.implementations.push(f.manifest.implementations[0]);await writeFile(`${f.bundle}.material-color-identity.json`,JSON.stringify(f.manifest));}await assert.rejects(stageMaterialColorRuntimePair(f.bundle,f.target));assert.equal((await readdir(f.root)).includes('stage'),false);});
 test('unknown existing target bytes never overwritten',async()=>{const f=await fixture();await mkdir(join(f.root,'stage'));await writeFile(f.target,'do-not-replace');await assert.rejects(stageMaterialColorRuntimePair(f.bundle,f.target),{code:'EEXIST'});assert.equal(await readFile(f.target,'utf8'),'do-not-replace');});
@@ -46,7 +48,7 @@ test('identical bundle bytes in different generation paths do not share captured
   // Pair transport permits a bounded subset; the actual executing consumer must
   // additionally reject missing/renamed/reordered helpers against embedded names.
   const sidecar=`${b}.material-color-identity.json`,original=JSON.parse(await readFile(sidecar,'utf8'));
-  assert.equal(original.implementations.length,33);
+  assert.equal(original.implementations.length,(await readMaterialColorImplementationRegistry()).length);
   for(const mutation of ['missing-display-helper','wrong-valid-name','reordered']){
     const changed=structuredClone(original),at=changed.implementations.findIndex(row=>row.name==='../color/displayTransfer.ts');assert.notEqual(at,-1);
     if(mutation==='missing-display-helper')changed.implementations.splice(at,1);

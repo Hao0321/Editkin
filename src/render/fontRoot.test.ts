@@ -1,15 +1,16 @@
 import { describe,expect,it } from "vitest";
-import { mkdtemp,mkdir,writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir,writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import { useTempRoots } from "../test/tempRoot.mjs";
 import { createDemoProject } from "../domain/demo";
 import { resolveAssFontRoot } from "./fontRoot";
 import { createMotionGraphic } from "../motion/composition";
 import { findMotionGraphicPreset } from "../creative/motionGraphicPresets";
 
+const temp=useTempRoots();
 async function fixture() {
- const root=await mkdtemp(join(tmpdir(),"editkin-font-root-test-"));await mkdir(join(root,"render"));
+ const root=await temp.create("editkin-font-root-test-");await mkdir(join(root,"render"));
  const bytes=Buffer.from("synthetic-font-integrity-fixture-not-raster-proof");
  const face={weight:400,file:"render/EditkinFace-noto-sans-tc-400.ttf",family:"EditkinFace noto-sans-tc 400",bytes:bytes.length,sha256:createHash("sha256").update(bytes).digest("hex")};
  const manifest={schemaVersion:2,fonts:[{id:"noto-sans-tc",family:"Noto Sans TC",faces:[face]}]};
@@ -24,7 +25,7 @@ describe("font root compatibility and integrity",()=>{
  });
  it("keeps absent/private/v1 roots legacy and rejects relative roots",async()=>{
   expect(await resolveAssFontRoot()).toEqual({bundledFaces:false});
-  const root=await mkdtemp(join(tmpdir(),"editkin-private-font-test-"));expect(await resolveAssFontRoot(root)).toEqual({fontRoot:root,bundledFaces:false});
+  const root=await temp.create("editkin-private-font-test-");expect(await resolveAssFontRoot(root)).toEqual({fontRoot:root,bundledFaces:false});
   await writeFile(join(root,"editkin-open-fonts.json"),'{"schemaVersion":1}');expect((await resolveAssFontRoot(root)).bundledFaces).toBe(false);
   await expect(resolveAssFontRoot("relative/fonts")).rejects.toThrow(/absolute/);
  });

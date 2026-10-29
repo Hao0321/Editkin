@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { BROWSER_PROXY_COLOR_CONTRACT, browserProxyColorPlan, browserProxyFilters } from "./mediaDerivativeColor";
+import { BROWSER_PROXY_COLOR_CONTRACT, browserProxyColorPlan, browserProxyFilters, browserThumbnailFilters } from "./mediaDerivativeColor";
+import { mediaProbeForDisplay } from "../render/mediaDisplayGeometry";
 import { compositorSourceColorPlan } from "../render/sourceColorFilters";
 import { DEFAULT_COLOR_MANAGEMENT, type MediaAsset } from "../domain/types";
 
@@ -37,7 +38,7 @@ describe("browser display proxies preserve original interpretation boundaries", 
   it("overlay consumes already-normalized proxy without double tone mapping", () => {
     const plan = browserProxyColorPlan(hdr);
     const filters = browserProxyFilters({ ...plan, normalization: [], treatment: "source-transfer-preserved" }, 216, 15);
-    expect(filters).toBe("fps=15,scale=-2:216,setsar=1,format=yuv420p");
+    expect(filters).toBe("fps=15,scale=-2:216:reset_sar=1,setsar=1,format=yuv420p");
     expect(plan.outputArgs).toContain("bt709");
   });
   it("unclassified input remains unclassified instead of being relabelled Rec709", () => {
@@ -47,6 +48,40 @@ describe("browser display proxies preserve original interpretation boundaries", 
     expect(plan.outputArgs).toEqual([]);
     expect(browserProxyFilters(plan, 360)).not.toContain("tonemap");
     expect(BROWSER_PROXY_COLOR_CONTRACT).toBe("editkin.browser-display-proxy/v1");
+  });
+  it.each([
+    { angle: 0, ratio: 5 / 3, width: 720, height: 576 },
+    { angle: 90, ratio: 3 / 5, width: 576, height: 720 },
+    { angle: -90, ratio: 3 / 5, width: 576, height: 720 },
+  ])("requests square-pixel DAR-preserving main and overlay resize for SAR4:3 at $angle degrees", fixture => {
+    const original = { duration: 2, width: 720, height: 576, hasVideo: true, hasAudio: false,
+      sampleAspectRatio: 4 / 3, displayRotationDegrees: fixture.angle }, before = structuredClone(original);
+    const displayed = mediaProbeForDisplay(original), plan = browserProxyColorPlan(displayed);
+    expect(displayed.displayAspectRatio).toBeCloseTo(fixture.ratio, 12);
+    expect([displayed.width, displayed.height]).toEqual([fixture.width, fixture.height]);
+    for (const [height, fps] of [[540, undefined], [216, 15]] as const) {
+      const stages = browserProxyFilters(plan, height, fps).split(",");
+      expect(stages.filter(stage => stage.startsWith("scale="))).toEqual([`scale=-2:${height}:reset_sar=1`]);
+      expect(stages.indexOf(`scale=-2:${height}:reset_sar=1`)).toBeLessThan(stages.indexOf("setsar=1"));
+      expect(stages.join(",")).not.toContain("transpose");
+      // The retired resize loses known SAR when its final tag is reset. This
+      // literal control observes production filter wiring, not decoded pixels.
+      expect(stages).not.toContain(`scale=-2:${height}`);
+    }
+    expect(original).toEqual(before);
+  });
+  it("preserves DAR in original and proxy thumbnails while retaining display color order", () => {
+    const plan = browserProxyColorPlan(hdr);
+    for (const fromProxy of [false, true]) {
+      const stages = browserThumbnailFilters(plan, fromProxy);
+      expect(stages.filter(stage => stage.startsWith("scale="))).toEqual([
+        "scale=480:-2:reset_sar=1:in_range=full:out_range=full:out_color_matrix=bt601",
+      ]);
+      expect(stages.indexOf("setsar=1")).toBeGreaterThan(stages.findIndex(stage => stage.startsWith("scale=")));
+      expect(stages.filter(stage => stage.startsWith("tonemap="))).toHaveLength(fromProxy ? 0 : 1);
+      expect(stages.at(-1)).toBe("format=yuvj444p");
+    }
+    expect(browserThumbnailFilters(browserProxyColorPlan({}), false)).toEqual(["scale=480:-2:reset_sar=1", "setsar=1"]);
   });
   it.each(["log", "slog3", "linear"])("does not pretend to support unresolved %s", transfer => {
     expect(() => browserProxyColorPlan({ colorTransfer: transfer })).toThrow(/顯示轉換/);

@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { importVerifiedMaterialColorGeneration } from "./material-color-generation-bridge.mjs";
+import { importVerifiedEntrypoint } from "../editkin-product-mcp-launcher.mjs";
+import { verifyMaterialColorRuntimePair } from "./material-color-runtime-pair.mjs";
 import {
   mkdir,
   open,
@@ -469,11 +470,33 @@ export async function applySnapshotRuntimeBindings(snapshot, {
   return plugins;
 }
 
+/**
+ * Loads the verified snapshot bundle exactly like the product launcher: the
+ * verified bytes run under the snapshot file's own file:// URL (see
+ * importVerifiedEntrypoint), so import.meta.* resolve inside the snapshot. The
+ * material-colour sidecar is still bound to the manifest before the import, and
+ * the live pair must still describe the executed bytes afterwards.
+ */
+async function importVerifiedSnapshotEntrypoint(snapshot, entrypointBytes, { importModule, registerHooks }) {
+  const bundleSha256 = hashBytes(entrypointBytes);
+  const sidecarPath = `${snapshot.manifest.entrypoint}.material-color-identity.json`;
+  const sidecar = snapshot.manifest.files.find((file) => file.path === sidecarPath);
+  if (!sidecar) throw new Error("generation-material-color-sidecar-required");
+  const assertLivePair = async (code) => {
+    const pair = await verifyMaterialColorRuntimePair(snapshot.entrypoint);
+    if (pair.bundleSha256 !== bundleSha256 || pair.sidecarSha256 !== sidecar.sha256) throw new Error(code);
+  };
+  await assertLivePair("generation-material-color-identity-drift");
+  await importVerifiedEntrypoint({ path: snapshot.entrypoint, bytes: entrypointBytes, sha256: bundleSha256, importModule, registerHooks });
+  await assertLivePair("verified-entrypoint-live-drift");
+}
+
 export async function launchActiveMcpGeneration({
   appRoot = EDITKIN_APP_ROOT,
   stateRoot = EDITKIN_MCP_STATE_ROOT,
   execPath = process.execPath,
   importModule = (url) => import(url),
+  registerHooks,
   hooks = {},
 } = {}) {
   const vendorNode = await verifyVendorNodeIdentity({ appRoot, execPath });
@@ -482,7 +505,7 @@ export async function launchActiveMcpGeneration({
   const plugins = await applySnapshotRuntimeBindings(snapshot, { appRoot, externalPluginRoots });
   const verifiedEntrypointBytes = Buffer.from(snapshot.entrypointBytes);
   await hooks.afterVerification?.({ snapshot, verifiedEntrypointBytes });
-  await importVerifiedMaterialColorGeneration({ ...snapshot, entrypointBytes: verifiedEntrypointBytes }, importModule);
+  await importVerifiedSnapshotEntrypoint(snapshot, verifiedEntrypointBytes, { importModule, registerHooks });
   return {
     status: "GREEN_MCP_GENERATION_STARTED",
     generationId: snapshot.manifest.generationId,

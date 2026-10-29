@@ -1,3 +1,4 @@
+import { writeProjectFileAtomic } from "./projectFiles";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -41,7 +42,7 @@ describe("batch auto edit", () => {
           acceleration: "cpu",
         }),
         detectScenes: async () => ({ cuts: [{ time: 5, score: 20, frame: 150 }], engine: "ffmpeg-scdet-8", threshold: 10, minSceneDuration: 0.5, analyzedSeconds: 10, elapsedMs: 1, cacheHit: true }),
-        writeProject: async (path, project) => { await writeFile(path, JSON.stringify(project)); return { ...project, revision: 1 }; },
+        writeProject: writeProjectFileAtomic,
         render: async ({ project, outputPath }) => {
           renderedProjectCaptions = project.captions.length;
           await writeFile(outputPath, "rendered");
@@ -49,7 +50,7 @@ describe("batch auto edit", () => {
         },
         now: () => new Date("2026-08-22T00:00:00.000Z"),
       });
-      expect(result.status).toBe("completed");
+      expect(result.status, result.error).toBe("completed");
       expect(result.project?.revision).toBe(1);
       expect(renderedProjectCaptions).toBeGreaterThan(0);
       expect(hashCalls).toBe(2);

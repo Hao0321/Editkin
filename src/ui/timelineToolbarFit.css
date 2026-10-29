@@ -1,0 +1,44 @@
+/* One-row timeline toolbar (TimelineToolbarFit measures it before paint). While it fits nothing wraps: the title keeps
+   its width, the actions fill the rest and 更多工具 stays at the end. When it does not fit, 逐幀, 畫中畫, ＋ 軌道 and
+   then 顯示全部 move into 更多工具 one at a time, then the 「時間軸」 title steps aside; only after that may the row wrap.
+   The two tools (選取, 剪刀), ＋ 文字, 調整片段／調整字幕, 吸附, 切開 and 刪除 always keep their words in the row. */
+.timeline-shell .timeline-toolbar.timeline-toolbar[data-fit][data-overflow] { flex-wrap: nowrap; }
+.timeline-shell .timeline-toolbar.timeline-toolbar[data-fit][data-overflow] > div:first-child { flex: 0 0 auto; }
+.timeline-shell .timeline-toolbar.timeline-toolbar[data-fit][data-overflow] > .timeline-actions { flex: 1 1 auto; flex-wrap: nowrap; min-width: 0; }
+.timeline-shell .timeline-toolbar.timeline-toolbar[data-fit][data-overflow] .timeline-quick-actions { flex: 1 0 auto; flex-wrap: nowrap; overflow: visible; }
+
+/* In the row until moved; in 更多工具 only once moved (顯示全部 is always there, with 縮小 and 放大). */
+.timeline-toolbar[data-moved~="1"] .timeline-quick-actions > [data-overflow-step="1"],
+.timeline-toolbar[data-moved~="2"] .timeline-quick-actions > [data-overflow-step="2"],
+.timeline-toolbar[data-moved~="3"] .timeline-quick-actions > [data-overflow-step="3"],
+.timeline-toolbar[data-moved~="4"] .timeline-quick-actions > [data-overflow-step="4"] { display: none; }
+.timeline-toolbar:not([data-moved~="1"]) .timeline-more-popover [data-overflow-copy="1"],
+.timeline-toolbar:not([data-moved~="2"]) .timeline-more-popover [data-overflow-copy="2"],
+.timeline-toolbar:not([data-moved~="3"]) .timeline-more-popover [data-overflow-copy="3"] { display: none; }
+
+/* Step 5: the title steps aside (the timeline section keeps its name 「時間軸」 for screen readers). */
+.timeline-toolbar[data-fit]:is([data-overflow="5"], [data-overflow="6"]) > div:first-child { display: none; }
+
+/* Step 6, the last resort: the row may wrap again. */
+.timeline-shell .timeline-toolbar.timeline-toolbar[data-fit][data-overflow="6"],
+.timeline-shell .timeline-toolbar.timeline-toolbar[data-fit][data-overflow="6"] > .timeline-actions,
+.timeline-shell .timeline-toolbar.timeline-toolbar[data-fit][data-overflow="6"] .timeline-quick-actions { flex-wrap: wrap; }
+
+/* 更多工具 opens where TimelineToolbarFit places it (under the toolbar, or from the window's bottom beside its button);
+   it never covers its own button, so a second click on it closes it. */
+.app-shell[data-interface-mode] .timeline-toolbar[data-fit] .timeline-more-popover {
+  inset-block-start: var(--timeline-more-top, auto); inset-block-end: var(--timeline-more-bottom, 12px);
+  inset-inline-end: var(--timeline-more-right, 12px); max-height: var(--timeline-more-max, calc(100dvh - 24px));
+  /* Four buttons a row, each wide enough that 「Fotograma a fotograma」 takes two lines at most and 「フレームごと」 one,
+     so the moved actions add no rows and 更多工具 still opens under the toolbar in a 1280×720 window. */
+  width: min(520px, calc(100vw - 24px));
+}
+.timeline-toolbar[data-fit] .timeline-more-popover { gap: 5px; padding-block: 8px; }
+/* A group with fewer buttons spreads them over the whole width instead of leaving empty columns. */
+.timeline-toolbar[data-fit] .timeline-more-popover :is(.timeline-zoom, .timeline-add-actions) { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+.timeline-toolbar[data-fit] .timeline-more-popover .timeline-primary-actions { flex-wrap: wrap; padding-right: 0; border-right: 0; }
+/* 「✓ 自動補空隙」 sits in 更多工具, which has room for it in any window (narrow windows hid it when it was in the row),
+   so 「常用功能」 is never an empty heading. */
+.timeline-toolbar[data-fit] .timeline-more-popover .ripple-default { display: inline-flex; }
+/* 更多工具's words sit in the middle of its button, like the words of the other buttons in the row. */
+.timeline-toolbar[data-fit] .timeline-more > summary { display: flex; align-items: center; }

@@ -185,6 +185,10 @@ describe("advanced production GPU render graph adapter", () => {
       const target = { ...structuredClone(project.tracks[0].clips[0]), id: `clip-target-${mode}`, assetId: targetAsset.id,
         layer: { enabled: true, blendMode: "normal" as const, trackMatte: { sourceClipId: "clip-demo", mode } } };
       project.assets.push(targetAsset); project.tracks[0].clips.push(target);
+      // D3: a matte source draws nothing, so the matted target would be the first drawn layer, which the resident
+      // video executor cannot seed: it falls back. Keeping the source visible restores the drawn-source graph.
+      expect(buildGpuEngineVideoPreviewGraph(project, 1)).toBeUndefined();
+      project.tracks[0].clips[0].layer = { enabled: true, blendMode: "normal", showMatteSource: true };
       const preview = buildGpuEngineVideoPreviewGraph(project, 1)!;
       expect(preview.graph.nodes.find((node) => node.kind === "composite")).toMatchObject({
         matteInput: "color:clip-demo", matteMode: mode,
@@ -402,6 +406,8 @@ describe("advanced production GPU render graph adapter", () => {
     project.colorManagement = { ...project.colorManagement!, mode: "aces2", outputTransform: "rec709_sdr" };
     const matte = project.tracks[0].clips[0];
     matte.creative = { effectPresetIds: ["mono_halftone"] };
+    // The matte source is also drawn here (D3 opt-out); otherwise the matted target would be the first drawn layer.
+    matte.layer = { enabled: true, blendMode: "normal", role: "content", showMatteSource: true };
     const targetAsset = { ...structuredClone(project.assets[0]), id: "asset-scene-linear-target", uri: "C:/fixtures/target.mp4" };
     const gpuEffect: NativeEffectInstance = {
       id: "scene-linear-gpu", pluginId: "creator.scene-linear", capabilityId: "look", pluginVersion: "1.0.0",

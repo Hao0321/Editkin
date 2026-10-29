@@ -15,6 +15,7 @@ export function validNativeGpuPlaybackEvent(event: NativeGpuPlaybackEvent, owner
 export function createTauriGpuPreviewApi(previewOwner?: string): GpuPreviewApi {
   const request = <T,>(command: string, args: Record<string, unknown> = {}): Promise<T> => invoke(command, { ...args, previewOwner });
   return {
+    gpuEngineStatus: () => request("gpu_engine_status"),
     startGpuPreviewPlayback: async (sessionId, range, onEvent) => {
       if (!previewOwner) throw new Error("原生播放需要有效的預覽持有者");
       let generation: number | undefined;
@@ -52,6 +53,8 @@ export function createTauriGpuPreviewApi(previewOwner?: string): GpuPreviewApi {
     loadGpuEnginePreviewSession: (sessionId, graph, assetBindings, timelineFrame) => request("load_gpu_engine_preview_session", { sessionId, graph, assetBindings, timelineFrame }),
     updateGpuEnginePreviewFrame: (sessionId, timelineFrame) => request("update_gpu_engine_preview_frame", { sessionId, timelineFrame }),
     loadGpuEngineVideoPreviewSession: (sessionId, graph, assetBindings, timelineFrame) => request("load_gpu_engine_video_preview_session", { sessionId, graph, assetBindings, timelineFrame }),
+    loadGpuEngineVideoFramePreviewSession: (sessionId, graph, assetBindings, timelineFrame) => request("load_gpu_engine_video_frame_preview_session", { sessionId, graph, assetBindings, timelineFrame }),
+    renderGpuEngineVideoPreviewFrame: (sessionId, timelineFrame, toleranceSeconds) => request("render_gpu_engine_video_preview_frame", { sessionId, timelineFrame, toleranceSeconds }),
     presentGpuEngineVideoPreviewFrame: (sessionId, timelineFrame, toleranceSeconds) => request("present_gpu_engine_video_preview_frame", { sessionId, timelineFrame, toleranceSeconds }),
     releaseGpuEngineVideoPreviewSession: (sessionId) => request("release_gpu_engine_video_preview_session", { sessionId }),
     updateGpuPreviewProperties: (sessionId, params) => request("update_gpu_preview_properties", { sessionId, params }),

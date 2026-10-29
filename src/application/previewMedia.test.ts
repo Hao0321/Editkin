@@ -2,9 +2,22 @@ import { describe, expect, it } from "vitest";
 import { applyCommand } from "../domain/commands";
 import { createDemoProject } from "../domain/demo";
 import { DEFAULT_COLOR, DEFAULT_TRANSFORM } from "../domain/types";
-import { activeMediaLayers } from "./previewMedia";
+import { activeMediaLayers, mesh3dPreviewTime } from "./previewMedia";
+import { prepareMesh3dTemplate } from "./mesh3dTemplates";
 
 describe("preview media selection", () => {
+  it("holds the actual final mesh source on a direct end seek, without keeping audio alive", () => {
+    let project = createDemoProject();
+    const duration = project.tracks[0].clips[0].duration;
+    const prepared = prepareMesh3dTemplate(project, { templateId: "extruded_typography", clipId: "clip-demo", title: "真實素材" });
+    project = applyCommand(project, prepared.commands[0]);
+    expect(mesh3dPreviewTime(project, duration)).toBeCloseTo(duration - 1 / project.fps);
+    expect(activeMediaLayers(project, duration + 1, { "asset-demo": "editkin-media://demo.mp4" }, "video"))
+      .toMatchObject([{ clip: { id: "clip-demo" }, source: "editkin-media://demo.mp4" }]);
+    expect(activeMediaLayers(project, duration, {}, "audio")).toEqual([]);
+    project.scene3d = undefined;
+    expect(activeMediaLayers(project, duration, {}, "video")).toEqual([]);
+  });
   it("selects an independent audio layer and respects track mute", () => {
     let project = applyCommand(createDemoProject(), {
       type: "import_asset",

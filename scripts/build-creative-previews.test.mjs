@@ -1,13 +1,14 @@
-import test from 'node:test';
+import test,{after} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,copyFile,readFile,writeFile,unlink} from 'node:fs/promises';
-import {tmpdir} from 'node:os';
+import {mkdir,copyFile,readFile,writeFile,unlink} from 'node:fs/promises';
+import {useTempRoots} from '../src/test/tempRoot.mjs';
 import {resolve,join} from 'node:path';
 import {populateCreativePreviews} from './lib/creative-preview-producer.mjs';
 import {copyPublicAuxiliary} from './build-creative-previews.mjs';
 import {digest,run} from './build-personal-visual-pack.mjs';
+const temp=useTempRoots(after);
 test('real producer cold/warm, stale recipe and corrupted cache; originals and license stay unchanged',async()=>{
- const root=await mkdtemp(join(tmpdir(),'creative-producer-')),ffmpeg=resolve('vendor/ffmpeg/win32-x64/ffmpeg.exe'),ffprobe=resolve('vendor/ffmpeg/win32-x64/ffprobe.exe');
+ const root=await temp.create('creative-producer-'),ffmpeg=resolve('vendor/ffmpeg/win32-x64/ffmpeg.exe'),ffprobe=resolve('vendor/ffmpeg/win32-x64/ffprobe.exe');
  const video=join(root,'fixture.mp4');await run(ffmpeg,['-v','error','-f','lavfi','-i','testsrc2=size=320x180:rate=15','-t','1','-c:v','libx264','-pix_fmt','yuv420p',video]);
  const bytes=(await readFile(video)).length,sha256=await digest(video);
  const base={schemaVersion:1,assetCount:1,assets:[{id:'test:video',mediaKind:'video',path:'assets/fixture.mp4',bytes,sha256,license:'CC0-1.0'}]};
@@ -27,7 +28,7 @@ test('real producer cold/warm, stale recipe and corrupted cache; originals and l
  assert.equal(await digest(video),sha256);
 });
 test('NOTICE and licenses copied exactly; missing license fails, not silently omitted',async()=>{
- const root=await mkdtemp(join(tmpdir(),'creative-license-')),source=join(root,'source'),target=join(root,'target');await mkdir(join(source,'licenses'),{recursive:true});await mkdir(target);await writeFile(join(source,'NOTICE.md'),'original notice');await writeFile(join(source,'licenses','CC-BY-4.0.md'),'original license');
+ const root=await temp.create('creative-license-'),source=join(root,'source'),target=join(root,'target');await mkdir(join(source,'licenses'),{recursive:true});await mkdir(target);await writeFile(join(source,'NOTICE.md'),'original notice');await writeFile(join(source,'licenses','CC-BY-4.0.md'),'original license');
  assert.equal((await copyPublicAuxiliary(source,target)).length,2);assert.equal(await digest(join(source,'NOTICE.md')),await digest(join(target,'NOTICE.md')));
  const missing=join(root,'missing');await mkdir(join(missing,'licenses'),{recursive:true});await assert.rejects(copyPublicAuxiliary(missing,join(root,'other')),/Missing/);
 });

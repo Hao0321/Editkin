@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-update-gpu-preview-properties"
+description = "Enables the update_gpu_preview_properties command without any pre-configured scope."
+commands.allow = ["update_gpu_preview_properties"]
+
+[[permission]]
+identifier = "deny-update-gpu-preview-properties"
+description = "Denies the update_gpu_preview_properties command without any pre-configured scope."
+commands.deny = ["update_gpu_preview_properties"]

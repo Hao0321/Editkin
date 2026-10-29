@@ -3,18 +3,26 @@ import { TIMELINE_MAGNET_THRESHOLD_PX } from "./timelineInteraction";
 
 export interface TimelineSnapPoint { time: number; owner: string }
 
-/** Build once per edit; dragging queries only two small edge windows, not every clip. */
-export function buildTimelineSnapIndex(project: Pick<EditProject, "tracks" | "captions" | "director">): TimelineSnapPoint[] {
+/** Build once per edit; dragging queries only two small edge windows, not every clip.
+ * Blocks of the 標題與圖卡 lane add their edges as `motion:<block id>` so clips and titles line up with each other. */
+export function buildTimelineSnapIndex(project: Pick<EditProject, "tracks" | "captions" | "director">,
+  motionBlocks: ReadonlyArray<{ id: string; start: number; duration: number }> = []): TimelineSnapPoint[] {
   const points: TimelineSnapPoint[] = [{ time: 0, owner: "origin" }];
   for (const track of project.tracks) for (const clip of track.clips) {
     points.push({ time: clip.timelineStart, owner: `clip:${clip.id}` }, { time: clip.timelineStart + clip.duration, owner: `clip:${clip.id}` });
   }
   for (const caption of project.captions) points.push({ time: caption.start, owner: `caption:${caption.id}` }, { time: caption.start + caption.duration, owner: `caption:${caption.id}` });
   for (const marker of project.director.markers) points.push({ time: marker.time, owner: `marker:${marker.id}` });
+  for (const block of motionBlocks) points.push({ time: block.start, owner: `motion:${block.id}` }, { time: block.start + block.duration, owner: `motion:${block.id}` });
   return points.filter(point => Number.isFinite(point.time) && point.time >= 0).sort((a, b) => a.time - b.time);
 }
 
 export function queryTimelineSnapTimes(index: TimelineSnapPoint[], owner: string, edges: number[], pixelsPerSecond: number, fps: number, playhead: number): number[] {
+  return queryTimelineSnapTimesExcluding(index, new Set([owner]), edges, pixelsPerSecond, fps, playhead);
+}
+
+/** Like queryTimelineSnapTimes, but skips every owner that moves together (a clip and the titles that follow it). */
+export function queryTimelineSnapTimesExcluding(index: TimelineSnapPoint[], owners: ReadonlySet<string>, edges: number[], pixelsPerSecond: number, fps: number, playhead: number): number[] {
   const threshold = TIMELINE_MAGNET_THRESHOLD_PX / Math.max(1, pixelsPerSecond) + 1 / fps;
   const times = new Set<number>();
   if (Number.isFinite(playhead) && playhead >= 0) times.add(playhead);
@@ -27,7 +35,7 @@ export function queryTimelineSnapTimes(index: TimelineSnapPoint[], owner: string
     }
     for (let cursor = low; cursor < index.length && index[cursor].time <= edge + threshold; cursor += 1) {
       const point = index[cursor];
-      if (point.owner !== owner) times.add(point.time);
+      if (!owners.has(point.owner)) times.add(point.time);
     }
   }
   return [...times];

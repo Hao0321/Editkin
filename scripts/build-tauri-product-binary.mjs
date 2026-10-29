@@ -5,7 +5,8 @@ import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFil
 import { readRegularFile } from "./lib/regular-file.mjs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
-import { assertTauriNativePolicyPin, assertTauriProductRustflagEnvironment, tauriProductCargoBuildArgs, TAURI_PRODUCT_EMBEDDED_FRONTEND_FEATURE } from "./lib/tauri-product-feature-policy.mjs";
+import { assertTauriNativePolicyPin, assertTauriProductRustflagEnvironment, encodeCargoRustflags, rustupHomeFromSysroot, tauriProductCargoBuildArgs, tauriProductPathRemapRustflags,
+  TAURI_PRODUCT_EMBEDDED_FRONTEND_FEATURE } from "./lib/tauri-product-feature-policy.mjs";
 import { computeBuildReceipt, productReleaseManifestFindings, PRODUCT_RELEASE_SCOPE } from "./lib/build-input-identity.mjs";
 
 const root = resolve(import.meta.dirname, "..");
@@ -106,7 +107,12 @@ try {
     run(rustcPath, ["-Vv"], 30_000),
   ]);
   const command = tauriProductCargoBuildArgs();
-  const buildEnvironment = { ...process.env, CARGO_TARGET_DIR: buildTargetDir, CARGO_INCREMENTAL: "0" };
+  // No build-machine cargo home, toolchain, checkout or target paths in the shipped binary's panic/error locations.
+  const sysroot = (await run(rustcPath, ["--print", "sysroot"], 30_000)).stdout.trim();
+  const pathRemapRustflags = tauriProductPathRemapRustflags({
+    rustupHome: rustupHomeFromSysroot(sysroot), cargoHome: resolve(homedir(), ".cargo"), workspaceRoot: root, cargoTargetDir: buildTargetDir,
+  });
+  const buildEnvironment = { ...process.env, CARGO_TARGET_DIR: buildTargetDir, CARGO_INCREMENTAL: "0", CARGO_ENCODED_RUSTFLAGS: encodeCargoRustflags(pathRemapRustflags) };
   await run(cargoPath, command, 45 * 60_000, buildEnvironment);
   const after = await collectInputs();
   if (before.identity.sha256 !== after.identity.sha256) throw new Error("Tauri product build inputs changed during compilation");
@@ -146,6 +152,7 @@ try {
     isolatedBuildTarget: relative(root, buildTargetDir).split(sep).join("/"),
     cleanGeneration: true,
     callerEnvironmentPolicy: "reject-rust-cargo-toolchain-feature-and-target-injection",
+    pathRemapRustflags,
     toolchain: { cargo: cargoVersion.stdout, rustc: rustcVersion.stdout },
     inputs: after.files,
     inputIdentity: after.identity,

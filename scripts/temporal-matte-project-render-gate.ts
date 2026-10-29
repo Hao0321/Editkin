@@ -59,6 +59,8 @@ function projectWithTemporalMatte(includeMatte = true): EditProject {
   const source = project.tracks[0].clips[0]; source.duration = .5; source.transform = { x: -120, y: 0, scale: .72, rotation: -4, opacity: 1 };
   source.keyframes = [{ id: "motion", time: 14 / 30, transform: { x: 120, y: 0, scale: .72, rotation: 4, opacity: 1 }, color: { ...source.color }, easing: "linear" }];
   const motion = createTransformMotionBlurInstance(); motion.parameters.shutter_angle = 360; source.creative = { effectPresetIds: [], nativeEffectInstances: [motion] };
+  // The source is also the drawn footage here; since D3 a track matte source draws only when it says so.
+  if (includeMatte) source.layer = { ...(source.layer ?? { enabled: true, blendMode: "normal" as const }), showMatteSource: true };
   const targetAsset = { ...structuredClone(project.assets[0]), id: "matte-target-asset", name: "Matte target", uri: resolve(root, "public/demo-source.mp4") };
   const target = structuredClone(source); target.id = "matte-target"; target.assetId = targetAsset.id; target.trackId = "matte-target-track";
   target.timelineStart = 3 / 30; target.sourceStart = 12 / 30; target.duration = 9 / 30; target.keyframes = [];

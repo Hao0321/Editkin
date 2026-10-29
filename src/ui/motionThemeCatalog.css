@@ -1,0 +1,7 @@
+.motion-theme-catalog { min-width: 0; }
+.motion-theme-catalog fieldset { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.motion-theme-catalog fieldset > button { min-height: 40px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--accent-soft); color: var(--ink); cursor: pointer; }
+.motion-theme-catalog fieldset > button:disabled { opacity: .45; cursor: default; }
+.motion-theme-fields { display: grid; gap: 9px; min-width: 0; padding-top: 9px; border-top: 1px solid var(--line); }
+.motion-theme-catalog [role="status"] { color: var(--muted); font-size: 13px; line-height: 1.5; overflow-wrap: normal; }
+@container (max-width: 380px) { .motion-theme-catalog .native-template-row { grid-template-columns: minmax(0,1fr); } }

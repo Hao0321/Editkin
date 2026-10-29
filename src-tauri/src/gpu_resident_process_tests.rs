@@ -34,7 +34,7 @@ fn runtime(name: &str) -> PathBuf {
     PathBuf::from(std::env::var_os(name).expect("test runtime must be explicitly configured"))
 }
 fn environment() -> Vec<(OsString, OsString)> {
-    std::env::vars_os().collect()
+    child_environment(std::env::vars_os(), &[])
 }
 fn launch(mode: &str, cancel: Arc<AtomicBool>) -> GpuResidentProcess {
     // Node -e is a script context, not a function body; wrap fixture so its early returns are valid.
@@ -365,4 +365,98 @@ fn gpu_existing_native_binary_ready_status_and_owned_cleanup() {
         "NATIVE_GPU_RECEIPT {}",
         json!({"pid":pid,"ready":ready,"status":status,"ownedCleanupConfirmed":true,"visiblePresentationTested":false})
     );
+}
+
+/// Starts `cmd.exe` (no arguments) in the given environment, feeds it `script` on stdin and returns its output.
+#[cfg(windows)]
+fn run_cmd_in(environment: &[(OsString, OsString)], script: &str) -> io::Result<String> {
+    let cmd = PathBuf::from(std::env::var_os("SystemRoot").expect("SystemRoot"))
+        .join("System32")
+        .join("cmd.exe");
+    let preview_process_platform::Spawned {
+        mut process,
+        mut stdin,
+        mut stdout,
+        stderr,
+    } = preview_process_platform::spawn_with_environment(&cmd, &[], environment)?;
+    drop(stderr);
+    stdin.write_all(script.as_bytes())?;
+    drop(stdin);
+    let mut output = Vec::new();
+    stdout.read_to_end(&mut output)?;
+    let _ = process.terminate_tree();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !process.tree_is_empty().unwrap_or(true) && Instant::now() < deadline {
+        thread::sleep(POLL);
+    }
+    Ok(String::from_utf8_lossy(&output).into_owned())
+}
+
+/// #101 "GPU owned process spawn failed: Invalid or duplicate clean environment entry". A Windows process block
+/// holds hidden per-drive entries (`=C:=C:\work`, created by cmd.exe and inherited by everything it starts) and can
+/// hold one name in two spellings (Path/PATH from MSYS/Cygwin-style hosts). Copying it verbatim into the strict
+/// owned-process environment made every GPU launch fail.
+#[test]
+#[cfg(windows)]
+fn gpu_child_environment_from_a_windows_process_block_is_spawnable() {
+    let os = |text: &str| OsString::from(text);
+    let system_root = std::env::var_os("SystemRoot").expect("SystemRoot");
+    let inherited = vec![
+        (os("=C:"), os(r"C:\work")),
+        (os("=E:"), os(r"E:\Editkin")),
+        (os("=ExitCode"), os("00000000")),
+        (os("SystemRoot"), system_root.clone()),
+        (os("Path"), os(r"C:\Windows\System32")),
+        (os("PATH"), os(r"C:\shadow")),
+        (os("TEMP"), std::env::temp_dir().into_os_string()),
+        (os("editkin_font_root"), os(r"C:\stale fonts")),
+    ];
+    let overrides = [(os("EDITKIN_FONT_ROOT"), os(r"D:\editkin test fonts"))];
+
+    // The 0.15.0 construction (copy the block, swap EDITKIN_FONT_ROOT) is what the validator rejected.
+    let mut legacy = inherited
+        .iter()
+        .filter(|(key, _)| !key.eq_ignore_ascii_case("EDITKIN_FONT_ROOT"))
+        .cloned()
+        .collect::<Vec<_>>();
+    legacy.extend(overrides.iter().cloned());
+    let legacy_error = run_cmd_in(&legacy, "exit\r\n").unwrap_err();
+    assert!(legacy_error
+        .to_string()
+        .contains("Invalid or duplicate clean environment entry"));
+
+    let environment = child_environment(inherited, &overrides);
+    assert!(environment
+        .iter()
+        .all(|(key, _)| !key.is_empty() && !key.to_string_lossy().contains('=')));
+    let lookup = |name: &str| {
+        environment
+            .iter()
+            .filter(|(key, _)| key.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(lookup("PATH"), [os(r"C:\Windows\System32")], "the first spelling wins, as in Windows");
+    assert_eq!(lookup("EDITKIN_FONT_ROOT"), [os(r"D:\editkin test fonts")]);
+    assert_eq!(lookup("SystemRoot"), [system_root]);
+    let output = run_cmd_in(&environment, "echo FONT=[%EDITKIN_FONT_ROOT%]\r\nexit\r\n").unwrap();
+    assert!(output.contains(r"FONT=[D:\editkin test fonts]"), "{output}");
+}
+
+/// The same with this test process's own block: run from cmd.exe it contains `=X:` entries.
+#[test]
+#[cfg(windows)]
+fn gpu_child_environment_from_this_process_is_spawnable() {
+    let live = std::env::vars_os().collect::<Vec<_>>();
+    let hidden = live
+        .iter()
+        .filter(|(key, _)| key.to_string_lossy().starts_with('='))
+        .count();
+    println!("live process block: {} entries, {hidden} hidden '=' entries", live.len());
+    let environment = child_environment(
+        live,
+        &[("EDITKIN_FONT_ROOT".into(), OsString::from(r"D:\editkin live fonts"))],
+    );
+    let output = run_cmd_in(&environment, "echo FONT=[%EDITKIN_FONT_ROOT%]\r\nexit\r\n").unwrap();
+    assert!(output.contains(r"FONT=[D:\editkin live fonts]"), "{output}");
 }

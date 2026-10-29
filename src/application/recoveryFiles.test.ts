@@ -1,15 +1,16 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { useTempRoots } from "../test/tempRoot.mjs";
 import { createEmptyProject } from "../domain/editGraph";
 import { clearRecoveryFile, parseRecoverySnapshot, readRecoveryFile, writeRecoveryFileAtomic } from "./recoveryFiles";
 
 const now = Date.parse("2026-08-21T12:00:00.000Z");
+const temp = useTempRoots();
 
 describe("crash recovery files", () => {
   it("writes and reads a bounded validated snapshot", async () => {
-    const root = await mkdtemp(join(tmpdir(), "editkin-recovery-"));
+    const root = await temp.create("editkin-recovery-");
     const path = join(root, "session.json");
     const project = createEmptyProject();
     const snapshot = await writeRecoveryFileAtomic(path, { project, cleanUpdatedAt: project.updatedAt }, { nowMs: now });
@@ -19,7 +20,7 @@ describe("crash recovery files", () => {
   });
 
   it("recovers the previous valid generation when the primary is corrupt", async () => {
-    const root = await mkdtemp(join(tmpdir(), "editkin-recovery-"));
+    const root = await temp.create("editkin-recovery-");
     const path = join(root, "session.json");
     const first = { ...createEmptyProject(), name: "first" };
     const second = { ...createEmptyProject(), name: "second" };
@@ -34,12 +35,12 @@ describe("crash recovery files", () => {
     const project = createEmptyProject();
     expect(() => parseRecoverySnapshot({ schemaVersion: 1, savedAt: "2020-01-01T00:00:00Z", cleanUpdatedAt: project.updatedAt, project }, now)).toThrow("已過期");
     expect(() => parseRecoverySnapshot({ schemaVersion: 1, savedAt: "2026-08-22T00:00:00Z", cleanUpdatedAt: project.updatedAt, project }, now)).toThrow("來自未來");
-    const root = await mkdtemp(join(tmpdir(), "editkin-recovery-"));
+    const root = await temp.create("editkin-recovery-");
     await expect(writeRecoveryFileAtomic(join(root, "session.json"), { project, cleanUpdatedAt: project.updatedAt }, { nowMs: now, maxBytes: 32 })).rejects.toThrow("32 MiB");
   });
 
   it("clears both recovery generations", async () => {
-    const root = await mkdtemp(join(tmpdir(), "editkin-recovery-"));
+    const root = await temp.create("editkin-recovery-");
     const path = join(root, "session.json");
     const project = createEmptyProject();
     await writeRecoveryFileAtomic(path, { project, cleanUpdatedAt: project.updatedAt }, { nowMs: now });

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-stop-mobile-remote"
+description = "Enables the stop_mobile_remote command without any pre-configured scope."
+commands.allow = ["stop_mobile_remote"]
+
+[[permission]]
+identifier = "deny-stop-mobile-remote"
+description = "Denies the stop_mobile_remote command without any pre-configured scope."
+commands.deny = ["stop_mobile_remote"]

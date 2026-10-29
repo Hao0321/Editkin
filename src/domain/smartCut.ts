@@ -1,3 +1,4 @@
+import { shiftedClipAudioEnvelope } from "./clipAudioEnvelope";
 import { alignTime, animatedClipState, EditGraphError, findClip, findTrack } from "./editGraph";
 import type { CaptionCue, EditProject, TimelineClip } from "./types";
 import { sliceClipVisuals } from "./clipSlicing";
@@ -48,7 +49,8 @@ export function applySmartCutToClip(
   let cursor = original.timelineStart;
   const segments: TimelineClip[] = keepRanges.map((range, index) => {
     const duration = alignTime(range.end - range.start, project.fps);
-    const initial = animatedClipState(original, range.start);
+    // Authored values only: the segments keep the expressions, which apply again on top at preview and export.
+    const initial = animatedClipState({ ...original, expressions: {} }, range.start);
     const keyframes = original.keyframes
       .filter((keyframe) => keyframe.time > range.start + tolerance && keyframe.time <= range.end + tolerance)
       .map((keyframe) => ({
@@ -58,7 +60,7 @@ export function applySmartCutToClip(
       }));
     if (original.keyframes.some((keyframe) => keyframe.time > range.end + tolerance)
       && !keyframes.some((keyframe) => Math.abs(keyframe.time - duration) <= tolerance)) {
-      const ending = animatedClipState(original, range.end);
+      const ending = animatedClipState({ ...original, expressions: {} }, range.end);
       keyframes.push({
         id: `${segmentIds[index]}-smart-end`,
         time: duration,
@@ -78,6 +80,7 @@ export function applySmartCutToClip(
       keyframes,
       masks: slicedMasks[index],
     };
+    if (original.audioEnvelope) segment.audioEnvelope = shiftedClipAudioEnvelope(original, range.start);
     cursor = alignTime(cursor + duration, project.fps);
     return segment;
   });

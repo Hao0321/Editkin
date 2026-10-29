@@ -15,7 +15,7 @@ fn policy(command: &str) -> Result<(Lane, Duration), String> {
         | "compile_plugin_tool" | "resolve_gpu_effect_bindings" | "read_workflow_profile"
         | "write_workflow_profile" => (Lane::Control, 60),
         "inspect_media" | "inspect_media_batch" => (Lane::Preparation, 120),
-        "prepare_media" => (Lane::Preparation, 10 * 60),
+        "prepare_media" | "clip_media_derivative" => (Lane::Preparation, 10 * 60),
         "stage_native_audio_preview" | "stage_native_audio_project" => (Lane::Preparation, 120),
         "analyze_smart_cut" | "transcribe_media" | "detect_scenes"
         | "analyze_motion_track" | "analyze_auto_roto" => (Lane::Analysis, 60 * 60),
@@ -93,6 +93,25 @@ impl ServicePool {
         verify_product_response(host, response)
     }
 
+    /// A desktop export on the export lane with a caller-owned stop token and outer bound. The renderer enforces
+    /// its own length-scaled deadline and no-progress watchdog; a set token stops the worker's process tree.
+    pub fn request_export_job(&self, node: &Path, service: &Path, request: Value, timeout: Duration, cancel: &AtomicBool) -> Result<Value, String> {
+        if request.get("command").and_then(Value::as_str) != Some("render_project") {
+            return Err("Export job only accepts render_project; not submitted".into());
+        }
+        let response = self.export.request_with_cancel(node, service, request, timeout, Some(cancel))?;
+        verify_product_response(&self.export, response)
+    }
+
+    /// Typed engine tasks share the existing serialized analysis lane, including its cancelable queue.
+    pub fn request_engine_task_job(&self, node: &Path, service: &Path, request: Value, cancel: &AtomicBool) -> Result<Value, String> {
+        if request.get("command").and_then(Value::as_str) != Some("engine_task_v1") {
+            return Err("Engine task only accepts engine_task_v1; not submitted".into());
+        }
+        let response = self.analysis.request_with_cancel(node, service, request, crate::render_jobs::EXPORT_REQUEST_BOUND, Some(cancel))?;
+        verify_product_response(&self.analysis, response)
+    }
+
     pub fn request_preview(&self, node: &Path, service: &Path, request: Value, cancel: &AtomicBool) -> Result<Value, String> {
         if request.get("command").and_then(Value::as_str) != Some("resolve_creative_preview") {
             return Err("Preview worker only accepts resolve_creative_preview; not submitted".into());
@@ -146,6 +165,15 @@ mod tests {
         let pool = ServicePool::default();
         let result = pool.request(Path::new("absent"), Path::new("absent"), "read_project", serde_json::json!({"command":"write_project"}));
         assert!(result.unwrap_err().contains("differ"));
+    }
+
+    #[test]
+    fn export_job_accepts_only_render_project_before_launch() {
+        let pool = ServicePool::default();
+        let stop = AtomicBool::new(false);
+        let result = pool.request_export_job(Path::new("absent"), Path::new("absent"),
+            serde_json::json!({"command":"write_project"}), Duration::from_secs(1), &stop);
+        assert!(result.unwrap_err().contains("only accepts render_project"));
     }
 
     #[test]

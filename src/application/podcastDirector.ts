@@ -2,7 +2,7 @@ import type { AutomaticCaptionCue } from "./automaticCaptions";
 import type { EditorCommand } from "../domain/commands";
 import { alignTime } from "../domain/editGraph";
 import { DEFAULT_COLOR, DEFAULT_TRANSFORM, type EditProject, type MotionTrack, type NormalizedRect, type TimelineClip } from "../domain/types";
-import { createMotionGraphic } from "../motion/composition";
+import { createMotionGraphic, legacyMotionGraphicSeed } from "../motion/composition";
 
 export type PodcastShotMode = "host" | "guest" | "split";
 
@@ -175,9 +175,9 @@ export function buildPodcastDirectorCommand(input: {
     start: alignTime(input.clip.timelineStart + cue.start, input.project.fps),
     duration: Math.max(1 / input.project.fps, alignTime(cue.end - cue.start, input.project.fps)),
   } }));
-  const hostTag = createMotionGraphic(input.idFactory("podcast-host-tag", 0), "tag", "H 主持人", input.clip.timelineStart, input.clip.duration, input.host.id);
+  const hostTag = createMotionGraphic(input.idFactory("podcast-host-tag", 0), "tag", "H 主持人", input.clip.timelineStart, input.clip.duration, input.host.id, legacyMotionGraphicSeed("tag"));
   Object.assign(hostTag, { backgroundColor: "#315CFFEE", accentColor: "#77E4FF", textColor: "#FFFFFF" });
-  const guestTag = createMotionGraphic(input.idFactory("podcast-guest-tag", 0), "tag", "G 來賓", input.clip.timelineStart, input.clip.duration, input.guest.id);
+  const guestTag = createMotionGraphic(input.idFactory("podcast-guest-tag", 0), "tag", "G 來賓", input.clip.timelineStart, input.clip.duration, input.guest.id, legacyMotionGraphicSeed("tag"));
   Object.assign(guestTag, { backgroundColor: "#8BFF58EE", accentColor: "#00E676", textColor: "#07110A" });
   commands.push({ type: "add_motion_graphic", graphic: hostTag }, { type: "add_motion_graphic", graphic: guestTag });
   const uncertainShots = shots.filter((shot) => shot.mode === "split").length;

@@ -1,0 +1,53 @@
+{
+  "schema": "editkin.style-template/v1",
+  "id": "S4_motion_promo_3d",
+  "revision": 2,
+  "stub": false,
+  "names": { "zh": "3D 動態宣傳・歌詞字", "en": "3D Motion Promo" },
+  "reference": "R4 (3D motion promo / lyric type): a 3D device whose screen carries the picture, UI cards popping out of it with an overshoot, an extruded chrome title with a tracked kicker, an ultramarine glow field with light columns, depth of field, bloom and a glossy floor reflection",
+  "videoTypes": ["launch", "brand_promo", "music_lyric"],
+  "palette": { "bg": "#040C1C", "accent": "#1E46FF", "accent2": "#0470D8", "highlight": "#E0262A" },
+  "art": { "styleframes": ".rd/benchmarks/style-system-20261022/styleframes/ (S4_A, S4_A_16x9, S4_reskin)", "engine": "mesh3d (src/motion/mesh3d*.ts on Mesh3dWorkerPoolV1: rounded boxes, alpha-textured cards, extruded glyphs, soft shadows, AO) + the template compositor (glow field, light columns, reflection, depth of field, bloom, grain)" },
+  "slots": {
+    "text": [
+      { "id": "title", "label": { "zh-TW": "立體主標", "en": "3D title", "es": "Título 3D", "ja": "立体タイトル", "ko": "입체 제목" },
+        "maxLength": 10, "role": "display", "required": true, "bind": [{ "component": "mesh3dExtrudedTitle", "target": "title.mesh", "as": "mesh_text_extruded" }] },
+      { "id": "kicker", "label": { "zh-TW": "小標（英文字距）", "en": "Kicker", "es": "Antetítulo", "ja": "キッカー", "ko": "키커" },
+        "maxLength": 28, "role": "display", "required": false, "bind": [{ "component": "mesh3dExtrudedTitle", "target": "kicker.type", "as": "svg_text" }] }
+    ],
+    "color": [
+      { "role": "bg", "label": { "zh-TW": "舞台底色", "en": "Stage colour", "es": "Color del escenario", "ja": "ステージの色", "ko": "무대 색" },
+        "bind": [{ "component": "mesh3dDeviceScreen", "target": "stage.background", "as": "material_color" }] },
+      { "role": "accent", "label": { "zh-TW": "光場與邊光", "en": "Glow field and rim light", "es": "Halo y luz de contorno", "ja": "グローと輪郭光", "ko": "글로우와 림 라이트" },
+        "bind": [{ "component": "mesh3dDeviceScreen", "target": "light.fill", "as": "light_color" }, { "component": "mesh3dDeviceScreen", "target": "device.edge", "as": "emissive_color" },
+          { "component": "mesh3dExtrudedTitle", "target": "title.glow", "as": "emissive_color" }] },
+      { "role": "accent2", "label": { "zh-TW": "螢幕光與鉻色", "en": "Screen light and chrome", "es": "Luz de pantalla y cromo", "ja": "画面光とクローム", "ko": "화면 빛과 크롬" },
+        "bind": [{ "component": "mesh3dDeviceScreen", "target": "light.hemisphere", "as": "light_color" }, { "component": "mesh3dExtrudedTitle", "target": "title.chrome", "as": "material_color" }] },
+      { "role": "highlight", "label": { "zh-TW": "小標圓點", "en": "Kicker dot", "es": "Punto del antetítulo", "ja": "キッカーの点", "ko": "키커 점" },
+        "bind": [{ "component": "mesh3dExtrudedTitle", "target": "kicker.dot", "as": "svg_fill" }] }
+    ],
+    "image": [
+      { "id": "screen", "label": { "zh-TW": "螢幕畫面", "en": "Screen picture", "es": "Imagen de la pantalla", "ja": "画面の画像", "ko": "화면 이미지" },
+        "aspect": { "portrait": 1.6, "landscape": 1.6 }, "fit": "cover", "focal": [0.5, 0.5], "placeholder": "ui_panel", "required": false,
+        "bind": [{ "component": "mesh3dDeviceScreen", "target": "screen.texture", "as": "mesh_texture" }] },
+      { "id": "cardHero", "label": { "zh-TW": "主卡片", "en": "Hero card", "es": "Tarjeta principal", "ja": "メインカード", "ko": "메인 카드" },
+        "aspect": { "portrait": 0.727273, "landscape": 0.727273 }, "fit": "cover", "focal": [0.5, 0.5], "placeholder": "ui_panel", "required": false,
+        "bind": [{ "component": "mesh3dDeviceScreen", "target": "cards.hero", "as": "mesh_texture" }] },
+      { "id": "cardMenu", "label": { "zh-TW": "選單卡片", "en": "Menu card", "es": "Tarjeta de menú", "ja": "メニューカード", "ko": "메뉴 카드" },
+        "aspect": { "portrait": 1.25, "landscape": 1.25 }, "fit": "cover", "focal": [0.5, 0.5], "placeholder": "ui_panel", "required": false,
+        "bind": [{ "component": "mesh3dDeviceScreen", "target": "cards.menu", "as": "mesh_texture" }] },
+      { "id": "cardPill", "label": { "zh-TW": "長條卡片", "en": "Bar card", "es": "Tarjeta alargada", "ja": "横長カード", "ko": "가로 카드" },
+        "aspect": { "portrait": 5.306122, "landscape": 5.306122 }, "fit": "cover", "focal": [0.5, 0.5], "placeholder": "ui_panel", "required": false,
+        "bind": [{ "component": "mesh3dDeviceScreen", "target": "cards.bar", "as": "mesh_texture" }] }
+    ]
+  },
+  "clip": {
+    "component": { "id": "mesh3dDeviceScreen", "renderer": "mesh3d", "revision": 1 },
+    "parts": [{ "id": "mesh3dExtrudedTitle", "renderer": "mesh3d", "revision": 1 }],
+    "output": "opaque",
+    "seconds": { "default": 4, "min": 2.5, "max": 12 },
+    "formats": ["portrait", "landscape"]
+  },
+  "artStatus": "certified",
+  "notes": "Built 2026-10-23 on the mesh3d engine (slots/mesh3dDeviceScreen.ts). Art certified 2026-10-29 (Hao: 「通過」): auto-picked for its video types."
+}

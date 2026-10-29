@@ -6,6 +6,10 @@ export interface ResidentAudioIntent {
   seekRevision: number;
   timelineStartSeconds: number;
   playing: boolean;
+  /** Prepare the current plan paused; a later Play reuses this owner and generation. */
+  prepare?: boolean;
+  /** Renderer-local view revision; never a forged durable project revision. */
+  previewEpoch?: number;
 }
 export interface ResidentAudioView {
   mode: "idle" | "preparing" | "native" | "compatible" | "failed" | "closed";
@@ -15,9 +19,10 @@ export interface ResidentAudioView {
   seekRevision?: number;
   playing?: boolean;
   error?: string;
+  previewEpoch?: number;
 }
 const safeId = (n: number) => Number.isSafeInteger(n) && n > 0;
-const keyOf = (i: ResidentAudioIntent) => JSON.stringify([i.project.id, i.project.revision, i.project.updatedAt, i.seekRevision]);
+const keyOf = (i: ResidentAudioIntent) => JSON.stringify([i.project.id, i.project.revision, i.project.updatedAt, i.seekRevision, i.previewEpoch ?? 0]);
 export function residentStageMatches(stage: ResidentAudioStage, intent: ResidentAudioIntent, generation: number): boolean {
   return stage.schema === "editkin.native-audio-project-stage/v1" && stage.status === "PREPARED"
     && stage.projectId === intent.project.id && stage.projectRevision === intent.project.revision
@@ -53,6 +58,7 @@ export class ResidentAudioTransport {
   private revision = 0;
   private readyGeneration?: number;
   private stagedSeekRevision?: number;
+  private stagedPreviewEpoch?: number;
 
   constructor(private readonly api: ResidentAudioApi, private readonly publish: (view: ResidentAudioView) => void,
     private readonly onClock: (seconds: number, ended: boolean) => void) {}
@@ -60,7 +66,8 @@ export class ResidentAudioTransport {
   update(intent: ResidentAudioIntent): void {
     if (this.retired) return;
     if (!Number.isFinite(intent.timelineStartSeconds) || intent.timelineStartSeconds < 0 || intent.timelineStartSeconds >= 86400
-      || !Number.isSafeInteger(intent.seekRevision) || intent.seekRevision < 0) throw new Error("音訊播放意圖不合法");
+      || !Number.isSafeInteger(intent.seekRevision) || intent.seekRevision < 0
+      || !Number.isSafeInteger(intent.previewEpoch ?? 0) || (intent.previewEpoch ?? 0) < 0) throw new Error("音訊播放意圖不合法");
     // A playhead telemetry update is not a seek. Only the explicit seek revision
     // or project identity changes the staged plan.
     this.desired = intent;
@@ -77,7 +84,8 @@ export class ResidentAudioTransport {
   }
   private view(mode: ResidentAudioView["mode"], error?: string): void {
     if (!this.retired) this.publish({mode, ownerId: this.owner, generation: this.generation,
-      stage: this.stage,seekRevision:this.stagedSeekRevision, playing: this.sentPlaying, error});
+      stage: this.stage,seekRevision:this.stagedSeekRevision, playing: this.sentPlaying, error,
+      ...(this.stagedPreviewEpoch ? {previewEpoch:this.stagedPreviewEpoch} : {})});
   }
   private async release(): Promise<void> {
     if (this.owner === undefined) return;
@@ -88,11 +96,12 @@ export class ResidentAudioTransport {
     this.key = undefined; this.sentPlaying = undefined; this.early = undefined;
     this.readyGeneration = undefined;
     this.stagedSeekRevision = undefined;
+    this.stagedPreviewEpoch = undefined;
   }
   private async pump(): Promise<void> {
     try {
       if (this.retired) { await this.release(); return; }
-      if (!this.desired?.playing && this.owner === undefined) { this.view("idle"); return; }
+      if (!this.desired?.playing && !this.desired?.prepare && this.owner === undefined) { this.view("idle"); return; }
       if (this.supported === undefined) {
         const caps = await this.api.capabilities();
         this.supported = caps.schema === "editkin.desktop-audio-capabilities/v1" && caps.supported && caps.sampleRate === 48000;
@@ -117,6 +126,7 @@ export class ResidentAudioTransport {
             || (this.generation !== undefined && replaced.generation <= this.generation)) throw new Error("音訊 plan 與目前專案或 generation 不一致");
           this.generation = replaced.generation; this.stage = replaced.stage; this.key = key;
           this.stagedSeekRevision=intent.seekRevision;
+          this.stagedPreviewEpoch=intent.previewEpoch ?? 0;
           this.readyGeneration = undefined;
           this.sentPlaying = false; this.replacing = false;
           if (this.retired) break;
@@ -178,8 +188,22 @@ export class ResidentAudioTransport {
     if (!this.desired?.playing && !ended) return;
     this.onClock(p.timelineFrame! / 48000, ended);
   }
-  /** Explicit retry, not an automatic failed-start loop on every render. */
-  retry(): void { if (!this.retired && this.owner === undefined) {this.failed = false; this.sequence = -1; this.schedule();} }
+  /** Explicit retry, not an automatic failed-start loop on every render. A close
+   * that was never confirmed is retried first on the serialized chain; only a
+   * confirmed release re-admits the owner, so two sounds can never overlap.
+   * Settles true once the owner is re-admitted, false when the close is still unconfirmed. */
+  retry(): Promise<boolean> {
+    if (this.retired) return Promise.resolve(false);
+    if (this.owner === undefined) {this.failed = false; this.sequence = -1; this.schedule(); return Promise.resolve(true);}
+    if (!this.failed || this.busy) return Promise.resolve(false);
+    const retried = this.release().then(() => {this.failed = false; this.sequence = -1; this.view("idle");},
+      () => this.view("failed", "原生音訊清理未確認；已停止播放，避免兩份聲音重疊")).finally(() => {
+      this.busy = undefined;
+      if (!this.retired && !this.failed) this.schedule();
+    });
+    this.busy = retried;
+    return retried.then(() => !this.retired && !this.failed);
+  }
   async dispose(): Promise<void> {
     this.retired = true;
     await this.busy;

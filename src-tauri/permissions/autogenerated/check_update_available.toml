@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-check-update-available"
+description = "Enables the check_update_available command without any pre-configured scope."
+commands.allow = ["check_update_available"]
+
+[[permission]]
+identifier = "deny-check-update-available"
+description = "Denies the check_update_available command without any pre-configured scope."
+commands.deny = ["check_update_available"]

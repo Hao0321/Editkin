@@ -35,6 +35,6 @@ describe("shared physical font selection", () => {
       expect(selected).toMatchObject({ fontFamily: face.family, fontWeight: face.weight, fontFile: face.file, faceId: face.id, weightSubstituted: false });
       count++;
     }
-    expect(count).toBe(43);
+    expect(count).toBe(44);
   });
 });

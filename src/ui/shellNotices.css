@@ -1,0 +1,11 @@
+.plain-problem-notice.shell-notice-warning { border-left-color: var(--warning, #ffbd59); background: color-mix(in srgb, var(--warning, #ffbd59) 9%, var(--surface)); }
+.plain-problem-notice.shell-notice-warning .plain-problem-icon { background: var(--warning, #ffbd59); color: #1b1b1b; }
+.plain-problem-notice.shell-notice-info { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.plain-problem-notice.shell-notice-info .plain-problem-icon { background: var(--accent); color: var(--accent-ink); }
+.shell-notice-list { display: grid; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
+.shell-notice-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.shell-notice-list li > span { display: grid; min-width: 0; flex: 1 1 260px; }
+.shell-notice-list b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shell-notice-list small { overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.shell-notice-list button { min-height: 48px; padding: 8px 18px; border: 1px solid var(--accent); border-radius: 12px; background: var(--accent); color: var(--accent-ink); font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; }
+.shell-notice-list button:disabled { cursor: wait; opacity: .6; }

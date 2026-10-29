@@ -41,13 +41,13 @@ export interface GpuNativePreviewSurface {
     headroom: { current: number | null; potential: number | null; reference: number | null } | null;
     toneMapHeadroom: number | null;
   };
-  compositeExecutionMode?: "dirty-rect-ping-pong/v1" | "fused-four-layer/v1";
+  compositeExecutionMode?: "dirty-rect-ping-pong/v1" | "fused-four-layer/v1" | "unified-draw-adjust-ping-pong/v1";
   compositeLayerCount?: number;
   compositeDirtyRectLayerCount?: number;
   compositeTextureCopyCount?: number;
   compositeFullFramePassCount?: number;
   compositeMaximumLayersPerPass?: number;
-  adjustmentExecutionMode?: "none" | "trailing-full-frame/v1" | "pre-typography-full-frame/v1" | null;
+  adjustmentExecutionMode?: "none" | "trailing-full-frame/v1" | "pre-typography-full-frame/v1" | "scoped-in-layer-order/v1" | null;
   adjustmentBaseLayerCount?: number;
   adjustmentPassCount?: number;
   matteExecutionMode?: "none" | "sampled-track-matte/v1" | null;
