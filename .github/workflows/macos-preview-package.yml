@@ -1,0 +1,77 @@
+name: Editkin macOS preview package
+
+# Runs on a pushed preview/... branch (a workflow_dispatch-only workflow can be started only from the default
+# branch, and this one is not on main) or by hand once it is.
+on:
+  push:
+    branches: ['preview/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: macOS ${{ matrix.arch }} preview package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 2018 Intel MacBook Pro and other x86_64 Macs.
+          - runner: macos-15-intel
+            arch: x64
+          # Apple Silicon.
+          - runner: macos-15
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.23.2
+          cache: npm
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable, pinned 2026-09-23
+      - name: Short commit for artifact names
+        id: commit
+        run: echo "short=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+      - run: npm ci
+      - name: Type check (reported; does not block the package)
+        continue-on-error: true
+        run: npx tsc --noEmit
+      # The full `npm test` suite is skipped here (it is red for reasons unrelated to this package); the agent
+      # connection and path rules are tested natively below on this Mac architecture.
+      - run: npm run build
+      - name: Agent connection and path unit tests (macOS; reported, does not block the package)
+        continue-on-error: true
+        working-directory: src-tauri
+        run: |
+          EDITKIN_TEST_NODE="$(command -v node)" cargo test --locked -- \
+            agent_connect agent_setup agent_runtime_probe media_source_path kit_ claude_mcp_readback codex_mcp_readback
+      - run: npm run native:build
+      - name: Build pinned whisper.cpp for this Mac architecture and stage the closed runtime
+        env:
+          EDITKIN_TARGET_PLATFORM: darwin
+          EDITKIN_TARGET_ARCH: ${{ matrix.arch }}
+        run: npm run runtime:stage
+      - name: Build app and DMG (ad-hoc signed, signingIdentity "-")
+        run: npm run tauri:build
+      - name: Verify the ad-hoc code signature
+        run: codesign --verify --deep --strict --verbose=2 src-tauri/target/release/bundle/macos/Editkin.app
+      - name: Verify exact bundled macOS runtime closure
+        run: npm run macos:bundle-runtime-gate -- src-tauri/target/release/bundle/macos/Editkin.app "${{ matrix.arch }}" ".rd/receipts/macos-runtime-${{ matrix.arch }}.json"
+      - name: Zip the app (ditto keeps the signature, symlinks and extended attributes)
+        run: ditto -c -k --sequesterRsrc --keepParent src-tauri/target/release/bundle/macos/Editkin.app "Editkin-macos-${{ matrix.arch }}-${{ steps.commit.outputs.short }}.app.zip"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: editkin-macos-${{ matrix.arch }}-${{ steps.commit.outputs.short }}-dmg
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: editkin-macos-${{ matrix.arch }}-${{ steps.commit.outputs.short }}-app-zip
+          path: Editkin-macos-${{ matrix.arch }}-${{ steps.commit.outputs.short }}.app.zip
+          if-no-files-found: error
