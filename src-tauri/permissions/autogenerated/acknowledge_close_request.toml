@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-acknowledge-close-request"
+description = "Enables the acknowledge_close_request command without any pre-configured scope."
+commands.allow = ["acknowledge_close_request"]
+
+[[permission]]
+identifier = "deny-acknowledge-close-request"
+description = "Denies the acknowledge_close_request command without any pre-configured scope."
+commands.deny = ["acknowledge_close_request"]

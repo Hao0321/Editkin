@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, readFile, realpath } from "node:fs/promises";
+import * as nodeModule from "node:module";
 import { readRegularFile } from "./lib/regular-file.mjs";
 import { basename, delimiter, dirname, isAbsolute, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const SCHEMA_VERSION = 3;
 const MANIFEST_KIND = "editkin-product-mcp-generation";
@@ -268,6 +269,57 @@ async function resolvePluginRoots(resourceRoot, builtin, configured) {
   return { roots, rejected };
 }
 
+export const VERIFIED_ENTRYPOINT_LOADER_UNAVAILABLE = "verified-entrypoint-loader-unavailable";
+
+/**
+ * Runs exactly `bytes` as the ES module at `path`'s own file:// URL.
+ *
+ * A data: URL kept the bytes exact but broke the bundle: no import.meta.dirname,
+ * fileURLToPath(import.meta.url) throws, and the material-colour identity code
+ * demanded a data-bundle context. An in-thread load hook keeps the real URL, so
+ * import.meta.* and relative runtime paths match the installed layout, while the
+ * code Node evaluates is the verified buffer, never a second read of the file.
+ */
+export async function importVerifiedEntrypoint({
+  path,
+  bytes,
+  sha256,
+  registerHooks = nodeModule.registerHooks,
+  importModule = (url) => import(url),
+}) {
+  if (typeof registerHooks !== "function") {
+    throw new Error(`${VERIFIED_ENTRYPOINT_LOADER_UNAVAILABLE}: this Node runtime has no module.registerHooks, so the verified MCP entrypoint cannot be loaded with file semantics; refusing an unverified import`);
+  }
+  const source = Buffer.from(bytes);
+  if (sha256Bytes(source) !== sha256) throw new Error("Product MCP entrypoint bytes do not match their verified identity");
+  const url = pathToFileURL(path).href;
+  // pathToFileURL percent-encodes "#" in paths, so a "#..." suffix can only be a
+  // caller-chosen fragment (a fresh module instance of the same verified file).
+  const isEntrypoint = (candidate) => candidate === url || candidate.startsWith(`${url}#`);
+  let served = 0;
+  const hooks = registerHooks({
+    resolve(specifier, context, nextResolve) {
+      if (isEntrypoint(specifier)) return { url: specifier, format: "module", shortCircuit: true };
+      return nextResolve(specifier, context);
+    },
+    load(requestedUrl, context, nextLoad) {
+      if (!isEntrypoint(requestedUrl)) return nextLoad(requestedUrl, context);
+      served += 1;
+      if (served !== 1) throw new Error("verified-entrypoint-reloaded: the Product MCP entrypoint was requested twice");
+      return { format: "module", source, shortCircuit: true };
+    },
+  });
+  try {
+    await importModule(url);
+  } finally {
+    hooks?.deregister?.();
+  }
+  if (served !== 1) {
+    throw new Error("verified-entrypoint-not-served: the Product MCP entrypoint was not evaluated from its verified bytes");
+  }
+  return url;
+}
+
 export function assertLauncherArguments(args) {
   if (!Array.isArray(args) || args.length !== 2) {
     throw new Error("Editkin product MCP generation launcher accepts no runtime or entrypoint arguments");
@@ -279,6 +331,7 @@ export async function launchProductMcpGeneration({
   runningExecutable = process.execPath,
   selfPath = fileURLToPath(import.meta.url),
   importModule = (url) => import(url),
+  registerHooks = nodeModule.registerHooks,
 } = {}) {
   const mcpMode = process.env.EDITKIN_MCP_MODE;
   if (mcpMode !== undefined && mcpMode !== "" && mcpMode !== "remote-only") {
@@ -337,7 +390,18 @@ export async function launchProductMcpGeneration({
     rejectedPluginRoots = plugins.rejected;
   }
 
-  await importModule(`data:text/javascript;base64,${entrypointBytes.toString("base64")}`);
+  await importVerifiedEntrypoint({
+    path: files.entrypoint.path,
+    bytes: entrypointBytes,
+    sha256: files.entrypoint.sha256,
+    registerHooks,
+    importModule,
+  });
+  // The bundle records its own code identity from the live file while it
+  // initializes; that identity must still describe the bytes that were executed.
+  if (await hashFile(files.entrypoint.path) !== files.entrypoint.sha256) {
+    throw new Error("verified-entrypoint-live-drift: the Product MCP entrypoint changed while it was starting");
+  }
   return {
     status: "GREEN_PRODUCT_MCP_GENERATION_STARTED",
     generationId: manifest.generationId,

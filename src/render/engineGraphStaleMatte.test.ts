@@ -43,12 +43,20 @@ describe("EngineGraph stale-matte admission (no native execution)", () => {
     expect(graph.nodes.some(node => node.id === "output:main")).toBe(true);
   });
 
-  it("does not block a muted track because of its inactive stale matte", () => {
+  // Rewritten on purpose (2026-10-11): 靜音 is sound only now, so a muted picture track still renders (and its stale
+  // matte still blocks). The picture is off when the track is hidden; an old project's muted picture track loads as
+  // muted + hidden, which is the case this test kept.
+  it("does not block a hidden track because of its inactive stale matte; a muted track still shows, so it is checked", () => {
     const { project } = fixture();
     project.tracks[0].muted = true;
+    project.tracks[0].hidden = true;
     const graph = buildEngineRenderGraph(project);
     expect(graph.nodes.some(node => node.kind === "mask")).toBe(false);
     expect(graph.nodes.some(node => node.id === "source:transparent")).toBe(true);
+    const shown = fixture().project;
+    shown.tracks[0].muted = true;
+    shown.tracks[0].hidden = false;
+    expect(() => buildEngineRenderGraph(shown)).toThrow(/roto-fixture.*已過期/);
   });
 
   it("does not block an explicitly disabled layer because of its inactive stale matte", () => {

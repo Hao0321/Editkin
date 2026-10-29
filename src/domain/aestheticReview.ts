@@ -2,7 +2,7 @@ import type { AestheticReview, AestheticSystem, AestheticBenchmarkReview, Aesthe
 import { BENCHMARK_AXES, evaluateAestheticBenchmarks } from "./aestheticBenchmarks";
 
 /** Data consistency only. Ratings and completion metadata are not proof of human identity. */
-export function scoreAestheticReview(system: AestheticSystem, ratings: Record<string, number>, options: { machineBlockers?: string[]; complete?: boolean; completedAt?: string; benchmarkReview?: AestheticBenchmarkReview; currentArtifact?: AestheticArtifactBinding } = {}): AestheticReview {
+export function scoreAestheticReview(system: AestheticSystem, ratings: Record<string, number>, options: { machineBlockers?: string[]; complete?: boolean; completedAt?: string; benchmarkReview?: AestheticBenchmarkReview; currentArtifact?: AestheticArtifactBinding; reviewer?: "human" | "agent" } = {}): AestheticReview {
   const benchmarkReview = options.benchmarkReview ?? system.review.benchmarkReview;
   const benchmarks = evaluateAestheticBenchmarks(benchmarkReview, options.currentArtifact);
   const effectiveRatings = { ...ratings };
@@ -22,14 +22,16 @@ export function scoreAestheticReview(system: AestheticSystem, ratings: Record<st
     if (rating < system.scoreContract.minimumDimensionRating) low.push(dimension.id);
   }
   const machineBlockers = [...new Set(options.machineBlockers ?? system.review.machineBlockers)].sort();
-  const complete = options.complete === true && system.dimensions.every((dimension) => normalized[dimension.id] !== undefined);
+  const reviewer = options.reviewer ?? system.review.reviewer ?? "human";
+  const authorized = reviewer === "human" || (system.reviewPolicy?.mode === "agent_reference_comparison" && Boolean(system.reviewPolicy.authorization.trim()));
+  const complete = authorized && options.complete === true && system.dimensions.every((dimension) => normalized[dimension.id] !== undefined);
   const rounded = Math.round(score * 10) / 10;
   const status = machineBlockers.length > 0 || (complete && rounded < system.scoreContract.blockBelow)
     ? "BLOCKED"
     : complete && benchmarks.complete && benchmarks.floorsPassed && low.length === 0 && rounded >= system.scoreContract.passScore
       ? "PASSED"
       : "REVIEW";
-  return { status, score: rounded, ratings: normalized, machineBlockers,
+  return { status, score: rounded, ratings: normalized, machineBlockers, reviewer,
     benchmarkReview: benchmarkReview ? structuredClone(benchmarkReview) : undefined,
     completedAt: complete ? options.completedAt ?? new Date().toISOString() : undefined };
 }
@@ -40,6 +42,7 @@ export function reconcileAestheticReview(system: AestheticSystem, review: Aesthe
     complete, completedAt: complete ? review.completedAt : undefined,
     benchmarkReview: review.benchmarkReview,
     currentArtifact,
+    reviewer: review.reviewer,
     machineBlockers: [...system.review.machineBlockers, ...review.machineBlockers],
   });
 }

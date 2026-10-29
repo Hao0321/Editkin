@@ -12,6 +12,7 @@
   --line: #d8dee8;
   --line-strong: #7c899b;
   --accent: #175cd3;
+  --editkin-brand-image: url("/brand/editkin-symbol-v3-sky.webp");
   --accent-2: #175cd3;
   --accent-ink: #ffffff;
   --accent-soft: #e8f0ff;
@@ -42,6 +43,7 @@
   --line: #e9dce1;
   --line-strong: #927984;
   --accent: #b11e55;
+  --editkin-brand-image: url("/brand/editkin-symbol-v3-candy.webp");
   --accent-2: #b11e55;
   --accent-ink: #ffffff;
   --accent-soft: #fbe8ef;
@@ -72,6 +74,7 @@
   --line: #344139;
   --line-strong: #718078;
   --accent: #8bbf65;
+  --editkin-brand-image: url("/brand/editkin-symbol-v3-volt.webp");
   --accent-2: #8bbf65;
   --accent-ink: #10180d;
   --accent-soft: #273920;

@@ -16,6 +16,11 @@ struct VideoVisualStyle {
     motion_sample_count: u32, motion_contract_code: u32, motion_shutter_angle: f32, motion_pad_z: f32,
     motion_samples: array<vec4<f32>, 8>,
     motion_sample_frames: array<vec4<f32>, 2>,
+    floating_panel: vec4<f32>,
+    floating_content: vec4<f32>,
+    floating_mask: vec4<f32>,
+    floating_shadow: vec4<f32>,
+    floating_color: vec4<f32>,
 };
 
 @group(0) @binding(0) var source_texture: texture_2d<f32>;
@@ -301,19 +306,26 @@ fn shutter_source(input_uv: vec2<f32>) -> vec4<f32> {
     return vec4<f32>(premultiplied / alpha_sum, alpha);
 }
 
+// Blend kernel v1, scene-linear rule (src/render/blendKernelV1.ts sceneLinearBlendV1, BLEND_KERNEL_WGSL_SCENE_LINEAR_V1):
+// add unclamped; multiply with the source clamped; darken/lighten/difference unclamped; the other modes blend clamped
+// operands with W3C formulas and pass the backdrop's out-of-range excess through, so their identities hold for any value.
 fn blend_color(backdrop: vec3<f32>, source: vec3<f32>, mode: u32) -> vec3<f32> {
     if mode == 1u { return backdrop + source; }
-    if mode == 2u { return vec3<f32>(1.0) - (vec3<f32>(1.0) - backdrop) * (vec3<f32>(1.0) - source); }
-    if mode == 3u { return backdrop * source; }
-    if mode == 4u { return select(2.0 * backdrop * source, vec3<f32>(1.0) - 2.0 * (vec3<f32>(1.0) - backdrop) * (vec3<f32>(1.0) - source), backdrop > vec3<f32>(0.5)); }
-    if mode == 5u { return (vec3<f32>(1.0) - 2.0 * source) * backdrop * backdrop + 2.0 * source * backdrop; }
-    if mode == 6u { return select(2.0 * backdrop * source, vec3<f32>(1.0) - 2.0 * (vec3<f32>(1.0) - backdrop) * (vec3<f32>(1.0) - source), source > vec3<f32>(0.5)); }
+    if mode == 3u { return backdrop * clamp(source, vec3<f32>(0.0), vec3<f32>(1.0)); }
     if mode == 7u { return abs(backdrop - source); }
     if mode == 8u { return min(backdrop, source); }
     if mode == 9u { return max(backdrop, source); }
-    if mode == 10u { return backdrop / max(vec3<f32>(0.000001), vec3<f32>(1.0) - source); }
-    if mode == 11u { return vec3<f32>(1.0) - (vec3<f32>(1.0) - backdrop) / max(vec3<f32>(0.000001), source); }
-    return source;
+    let b = clamp(backdrop, vec3<f32>(0.0), vec3<f32>(1.0));
+    let s = clamp(source, vec3<f32>(0.0), vec3<f32>(1.0));
+    var mixed = s;
+    if mode == 2u { mixed = vec3<f32>(1.0) - (vec3<f32>(1.0) - b) * (vec3<f32>(1.0) - s); }
+    else if mode == 4u { mixed = select(2.0 * b * s, vec3<f32>(1.0) - 2.0 * (vec3<f32>(1.0) - b) * (vec3<f32>(1.0) - s), b > vec3<f32>(0.5)); }
+    else if mode == 5u { let d = select(sqrt(b), ((16.0 * b - vec3<f32>(12.0)) * b + vec3<f32>(4.0)) * b, b <= vec3<f32>(0.25)); mixed = select(b + (2.0 * s - vec3<f32>(1.0)) * (d - b), b - (vec3<f32>(1.0) - 2.0 * s) * b * (vec3<f32>(1.0) - b), s <= vec3<f32>(0.5)); }
+    else if mode == 6u { mixed = select(2.0 * b * s, vec3<f32>(1.0) - 2.0 * (vec3<f32>(1.0) - b) * (vec3<f32>(1.0) - s), s > vec3<f32>(0.5)); }
+    else if mode == 10u { mixed = min(vec3<f32>(1.0), b / max(vec3<f32>(0.000001), vec3<f32>(1.0) - s)); }
+    else if mode == 11u { mixed = vec3<f32>(1.0) - min(vec3<f32>(1.0), (vec3<f32>(1.0) - b) / max(vec3<f32>(0.000001), s)); }
+    else { return source; }
+    return mixed + (backdrop - b);
 }
 
 fn composite(backdrop: vec4<f32>, source_input: vec4<f32>, matte_factor: f32) -> vec4<f32> {
@@ -327,9 +339,70 @@ fn composite(backdrop: vec4<f32>, source_input: vec4<f32>, matte_factor: f32) ->
     return vec4<f32>(premultiplied / output_alpha, output_alpha);
 }
 
+ // The same material executes in native manual preview and formal sequence.
+// Footage keeps its source EOTF/grade; decorations are authored sRGB, decoded
+// once into the scene-linear buffer. Physical display paint remains a later pass.
+fn floating_srgb(color: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(srgb_to_linear_channel(color.r), srgb_to_linear_channel(color.g), srgb_to_linear_channel(color.b));
+}
+fn floating_backdrop(uv: vec2<f32>) -> vec3<f32> {
+    let dimensions = vec2<f32>(style.source_width, style.source_height);
+    let radial = clamp(length((uv - vec2<f32>(0.5, 0.42)) * dimensions) / max(1.0, dimensions.y * 0.76), 0.0, 1.0);
+    return floating_srgb(mix(vec3<f32>(32.0, 39.0, 44.0) / 255.0, vec3<f32>(8.0, 11.0, 15.0) / 255.0, radial));
+}
+fn floating_distance(point: vec2<f32>) -> f32 {
+    let half_extent = style.floating_panel.zw * 0.5;
+    let radius = min(style.floating_mask.x, min(half_extent.x, half_extent.y));
+    let center = style.floating_panel.xy + half_extent;
+    let q = abs(point - center) - half_extent + vec2<f32>(radius);
+    return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - radius;
+}
+fn floating_source(input_uv: vec2<f32>) -> vec4<f32> {
+    let mapped = transformed_uv(input_uv);
+    if (mapped.z < 0.5) { return vec4<f32>(0.0); }
+    // The homography projects full-canvas corners, not the panel rectangle.
+    let point = mapped.xy * vec2<f32>(style.source_width, style.source_height);
+    let signed_distance = floating_distance(point);
+    let mask = smoothstep(0.0, max(style.floating_mask.y, 0.0001), -signed_distance);
+    let shadow_distance = max(floating_distance(point - style.floating_shadow.xy), 0.0);
+    let sigma = max(style.floating_shadow.z, 0.0001);
+    let shadow_alpha = clamp(style.floating_shadow.w * exp(-(shadow_distance * shadow_distance) / (2.0 * sigma * sigma)), 0.0, 1.0);
+    var panel = style.floating_color.rgb;
+    let local = point - style.floating_panel.xy;
+    var accent = vec3<f32>(48.0, 53.0, 54.0) / 255.0;
+    var edge = vec3<f32>(35.0, 40.0, 42.0) / 255.0;
+    if (style.floating_color.w > 0.5 && style.floating_color.w < 1.5) {
+        accent = vec3<f32>(150.0, 204.0, 211.0) / 255.0;
+        edge = vec3<f32>(69.0, 108.0, 120.0) / 255.0;
+    } else if (style.floating_color.w > 1.5) {
+        accent = vec3<f32>(212.0, 195.0, 165.0) / 255.0;
+        edge = vec3<f32>(102.0, 100.0, 94.0) / 255.0;
+    }
+    let highlight = max(2.0, floor(style.floating_mask.z / 3.0));
+    if (local.y >= 0.0 && local.y < highlight) { panel = floating_srgb(accent); }
+    if (local.x > style.floating_panel.z - highlight && local.x < style.floating_panel.z) { panel = floating_srgb(edge); }
+    let uv = (point - style.floating_content.xy) / style.floating_content.zw;
+    if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
+        let footage = styled_source(textureSampleLevel(source_texture, source_sampler, uv, 0.0), uv);
+        panel = mix(panel, footage.rgb, clamp(footage.a, 0.0, 1.0));
+    }
+    let alpha = mask + shadow_alpha * (1.0 - mask);
+    if (alpha <= 0.000001) { return vec4<f32>(0.0); }
+    let shadow_color = floating_srgb(vec3<f32>(8.0, 11.0, 13.0) / 255.0);
+    return vec4<f32>((panel * mask + shadow_color * shadow_alpha * (1.0 - mask)) / alpha, alpha);
+}
+
 @fragment
 fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    let backdrop = textureSample(backdrop_texture, source_sampler, input.uv);
+    var backdrop = textureSample(backdrop_texture, source_sampler, input.uv);
+    if (style.floating_mask.w > 1.5) {
+        // Only the first actual scene layer selects this backdrop. Subsequent
+        // floating layers never repaint it over already composited footage.
+        backdrop = vec4<f32>(floating_backdrop(input.uv), 1.0);
+    }
+    if (style.floating_mask.w > 0.5) {
+        return composite(backdrop, floating_source(input.uv), 1.0);
+    }
     return composite(backdrop, shutter_source(input.uv), sample_matte_factor(input.uv));
 }
 

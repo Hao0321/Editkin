@@ -1,0 +1,161 @@
+.preview-panel.preview-with-transport {
+  grid-template-rows: 46px minmax(0, 1fr) auto;
+}
+.preview-panel.preview-with-transport.has-preview-update {
+  grid-template-rows: 46px auto minmax(0, 1fr) auto;
+}
+.playback-controls {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--line, #d8dee8);
+  background: var(--surface, #fff);
+  color: var(--ink, #172033);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.playback-controls-row, .playback-controls-actions, .playback-frame-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.playback-controls-actions { flex: 1 1 420px; }
+.playback-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--line, #d8dee8);
+  border-radius: 8px;
+  background: var(--surface-2, #f5f7fa);
+  color: var(--ink, #172033);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.playback-controls .playback-main {
+  min-width: 96px;
+  min-height: 44px;
+  border-color: var(--accent, #175cd3);
+  background: var(--accent, #175cd3);
+  color: var(--accent-ink, #fff);
+  font-size: 16px;
+  font-weight: 800;
+}
+.playback-controls button:hover:not(:disabled) {
+  border-color: var(--accent, #175cd3);
+  background: var(--accent-soft, #e8f0ff);
+  color: var(--accent, #175cd3);
+}
+.playback-controls .playback-main:hover:not(:disabled) {
+  background: var(--accent, #175cd3);
+  color: var(--accent-ink, #fff);
+  filter: brightness(1.08);
+}
+.playback-controls :is(button, select, input):focus-visible, .preview-play:focus-visible {
+  outline: 3px solid var(--focus-ring, #175cd3);
+  outline-offset: 2px;
+}
+.playback-controls button:disabled, .playback-controls select:disabled {
+  border-color: var(--disabled-line, #7c8796);
+  background: var(--disabled-bg, #eef1f5);
+  color: var(--disabled-ink, #687386);
+  cursor: not-allowed;
+}
+.playback-rate-control { display: inline-flex; align-items: center; gap: 6px; color: var(--soft, #3c485c); }
+.playback-rate-control select {
+  min-width: 68px;
+  min-height: 36px;
+  padding: 4px 7px;
+  border: 1px solid var(--line, #d8dee8);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--ink, #172033);
+  font: inherit;
+}
+/* Sized by the row, not by its text: a longer state (音訊相容模式, 已靜音) never
+   moves the row break, so the transport and the picture keep their height. */
+.playback-state { flex: 1 1 15em; min-width: 0; overflow: hidden; color: var(--soft, #3c485c); white-space: nowrap; text-overflow: ellipsis; }
+.playback-seek-row { display: grid; grid-template-columns: auto minmax(36px, 1fr) auto; align-items: center; gap: 9px; }
+.playback-seek-row input { width: 100%; min-width: 0; min-height: 36px; margin: 0; accent-color: var(--accent, #175cd3); cursor: pointer; }
+.playback-seek-row input:disabled { cursor: not-allowed; }
+.playback-time { color: var(--soft, #3c485c); white-space: nowrap; }
+/* Notices float over the bottom of the picture instead of taking a grid row, so
+   the picture never shrinks; several notices scroll inside a bounded box. */
+.playback-notices {
+  position: absolute;
+  z-index: 30;
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  max-height: 15rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.playback-notices .preview-update-notice { margin-bottom: 0; box-shadow: 0 6px 18px rgba(0, 0, 0, .28); }
+/* GPU 直出 draws the picture in a separate native window placed over the stage,
+   which hides any web content floated over the picture. There the notices take
+   their own space above the transport row instead; the picture shrinks while one
+   is shown and the native window follows the smaller stage. */
+.playback-notices.playback-notices-inline {
+  position: static;
+  max-height: min(15rem, 30vh);
+}
+.playback-notices-inline .preview-update-notice { box-shadow: none; }
+.playback-notice-reason { color: var(--soft, #3c485c); font-size: 12px; line-height: 1.35; }
+.playback-notice-reason summary { width: fit-content; min-height: 24px; cursor: pointer; }
+.playback-notice-reason > span { display: block; max-height: 4.2em; overflow: auto; overflow-wrap: anywhere; }
+.playback-notices button[aria-disabled="true"], .playback-notices button[aria-disabled="true"]:hover {
+  background: var(--surface, #fff);
+  color: var(--accent, #175cd3);
+  cursor: wait;
+  opacity: .6;
+}
+.playback-notices .playback-notice-dismiss { min-width: 44px; padding: 0; border-color: var(--line, #d8dee8); color: var(--soft, #3c485c); font-size: 18px; }
+@media (max-width: 1200px) {
+  .playback-controls-actions { flex-basis: 100%; }
+  .playback-controls button { padding-inline: 8px; }
+}
+/* One row (TransportRow in PlaybackControls.tsx measures before paint): every word → icons with tooltips, 播放 keeps
+   its word → 播放, the frame steps and 「更多」. Every button keeps its spoken name (aria-label) and tooltip (title);
+   the state readout shrinks and leaves the view (still announced) instead of wrapping. */
+.playback-controls.playback-controls .playback-controls-row[data-density] { position: relative; flex-wrap: nowrap; }
+.playback-controls.playback-controls .playback-controls-row[data-density] > .playback-controls-actions { flex: 0 0 auto; flex-wrap: nowrap; }
+.playback-controls.playback-controls .playback-controls-row[data-density] :is(.playback-secondary, .playback-frame-actions) {
+  display: flex; flex: 0 0 auto; flex-wrap: nowrap; align-items: center; gap: 6px; min-width: 0;
+}
+.playback-controls.playback-controls .playback-controls-row[data-density] > .playback-more-toggle { order: 1; flex: 0 0 auto; }
+.playback-controls.playback-controls .playback-controls-row[data-density] > .playback-state { order: 2; }
+.playback-controls.playback-controls .playback-more-toggle[hidden] { display: none; }
+.playback-controls.playback-controls .playback-more-toggle[aria-expanded="true"] { border-color: var(--accent, #175cd3); background: var(--accent-soft, #e8f0ff); color: var(--accent, #175cd3); }
+.playback-controls-row[data-readout="hidden"] > .playback-state,
+.playback-controls-row[data-density="compact"] :is(.playback-secondary, .playback-frame-actions) .playback-label,
+.playback-controls-row:is([data-density="more"], [data-density="wrap"]) .playback-frame-actions .playback-label {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+.playback-controls.playback-controls .playback-controls-row[data-density="compact"] :is(.playback-secondary, .playback-frame-actions) button,
+.playback-controls.playback-controls .playback-controls-row:is([data-density="more"], [data-density="wrap"]) .playback-frame-actions button {
+  min-width: var(--ui-target-size, 44px); padding-inline: 6px;
+}
+/* 「更多」 opens under its button (TransportRow sets the place): never over the picture, where GPU 直出's native window
+   would hide it, and never cut by the scrolling preview column. */
+.playback-controls.playback-controls .playback-controls-row:is([data-density="more"], [data-density="wrap"]):not([data-more-open="true"]) .playback-secondary { display: none; }
+.playback-controls.playback-controls .playback-controls-row:is([data-density="more"], [data-density="wrap"])[data-more-open="true"] .playback-secondary {
+  position: fixed; z-index: 140; top: var(--playback-more-top, 0px); left: var(--playback-more-left, 0px);
+  flex-wrap: wrap; max-width: calc(100vw - 16px); padding: 10px; gap: 8px;
+  border: 1px solid var(--line-strong, #b8c2d3); border-radius: 12px; background: var(--surface, #fff);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--ink, #172033) 22%, transparent);
+}
+/* A very narrow panel at a large interface size: even 播放, the frame steps and 「更多」 may take two rows. */
+.playback-controls.playback-controls .playback-controls-row[data-density="wrap"],
+.playback-controls.playback-controls .playback-controls-row[data-density="wrap"] > .playback-controls-actions { flex-wrap: wrap; }

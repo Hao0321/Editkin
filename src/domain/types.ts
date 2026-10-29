@@ -1,11 +1,20 @@
+import type { MotionScene2D } from "./motionScene2d";
+import type { GraphicHoldEnvelopeV3 } from "./graphicHoldBeatV3";
+import type { ReferenceMotionTemplateInstance } from "./referenceMotionInstance";
+import type { Mesh3dScene } from "../motion/mesh3dScene";
+import type { SpringGeometryTrack } from "./motionContinuity";
+import type { MotionPaintDescriptor } from "./motionPaint";
+import type { TimelineTransition } from "./timelineTransitionV1";
+import type { UnifiedLayerOrderV1 } from "./unifiedLayerOrderV1";
+export type { TimelineTransition } from "./timelineTransitionV1";
 export * from "./visualTypes";
 import type {
   CaptionCue, CaptionStyle, ClipLayerState, ColorAdjustments, ColorManagementSettings, CreativeTransition, MediaAsset, MotionTrack,
-  ParticleSimulationSettings, Scene25dSettings, TemplateElementOwner, TimelineTrack, Transform2D, Transform3D,
+  FloatingVideoFrame, NormalizedRect, ParticleSimulationSettings, Scene25dSettings, TemplateElementOwner, TimelineTrack, Transform2D, Transform3D,
 } from "./visualTypes";
 
 
-export type EditorialProfileId = "auto" | "gaming" | "food" | "travel" | "podcast_on_camera" | "podcast_no_face";
+export type EditorialProfileId = "auto" | "gaming" | "food" | "travel" | "music_mv" | "podcast_on_camera" | "podcast_no_face";
 
 export type AestheticReviewStatus = "REVIEW" | "BLOCKED" | "PASSED";
 export type AestheticBenchmarkAxis = "mrbeast_information_energy" | "yingshi_hurricane_cinematic_craft";
@@ -34,7 +43,10 @@ export interface AestheticReview {
   machineBlockers: string[];
   completedAt?: string;
   benchmarkReview?: AestheticBenchmarkReview;
+  reviewer?: "human" | "agent";
 }
+
+export type AestheticReviewPolicy = { mode: "human"; authorization?: string } | { mode: "agent_reference_comparison"; authorization: string };
 
 export interface AestheticSystem {
   schema: "editkin.aesthetic-system/v1";
@@ -49,7 +61,8 @@ export interface AestheticSystem {
   avoid: string[];
   sharedDnaSha256: string;
   dimensions: AestheticDimension[];
-  scoreContract: { passScore: number; blockBelow: number; minimumDimensionRating: number; humanReviewRequired: true };
+  scoreContract: { passScore: number; blockBelow: number; minimumDimensionRating: number; humanReviewRequired: boolean };
+  reviewPolicy?: AestheticReviewPolicy;
   review: AestheticReview;
 }
 
@@ -57,6 +70,7 @@ export type MotionGraphicKind = "title" | "card" | "tag" | "counter";
 export type MotionGraphicAnimation = "fade" | "slide_up" | "pop" | "spring_soft";
 export type MotionGraphicTrackingMode = "anchor" | "surface";
 export type MotionGraphicVisualStyle =
+  | "native_paint"
   | "solid_panel"
   | "holo_scan_cyan"
   | "holo_grid_lime"
@@ -66,9 +80,24 @@ export type MotionGraphicVisualStyle =
   | "telemetry_beam_amber"
   | "neon_extrude_white"
   | "quantum_label_magenta";
-export type MotionCompositionSchema = "hao.motion-composition/v1" | "hao.motion-composition/v2";
+export type MotionCompositionSchema = "hao.motion-composition/v1" | "hao.motion-composition/v2" | "hao.motion-composition/v3";
+/** Motion Design v3 layouts. Copy stays in `text`, one field per line. */
+export type MotionDesignV3TemplateId =
+  | "title_reveal" | "title_impact" | "title_editorial"
+  | "lower_third_bar" | "lower_third_glass"
+  | "chapter_number"
+  | "stat_counter" | "progress_bar" | "compare_split"
+  | "tag_pill" | "location_pin" | "callout_line"
+  | "highlight_sweep" | "quote_card" | "steps_list" | "cta_subscribe";
+
+/** fontSize and letterSpacing of a v3 graphic are design pixels at a 1080-pixel
+ * short side; the template scales them with the canvas. */
+export interface MotionDesignV3 {
+  template: MotionDesignV3TemplateId;
+}
 export type MotionGraphicV2SequenceUnit = "all" | "word" | "character";
 export type MotionGraphicV2SequenceOrder = "forward" | "reverse" | "center_out";
+export type MotionGraphicV2ScaleOrigin = "top_left" | "center";
 
 export type MotionGraphicV2Easing =
   | { type: "linear" }
@@ -85,6 +114,15 @@ export interface MotionGraphicV2Phase {
   scale: number;
   opacity: number;
   easing: MotionGraphicV2Easing;
+  /** Optional Motion Language pose. Omitted means zero, and the frame receipt
+   * stays byte-identical to the four-field historical pose. */
+  /** Gaussian blur radius in project pixels: a focus-pull entrance / exit. */
+  blurPixels?: number;
+  /** Rotation about each segment's own center, clockwise degrees. */
+  rotationDegrees?: number;
+  /** Extra horizontal offset of the outermost unit, scaled by its distance
+   * from the text center: letters converge (entrance) or fan out (exit). */
+  spreadPixels?: number;
 }
 
 export interface MotionGraphicV2Motion {
@@ -93,6 +131,17 @@ export interface MotionGraphicV2Motion {
     order: MotionGraphicV2SequenceOrder;
     exitOrder: MotionGraphicV2SequenceOrder;
     staggerFrames: number;
+    /** Omitted follows entrance spacing; zero exits the complete sentence together. */
+    exitStaggerFrames?: number;
+    /** Omitted keeps the historical top-left pivot; "center" scales each segment
+     * about its own box center by compensating translation in the evaluator. */
+    scaleOrigin?: MotionGraphicV2ScaleOrigin;
+    /** Scale reached at the end of the readable hold (linear slow push from 1).
+     * Requires a centered scale origin. Omitted keeps a static hold. */
+    holdScale?: number;
+    /** Resting tilt (degrees) the graphic holds between its entrance and exit; entrance/exit rotation adds
+     * to it. Omitted keeps the historical upright rest. */
+    restRotationDegrees?: number;
   };
   entrance: MotionGraphicV2Phase;
   exit: MotionGraphicV2Phase;
@@ -108,7 +157,50 @@ export interface MotionGraphicV2Layout {
   widthMode?: "fixed" | "fit_content";
 }
 
+/** Editkin-authored geometric layers; no HTML, CSS animation or component payload. */
+export type MotionVectorV2 = ({
+  schema: "editkin.motion-vector/v1" | "editkin.motion-vector-stage/v1";
+  heightPixels: number;
+  revealFrames: number;
+  /** Gaussian soft edge in canvas pixels (glows, soft shadows); omitted keeps the historical hard edge. */
+  softnessPixels?: number;
+} & (
+  | { kind: "rule" | "panel" | "ellipse" }
+  | { kind: "step_progress"; steps: number; activeStep: number; gapPixels: number }
+  | { kind: "dot_grid"; spacingPixels: number; dotRadiusPixels: number }
+  | { kind: "line_grid"; spacingPixels: number; lineWidthPixels: number; majorEvery: number }
+  | { kind: "connection_field"; seed: number; points: number; dotRadiusPixels: number; lineWidthPixels: number;
+      burstFrames: number; gatherStartFrame: number; gatherFrames: number; connectStartFrame: number; connectFrames: number;
+      groupColors?: [string, string, string] }
+)) | {
+  /** Explicit topmost ink, not a panel or a background. Old parsers reject
+   * this version instead of silently putting a crossout under its glyphs. */
+  schema: "editkin.motion-vector-annotation/v1"; kind: "rule"; heightPixels: number; revealFrames: number;
+} | { schema: "editkin.motion-vector-continuity/v1"; kind: "spring_panel"; heightPixels: number; revealFrames: 1; geometry: SpringGeometryTrack }
+  /** Authored flat shape (Original Elements): non-zero filled contours in box
+   * pixels, filled with backgroundColor. Strokes arrive pre-expanded to fills. */
+  | { schema: "editkin.motion-vector-shape/v1"; kind: "shape"; heightPixels: number; revealFrames: number;
+      /** Wipe reveal side when revealFrames > 1: the shape is uncovered from this edge. */
+      revealFrom?: "left" | "right" | "top" | "bottom"; commands: MotionVectorShapeCommand[]; softnessPixels?: number;
+      /** over_text paints over glyphs like an annotation (bold strikes, bars across type); under_media composites the
+       * shape in the background layer beneath footage (photo frames, tilted mats, soft shadows). Omitted keeps a
+       * foreground shape under text. Older strict parsers reject either marker instead of misplacing the shape. */
+      stack?: "over_text" | "under_media" }
+  /** A centerline that draws itself along its length (donut, line chart, underline, route, circled note): the drawn
+   * part [from, from + (to - from) * progress] is stroked to a non-zero fill in backgroundColor, with an optional pen
+   * tip dot in accentColor while it draws. Older strict parsers reject the version instead of drawing it whole. */
+  | { schema: "editkin.motion-vector-stroke/v1" | "editkin.motion-vector-tracked-stroke/v1"; kind: "stroke"; heightPixels: number; revealFrames: number;
+      commands: MotionVectorShapeCommand[]; widthPixels: number; cap?: "round" | "butt"; from?: number; to?: number;
+      tipRadiusPixels?: number; softnessPixels?: number; stack?: "over_text" | "under_media" };
+
+export type MotionVectorShapeCommand =
+  | { type: "M" | "L"; x: number; y: number }
+  | { type: "C"; x1: number; y1: number; x2: number; y2: number; x: number; y: number }
+  | { type: "Z" };
+
 export interface MotionGraphic {
+  /** Explicit opt-in stroke binding; legacy v1 trackId semantics remain separate. */
+  vectorTrackingV1?: import("./vectorTrackingV1").VectorTrackingV1;
   schema: MotionCompositionSchema;
   id: string;
   presetId?: string;
@@ -126,19 +218,35 @@ export interface MotionGraphic {
   letterSpacing?: number;
   outlineWidth?: number;
   shadowDepth?: number;
+  /** v2 physical glyphs only: Gaussian softening of the shadow copy in canvas pixels. Omitted keeps the crisp historical shadow. */
+  shadowBlurPixels?: number;
+  /** v2 only: a fixed window in frame space (fractions of the frame). Glyphs, panel and vector paths paint only inside
+   * it while the graphic moves, so text can rise from behind a baseline (mask reveal) or roll like an odometer. Omitted
+   * keeps the historical unclipped output. */
+  clipRegion?: NormalizedRect;
   cornerRadius?: number;
   textColor: string;
   backgroundColor: string;
   accentColor: string;
   /** Procedural renderer material. Text remains project data and is never baked into the preset. */
   visualStyle?: MotionGraphicVisualStyle;
+  /** Versioned glyph ink. The field is retained for saved-project compatibility; its descriptor
+   * discriminator explicitly distinguishes scene v1 from display v2. */
+  paintV1?: MotionPaintDescriptor;
   animation: MotionGraphicAnimation;
   trackId?: string;
   trackingMode?: MotionGraphicTrackingMode;
   offsetX: number;
   offsetY: number;
   motionV2?: MotionGraphicV2Motion;
+  /** Explicit unaccepted second event in a readable hold; absent preserves original frame output. */
+  holdBeatV3?: GraphicHoldEnvelopeV3;
   layoutV2?: MotionGraphicV2Layout;
+  vectorV2?: MotionVectorV2;
+  /** Authored v2 vector stage beneath video layers; omitted retains foreground. */
+  compositeLayer?: "background" | "foreground";
+  /** Present only on hao.motion-composition/v3 graphics. */
+  designV3?: MotionDesignV3;
   templateOwner?: TemplateElementOwner;
 }
 
@@ -166,6 +274,8 @@ export interface TemplateCreativeSnapshot {
   effectPresetIds: string[];
   transitionIn: CreativeTransition | null;
   transitionOut: CreativeTransition | null;
+  floatingFrame?: FloatingVideoFrame | null;
+  transform?: Transform2D;
 }
 
 export interface TemplateApplicationSnapshot {
@@ -185,6 +295,7 @@ export interface TemplateApplicationState {
   createdAt: string;
   before: TemplateApplicationSnapshot;
   applied: TemplateApplicationSnapshot;
+  generatedClips?: { clipId: string; trackId: string }[];
 }
 
 export interface DirectorState {
@@ -207,15 +318,22 @@ export interface EditComposition {
   captionStyle: CaptionStyle;
   motionTracks: MotionTrack[];
   motionGraphics: MotionGraphic[];
+  /** Versioned foreground scene; omitted preserves legacy graphic rendering. */
+  motionScenes?: MotionScene2D[];
+  /** Authored paired-source cut windows; omission preserves the existing timeline. */
+  timelineTransitions?: TimelineTransition[];
+  /** Schema11 root metadata owns this versioned back-to-front composition order. Omitted preserves legacy rendering. */
+  unifiedLayerOrderV1?: UnifiedLayerOrderV1;
   director: DirectorState;
   colorManagement?: ColorManagementSettings;
   scene25d?: Scene25dSettings;
+  scene3d?: Mesh3dScene;
   particleSimulation?: ParticleSimulationSettings;
   updatedAt: string;
 }
 
 export interface EditProject {
-  schemaVersion: 8;
+  schemaVersion: 9 | 10 | 11;
   revision: number;
   id: string;
   name: string;
@@ -226,6 +344,7 @@ export interface EditProject {
   aestheticSystem?: AestheticSystem;
   colorManagement?: ColorManagementSettings;
   scene25d?: Scene25dSettings;
+  scene3d?: Mesh3dScene;
   particleSimulation?: ParticleSimulationSettings;
   assets: MediaAsset[];
   compositions: EditComposition[];
@@ -234,14 +353,24 @@ export interface EditProject {
   captionStyle: CaptionStyle;
   motionTracks: MotionTrack[];
   motionGraphics: MotionGraphic[];
+  /** Versioned foreground scene; omitted preserves legacy graphic rendering. */
+  motionScenes?: MotionScene2D[];
+  /** Authored paired-source cut windows; omission preserves the existing timeline. */
+  timelineTransitions?: TimelineTransition[];
+  /** Admitted only by schema11; the exact draw order is retained across save, undo and reopen. */
+  unifiedLayerOrderV1?: UnifiedLayerOrderV1;
   director: DirectorState;
   templateApplication?: TemplateApplicationState;
+  /** Root metadata is admitted only by schema10; omission preserves schema9 projects. */
+  referenceMotionInstances?: ReferenceMotionTemplateInstance[];
   updatedAt: string;
 }
 
 export interface ProjectSummary {
   id: string;
   name: string;
+  /** The saved project revision; tools taking expectedRevision compare against it. */
+  revision: number;
   resolution: string;
   fps: number;
   duration: number;

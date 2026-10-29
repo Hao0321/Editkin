@@ -1,5 +1,8 @@
+import { readFileSync } from "node:fs";
+import postcss from "postcss";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { interfacePreferences } from "./i18n/interfacePreferences";
 import { createDemoProject } from "../domain/demo";
 import { Timeline } from "./Timeline";
 import type { TimelineProps } from "./timelineContract";
@@ -21,7 +24,9 @@ describe("bounded timeline DOM and visible actions", () => {
     expect(html).not.toContain('data-testid="timeline-clip-bounded-39999"');
     expect((html.match(/data-testid="timeline-clip-/g) ?? []).length).toBeLessThan(12);
   });
+  // Advanced mode since 2026-10-11: simple mode shows only ＋ 文字, 切開, 刪除 and the zoom (see the simple-mode block below).
   it("places split, delete, add track, PiP and fit before the extra-tools disclosure", () => {
+    interfacePreferences.setMode("advanced");
     const html = renderToStaticMarkup(<Timeline {...props()} />);
     const disclosure = html.indexOf('class="timeline-more"');
     expect(disclosure).toBeGreaterThan(0);
@@ -33,5 +38,68 @@ describe("bounded timeline DOM and visible actions", () => {
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain('data-testid="timeline-snap-guide" hidden=""');
     expect(html).toContain("分 : 秒 : 幀");
+  });
+  it("publishes the actual viewport frame scale and guarded lane identities for drop routing", () => {
+    const value = props();
+    value.project.fps = 60;
+    value.project.tracks[0]!.locked = true;
+    const html = renderToStaticMarkup(<Timeline {...value} />);
+    expect(html).toContain('data-timeline-viewport="true"');
+    expect(html).toContain('data-timeline-pixels-per-second="80"');
+    expect(html).toContain('data-timeline-fps="60"');
+    expect(html).toContain(`data-track-id="${value.project.tracks[0]!.id}" data-track-kind="video" data-track-locked="true"`);
+    expect(html).toContain('data-drop-zone="blocked"');
+    expect(html).toContain('data-testid="timeline-asset-drop-preview" hidden=""');
+    // Static markup proves routing metadata only; it does not observe live rects or pointer capture.
+  });
+});
+
+afterEach(() => interfacePreferences.setMode("simple"));
+
+describe("simple mode's calm timeline toolbar", () => {
+  // Rewritten on purpose (2026-10-11): the two tools (選取, 剪刀) lead the row in both modes since the 剪刀 tool.
+  it("shows only the two tools, ＋ 文字, 切開, 刪除 and a small zoom (−, slider, ＋, 顯示全部); advanced keeps every tool", () => {
+    interfacePreferences.setMode("simple");
+    const simple = renderToStaticMarkup(<Timeline {...props()} />);
+    const row = simple.slice(simple.indexOf('class="timeline-quick-actions"'), simple.indexOf('data-testid="timeline-zoom-control"'));
+    expect([...row.matchAll(/data-testid="([^"]+)"/g)].map(match => match[1])).toEqual(["timeline-tool-toggle", "timeline-tool-select", "timeline-tool-blade",
+      "add-caption-button", "split-button", "delete-button"]);
+    for (const id of ["timeline-zoom-out", "timeline-zoom-slider", "timeline-zoom-in", "timeline-fit-button"]) expect(simple.split(`data-testid="${id}"`)).toHaveLength(2);
+    for (const id of ["edit-selection-button", "timeline-snap-toggle", "timeline-frame-zoom", "add-video-track-button", "picture-in-picture-button", "precompose-button"]) {
+      expect(simple, id).not.toContain(`data-testid="${id}"`);
+    }
+    expect(simple).not.toContain('class="timeline-more"');
+    expect(simple).not.toContain("✓ 自動補空隙");
+    expect(simple).toContain('data-interface-mode="simple"');
+    interfacePreferences.setMode("advanced");
+    const advanced = renderToStaticMarkup(<Timeline {...props()} />);
+    for (const id of ["timeline-snap-toggle", "timeline-frame-zoom", "add-video-track-button", "picture-in-picture-button", "timeline-fit-button", "precompose-button"]) {
+      expect(advanced, id).toContain(`data-testid="${id}"`);
+    }
+    expect(advanced).toContain('class="timeline-more"');
+    expect(advanced).toContain("✓ 自動補空隙");
+    expect(advanced).not.toContain('data-testid="timeline-zoom-control"');
+  });
+
+  it("lets the time ruler show the whole project on a double-click", () => {
+    interfacePreferences.setMode("simple");
+    expect(renderToStaticMarkup(<Timeline {...props()} />)).toMatch(/data-testid="timeline-ruler" title="點一下移動播放頭；雙擊顯示全部"/);
+  });
+
+  it("shows track names only: mute and ⋯ appear on hover or keyboard focus, the kind badge is hidden", () => {
+    const css = postcss.parse(readFileSync(new URL("./timelineSimple.css", import.meta.url), "utf8"));
+    const selectors: string[] = [];
+    css.walkRules(rule => { selectors.push(rule.selector.replace(/\s+/g, " ")); });
+    expect(selectors).toContain('.timeline-shell[data-interface-mode="simple"] .track-label:not(.ruler-label) > .track-kind');
+    // Updated 2026-10-23 (P7): mute now sits with the eye, solo and lock switches beside the name; a switch that is on stays
+    // visible (the header still shows the state), the others and ⋯ appear on hover or keyboard focus.
+    expect(selectors).toContain('.timeline-shell[data-interface-mode="simple"] .track-label:not(:hover):not(:focus-within) > .track-options, .timeline-shell[data-interface-mode="simple"] .track-label:not(:hover):not(:focus-within) .track-quick-toggles > button:not([aria-pressed="true"])');
+    // The controls stay in the markup (keyboard and hover reach them); a locked track still says so.
+    interfacePreferences.setMode("simple");
+    const value = props();
+    value.project.tracks[0]!.locked = true;
+    const html = renderToStaticMarkup(<Timeline {...value} />);
+    expect(html).toContain('class="track-mute');
+    expect(html).toContain('<span class="track-locked">已鎖定</span>');
   });
 });

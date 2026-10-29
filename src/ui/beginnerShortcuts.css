@@ -1,1 +1,21 @@
-.guide-shortcuts{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.guide-shortcuts span{display:flex;align-items:center;gap:5px;padding:6px 8px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);color:var(--muted);font-size:9px}.guide-shortcuts kbd{padding:2px 5px;border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:5px;background:var(--surface);color:var(--ink);font-family:inherit;font-size:8px;font-weight:850}
+/* The guide's 快捷鍵 page (BeginnerShortcuts.tsx): every key in big plain words, in the groups of the editor's tools. */
+.beginner-guide .guide-progress { grid-template-columns: repeat(4, minmax(0, 1fr)) auto; }
+.beginner-guide .guide-progress .guide-shortcuts-tab { padding-inline: 16px; }
+.beginner-guide { container-type: inline-size; }
+.guide-shortcut-sheet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 22px; padding: 16px 18px;
+  border: 1px solid var(--line); border-radius: 20px; background: var(--surface-2); }
+.guide-shortcut-sheet section { min-width: 0; }
+.guide-shortcut-sheet h3 { margin: 0 0 8px; }
+.guide-shortcut-sheet dl { display: grid; gap: 7px; margin: 0; }
+.guide-shortcut-sheet dl > div { display: grid; grid-template-columns: max-content minmax(8em, 1fr); column-gap: 12px; align-items: center; }
+.guide-shortcut-sheet dt, .guide-shortcut-sheet dt span { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 4px; white-space: nowrap; }
+.guide-shortcut-sheet dt i { color: var(--muted); font-style: normal; }
+/* Mouse lines: the gesture is words, so it wraps in its own column instead of pushing the meaning out of the card. */
+.guide-shortcut-sheet dl > div.guide-shortcut-mouse { grid-template-columns: minmax(0, 1fr) minmax(8em, 1fr); }
+.guide-shortcut-sheet dt .guide-shortcut-gesture { display: block; min-width: 0; white-space: normal; color: var(--soft); font-weight: 700; }
+.guide-shortcut-sheet dt .guide-shortcut-gesture > i { margin-inline-end: 4px; }
+.guide-shortcut-sheet dd { margin: 0; color: var(--ink); font-size: var(--ui-copy-size, 15px); font-weight: 700; overflow-wrap: normal; word-break: keep-all; line-break: strict; }
+@container (width < 760px) { .guide-shortcut-sheet { grid-template-columns: minmax(0, 1fr); } }
+.guide-shortcut-sheet kbd { display: inline-grid; place-items: center; min-width: 2em; padding: 2px 8px; border: 1px solid var(--line-strong);
+  border-bottom-width: 3px; border-radius: 7px; background: var(--surface); color: var(--ink); font: inherit;
+  font-size: var(--ui-copy-size, 15px); font-weight: 800; line-height: 1.35; }

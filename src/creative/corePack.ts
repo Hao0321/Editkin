@@ -1,5 +1,6 @@
 import rawPack from "./haoCorePack.json";
 import { DEFAULT_CAPTION_STYLE, type CaptionStyle, type ClipCreativeState, type ColorAdjustments, type TimelineClip } from "../domain/types";
+import { FFMPEG_CRISP_PREVIEW_FILTER_V1 } from "../render/unsharpPreviewFilterV1";
 
 export interface CreativePresetBase {
   id: string;
@@ -132,7 +133,9 @@ export function findTextStylePreset(id: string): TextStylePreset {
 
 export function captionStyleFromPreset(id: string): CaptionStyle {
   const preset = findTextStylePreset(id);
-  return { ...DEFAULT_CAPTION_STYLE, presetId: preset.id, ...preset.style };
+  // A preset replaces the whole look: optional fields it does not define (e.g. a Shorts soft
+  // shadow) must not survive the set_caption_style merge.
+  return { ...DEFAULT_CAPTION_STYLE, shadowColor: undefined, shadowBlur: undefined, maxLineEm: undefined, presetId: preset.id, ...preset.style };
 }
 
 export function resolveCreativeState(clip: TimelineClip): Required<Pick<ClipCreativeState, "effectPresetIds">> & Omit<ClipCreativeState, "effectPresetIds"> {
@@ -163,13 +166,16 @@ export function previewEffectFilter(effectPresetIds: string[]): string {
     if (renderer === "ffmpeg-film-grain") filters.push("contrast(1.04)");
     else if (renderer === "ffmpeg-monochrome") filters.push("grayscale(1)", "contrast(1.16)");
     else if (renderer === "ffmpeg-bloom") filters.push("brightness(1.08)");
-    else if (renderer === "ffmpeg-crisp") filters.push("contrast(1.1)");
+    // ffmpeg-crisp (scanline_focus and the wave-2 crisp presets): an SVG emulation of the export's unsharp (the export is
+    // the reference; see unsharpPreviewFilterV1).
+    else if (renderer === "ffmpeg-crisp") filters.push(FFMPEG_CRISP_PREVIEW_FILTER_V1);
     else if (renderer === "ffmpeg-vignette") filters.push("contrast(1.04)");
     else if (renderer === "ffmpeg-denoise") filters.push("contrast(.99)");
     else if (renderer === "ffmpeg-detail-pop") filters.push("contrast(1.12) saturate(1.04)");
     else if (renderer === "ffmpeg-pastel") filters.push("brightness(1.04) contrast(.94) saturate(.9)");
     else if (renderer === "ffmpeg-night-depth") filters.push("brightness(.92) contrast(1.16) saturate(1.06)");
     else if (renderer === "ffmpeg-highlight-soft") filters.push("brightness(1.03) contrast(.97)");
+    else if (renderer === "ffmpeg-backdrop-soft") filters.push("blur(10px)", "brightness(.68)");
   }
   return filters.join(" ");
 }
@@ -187,7 +193,8 @@ export function previewTransitionState(clip: TimelineClip, localTime: number): {
     const edge = incoming ? 1 - eased : eased;
     if (renderers.includes("transition-fade")) opacity *= eased ** (preset.parameters?.fadeCurve ?? 1);
     if (renderers.includes("transition-zoom")) scale *= 1 + (preset.parameters?.zoomAmount ?? .08) * edge;
-    if (renderers.includes("transition-whip")) xPercent += (incoming ? -1 : 1) * (preset.parameters?.direction ?? 1) * (preset.parameters?.travelPercent ?? 28) * edge;
+    // Same default travel as the export (creativeFilters.transitionXExpression): a full frame width.
+    if (renderers.includes("transition-whip")) xPercent += (incoming ? -1 : 1) * (preset.parameters?.direction ?? 1) * (preset.parameters?.travelPercent ?? 100) * edge;
     if (renderers.includes("transition-flash")) brightness *= 1 + (preset.parameters?.flashStrength ?? .55) * edge;
     void duration;
   };

@@ -2,20 +2,23 @@ import type { EditorCommand } from "../domain/commands";
 import { alignTime } from "../domain/editGraph";
 import type { EditProject, TimelineClip } from "../domain/types";
 import { makeId } from "../lib/format";
+import { isTemplateGeneratedCaption } from "./templateLifecycle";
 
 export function buildAutomaticCaptionCommand(
   project: EditProject,
   clip: TimelineClip,
   result: { cues: Array<{ start: number; end: number; text: string; translation?: { text: string; language: string } }> },
   idFactory: () => string = () => makeId("caption-auto"),
-): { command: EditorCommand; added: number; replaced: number } {
+): { command: EditorCommand; added: number; replaced: number; keptTemplateCaptions: number } {
   const start = clip.timelineStart;
   const end = clip.timelineStart + clip.duration;
   const lastFrameEnd = Math.floor(end * project.fps + 1e-7) / project.fps;
+  // B11: cues a title template owns are kept (the template revises them); only the clip's ordinary captions are replaced.
   const commands: EditorCommand[] = project.captions
-    .filter((caption) => caption.start < end && caption.start + caption.duration > start)
+    .filter((caption) => caption.start < end && caption.start + caption.duration > start && !isTemplateGeneratedCaption(caption))
     .map((caption) => ({ type: "delete_caption" as const, captionId: caption.id }));
   const replaced = commands.length;
+  const keptTemplateCaptions = project.captions.filter((caption) => caption.start < end && caption.start + caption.duration > start && isTemplateGeneratedCaption(caption)).length;
   let added = 0;
   for (const cue of result.cues) {
     const cueStart = alignTime(Math.max(start, start + cue.start), project.fps);
@@ -31,5 +34,5 @@ export function buildAutomaticCaptionCommand(
     added += 1;
   }
   if (!added) throw new Error("沒有可加入 Timeline 的字幕");
-  return { command: { type: "batch", commands }, added, replaced };
+  return { command: { type: "batch", commands }, added, replaced, keptTemplateCaptions };
 }

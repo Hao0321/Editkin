@@ -23,8 +23,9 @@ export function useMediaPreviewRepair(
   const operation = useRef(0),
     pending = useRef<{ sessionId: number; operationId: number } | undefined>(undefined),
     [state, setState] = useState<PreviewRepairState>();
-  const repair = async (assetId: string) => {
-    if (!api) return;
+  // True only when a rebuilt preview was committed for the current asset.
+  const rebuild = async (assetId: string): Promise<boolean> => {
+    if (!api) return false;
     const initial = session.getSnapshot(),
       asset = initial.history.present.assets.find((a) => a.id === assetId);
     if (
@@ -32,7 +33,7 @@ export function useMediaPreviewRepair(
       asset.kind !== "video" ||
       pending.current?.sessionId === initial.sessionId
     )
-      return;
+      return false;
     const operationId = ++operation.current;
     const submitted = structuredClone(asset),
       previousDerivatives = JSON.stringify(asset.derivatives);
@@ -68,13 +69,13 @@ export function useMediaPreviewRepair(
     update("preparing", "正在重建這份素材的預覽，原片與既有剪輯不變。");
     try {
       const prepared = await api.prepareMedia(submitted);
-      if (!current()) return;
+      if (!current()) return false;
       const live = session
         .getSnapshot()
         .history.present.assets.find((a) => a.id === assetId)!;
       if (JSON.stringify(live.derivatives) !== previousDerivatives) {
         update("failed", "素材預覽資料已由其他操作更新，未覆蓋；請重試。");
-        return;
+        return false;
       }
       if (
         prepared.assetId !== assetId ||
@@ -101,19 +102,21 @@ export function useMediaPreviewRepair(
         throw Error("預覽結果含其他素材網址，已拒絕套用");
       onPrepared([prepared], current);
       committedDerivatives = JSON.stringify(prepared.derivatives);
-      if (current())
-        setState({
-          assetId,
-          sessionId: initial.sessionId,
-          phase: "prepared",
-          operationId,
-          previewUrl: prepared.runtimeUrls[assetId],
-          isCurrent: current,
-          message:
-            "預覽已重建，正在等待播放器解碼。若仍失敗可再重試；未改動剪輯內容。",
-        });
+      if (!current()) return false;
+      setState({
+        assetId,
+        sessionId: initial.sessionId,
+        phase: "prepared",
+        operationId,
+        previewUrl: prepared.runtimeUrls[assetId],
+        isCurrent: current,
+        message:
+          "預覽已重建，正在等待播放器解碼。若仍失敗可再重試；未改動剪輯內容。",
+      });
+      return true;
     } catch (error) {
       update("failed", error instanceof Error ? error.message : String(error));
+      return false;
     } finally {
       if (pending.current?.operationId === operationId)
         pending.current = undefined;
@@ -131,6 +134,21 @@ export function useMediaPreviewRepair(
             : previous,
         );
       }
+    }
+  };
+  // Settles once the rebuild is over and never rejects for a failed one, so a
+  // finished call is not a success: `onOutcome` says whether a rebuilt preview was
+  // committed (true), or the rebuild failed, was skipped (no desktop, not a video,
+  // another rebuild still running) or went stale (false).
+  const repair = async (
+    assetId: string,
+    onOutcome?: (rebuilt: boolean) => void,
+  ): Promise<void> => {
+    let rebuilt = false;
+    try {
+      rebuilt = await rebuild(assetId);
+    } finally {
+      onOutcome?.(rebuilt);
     }
   };
   return {

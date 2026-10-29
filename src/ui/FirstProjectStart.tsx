@@ -1,4 +1,8 @@
 import { useRef } from "react";
+import { useI18n } from "./i18n/interfacePreferences";
+import { EasyFlow, EasyFlowDemo } from "./easy/EasyFlow";
+import { readEasyDemoSwitch, type EasyFlowHost } from "./easy/easyFlowHost";
+import { AgentHelpCardLive } from "./agentConnect/AgentHelpEntryV1";
 import "./firstProjectStart.css";
 
 interface FirstProjectStartProps {
@@ -9,24 +13,37 @@ interface FirstProjectStartProps {
   onExploreDemo: () => void;
   onHelp: () => void;
   onConnectAgent?: () => void;
+  /** Simple mode starts with the easy flow when the editor shell provides its host. */
+  easyFlowHost?: EasyFlowHost;
 }
 
-export function FirstProjectStart({ isDesktop, onImport, onDesktopImport, onOpenProject, onExploreDemo, onHelp, onConnectAgent }: FirstProjectStartProps) {
+/** The welcome card's step strip: the editor's three steps (interfaceMessages.70: 三步完成影片). */
+export const FIRST_PROJECT_STEPS = ["加入影片", "剪輯", "輸出"] as const;
+
+export function FirstProjectStart({ isDesktop, onImport, onDesktopImport, onOpenProject, onExploreDemo, onHelp, onConnectAgent, easyFlowHost }: FirstProjectStartProps) {
+  const { t, mode } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const chooseMedia = () => onDesktopImport ? onDesktopImport() : inputRef.current?.click();
+  if (mode === "simple") {
+    // Dev-only simulation for screenshots and review; production builds never read the switch.
+    const demo = readEasyDemoSwitch();
+    if (demo) return <EasyFlowDemo demo={demo} onWorkspace={onExploreDemo} onOpenProject={() => onOpenProject?.()} />;
+    // The desktop's 讓 AI 幫我剪片 is in plain sight in simple mode too (the release notes point at the start screen).
+    if (easyFlowHost) return <EasyFlow host={easyFlowHost} onConnectAgent={isDesktop ? onConnectAgent : undefined} />;
+  }
 
   return (
     <section className="first-project-start" data-testid="first-project-start" aria-labelledby="first-project-title">
       <div className="first-project-glow" aria-hidden="true" />
       <div className="first-project-card">
-        <div className="first-project-kicker"><span>✦</span> 不用先學剪輯軟體</div>
-        <h1 id="first-project-title">把影片丟進來，<br /><em>Editkin 幫你剪好。</em></h1>
-        <p>自動判斷直式或橫式、分析畫面與語音、套用節奏、字幕、配樂與效果。完成後每一段都能自己改。</p>
+        <div className="first-project-kicker"><span aria-hidden="true">✦</span>{t("從一支影片開始")}</div>
+        <h1 id="first-project-title">{t("加入影片，開始剪輯")}</h1>
+        <p>{t("先選影片，再選擇自己調整或製作第一版粗剪。每一步都能復原。")}</p>
 
         <button type="button" className="first-project-import" onClick={chooseMedia} data-testid="import-media-button" data-beginner-action="加入影片">
           <span aria-hidden="true">＋</span>
-          <strong>加入影片開始剪</strong>
-          <small>可一次選多個影片、照片或錄音</small>
+          <strong>{t("加入影片")}</strong>
+          <small>{t("可一次選多個影片、照片或錄音")}</small>
         </button>
         <input
           ref={inputRef}
@@ -41,21 +58,21 @@ export function FirstProjectStart({ isDesktop, onImport, onDesktopImport, onOpen
             event.currentTarget.value = "";
           }}
         />
-        <div className="first-project-drop-hint"><span aria-hidden="true">⇣</span> 也可以直接把檔案拖到這個視窗</div>
-        {isDesktop && onConnectAgent && <button type="button" className="first-project-agent" onClick={onConnectAgent} data-testid="welcome-agent-connect"><span>✦</span><strong>想讓 AI 看懂題材？連接 Codex／Claude Code</strong><small>沿用自己的訂閱 · 不用 API key</small></button>}
+        <div className="first-project-drop-hint"><span aria-hidden="true">⇣</span>{t("也可以直接把檔案拖到這個視窗")}</div>
 
-        <ol className="first-project-steps" aria-label="自動剪輯流程">
-          <li><b>1</b><span><strong>加入影片</strong><small>自動判斷直橫與素材</small></span></li>
-          <li><b>2</b><span><strong>選擇片型</strong><small>遊戲、美食、旅遊、Podcast…</small></span></li>
-          <li><b>3</b><span><strong>一鍵完成</strong><small>剪完仍可拖曳微調</small></span></li>
+        {/* The same three steps as the editor's step strip (加入影片 → 剪輯 → 輸出); there is no separate 檢查 step any more. */}
+        <ol className="first-project-steps" aria-label={t("三步完成影片")}>
+          {FIRST_PROJECT_STEPS.map((label, index) => <li key={label}><b aria-hidden="true">{index + 1}</b><span><strong>{t(label)}</strong></span></li>)}
         </ol>
 
-        <div className="first-project-secondary" aria-label="其他開始方式">
-          {isDesktop && onOpenProject && <button type="button" onClick={onOpenProject}>開啟之前的專案</button>}
-          <button type="button" onClick={onExploreDemo} data-testid="explore-editor-button">先看看剪輯介面</button>
-          <button type="button" onClick={onHelp}>看 30 秒教學</button>
+        <div className="first-project-secondary" aria-label={t("如何開始")}>
+          {onOpenProject && <button type="button" onClick={onOpenProject} data-testid="welcome-open-project">{t("開啟之前的專案")}</button>}
+          <button type="button" onClick={onExploreDemo} data-testid="explore-editor-button">{t("先看看剪輯介面")}</button>
+          <button type="button" onClick={onHelp}>{t("快速教學")}</button>
         </div>
-        <div className="first-project-trust"><span>✓ 素材留在本機</span><span>✓ 原生自動剪輯不花 AI 額度</span><span>✓ 隨時可復原</span></div>
+        {/* The same 「讓 AI 幫我剪片」 card as the simple start and the simple top bar (2026-10-29). */}
+        {isDesktop && onConnectAgent && <div className="first-project-agent"><AgentHelpCardLive onClick={onConnectAgent} /></div>}
+        <div className="first-project-trust"><span>✓ {t("原始檔案不會被剪掉")}</span><span>✓ {t("隨時可復原")}</span></div>
       </div>
     </section>
   );

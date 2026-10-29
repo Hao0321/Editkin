@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-load-gpu-engine-video-preview-session"
+description = "Enables the load_gpu_engine_video_preview_session command without any pre-configured scope."
+commands.allow = ["load_gpu_engine_video_preview_session"]
+
+[[permission]]
+identifier = "deny-load-gpu-engine-video-preview-session"
+description = "Denies the load_gpu_engine_video_preview_session command without any pre-configured scope."
+commands.deny = ["load_gpu_engine_video_preview_session"]

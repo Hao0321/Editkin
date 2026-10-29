@@ -2,14 +2,25 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { HaoDesktopApi, MobileRemoteNetworkSummary, MobileRemoteResult, MobileRemoteSnapshot, MobileRemoteStartOptions, MobileRemoteStatus } from "./types";
 import { remoteProposalNeedsAttention } from "../application/remoteOnboarding";
 
+/** A snapshot that changes without re-rendering its owner (the playhead, PF1): read when needed, told when it changed. */
+export interface MobileRemoteSnapshotSource {
+  getSnapshot: () => MobileRemoteSnapshot;
+  subscribe: (listener: () => void) => () => void;
+}
+
 interface MobileRemoteOptions {
   api?: HaoDesktopApi;
-  snapshot: MobileRemoteSnapshot;
+  snapshot: MobileRemoteSnapshot | MobileRemoteSnapshotSource;
   onInstruction: (instruction: string) => void;
   onStatus: (message: string) => void;
 }
 
-export function useMobileRemote({ api, snapshot, onInstruction, onStatus }: MobileRemoteOptions) {
+const isSnapshotSource = (value: MobileRemoteSnapshot | MobileRemoteSnapshotSource): value is MobileRemoteSnapshotSource =>
+  typeof (value as MobileRemoteSnapshotSource).getSnapshot === "function";
+
+export function useMobileRemote({ api, snapshot: snapshotInput, onInstruction, onStatus }: MobileRemoteOptions) {
+  const source = isSnapshotSource(snapshotInput) ? snapshotInput : undefined;
+  const snapshot = source ? undefined : snapshotInput as MobileRemoteSnapshot;
   const [remote, setRemote] = useState<MobileRemoteResult>();
   const [remoteStatus, setRemoteStatus] = useState<MobileRemoteStatus>();
   const [networkSummary, setNetworkSummary] = useState<MobileRemoteNetworkSummary>();
@@ -27,7 +38,7 @@ export function useMobileRemote({ api, snapshot, onInstruction, onStatus }: Mobi
     }
     try {
       statusRef.current("正在建立一次性 QR 綁定碼…");
-      const result = await api.startMobileRemote(snapshot, options);
+      const result = await api.startMobileRemote(source ? source.getSnapshot() : snapshot!, options);
       setRemote(result);
       setRemoteStatus({ active: true, connectedCount: 0, devices: [] });
       setShowConnect(true);
@@ -37,7 +48,7 @@ export function useMobileRemote({ api, snapshot, onInstruction, onStatus }: Mobi
     } catch (error) {
       statusRef.current(error instanceof Error ? `手機遙控啟動失敗：${error.message}` : "手機遙控啟動失敗");
     }
-  }, [api, remote?.active, snapshot]);
+  }, [api, remote?.active, snapshotInput]);
 
   const open = useCallback(async () => {
     if (!api?.startMobileRemote) return;
@@ -109,10 +120,21 @@ export function useMobileRemote({ api, snapshot, onInstruction, onStatus }: Mobi
 
   useEffect(() => {
     if (!remote?.active || !api?.updateMobileSnapshot) return;
-    void api.updateMobileSnapshot(snapshot).catch((error) => {
+    const desktop = api;
+    const send = (value: MobileRemoteSnapshot) => void desktop.updateMobileSnapshot!(value).catch((error) => {
       statusRef.current(error instanceof Error ? `手機狀態同步失敗：${error.message}` : "手機狀態同步失敗");
     });
-  }, [api, remote?.active, snapshot]);
+    if (!source) { send(snapshot!); return; }
+    // Each changed snapshot once, as the effect above did for each new snapshot object.
+    let last = source.getSnapshot();
+    send(last);
+    return source.subscribe(() => {
+      const next = source.getSnapshot();
+      if (next === last) return;
+      last = next;
+      send(next);
+    });
+  }, [api, remote?.active, snapshotInput]);
 
   useEffect(() => {
     const pollCommands = api?.pollMobileCommands;

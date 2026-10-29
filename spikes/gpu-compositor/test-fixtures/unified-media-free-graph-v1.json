@@ -1,0 +1,116 @@
+{
+  "schema": "editkin.engine-graph/v1",
+  "graphId": "project:editkin-demo:r0:layer-order-v1:1.0",
+  "width": 64,
+  "height": 64,
+  "timebase": {
+    "numerator": 1,
+    "denominator": 30
+  },
+  "workingFormat": "rgba16_float",
+  "cacheBudgetMb": 1024,
+  "nodes": [
+    {
+      "id": "source:transparent",
+      "inputs": [],
+      "enabled": true,
+      "kind": "source",
+      "assetId": "editkin.generator.transparent",
+      "mediaKind": "generator",
+      "inputColorSpace": "rec709",
+      "alphaMode": "straight"
+    },
+    {
+      "id": "motion-graphic:graphic",
+      "inputs": [],
+      "enabled": true,
+      "kind": "motion_graphic",
+      "graphicId": "graphic",
+      "graphicKind": "title",
+      "text": "Source fixture",
+      "timeline": {
+        "timelineStartFrame": 0,
+        "sourceStartFrame": 0,
+        "durationFrames": 90
+      },
+      "x": 0.1,
+      "y": 0.1,
+      "width": 0.7,
+      "fontSize": 18,
+      "fontFamily": "Noto Sans TC",
+      "fontWeight": 700,
+      "letterSpacing": 0,
+      "outlineWidth": 2,
+      "shadowDepth": 2,
+      "cornerRadius": 18,
+      "textColor": "#FFFFFF",
+      "backgroundColor": "#315CFFDD",
+      "accentColor": "#77E4FF",
+      "visualStyle": "solid_panel",
+      "animation": "slide_up",
+      "trackingMode": "anchor",
+      "offsetX": 0,
+      "offsetY": 0
+    },
+    {
+      "id": "composite:1",
+      "inputs": [
+        "source:transparent",
+        "motion-graphic:graphic"
+      ],
+      "enabled": true,
+      "kind": "composite",
+      "blendMode": "normal",
+      "opacity": 1
+    },
+    {
+      "id": "caption:captionA",
+      "inputs": [],
+      "enabled": true,
+      "kind": "caption",
+      "cueId": "captionA",
+      "text": "captionA",
+      "lines": [
+        "captionA"
+      ],
+      "timeline": {
+        "timelineStartFrame": 0,
+        "sourceStartFrame": 0,
+        "durationFrames": 90
+      },
+      "fontFamily": "Noto Sans TC",
+      "fontSize": 20,
+      "textColor": "#FFFFFF",
+      "outlineColor": "#000000",
+      "outlineWidth": 1,
+      "backgroundColor": "#00000000",
+      "alignment": 2,
+      "marginVertical": 4,
+      "bold": true,
+      "italic": false,
+      "shadow": 1,
+      "letterSpacing": 0
+    },
+    {
+      "id": "composite:2",
+      "inputs": [
+        "composite:1",
+        "caption:captionA"
+      ],
+      "enabled": true,
+      "kind": "composite",
+      "blendMode": "normal",
+      "opacity": 1
+    },
+    {
+      "id": "output:main",
+      "inputs": [
+        "composite:2"
+      ],
+      "enabled": true,
+      "kind": "output",
+      "format": "rgba16_float"
+    }
+  ],
+  "outputNode": "output:main"
+}

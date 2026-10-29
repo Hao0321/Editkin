@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-render-native-effect-preview"
+description = "Enables the render_native_effect_preview command without any pre-configured scope."
+commands.allow = ["render_native_effect_preview"]
+
+[[permission]]
+identifier = "deny-render-native-effect-preview"
+description = "Denies the render_native_effect_preview command without any pre-configured scope."
+commands.deny = ["render_native_effect_preview"]

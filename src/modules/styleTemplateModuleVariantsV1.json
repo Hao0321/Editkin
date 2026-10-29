@@ -1,0 +1,980 @@
+{
+ "schema": "editkin.style-template-module-variants/v1",
+ "variants": [
+  {
+   "id": "S1_explainer_ui",
+   "name": "產品教學・介面講解",
+   "family": "svg",
+   "roles": [
+    "ai_tutorial",
+    "software_tutorial",
+    "tool_demo"
+   ],
+   "formats": [
+    "portrait",
+    "landscape"
+   ],
+   "intensity": "medium",
+   "use": "text slots (M10: the creator's own words with evidence, never sample text): chapterNumber ≤2, chapterLabel ≤14, lead ≤14, keyword* ≤8, tag ≤12；colours: accent, ink; pictures: card (cover)；art pending Claude's certification: never auto-picked; name it to use it",
+   "artStatus": "pending",
+   "implemented": true,
+   "slots": {
+    "text": [
+     {
+      "id": "chapterNumber",
+      "label": {
+       "zh-TW": "章節編號",
+       "en": "Chapter number",
+       "es": "Número de capítulo",
+       "ja": "章番号",
+       "ko": "챕터 번호"
+      },
+      "maxLength": 2,
+      "role": "display",
+      "required": false,
+      "consumers": [
+       "uiCardScene.chip.number:svg_text"
+      ]
+     },
+     {
+      "id": "chapterLabel",
+      "label": {
+       "zh-TW": "章節名稱",
+       "en": "Chapter title",
+       "es": "Título del capítulo",
+       "ja": "章タイトル",
+       "ko": "챕터 제목"
+      },
+      "maxLength": 14,
+      "role": "display",
+      "required": false,
+      "consumers": [
+       "uiCardScene.chip.label:svg_text"
+      ]
+     },
+     {
+      "id": "lead",
+      "label": {
+       "zh-TW": "引導小字",
+       "en": "Lead-in line",
+       "es": "Frase de entrada",
+       "ja": "導入の小見出し",
+       "ko": "도입 문구"
+      },
+      "maxLength": 14,
+      "role": "display",
+      "required": false,
+      "consumers": [
+       "uiCardScene.lockup.lead:svg_text"
+      ]
+     },
+     {
+      "id": "keyword",
+      "label": {
+       "zh-TW": "重點大字",
+       "en": "Keyword",
+       "es": "Palabra clave",
+       "ja": "キーワード",
+       "ko": "키워드"
+      },
+      "maxLength": 8,
+      "role": "display",
+      "required": true,
+      "consumers": [
+       "uiCardScene.lockup.keyword:svg_text"
+      ]
+     },
+     {
+      "id": "tag",
+      "label": {
+       "zh-TW": "工具標籤",
+       "en": "Tool tag",
+       "es": "Etiqueta de herramienta",
+       "ja": "ツールタグ",
+       "ko": "도구 태그"
+      },
+      "maxLength": 12,
+      "role": "display",
+      "required": false,
+      "consumers": [
+       "uiCardScene.tag.text:svg_text"
+      ]
+     }
+    ],
+    "color": [
+     {
+      "role": "accent",
+      "label": {
+       "zh-TW": "主色（重點字・章節號・標籤）",
+       "en": "Accent (keyword, chapter number, tag)",
+       "es": "Acento (palabra clave, número, etiqueta)",
+       "ja": "アクセント（キーワード・章番号・タグ）",
+       "ko": "강조색(키워드·챕터 번호·태그)"
+      },
+      "default": "#FCC834",
+      "consumers": [
+       "uiCardScene.lockup.keyword:svg_fill",
+       "uiCardScene.chip.number:svg_fill",
+       "uiCardScene.tag.plate:svg_fill"
+      ]
+     },
+     {
+      "role": "ink",
+      "label": {
+       "zh-TW": "標籤字色",
+       "en": "Tag text colour",
+       "es": "Color del texto de la etiqueta",
+       "ja": "タグの文字色",
+       "ko": "태그 글자색"
+      },
+      "default": "#121214",
+      "consumers": [
+       "uiCardScene.tag.text:svg_fill"
+      ]
+     }
+    ],
+    "image": [
+     {
+      "id": "card",
+      "label": {
+       "zh-TW": "卡片畫面",
+       "en": "Card picture",
+       "es": "Imagen de la tarjeta",
+       "ja": "カードの画像",
+       "ko": "카드 이미지"
+      },
+      "aspect": {
+       "portrait": 1.042105,
+       "landscape": 1.421687
+      },
+      "fit": "cover",
+      "focal": [
+       0.5,
+       0.5
+      ],
+      "placeholder": "ui_panel",
+      "required": false,
+      "consumers": [
+       "uiCardScene.card.image:svg_image"
+      ]
+     }
+    ]
+   },
+   "clip": {
+    "component": "uiCardScene",
+    "renderer": "svg",
+    "parts": [],
+    "output": "opaque",
+    "seconds": {
+     "default": 4,
+     "min": 2.2,
+     "max": 20
+    }
+   }
+  },
+  {
+   "id": "S4_motion_promo_3d",
+   "name": "3D 動態宣傳・歌詞字",
+   "family": "mesh3d",
+   "roles": [
+    "launch",
+    "brand_promo",
+    "music_lyric"
+   ],
+   "formats": [
+    "portrait",
+    "landscape"
+   ],
+   "intensity": "medium",
+   "use": "text slots (M10: the creator's own words with evidence, never sample text): title* ≤10, kicker ≤28；colours: bg, accent, accent2, highlight; pictures: screen (cover), cardHero (cover), cardMenu (cover), cardPill (cover)",
+   "artStatus": "certified",
+   "implemented": true,
+   "slots": {
+    "text": [
+     {
+      "id": "title",
+      "label": {
+       "zh-TW": "立體主標",
+       "en": "3D title",
+       "es": "Título 3D",
+       "ja": "立体タイトル",
+       "ko": "입체 제목"
+      },
+      "maxLength": 10,
+      "role": "display",
+      "required": true,
+      "consumers": [
+       "mesh3dExtrudedTitle.title.mesh:mesh_text_extruded"
+      ]
+     },
+     {
+      "id": "kicker",
+      "label": {
+       "zh-TW": "小標（英文字距）",
+       "en": "Kicker",
+       "es": "Antetítulo",
+       "ja": "キッカー",
+       "ko": "키커"
+      },
+      "maxLength": 28,
+      "role": "display",
+      "required": false,
+      "consumers": [
+       "mesh3dExtrudedTitle.kicker.type:svg_text"
+      ]
+     }
+    ],
+    "color": [
+     {
+      "role": "bg",
+      "label": {
+       "zh-TW": "舞台底色",
+       "en": "Stage colour",
+       "es": "Color del escenario",
+       "ja": "ステージの色",
+       "ko": "무대 색"
+      },
+      "default": "#040C1C",
+      "consumers": [
+       "mesh3dDeviceScreen.stage.background:material_color"
+      ]
+     },
+     {
+      "role": "accent",
+      "label": {
+       "zh-TW": "光場與邊光",
+       "en": "Glow field and rim light",
+       "es": "Halo y luz de contorno",
+       "ja": "グローと輪郭光",
+       "ko": "글로우와 림 라이트"
+      },
+      "default": "#1E46FF",
+      "consumers": [
+       "mesh3dDeviceScreen.light.fill:light_color",
+       "mesh3dDeviceScreen.device.edge:emissive_color",
+       "mesh3dExtrudedTitle.title.glow:emissive_color"
+      ]
+     },
+     {
+      "role": "accent2",
+      "label": {
+       "zh-TW": "螢幕光與鉻色",
+       "en": "Screen light and chrome",
+       "es": "Luz de pantalla y cromo",
+       "ja": "画面光とクローム",
+       "ko": "화면 빛과 크롬"
+      },
+      "default": "#0470D8",
+      "consumers": [
+       "mesh3dDeviceScreen.light.hemisphere:light_color",
+       "mesh3dExtrudedTitle.title.chrome:material_color"
+      ]
+     },
+     {
+      "role": "highlight",
+      "label": {
+       "zh-TW": "小標圓點",
+       "en": "Kicker dot",
+       "es": "Punto del antetítulo",
+       "ja": "キッカーの点",
+       "ko": "키커 점"
+      },
+      "default": "#E0262A",
+      "consumers": [
+       "mesh3dExtrudedTitle.kicker.dot:svg_fill"
+      ]
+     }
+    ],
+    "image": [
+     {
+      "id": "screen",
+      "label": {
+       "zh-TW": "螢幕畫面",
+       "en": "Screen picture",
+       "es": "Imagen de la pantalla",
+       "ja": "画面の画像",
+       "ko": "화면 이미지"
+      },
+      "aspect": {
+       "portrait": 1.6,
+       "landscape": 1.6
+      },
+      "fit": "cover",
+      "focal": [
+       0.5,
+       0.5
+      ],
+      "placeholder": "ui_panel",
+      "required": false,
+      "consumers": [
+       "mesh3dDeviceScreen.screen.texture:mesh_texture"
+      ]
+     },
+     {
+      "id": "cardHero",
+      "label": {
+       "zh-TW": "主卡片",
+       "en": "Hero card",
+       "es": "Tarjeta principal",
+       "ja": "メインカード",
+       "ko": "메인 카드"
+      },
+      "aspect": {
+       "portrait": 0.727273,
+       "landscape": 0.727273
+      },
+      "fit": "cover",
+      "focal": [
+       0.5,
+       0.5
+      ],
+      "placeholder": "ui_panel",
+      "required": false,
+      "consumers": [
+       "mesh3dDeviceScreen.cards.hero:mesh_texture"
+      ]
+     },
+     {
+      "id": "cardMenu",
+      "label": {
+       "zh-TW": "選單卡片",
+       "en": "Menu card",
+       "es": "Tarjeta de menú",
+       "ja": "メニューカード",
+       "ko": "메뉴 카드"
+      },
+      "aspect": {
+       "portrait": 1.25,
+       "landscape": 1.25
+      },
+      "fit": "cover",
+      "focal": [
+       0.5,
+       0.5
+      ],
+      "placeholder": "ui_panel",
+      "required": false,
+      "consumers": [
+       "mesh3dDeviceScreen.cards.menu:mesh_texture"
+      ]
+     },
+     {
+      "id": "cardPill",
+      "label": {
+       "zh-TW": "長條卡片",
+       "en": "Bar card",
+       "es": "Tarjeta alargada",
+       "ja": "横長カード",
+       "ko": "가로 카드"
+      },
+      "aspect": {
+       "portrait": 5.306122,
+       "landscape": 5.306122
+      },
+      "fit": "cover",
+      "focal": [
+       0.5,
+       0.5
+      ],
+      "placeholder": "ui_panel",
+      "required": false,
+      "consumers": [
+       "mesh3dDeviceScreen.cards.bar:mesh_texture"
+      ]
+     }
+    ]
+   },
+   "clip": {
+    "component": "mesh3dDeviceScreen",
+    "renderer": "mesh3d",
+    "parts": [
+     "mesh3dExtrudedTitle"
+    ],
+    "output": "opaque",
+    "seconds": {
+     "default": 4,
+     "min": 2.5,
+     "max": 12
+    }
+   }
+  },
+  {
+   "id": "S5_vox_collage",
+   "name": "Vox 拼貼解說",
+   "family": "svg",
+   "roles": [
+    "explainer",
+    "history",
+    "news"
+   ],
+   "formats": [
+    "portrait",
+    "landscape"
+   ],
+   "intensity": "medium",
+   "use": "text slots (M10: the creator's own words with evidence, never sample text): wordmark* ≤8, kicker ≤14, caption ≤12, gloss ≤16, step1 ≤10, step2 ≤10, step3 ≤10, stepCaption ≤12, stepGloss ≤16；colours: paper, bg, accent; pictures: speaker (cover), cutout (cover), plate (cover), stepPhoto1 (cover), stepPhoto2 (cover), stepPhoto3 (cover)",
+   "artStatus": "certified",
+   "implemented": true,
+   "slots": {
+    "text": [
+     {
+      "id": "wordmark",
+      "label": {
+       "zh-TW": "大標字",
+       "en": "Wordmark",
+       "es": "Titular",
+       "ja": "大見出し",
+       "ko": "큰 제목"
+      },
+      "maxLength": 8,
+      "role": "serif",
+      "required": true,
+      "consumers": [
+       "collageExplainer.wordmark:svg_text"
+      ]
+     },
+     {
+      "id": "kicker",
+      "label": {
+       "zh-TW": "標籤小字",
+       "en": "Kicker tag",
+       "es": "Etiqueta",
+       "ja": "タグ",
+       "ko": "태그"
+      },
+      "maxLength": 14,
+      "role": "body",
+      "required": false,
+      "consumers": [
+       "collageExplainer.kicker.tag:svg_text"
+      ]
+     },
+     {
+      "id": "caption",
+      "label": {
+       "zh-TW": "單字字幕",
+       "en": "One-word caption",
+       "es": "Subtítulo de una palabra",
+       "ja": "一語キャプション",
+       "ko": "한 단어 자막"
+      },
+      "maxLength": 12,
+      "role": "display",
+      "required": false,
+      "consumers": [
+       "collageExplainer.caption.word:svg_text"
+      ]
+     },
+     {
+      "id": "gloss",
+      "label": {
+       "zh-TW": "字幕說明",
+       "en": "Caption gloss",
+       "es": "Glosa del subtítulo",
+       "ja": "キャプションの補足",
+       "ko": "자막 설명"
+      },
+      "maxLength": 16,
+      "role": "body",
+      "required": false,
+      "consumers": [
+       "collageExplainer.caption.gloss:svg_text"
+      ]
+     },
+     {
+      "id": "step1",
+      "label": {
+       "zh-TW": "步驟一",
+       "en": "Step 1",
+       "es": "Paso 1",
+       "ja": "ステップ 1",
+       "ko": "1단계"
+      },
+      "maxLength": 10,
+      "role": "body",
+      "required": false,
+      "consumers": [
+       "collageExplainer.steps.1:svg_text"
+      ]
+     },
+     {
+      "id": "step2",
+      "label": {
+       "zh-TW": "步驟二",
+       "en": "Step 2",
+       "es": "Paso 2",
+       "ja": "ステップ 2",
+       "ko": "2단계"
+      },
+      "maxLength": 10,
+      "role": "body",
+      "required": false,
+      "consumers": [
+       "collageExplainer.steps.2:svg_text"
+      ]
+     },
+     {
+      "id": "step3",
+      "label": {
+       "zh-TW": "步驟三",
+       "en": "Step 3",
+       "es": "Paso 3",
+       "ja": "ステップ 3",
+       "ko": "3단계"
+      },
+      "maxLength": 10,
+      "role": "body",
+      "required": false,
+      "consumers": [
+       "collageExplainer.steps.3:svg_text"
+      ]
+     },
+     {
+      "id": "stepCaption",
+      "label": {
+       "zh-TW": "步驟單字字幕",
+       "en": "Steps caption",
+       "es": "Subtítulo de los pasos",
+       "ja": "ステップのキャプション",
+       "ko": "단계 자막"
+      },
+      "maxLength": 12,
+      "role": "display",
+      "required": false,
+      "consumers": [
+       "collageExplainer.steps.caption:svg_text"
+      ]
+     },
+     {
+      "id": "stepGloss",
+      "label": {
+       "zh-TW": "步驟字幕說明",
+       "en": "Steps caption gloss",
+       "es": "Glosa de los pasos",
+       "ja": "ステップの補足",
+       "ko": "단계 자막 설명"
+      },
+      "maxLength": 16,
+      "role": "body",
+      "required": false,
+      "consumers": [
+       "collageExplainer.steps.gloss:svg_text"
+      ]
+     }
+    ],
+    "color": [
+     {
+      "role": "paper",
+      "label": {
+       "zh-TW": "紙色",
+       "en": "Paper",
+       "es": "Papel",
+       "ja": "紙の色",
+       "ko": "종이 색"
+      },
+      "default": "#F5EEE0",
+      "consumers": [
+       "collageExplainer.paper:svg_fill"
+      ]
+     },
+     {
+      "role": "bg",
+      "label": {
+       "zh-TW": "報紙底色與墨色",
+       "en": "Newsprint and ink",
+       "es": "Papel de periódico y tinta",
+       "ja": "新聞地とインク",
+       "ko": "신문지와 잉크"
+      },
+      "default": "#1C1C1A",
+      "consumers": [
+       "collageExplainer.newsprint:svg_fill"
+      ]
+     },
+     {
+      "role": "accent",
+      "label": {
+       "zh-TW": "主色（天空、色帶）",
+       "en": "Accent (sky, band)",
+       "es": "Acento (cielo, banda)",
+       "ja": "アクセント（空・帯）",
+       "ko": "강조색 (하늘, 띠)"
+      },
+      "default": "#2F6FD6",
+      "consumers": [
+       "collageExplainer.accent:svg_fill"
+      ]
+     }
+    ],
+    "image": [
+     {
+      "id": "speaker",
+      "label": {
+       "zh-TW": "講者畫面（留空＝透出下方影片）",
+       "en": "Speaker (empty: the video below shows through)",
+       "es": "Orador (vacío: se ve el vídeo de abajo)",
+       "ja": "話者（空欄で下の映像が透ける）",
+       "ko": "화자 (비우면 아래 영상이 보임)"
+      },
+      "aspect": {
+       "portrait": 1.125,
+       "landscape": 0.783
+      },
+      "fit": "cover",
+      "focal": [
+       0.5,
+       0.45
+      ],
+      "placeholder": "none",
+      "required": false,
+      "consumers": [
+       "collageExplainer.speaker:svg_image"
+      ]
+     },
+     {
+      "id": "cutout",
+      "label": {
+       "zh-TW": "剪影照片（自動去天空）",
+       "en": "Cut-out photo (sky keyed out)",
+       "es": "Foto recortada (sin cielo)",
+       "ja": "切り抜き写真（空を抜く）",
+       "ko": "오려 낸 사진 (하늘 제거)"
+      },
+      "aspect": {
+       "portrait": 0.627,
+       "landscape": 0.6
+      },
+      "fit": "cover",
+      "focal": [
+       0.5,
+       0.5
+      ],
+      "placeholder": "paper",
+      "required": false,
+      "consumers": [
+       "collageExplainer.cutout:svg_image"
+      ]
+     },
+     {
+      "id": "plate",
+      "label": {
+       "zh-TW": "照片紙卡",
+       "en": "Photo plate",
+       "es": "Foto enmarcada",
+       "ja": "写真プレート",
+       "ko": "사진 카드"
+      },
+      "aspect": {
+       "portrait": 0.692,
+       "landscape": 0.66
+      },
+      "fit": "cover",
+      "focal": [
+       0.5,
+       0.4
+      ],
+      "placeholder": "paper",
+      "required": false,
+      "consumers": [
+       "collageExplainer.plate.photo:svg_image"
+      ]
+     },
+     {
+      "id": "stepPhoto1",
+      "label": {
+       "zh-TW": "步驟一照片",
+       "en": "Step 1 photo",
+       "es": "Foto del paso 1",
+       "ja": "ステップ 1 の写真",
+       "ko": "1단계 사진"
+      },
+      "aspect": {
+       "portrait": 0.732,
+       "landscape": 0.7
+      },
+      "fit": "cover",
+      "focal": [
+       0.5,
+       0.4
+      ],
+      "placeholder": "paper",
+      "required": false,
+      "consumers": [
+       "collageExplainer.steps.1.photo:svg_image"
+      ]
+     },
+     {
+      "id": "stepPhoto2",
+      "label": {
+       "zh-TW": "步驟二照片",
+       "en": "Step 2 photo",
+       "es": "Foto del paso 2",
+       "ja": "ステップ 2 の写真",
+       "ko": "2단계 사진"
+      },
+      "aspect": {
+       "portrait": 0.732,
+       "landscape": 0.7
+      },
+      "fit": "cover",
+      "focal": [
+       0.5,
+       0.4
+      ],
+      "placeholder": "paper",
+      "required": false,
+      "consumers": [
+       "collageExplainer.steps.2.photo:svg_image"
+      ]
+     },
+     {
+      "id": "stepPhoto3",
+      "label": {
+       "zh-TW": "步驟三照片",
+       "en": "Step 3 photo",
+       "es": "Foto del paso 3",
+       "ja": "ステップ 3 の写真",
+       "ko": "3단계 사진"
+      },
+      "aspect": {
+       "portrait": 0.732,
+       "landscape": 0.7
+      },
+      "fit": "cover",
+      "focal": [
+       0.5,
+       0.4
+      ],
+      "placeholder": "paper",
+      "required": false,
+      "consumers": [
+       "collageExplainer.steps.3.photo:svg_image"
+      ]
+     }
+    ]
+   },
+   "clip": {
+    "component": "collageExplainer",
+    "renderer": "svg",
+    "parts": [],
+    "output": "alpha",
+    "seconds": {
+     "default": 4,
+     "min": 2,
+     "max": 12
+    }
+   }
+  },
+  {
+   "id": "S7_kinetic_lyric_3d",
+   "name": "動態歌詞・品牌節奏",
+   "family": "mesh3d",
+   "roles": [
+    "brand_promo",
+    "launch",
+    "music_lyric",
+    "channel_trailer"
+   ],
+   "formats": [
+    "portrait",
+    "landscape"
+   ],
+   "intensity": "medium",
+   "use": "text slots (M10: the creator's own words with evidence, never sample text): word* ≤6, band ≤24, label ≤16, labelSub ≤8, display ≤10, script ≤8, kicker ≤16；colours: paper, ink, bg, accent; pictures: none",
+   "artStatus": "certified",
+   "implemented": true,
+   "slots": {
+    "text": [
+     {
+      "id": "word",
+      "label": {
+       "zh-TW": "立體大字",
+       "en": "Hero word",
+       "es": "Palabra principal",
+       "ja": "立体の大きな語",
+       "ko": "입체 큰 글자"
+      },
+      "maxLength": 6,
+      "role": "display",
+      "required": true,
+      "consumers": [
+       "mesh3dKineticLyric.hero.word:mesh_text_extruded"
+      ]
+     },
+     {
+      "id": "band",
+      "label": {
+       "zh-TW": "環帶文字",
+       "en": "Band text",
+       "es": "Texto de la banda",
+       "ja": "バンドの文字",
+       "ko": "띠 글자"
+      },
+      "maxLength": 24,
+      "role": "serif",
+      "required": false,
+      "consumers": [
+       "mesh3dLyricBand.band.text:mesh_text_band"
+      ]
+     },
+     {
+      "id": "label",
+      "label": {
+       "zh-TW": "角落品牌字",
+       "en": "Corner label",
+       "es": "Etiqueta de esquina",
+       "ja": "コーナーラベル",
+       "ko": "코너 라벨"
+      },
+      "maxLength": 16,
+      "role": "display",
+      "required": false,
+      "consumers": [
+       "mesh3dKineticLyric.label.top:svg_text"
+      ]
+     },
+     {
+      "id": "labelSub",
+      "label": {
+       "zh-TW": "角落手寫字",
+       "en": "Corner script",
+       "es": "Manuscrito de esquina",
+       "ja": "コーナーの手書き",
+       "ko": "코너 손글씨"
+      },
+      "maxLength": 8,
+      "role": "script",
+      "required": false,
+      "consumers": [
+       "mesh3dKineticLyric.label.sub:svg_text"
+      ]
+     },
+     {
+      "id": "display",
+      "label": {
+       "zh-TW": "收尾大標（有填才有第二幕）",
+       "en": "Lock-up title (adds the second act)",
+       "es": "Título final (añade el segundo acto)",
+       "ja": "締めのタイトル（入力で第2幕）",
+       "ko": "마무리 제목 (입력 시 2막)"
+      },
+      "maxLength": 10,
+      "role": "display",
+      "required": false,
+      "consumers": [
+       "mesh3dKineticLyric.lockup.display:svg_text"
+      ]
+     },
+     {
+      "id": "script",
+      "label": {
+       "zh-TW": "收尾手寫字",
+       "en": "Lock-up script",
+       "es": "Manuscrito final",
+       "ja": "締めの手書き",
+       "ko": "마무리 손글씨"
+      },
+      "maxLength": 8,
+      "role": "script",
+      "required": false,
+      "consumers": [
+       "mesh3dKineticLyric.lockup.script:svg_text"
+      ]
+     },
+     {
+      "id": "kicker",
+      "label": {
+       "zh-TW": "收尾小標",
+       "en": "Lock-up kicker",
+       "es": "Antetítulo final",
+       "ja": "締めのキッカー",
+       "ko": "마무리 키커"
+      },
+      "maxLength": 16,
+      "role": "display",
+      "required": false,
+      "consumers": [
+       "mesh3dKineticLyric.lockup.kicker:svg_text"
+      ]
+     }
+    ],
+    "color": [
+     {
+      "role": "paper",
+      "label": {
+       "zh-TW": "紙色（環帶、地面）",
+       "en": "Paper (band, floor)",
+       "es": "Papel (banda, suelo)",
+       "ja": "紙の色（帯・床）",
+       "ko": "종이 색 (띠, 바닥)"
+      },
+      "default": "#F8D8E8",
+      "consumers": [
+       "mesh3dLyricBand.band.ribbon:material_color",
+       "mesh3dKineticLyric.floor.material:material_color"
+      ]
+     },
+     {
+      "role": "ink",
+      "label": {
+       "zh-TW": "墨色（字、線）",
+       "en": "Ink (type, lines)",
+       "es": "Tinta (texto, líneas)",
+       "ja": "インク（文字・線）",
+       "ko": "잉크 (글자, 선)"
+      },
+      "default": "#580828",
+      "consumers": [
+       "mesh3dLyricBand.band.text:material_color",
+       "mesh3dKineticLyric.lockup.ink:svg_fill"
+      ]
+     },
+     {
+      "role": "bg",
+      "label": {
+       "zh-TW": "舞台底色",
+       "en": "Stage colour",
+       "es": "Color del escenario",
+       "ja": "ステージの色",
+       "ko": "무대 색"
+      },
+      "default": "#480818",
+      "consumers": [
+       "mesh3dKineticLyric.stage.background:material_color"
+      ]
+     },
+     {
+      "role": "accent",
+      "label": {
+       "zh-TW": "主色（大字、光環）",
+       "en": "Accent (hero word, ring)",
+       "es": "Acento (palabra, anillo)",
+       "ja": "アクセント（大きな語・リング）",
+       "ko": "강조색 (큰 글자, 링)"
+      },
+      "default": "#F868A8",
+      "consumers": [
+       "mesh3dKineticLyric.hero.material:material_color",
+       "mesh3dKineticLyric.light.fill:light_color",
+       "mesh3dKineticLyric.tunnel.lines:emissive_color"
+      ]
+     }
+    ],
+    "image": []
+   },
+   "clip": {
+    "component": "mesh3dKineticLyric",
+    "renderer": "mesh3d",
+    "parts": [
+     "mesh3dLyricBand"
+    ],
+    "output": "opaque",
+    "seconds": {
+     "default": 4,
+     "min": 1.5,
+     "max": 15
+    }
+   }
+  }
+ ]
+}

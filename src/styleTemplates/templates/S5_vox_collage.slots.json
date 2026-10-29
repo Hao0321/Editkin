@@ -1,0 +1,69 @@
+{
+  "schema": "editkin.style-template/v1",
+  "id": "S5_vox_collage",
+  "revision": 2,
+  "stub": false,
+  "names": { "zh": "Vox 拼貼解說", "en": "Vox Collage" },
+  "reference": "R5 (Vox-style collage explainer): torn paper, halftone and newsprint texture, cut-out photo plates with parallax, a big serif wordmark with a hard ink offset, single-word uppercase captions, a split screen with the speaker, numbered step plates with a hand-drawn arrow",
+  "videoTypes": ["explainer", "history", "news"],
+  "palette": { "bg": "#1C1C1A", "paper": "#F5EEE0", "accent": "#2F6FD6" },
+  "art": { "styleframes": ".rd/benchmarks/style-system-20261022/styleframes/ (S5_A, S5_B, S5_A_16x9, S5_reskin)", "engine": "svg (glyphs and pictures rasterized once by the bundled librsvg; owned procedural paper, halftone and torn edges; pieces posed per frame by the template compositor)" },
+  "slots": {
+    "text": [
+      { "id": "wordmark", "label": { "zh-TW": "大標字", "en": "Wordmark", "es": "Titular", "ja": "大見出し", "ko": "큰 제목" },
+        "maxLength": 8, "role": "serif", "required": true, "bind": [{ "component": "collageExplainer", "target": "wordmark", "as": "svg_text" }] },
+      { "id": "kicker", "label": { "zh-TW": "標籤小字", "en": "Kicker tag", "es": "Etiqueta", "ja": "タグ", "ko": "태그" },
+        "maxLength": 14, "role": "body", "required": false, "bind": [{ "component": "collageExplainer", "target": "kicker.tag", "as": "svg_text" }] },
+      { "id": "caption", "label": { "zh-TW": "單字字幕", "en": "One-word caption", "es": "Subtítulo de una palabra", "ja": "一語キャプション", "ko": "한 단어 자막" },
+        "maxLength": 12, "role": "display", "required": false, "bind": [{ "component": "collageExplainer", "target": "caption.word", "as": "svg_text" }] },
+      { "id": "gloss", "label": { "zh-TW": "字幕說明", "en": "Caption gloss", "es": "Glosa del subtítulo", "ja": "キャプションの補足", "ko": "자막 설명" },
+        "maxLength": 16, "role": "body", "required": false, "bind": [{ "component": "collageExplainer", "target": "caption.gloss", "as": "svg_text" }] },
+      { "id": "step1", "label": { "zh-TW": "步驟一", "en": "Step 1", "es": "Paso 1", "ja": "ステップ 1", "ko": "1단계" },
+        "maxLength": 10, "role": "body", "required": false, "bind": [{ "component": "collageExplainer", "target": "steps.1", "as": "svg_text" }] },
+      { "id": "step2", "label": { "zh-TW": "步驟二", "en": "Step 2", "es": "Paso 2", "ja": "ステップ 2", "ko": "2단계" },
+        "maxLength": 10, "role": "body", "required": false, "bind": [{ "component": "collageExplainer", "target": "steps.2", "as": "svg_text" }] },
+      { "id": "step3", "label": { "zh-TW": "步驟三", "en": "Step 3", "es": "Paso 3", "ja": "ステップ 3", "ko": "3단계" },
+        "maxLength": 10, "role": "body", "required": false, "bind": [{ "component": "collageExplainer", "target": "steps.3", "as": "svg_text" }] },
+      { "id": "stepCaption", "label": { "zh-TW": "步驟單字字幕", "en": "Steps caption", "es": "Subtítulo de los pasos", "ja": "ステップのキャプション", "ko": "단계 자막" },
+        "maxLength": 12, "role": "display", "required": false, "bind": [{ "component": "collageExplainer", "target": "steps.caption", "as": "svg_text" }] },
+      { "id": "stepGloss", "label": { "zh-TW": "步驟字幕說明", "en": "Steps caption gloss", "es": "Glosa de los pasos", "ja": "ステップの補足", "ko": "단계 자막 설명" },
+        "maxLength": 16, "role": "body", "required": false, "bind": [{ "component": "collageExplainer", "target": "steps.gloss", "as": "svg_text" }] }
+    ],
+    "color": [
+      { "role": "paper", "label": { "zh-TW": "紙色", "en": "Paper", "es": "Papel", "ja": "紙の色", "ko": "종이 색" },
+        "bind": [{ "component": "collageExplainer", "target": "paper", "as": "svg_fill" }] },
+      { "role": "bg", "label": { "zh-TW": "報紙底色與墨色", "en": "Newsprint and ink", "es": "Papel de periódico y tinta", "ja": "新聞地とインク", "ko": "신문지와 잉크" },
+        "bind": [{ "component": "collageExplainer", "target": "newsprint", "as": "svg_fill" }] },
+      { "role": "accent", "label": { "zh-TW": "主色（天空、色帶）", "en": "Accent (sky, band)", "es": "Acento (cielo, banda)", "ja": "アクセント（空・帯）", "ko": "강조색 (하늘, 띠)" },
+        "bind": [{ "component": "collageExplainer", "target": "accent", "as": "svg_fill" }] }
+    ],
+    "image": [
+      { "id": "speaker", "label": { "zh-TW": "講者畫面（留空＝透出下方影片）", "en": "Speaker (empty: the video below shows through)", "es": "Orador (vacío: se ve el vídeo de abajo)", "ja": "話者（空欄で下の映像が透ける）", "ko": "화자 (비우면 아래 영상이 보임)" },
+        "aspect": { "portrait": 1.125, "landscape": 0.783 }, "fit": "cover", "focal": [0.5, 0.45], "placeholder": "none", "required": false,
+        "bind": [{ "component": "collageExplainer", "target": "speaker", "as": "svg_image" }] },
+      { "id": "cutout", "label": { "zh-TW": "剪影照片（自動去天空）", "en": "Cut-out photo (sky keyed out)", "es": "Foto recortada (sin cielo)", "ja": "切り抜き写真（空を抜く）", "ko": "오려 낸 사진 (하늘 제거)" },
+        "aspect": { "portrait": 0.627, "landscape": 0.6 }, "fit": "cover", "focal": [0.5, 0.5], "placeholder": "paper", "required": false,
+        "bind": [{ "component": "collageExplainer", "target": "cutout", "as": "svg_image" }] },
+      { "id": "plate", "label": { "zh-TW": "照片紙卡", "en": "Photo plate", "es": "Foto enmarcada", "ja": "写真プレート", "ko": "사진 카드" },
+        "aspect": { "portrait": 0.692, "landscape": 0.66 }, "fit": "cover", "focal": [0.5, 0.4], "placeholder": "paper", "required": false,
+        "bind": [{ "component": "collageExplainer", "target": "plate.photo", "as": "svg_image" }] },
+      { "id": "stepPhoto1", "label": { "zh-TW": "步驟一照片", "en": "Step 1 photo", "es": "Foto del paso 1", "ja": "ステップ 1 の写真", "ko": "1단계 사진" },
+        "aspect": { "portrait": 0.732, "landscape": 0.7 }, "fit": "cover", "focal": [0.5, 0.4], "placeholder": "paper", "required": false,
+        "bind": [{ "component": "collageExplainer", "target": "steps.1.photo", "as": "svg_image" }] },
+      { "id": "stepPhoto2", "label": { "zh-TW": "步驟二照片", "en": "Step 2 photo", "es": "Foto del paso 2", "ja": "ステップ 2 の写真", "ko": "2단계 사진" },
+        "aspect": { "portrait": 0.732, "landscape": 0.7 }, "fit": "cover", "focal": [0.5, 0.4], "placeholder": "paper", "required": false,
+        "bind": [{ "component": "collageExplainer", "target": "steps.2.photo", "as": "svg_image" }] },
+      { "id": "stepPhoto3", "label": { "zh-TW": "步驟三照片", "en": "Step 3 photo", "es": "Foto del paso 3", "ja": "ステップ 3 の写真", "ko": "3단계 사진" },
+        "aspect": { "portrait": 0.732, "landscape": 0.7 }, "fit": "cover", "focal": [0.5, 0.4], "placeholder": "paper", "required": false,
+        "bind": [{ "component": "collageExplainer", "target": "steps.3.photo", "as": "svg_image" }] }
+    ]
+  },
+  "clip": {
+    "component": { "id": "collageExplainer", "renderer": "svg", "revision": 1 },
+    "output": "alpha",
+    "seconds": { "default": 4, "min": 2, "max": 12 },
+    "formats": ["portrait", "landscape"]
+  },
+  "artStatus": "certified",
+  "notes": "Built 2026-10-23 (slots/collageExplainer.ts). With step labels the clip plays a second act (numbered step plates) after a paper tear at half time. Art certified 2026-10-29 (Hao: 「通過」): auto-picked for its video types."
+}

@@ -62,6 +62,11 @@
 .operation-status-panel p { margin: 12px 0 0; font-size: 13px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
 .operation-status-panel .operation-status-runtime { padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
 .operation-status :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* Simple mode: what to do next, and the original engine text only behind 「查看原因」. */
+.operation-status-panel .operation-status-advice { color: var(--ink); }
+.operation-status-reason { margin-top: 12px; }
+.operation-status-reason > summary { color: var(--muted); font-size: 13px; cursor: pointer; }
+.operation-status-panel .operation-status-reason > p { margin-top: 8px; color: var(--muted); font-size: 12px; }
 @media(max-width: 600px) {
   .operation-status { margin-left: 8px; }
   .operation-status > summary > b { display: none; }

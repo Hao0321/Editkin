@@ -1,9 +1,17 @@
+import { composeUnifiedLayerGraphV1, assertUnifiedEngineNodeIdentitiesV1, unifiedLayerGraphOrderKeyV1 } from "./unifiedLayerGraphV1";
+import { trackAudioAudible } from "../domain/trackState";
+import { buildTimelineTransitionNativeGraphV1 } from "./timelineTransitionNativeV1";
 import { findClip, projectDuration } from "../domain/editGraph";
 import { motionTrackPoseAt } from "../domain/motionTrackSampling";
 import type { EditProject, MotionGraphic, NormalizedPoint, TimelineClip } from "../domain/types";
 import { particleSimulationEmitters } from "../domain/types";
 import { isTransformMotionBlurInstance, transformMotionBlurParameters } from "../domain/transformMotionBlur";
 import { scene25dCameraNode, scene25dDepthOfFieldNode, scene25dLightNodes } from "./scene25dDepthOfFieldNode";
+import { nativeMotionPaintTrack, type PreparedNativeMotionPaint } from "../motion/nativeMotionPaint";
+import { nativeFloatingVideoFrameSpec, type PreparedNativeFloatingVideoFrames } from "./nativeFloatingVideoFrame";
+import { captionEdgeBlur, captionPreviewText, captionShadowColor } from "./captionLayout";
+import { assertNativeUnifiedLayerProfileV1, resolveUnifiedLayerOrderV1, type UnifiedLayerOrderV1 } from "../domain/unifiedLayerOrderV1";
+import { matteOnlySourceIdsV1 } from "../domain/trackMatteSourcesV1";
 
 export type EnginePixelFormat = "rgba8" | "rgba16_float" | "rgba32_float" | "alpha8" | "alpha16";
 export type EngineStage = "decode" | "analysis" | "geometry" | "matte" | "color" | "effect" | "composite" | "simulation" | "audio" | "output";
@@ -56,8 +64,17 @@ export interface NativeCompiledGraph {
 }
 
 export interface EngineGraphBuildOptions {
+  /** Explicit back-to-front mixed picture/caption/Motion order. Omission retains the exact legacy graph.
+   * Persistence, preview and formal-export adapters must opt in together before this is exposed in the editor. */
+  unifiedLayerOrderV1?: UnifiedLayerOrderV1;
+  /** Source opt-in; older runtimes reject the typed pair operation. */
+  nativeTimelineTransitionVersion?: 1;
   /** Explicit current SDR video-preview contract; default/1 retains legacy wire semantics. */
   rec709PrimaryVersion?: 1 | 2;
+  /** Private actual glyph preparation; a cloned/deserialized handle is rejected. */
+  nativeMotionPaint?: PreparedNativeMotionPaint;
+  /** Explicit factory-owned flat floating assembly, never inferred for an old runtime. */
+  nativeFloatingVideoFrames?: PreparedNativeFloatingVideoFrames;
 }
 
 function currentSdrVideoProfileEligible(project: EditProject, clips: TimelineClip[]): boolean {
@@ -74,7 +91,7 @@ function currentSdrVideoProfileEligible(project: EditProject, clips: TimelineCli
   });
 }
 
-function timebaseForFps(fps: number): { numerator: number; denominator: number } {
+export function timebaseForFps(fps: number): { numerator: number; denominator: number } {
   if (!Number.isFinite(fps) || fps <= 0 || fps > 240) throw new Error("專案 FPS 無法轉為 rational timebase");
   const ntsc = [
     { fps: 24_000 / 1_001, numerator: 1_001, denominator: 24_000 },
@@ -184,7 +201,7 @@ function colorSpaces(project: EditProject, clip: TimelineClip, currentRec709 = f
   const wb = hasPhysicalWhiteBalance(clip);
   if (project.colorManagement?.mode === "aces2") {
     if (input === "linear_rec709") return { input, working: "linear_rec709", output: "linear_rec709", processor: wb ? "editkin-linear-primary/v2" : "editkin-linear-primary/v1" };
-    return { input, working: "linear_rec709", output: "linear_rec709", processor: wb ? "editkin-rec709-to-linear-rec709-primary/v2" : "editkin-srgb-to-linear-rec709-primary/v1" };
+    return { input, working: "linear_rec709", output: "linear_rec709", processor: wb || currentRec709 ? "editkin-rec709-to-linear-rec709-primary/v2" : "editkin-srgb-to-linear-rec709-primary/v1" };
   }
   if (input === "linear_rec709") {
     return { input, working: "linear_rec709", output: "linear_rec709", processor: wb ? "editkin-linear-primary/v2" : "editkin-linear-primary/v1" };
@@ -194,11 +211,12 @@ function colorSpaces(project: EditProject, clip: TimelineClip, currentRec709 = f
 
 function requiresFloatWorkingFormat(project: EditProject): boolean {
   const assetById = new Map(project.assets.map((asset) => [asset.id, asset]));
-  return project.tracks.some((track) => track.kind === "video" && !track.muted
+  return project.tracks.some((track) => track.kind === "video" && !track.hidden
     && track.clips.some((clip) => assetById.get(clip.assetId)?.color?.interpretation === "linear_rec709"));
 }
 
-function clipNodes(project: EditProject, clip: TimelineClip, currentRec709 = false): { nodes: EngineNode[]; tail: string } {
+function clipNodes(project: EditProject, clip: TimelineClip, currentRec709 = false,
+  nativeFloatingVideoFrames?: PreparedNativeFloatingVideoFrames): { nodes: EngineNode[]; tail: string } {
   const clipId = safeId(clip.id);
   const asset = project.assets.find((candidate) => candidate.id === clip.assetId);
   const source = `source:${clipId}`;
@@ -222,22 +240,26 @@ function clipNodes(project: EditProject, clip: TimelineClip, currentRec709 = fal
     }
     : {
       id: transform, inputs: [source], enabled: clip.layer?.enabled ?? true, kind: "transform2d",
-      x: clip.transform.x, y: clip.transform.y, scaleX: clip.transform.scale, scaleY: clip.transform.scale,
+      x: clip.transform.x, y: clip.transform.y, scaleX: clip.transform.scale * (clip.transform.flipX ? -1 : 1), scaleY: clip.transform.scale * (clip.transform.flipY ? -1 : 1),
       rotationRadians: clip.transform.rotation * Math.PI / 180, opacity: clip.transform.opacity,
       keyframes: clip.keyframes.map((keyframe) => ({
         frame: frameAt(keyframe.time, project.fps), x: keyframe.transform.x, y: keyframe.transform.y,
-        scaleX: keyframe.transform.scale, scaleY: keyframe.transform.scale,
+        scaleX: keyframe.transform.scale * (clip.transform.flipX ? -1 : 1), scaleY: keyframe.transform.scale * (clip.transform.flipY ? -1 : 1),
         rotationRadians: keyframe.transform.rotation * Math.PI / 180,
         opacity: keyframe.transform.opacity, easing: keyframe.easing,
       })),
       parent: clip.layer?.parentClipId ? `transform:${safeId(clip.layer.parentClipId)}` : undefined,
     };
   if (scene25d && !clip.transform3d) throw new Error(`2.5D 平面 ${clip.id} 缺少 transform3d`);
-  const nodes: EngineNode[] = [sourceNode, transformNode];
+  if (clip.floatingFrame && !nativeFloatingVideoFrames) throw new Error("Native floating requires explicit factory-owned preparation; no old runtime promotion");
+  const nativeFloating = clip.floatingFrame && nativeFloatingVideoFrames
+    ? nativeFloatingVideoFrameSpec(project, nativeFloatingVideoFrames, clip.id) : undefined;
+  const nodes: EngineNode[] = nativeFloating ? [sourceNode] : [sourceNode, transformNode];
   let tail = transform;
   if (controller) return { nodes, tail };
-  const spaces = colorSpaces(project, clip, currentRec709);
-  nodes.push({ id: color, inputs: [tail], enabled: true, kind: "color", processor: spaces.processor, inputSpace: spaces.input, workingSpace: spaces.working, outputSpace: spaces.output, grade: projectedGrade(clip, currentRec709) });
+  const physicalRec709 = currentRec709 || Boolean(nativeFloating);
+  const spaces = colorSpaces(project, clip, physicalRec709);
+  nodes.push({ id: color, inputs: [nativeFloating ? source : tail], enabled: true, kind: "color", processor: spaces.processor, inputSpace: spaces.input, workingSpace: spaces.working, outputSpace: spaces.output, grade: projectedGrade(clip, physicalRec709) });
   tail = color;
   for (const effectId of clip.creative?.effectPresetIds ?? []) {
     const effect = `effect:${clipId}:${safeId(effectId)}`;
@@ -245,6 +267,12 @@ function clipNodes(project: EditProject, clip: TimelineClip, currentRec709 = fal
     tail = effect;
   }
   tail = appendNativeEffectNodes(clip, clipId, nodes, tail);
+  if (nativeFloating) {
+    const floating = `floating-frame:${clipId}`;
+    nodes.push({ id: floating, inputs: [tail], enabled: true, kind: "floating_video_frame_2d", spec: nativeFloating });
+    nodes.push({ ...transformNode, inputs: [floating] });
+    tail = transform;
+  }
   for (const mask of clip.masks ?? []) {
     if (!mask.enabled || !mask.matteSequence?.frozen || mask.matteSequence.stale) continue;
     const maskNode = `mask:${clipId}:${safeId(mask.id)}`;
@@ -292,13 +320,19 @@ function adjustmentNodes(project: EditProject, clip: TimelineClip, input: string
 function captionNode(project: EditProject, index: number): EngineNode {
   const cue = project.captions[index];
   const style = project.captionStyle;
+  // The native preview draws what the ASS export draws: `lines` are the HTML preview's lines (the export's breaks
+  // and glyphs, wrapped where libass wraps), with the export's shadow colour and \blur (omitted = the shadow takes
+  // backgroundColor, hard edges). `text` stays the authored cue: a renderer that predates `lines` draws it as before.
+  const shadowColor = captionShadowColor(style), edgeBlur = captionEdgeBlur(style);
   return {
     id: `caption:${safeId(cue.id)}`, inputs: [], enabled: true, kind: "caption", cueId: cue.id, text: cue.text,
+    lines: captionPreviewText(cue.text, style, project.width).split("\n"),
     timeline: frameRange(cue.start, 0, cue.duration, project.fps),
     fontFamily: style.fontFamily, fontSize: style.fontSize, textColor: style.color,
     outlineColor: style.outlineColor, outlineWidth: style.outlineWidth,
     backgroundColor: style.backgroundColor, alignment: style.alignment, marginVertical: style.marginV,
     bold: style.bold, italic: style.italic, shadow: style.shadow, letterSpacing: style.letterSpacing,
+    ...(shadowColor !== style.backgroundColor ? { shadowColor } : {}), ...(edgeBlur > 0 ? { shadowBlur: edgeBlur } : {}),
     translation: cue.translation?.text,
   };
 }
@@ -382,8 +416,13 @@ export function motionGraphicTracking(project: EditProject, graphic: MotionGraph
   return { trackId: track.id, samples };
 }
 
-function motionGraphicNode(project: EditProject, index: number): EngineNode {
+function motionGraphicNode(project: EditProject, index: number, options: EngineGraphBuildOptions): EngineNode {
   const graphic = project.motionGraphics[index];
+  if (graphic.paintV1 || graphic.visualStyle === "native_paint") {
+    if (!options.nativeMotionPaint) throw new Error(`Native paint ${graphic.id} requires actual physical preparation; no v1 downgrade`);
+    return { id: `motion-graphic:${safeId(graphic.id)}`, inputs: [], enabled: true, kind: "native_motion_paint",
+      graphicId: graphic.id, track: nativeMotionPaintTrack(project, options.nativeMotionPaint, graphic.id) };
+  }
   if (graphic.schema !== "hao.motion-composition/v1") throw new Error(`原生 GPU graph 尚未支援 ${graphic.schema}：${graphic.id}；禁止降級成 v1 動畫`);
   return {
     id: `motion-graphic:${safeId(graphic.id)}`, inputs: [], enabled: true, kind: "motion_graphic",
@@ -409,7 +448,7 @@ function appendComposite(nodes: EngineNode[], current: string, upper: string, in
 function buildAudioGraph(project: EditProject): EngineRenderGraph["audio"] | undefined {
   const audioAssets = new Set(project.assets.filter((asset) => asset.kind === "audio" || asset.kind === "video").map((asset) => asset.id));
   const clips = project.tracks.filter((track) => track.kind === "audio" || track.kind === "video")
-    .flatMap((track) => track.muted ? [] : track.clips)
+    .flatMap((track) => trackAudioAudible(project, track) ? track.clips : [])
     .filter((clip) => (clip.layer?.role ?? "content") === "content" && audioAssets.has(clip.assetId));
   if (clips.length === 0) return undefined;
   const nodes: EngineAudioNode[] = [];
@@ -457,11 +496,18 @@ function appendParticleSimulation(project: EditProject, nodes: EngineNode[], cur
 }
 
 export function buildEngineRenderGraph(project: EditProject, options: EngineGraphBuildOptions = {}): EngineRenderGraph {
-  if (project.tracks.some(track => track.clips.some(clip => clip.floatingFrame))) {
+  const requestedOrder = options.unifiedLayerOrderV1 === undefined ? project.unifiedLayerOrderV1 : options.unifiedLayerOrderV1;
+  const unifiedLayers = requestedOrder === undefined ? undefined : resolveUnifiedLayerOrderV1(project, requestedOrder);
+  if (unifiedLayers) assertNativeUnifiedLayerProfileV1(project);
+  if (project.timelineTransitions?.length) {
+    if (options.nativeTimelineTransitionVersion !== 1) throw new Error("TIMELINE_TRANSITION_NATIVE_SHADER_NOT_CONNECTED");
+    return buildTimelineTransitionNativeGraphV1(project, options, buildEngineRenderGraph);
+  }
+  if (project.tracks.some(track => track.clips.some(clip => clip.floatingFrame)) && !options.nativeFloatingVideoFrames) {
     throw new Error("浮空影片框尚未進入原生 EngineGraph；請使用 Editkin 的正式 FFmpeg 合成路徑");
   }
   if (options.rec709PrimaryVersion !== undefined && ![1, 2].includes(options.rec709PrimaryVersion)) throw new Error("Unsupported Rec.709 primary processor version");
-  const visibleClips = project.tracks.filter((track) => track.kind === "video" && !track.muted).flatMap((track) => track.clips);
+  const visibleClips = project.tracks.filter((track) => track.kind === "video" && !track.hidden).flatMap((track) => track.clips);
   // Never turn an invalidated authored matte into an unmasked executable graph.
   // Check before role-specific branches can omit masks (adjustment/controller).
   for (const clip of visibleClips) {
@@ -472,35 +518,56 @@ export function buildEngineRenderGraph(project: EditProject, options: EngineGrap
   const nodes: EngineNode[] = [];
   const currentRec709 = options.rec709PrimaryVersion === 2 && currentSdrVideoProfileEligible(project, visibleClips);
   const contentTails = new Map<string, string>();
-  for (const clip of visibleClips.filter((candidate) => candidate.layer?.role !== "adjustment")) {
-    const built = clipNodes(project, clip, currentRec709);
+  // Track matte sources draw nothing (design D3): they get source nodes (also from a hidden track) for the target's
+  // matte input and are skipped by the layer composite below. Projects without mattes build the same graph.
+  const matteOnly = matteOnlySourceIdsV1(project);
+  const hiddenMatteSources = matteOnly.size ? project.tracks.filter((track) => track.kind === "video" && track.hidden)
+    .flatMap((track) => track.clips).filter((clip) => matteOnly.has(clip.id) && clip.layer?.enabled !== false) : [];
+  for (const clip of [...hiddenMatteSources, ...visibleClips.filter((candidate) => candidate.layer?.role !== "adjustment")]) {
+    const built = clipNodes(project, clip, currentRec709, options.nativeFloatingVideoFrames);
     nodes.push(...built.nodes);
     if ((clip.layer?.role ?? "content") === "content") contentTails.set(clip.id, built.tail);
   }
   let compositeTail: string | undefined;
   let compositeIndex = 0;
   const deferredParticleAdjustments: TimelineClip[] = [];
-  for (const clip of visibleClips) {
-    if (clip.layer?.role === "adjustment") {
-      if (project.particleSimulation?.enabled === true) {
-        deferredParticleAdjustments.push(clip);
+  if (unifiedLayers) {
+    const captionIndexes = new Map(project.captions.map((caption, index) => [caption.id, index]));
+    const graphicIndexes = new Map(project.motionGraphics.map((graphic, index) => [graphic.id, index]));
+    const composed = composeUnifiedLayerGraphV1(unifiedLayers, { nodes, contentTails,
+      overlayNode: layer => layer.kind === "caption" ? captionNode(project, captionIndexes.get(layer.id)!) : motionGraphicNode(project, graphicIndexes.get(layer.id)!, options),
+      adjustmentNodes: (clip, input) => adjustmentNodes(project, clip, input, currentRec709),
+      appendComposite: (base, upper, index, clip, matteInput) => appendComposite(nodes, base, upper, index, clip?.layer?.blendMode ?? "normal", 1, matteInput, clip?.layer?.trackMatte?.mode),
+    });
+    compositeTail = composed.tail; compositeIndex = composed.compositeIndex;
+  } else {
+    for (const clip of visibleClips) {
+      if (clip.layer?.role === "adjustment") {
+        if (project.particleSimulation?.enabled === true) {
+          deferredParticleAdjustments.push(clip);
+          continue;
+        }
+        if (!compositeTail) continue;
+        const built = adjustmentNodes(project, clip, compositeTail, currentRec709);
+        nodes.push(...built.nodes);
+        compositeTail = built.tail;
         continue;
       }
-      if (!compositeTail) continue;
-      const built = adjustmentNodes(project, clip, compositeTail, currentRec709);
-      nodes.push(...built.nodes);
-      compositeTail = built.tail;
-      continue;
-    }
-    if (clip.layer?.role === "controller") continue;
-    const tail = contentTails.get(clip.id)!;
-    if (!compositeTail) compositeTail = tail;
-    else {
-      const matteInput = clip.layer?.trackMatte ? contentTails.get(clip.layer.trackMatte.sourceClipId) : undefined;
-      if (clip.layer?.trackMatte && !matteInput) throw new Error(`Track Matte 缺少 graph source：${clip.layer.trackMatte.sourceClipId}`);
-      // Transform2D owns clip opacity. Composite opacity is a separate group/operator value;
-      // multiplying the clip opacity here again would square every upper layer's alpha.
-      compositeTail = appendComposite(nodes, compositeTail, tail, ++compositeIndex, clip.layer?.blendMode ?? "normal", 1, matteInput, clip.layer?.trackMatte?.mode);
+      if (clip.layer?.role === "controller" || matteOnly.has(clip.id)) continue;
+      const tail = contentTails.get(clip.id)!;
+      if (!compositeTail && clip.layer?.trackMatte) {
+        // A matted first layer (its source draws nothing) still needs its matte: composite it onto transparency.
+        nodes.push({ id: "source:transparent", inputs: [], enabled: true, kind: "source", assetId: "editkin.generator.transparent", mediaKind: "generator", inputColorSpace: "rec709", alphaMode: "straight" });
+        compositeTail = "source:transparent";
+      }
+      if (!compositeTail) compositeTail = tail;
+      else {
+        const matteInput = clip.layer?.trackMatte ? contentTails.get(clip.layer.trackMatte.sourceClipId) : undefined;
+        if (clip.layer?.trackMatte && !matteInput) throw new Error(`Track Matte 缺少 graph source：${clip.layer.trackMatte.sourceClipId}`);
+        // Transform2D owns clip opacity. Composite opacity is a separate group/operator value;
+        // multiplying the clip opacity here again would square every upper layer's alpha.
+        compositeTail = appendComposite(nodes, compositeTail, tail, ++compositeIndex, clip.layer?.blendMode ?? "normal", 1, matteInput, clip.layer?.trackMatte?.mode);
+      }
     }
   }
   if (!compositeTail) {
@@ -519,15 +586,27 @@ export function buildEngineRenderGraph(project: EditProject, options: EngineGrap
     nodes.push(...built.nodes);
     compositeTail = built.tail;
   }
-  for (let index = 0; index < project.captions.length; index += 1) {
+  for (let index = 0; !unifiedLayers && index < project.captions.length; index += 1) {
     const node = captionNode(project, index);
     nodes.push(node);
     compositeTail = appendComposite(nodes, compositeTail, node.id, ++compositeIndex);
   }
-  for (let index = 0; index < project.motionGraphics.length; index += 1) {
-    const node = motionGraphicNode(project, index);
+  const displayMotionNodes: EngineNode[] = [];
+  let displayMotionSuffix = false;
+  for (let index = 0; !unifiedLayers && index < project.motionGraphics.length; index += 1) {
+    const node = motionGraphicNode(project, index, options);
     nodes.push(node);
-    compositeTail = appendComposite(nodes, compositeTail, node.id, ++compositeIndex);
+    if (project.motionGraphics[index].paintV1?.schema === "editkin.motion-paint/v2") {
+      if (project.colorManagement?.mode !== "aces2" || project.colorManagement.outputTransform !== "rec709_sdr"
+        || project.scene3d?.enabled || project.scene25d?.enabled) {
+        throw new Error("Display native paint requires the explicit flat ACES2 Rec.709 SDR boundary");
+      }
+      displayMotionSuffix = true;
+      displayMotionNodes.push(node);
+    } else {
+      if (displayMotionSuffix) throw new Error("Scene or legacy Motion cannot follow the final display paint suffix; reorder explicitly");
+      compositeTail = appendComposite(nodes, compositeTail, node.id, ++compositeIndex);
+    }
   }
   const depthOfFieldNode = scene25dDepthOfFieldNode(project, compositeTail, frameAt);
   if (depthOfFieldNode) {
@@ -549,10 +628,16 @@ export function buildEngineRenderGraph(project: EditProject, options: EngineGrap
     });
     compositeTail = "display:aces2";
   }
+  // Display artwork owns a distinct, literal graph boundary. Do not silently
+  // reinterpret the old scene branch or reorder interleaved authored graphics.
+  for (const node of displayMotionNodes) {
+    compositeTail = appendComposite(nodes, compositeTail, node.id, ++compositeIndex);
+  }
   const workingFormat: EnginePixelFormat = requiresFloatWorkingFormat(project) || project.colorManagement?.mode === "aces2" ? "rgba32_float" : "rgba16_float";
+  if (unifiedLayers) assertUnifiedEngineNodeIdentitiesV1(nodes);
   nodes.push({ id: "output:main", inputs: [compositeTail], enabled: true, kind: "output", format: workingFormat });
   return {
-    schema: "editkin.engine-graph/v1", graphId: `project:${safeId(project.id)}:r${project.revision}`,
+    schema: "editkin.engine-graph/v1", graphId: `project:${safeId(project.id)}:r${project.revision}${unifiedLayers ? `:${unifiedLayerGraphOrderKeyV1(project, unifiedLayers)}` : ""}`,
     width: project.width, height: project.height, timebase: timebaseForFps(project.fps), workingFormat, cacheBudgetMb: 1_024,
     nodes, outputNode: "output:main", audio: project.scene25d?.enabled ? undefined : buildAudioGraph(project),
   };

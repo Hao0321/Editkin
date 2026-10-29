@@ -139,7 +139,7 @@ if (!ffmpegConfigurationFlags.length) throw new Error("Bundled FFmpeg did not re
 const ffmpegSourceEvidence = await inspectFfmpegCorrespondingSource({
   manifestPath: resolve(root, "vendor/ffmpeg/win32-x64/corresponding-source.json"),
   expectedBinarySha256: (await fileEvidence(ffmpegBinaryPath)).sha256,
-  expectedBuild: "8.0-full_build-www.gyan.dev",
+  expectedBuild: "n8.1.3-20260923",
   expectedConfigurationFlags: ffmpegConfigurationFlags,
 });
 const installerEvidence = await fileEvidence(installer);

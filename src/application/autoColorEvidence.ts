@@ -42,7 +42,7 @@ function primarySnapshot(project: EditProject, clip: TimelineClip) {
 function requireStaticPrimary(project: EditProject, clip: TimelineClip) {
   if (clip.keyframes.length || Object.keys(clip.expressions ?? {}).length) throw Error("動畫調色需逐幀驗證，不能套用靜態曝光決策");
   if (clip.layer?.role === "adjustment" || clip.layer?.role === "controller") throw Error("自動曝光只作用於實拍素材片段");
-  const overlap = project.tracks.filter(track => !track.muted).flatMap(track => track.clips).some(other => other.layer?.role === "adjustment"
+  const overlap = project.tracks.filter(track => !track.hidden).flatMap(track => track.clips).some(other => other.layer?.role === "adjustment"
     && other.timelineStart < clip.timelineStart + clip.duration && other.timelineStart + other.duration > clip.timelineStart);
   if (overlap) throw Error("重疊 adjustment layer 尚未納入自動曝光量測，請先處理疊加調色");
 }

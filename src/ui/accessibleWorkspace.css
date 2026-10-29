@@ -1,0 +1,185 @@
+/* Interface layout only: no scaling or rewriting of the video's canvas content. */
+html, body, #root { min-width: 320px; min-height: 0; }
+html { overflow: auto; }
+body, #root { overflow: visible; }
+#root { height: auto; min-height: 100dvh; }
+body { font-family: system-ui, "Segoe UI", "Microsoft JhengHei", "Yu Gothic", "Malgun Gothic", sans-serif; font-size: 14px; }
+:root { --ui-scale: 1; --ui-copy-size: calc(14px * var(--ui-scale)); --ui-target-size: max(44px, calc(40px * var(--ui-scale))); }
+.app-shell[data-interface-mode] { grid-template-rows: auto minmax(240px,1fr) minmax(170px,var(--timeline-height,200px)) auto; min-height: calc(600px + (var(--ui-scale) - 1) * 600px); height: 100dvh; }
+.app-shell[data-interface-mode][data-workspace-mode="welcome"] { grid-template-rows: auto minmax(0,1fr) auto; min-height: 100dvh; height: auto; }
+.app-shell[data-interface-mode][data-workspace-notice="true"] { grid-template-rows: auto auto minmax(240px,1fr) minmax(170px,var(--timeline-height,200px)) auto; }
+.app-shell[data-interface-mode][data-workspace-notice="true"][data-workspace-mode="welcome"] { grid-template-rows: auto auto minmax(0,1fr) auto; }
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-timeline-visible="false"] { grid-template-rows: auto minmax(240px,1fr) auto; }
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-workspace-notice="true"][data-timeline-visible="false"] { grid-template-rows: auto auto minmax(240px,1fr) auto; }
+.app-shell[data-interface-mode] > .toolbar { grid-row: 1; }
+.app-shell[data-interface-mode] > :is(.workspace-grid,.first-project-start,.first-project-loading) { grid-row: 2; }
+.app-shell[data-interface-mode] > .workspace-notices { grid-row: 2; }
+.app-shell[data-interface-mode][data-workspace-notice="true"] > :is(.workspace-grid,.first-project-start,.first-project-loading) { grid-row: 3; }
+.app-shell[data-interface-mode] > .timeline-region { grid-row: -3; }
+.app-shell[data-interface-mode] > .status-bar { grid-row: -2; }
+.app-shell[data-interface-mode] .toolbar { grid-template-columns: minmax(120px,160px) minmax(200px,1fr); gap: 12px 18px; padding: 12px 18px; }
+.app-shell[data-interface-mode] .toolbar-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+/* The brand line fits its 160px column (「你的影片工作台」 on one line) and wraps, balanced, instead of running under the
+   step buttons when it is longer (English, Spanish, Japanese, Korean). */
+.app-shell[data-interface-mode] .brand-copy span { font-size: var(--ui-copy-size); line-height: 1.5; white-space: normal; overflow-wrap: anywhere; text-wrap: balance; }
+.app-shell[data-interface-mode] .project-flow { display: grid; grid-template-columns: minmax(0,1fr); gap: 8px; min-width: 0; }
+.app-shell[data-interface-mode] .project-heading { display: flex; flex-wrap: wrap; gap: 5px 10px; }
+.app-shell[data-interface-mode] .project-heading strong { min-width: 0; max-width: min(32vw,440px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell[data-interface-mode] .project-heading small { font-size: var(--ui-copy-size); white-space: normal; }
+.app-shell[data-interface-mode] .quick-flow { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); width: 100%; min-width: 0; height: auto; gap: 6px; padding: 0; }
+.app-shell[data-interface-mode] .quick-flow li { display: block; min-width: 0; min-height: 0; height: auto; padding: 0; background: transparent; }
+.quick-flow button { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: var(--ui-target-size); height: auto; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); color: var(--soft); cursor: pointer; }
+.quick-flow .current button { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.quick-flow button b { flex: 0 0 auto; }
+.app-shell[data-interface-mode] .quick-flow button span { display: inline; min-width: 0; overflow-wrap: break-word; white-space: normal; text-align: start; }
+.app-shell[data-interface-mode] .toolbar .secondary-action { width: auto; padding: 8px 12px; gap: 6px; color: var(--soft); overflow: visible; white-space: normal; }
+.app-shell[data-interface-mode] .project-menu > summary { width: auto; padding: 8px 12px; font-size: var(--ui-copy-size); overflow: visible; white-space: normal; }
+.app-shell[data-interface-mode] .project-menu > summary::before { display: none; }
+.app-shell[data-interface-mode] :is(.toolbar,.media-bin,.inspector,.playback-controls,.workspace-controls,.interface-settings,.first-project-start,.editing-profile-picker,.status-bar,.timeline-toolbar) { font-size: var(--ui-copy-size); }
+.app-shell[data-interface-mode] :is(.toolbar,.media-bin,.inspector,.workspace-controls,.interface-settings,.first-project-start,.editing-profile-picker,.playback-controls,.timeline-toolbar) :is(button,label,select,input,small,p,summary) { font-size: var(--ui-copy-size); }
+.app-shell[data-interface-mode] :is(.toolbar,.media-bin,.inspector,.workspace-controls,.interface-settings,.first-project-start,.editing-profile-picker,.playback-controls,.timeline-toolbar) :is(button,select,summary) { min-height: var(--ui-target-size); height: auto; line-height: 1.4; }
+.app-shell[data-interface-mode] :is(.toolbar,.media-bin,.inspector,.workspace-controls,.interface-settings,.first-project-start,.editing-profile-picker,.playback-controls,.timeline-toolbar) button { white-space: normal; }
+.app-shell[data-interface-mode] :is(.toolbar,.media-bin,.inspector,.workspace-controls,.first-project-start) button :is(span,strong,small,div) { max-width: 100%; overflow-wrap: anywhere; }
+.app-shell[data-interface-mode] :is(button,summary,a,input,select,textarea,[tabindex]):focus-visible, dialog :is(button,input,select):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.toolbar:has(.interface-settings[open]) { z-index: 100; }
+.app-shell[data-interface-mode] .history-actions { display: flex; flex-wrap: wrap; }
+.app-shell[data-interface-mode] .project-menu-popover { width: min(380px,calc(100vw - 24px)); max-height: calc(100dvh - 150px); }
+.app-shell[data-interface-mode] .project-menu-group-body .workspace-controls-popover { position: static; width: 100%; padding: 12px 4px; box-shadow: none; }
+.app-shell[data-interface-mode] .theme-control { grid-template-columns: 14px minmax(0,1fr) minmax(90px,1fr); gap: 8px; }
+.app-shell[data-interface-mode] .export-action { margin-inline-start: auto; min-height: var(--ui-target-size); }
+.app-shell[data-interface-mode] .first-project-start { padding: 24px; overflow: visible; }
+.app-shell[data-interface-mode] .first-project-card { width: min(720px,100%); padding: clamp(18px,4vw,36px); }
+.app-shell[data-interface-mode] .first-project-card h1 { font-size: clamp(28px,3vw,42px); line-height: 1.35; overflow-wrap: anywhere; }
+.app-shell[data-interface-mode] .first-project-card > p { max-width: 54ch; margin: 16px auto 22px; line-height: 1.8; }
+.app-shell[data-interface-mode] .first-project-import { min-height: max(92px,calc(92px * var(--ui-scale))); padding: 14px; }
+.app-shell[data-interface-mode] .first-project-import strong { font-size: calc(22px * var(--ui-scale)); }
+.app-shell[data-interface-mode] .first-project-steps { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.app-shell[data-interface-mode] .first-project-steps li { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 5px; }
+.app-shell[data-interface-mode] .first-project-steps li strong { font-size: var(--ui-copy-size); overflow-wrap: anywhere; }
+.app-shell[data-interface-mode] .first-project-secondary { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.first-project-ai { margin: 18px 0 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; text-align: start; }
+.first-project-ai summary { cursor: pointer; }
+.first-project-ai button { width: 100%; padding: 10px; border: 1px solid var(--accent); border-radius: 9px; background: var(--accent-soft); color: var(--accent); }
+.app-shell[data-interface-mode] .status-bar { gap: 8px 14px; flex-wrap: wrap; height: auto; min-height: 44px; padding: 8px 14px; font-size: var(--ui-copy-size); line-height: 1.5; }
+.app-shell[data-interface-mode] .operation-status { flex: 1 1 240px; width: auto; max-width: 100%; margin-inline-start: 0; }
+.app-shell[data-interface-mode] .operation-status > summary { min-height: var(--ui-target-size); }
+.app-shell[data-interface-mode] .operation-status > summary > b { flex-shrink: 1; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.app-shell[data-interface-mode] .operation-status :is(summary > b,.operation-status-message,.operation-status-panel p) { font-size: var(--ui-copy-size); }
+.app-shell[data-interface-mode] .operation-status-panel { position: fixed; inset-inline-end: 12px; inset-block-end: 12px; width: min(480px,calc(100vw - 24px)); max-height: calc(100dvh - 24px); }
+.app-shell[data-interface-mode] .project-format-control { flex: 0 1 auto; max-width: 100%; }
+.app-shell[data-interface-mode] .project-format-control > summary { flex-wrap: wrap; min-height: var(--ui-target-size); }
+.app-shell[data-interface-mode] .project-format-control > summary :is(span,small) { font-size: var(--ui-copy-size); white-space: normal; overflow-wrap: anywhere; }
+/* Simple mode says 「16:9 · 橫式影片」; the pixel size and frame rate stay in advanced mode. */
+.app-shell[data-interface-mode="simple"] .project-format-control > summary small { display: none; }
+.app-shell[data-interface-mode] .center-workspace { grid-template-rows: minmax(min-content,1fr) auto auto; overflow: auto; }
+.app-shell[data-interface-mode] .preview-panel.preview-with-transport { grid-template-rows: auto minmax(160px,1fr) auto; min-height: min-content; overflow: visible; }
+.app-shell[data-interface-mode] .preview-panel.preview-with-transport.has-preview-update { grid-template-rows: auto auto minmax(160px,1fr) auto; }
+.app-shell[data-interface-mode] .preview-toolbar { min-height: 46px; flex-wrap: wrap; gap: 8px; }
+.app-shell[data-interface-mode] .preview-badges { flex-wrap: wrap; }
+.app-shell[data-interface-mode] .timeline-toolbar { flex-wrap: wrap; align-items: center; gap: 8px; height: auto; min-height: min-content; padding-block: 8px; }
+.app-shell[data-interface-mode] :is(.timeline-actions,.timeline-quick-actions) { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+.app-shell[data-interface-mode] .timeline-actions { flex: 1 1 100%; }
+.app-shell[data-interface-mode] .timeline-quick-actions { flex: 1 1 200px; }
+.app-shell[data-interface-mode] .timeline-shell { grid-template-rows: auto minmax(100px,1fr); overflow: auto; }
+/* Simple mode keeps the 標題與圖卡 lane and the 主畫面 track in view (checked at 1440×900 and 1280×720): the timeline's
+   name and buttons share one row, the playback buttons keep one row whenever they fit, and the footer keeps its 44px
+   targets with less padding. */
+.app-shell[data-interface-mode="simple"] .timeline-actions { flex: 1 1 560px; }
+.app-shell[data-interface-mode="simple"] .playback-controls-actions { flex: 1 1 auto; }
+.app-shell[data-interface-mode="simple"] .status-bar { padding-block: 4px; }
+@media (max-height: 760px) {
+  /* A short window: less toolbar padding; the preview keeps its header, a 160px picture and the 播放 row; the media
+     panel drops its title (the big 加入更多素材 button stays) so the first clip stays in view; the timeline gets the rest. */
+  .app-shell[data-interface-mode="simple"][data-workspace-mode="editor"] > .toolbar { padding-block: 8px; row-gap: 8px; }
+  .app-shell[data-interface-mode="simple"][data-workspace-mode="editor"] { grid-template-rows: auto minmax(266px,1fr) minmax(170px,var(--timeline-height,200px)) auto; }
+  .app-shell[data-interface-mode="simple"][data-workspace-mode="editor"][data-workspace-notice="true"] { grid-template-rows: auto auto minmax(266px,1fr) minmax(170px,var(--timeline-height,200px)) auto; }
+  .app-shell[data-interface-mode="simple"][data-workspace-mode="editor"] .media-bin > .panel-title { display: none; }
+  .app-shell[data-interface-mode="simple"][data-workspace-mode="editor"] .media-bin .import-drop.has-media { min-height: var(--ui-target-size); padding-block: 6px; }
+  .app-shell[data-interface-mode="simple"][data-workspace-mode="editor"] .media-bin .import-drop.has-media small { display: none; }
+  .app-shell[data-interface-mode="simple"][data-workspace-mode="editor"] .media-bin .import-drop.has-media strong { grid-row: 1 / 3; align-self: center; justify-self: start; }
+  .app-shell[data-interface-mode="simple"][data-workspace-mode="editor"] .media-bin > .project-media-search[data-collapsed="true"] { margin-top: 6px; }
+  .app-shell[data-interface-mode="simple"][data-workspace-mode="editor"] .media-bin > .asset-list { margin-top: 8px; }
+}
+.app-shell[data-interface-mode] .timeline-region:has(.timeline-more[open]) { z-index: 80; }
+.app-shell[data-interface-mode] .timeline-more-popover { position: fixed; inset-inline-end: 12px; inset-block-end: 12px; width: min(380px,calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; }
+.status-bar > span { max-width: 100%; overflow-wrap: anywhere; }
+.compact-panel-tabs { display: none; }
+dialog { max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); overflow: auto; }
+dialog.beginner-guide { position: fixed; inset: 0; width: min(680px,calc(100vw - 24px)); margin: auto; padding: clamp(18px,3vw,30px); border: 1px solid var(--line-strong); color: var(--ink); font-size: var(--ui-copy-size); }
+dialog.beginner-guide::backdrop { background: rgb(20 30 48 / .45); }
+dialog.beginner-guide :is(p,span,button) { font-size: var(--ui-copy-size); line-height: 1.6; overflow-wrap: anywhere; }
+dialog.beginner-guide :is(button) { min-height: var(--ui-target-size); white-space: normal; }
+dialog.beginner-guide h2 { padding-inline-end: 28px; font-size: calc(25px * var(--ui-scale)); }
+dialog.beginner-guide h3 { font-size: calc(20px * var(--ui-scale)); }
+dialog.beginner-guide .guide-card { min-width: 0; }
+dialog.beginner-guide .guide-card > div { min-width: 0; }
+dialog.beginner-guide footer, dialog.beginner-guide footer > div { display: flex; flex-wrap: wrap; gap: 10px; }
+dialog.beginner-guide .guide-visual b { font-size: 40px; }
+dialog.auto-edit-dialog :is(p,small,label,button,legend) { font-size: var(--ui-copy-size); line-height: 1.6; overflow-wrap: anywhere; }
+dialog.auto-edit-dialog button { min-height: var(--ui-target-size); }
+@media (min-width:1600px) { .app-shell[data-interface-mode] .toolbar { grid-template-columns: 160px minmax(300px,1fr) auto; } .app-shell[data-interface-mode] .toolbar-actions { grid-column: auto; } }
+@media (max-width:1039px) {
+  .app-shell[data-interface-mode] .workspace-grid { display: flex; flex-direction: column; gap: 0; overflow: hidden; }
+  .compact-panel-tabs { display: grid; flex: 0 0 auto; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; padding: 8px; background: var(--surface); }
+  .compact-panel-tabs button { min-height: var(--ui-target-size); border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); color: var(--soft); font-size: var(--ui-copy-size); overflow-wrap: anywhere; }
+  .compact-panel-tabs [aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .app-shell[data-interface-mode] .workspace-grid > :is(.media-bin,.center-workspace,.inspector) { flex: 1 1 0; width: 100%; min-height: 0; max-width: 100%; }
+  .app-shell[data-active-pane="preview"] .workspace-grid > :is(.media-bin,.inspector),
+  .app-shell[data-active-pane="media"] .workspace-grid > :is(.center-workspace,.inspector),
+  .app-shell[data-active-pane="inspector"] .workspace-grid > :is(.center-workspace,.media-bin) { display: none; }
+  .workspace-grid > .workspace-resizer.horizontal { display: none; }
+  .app-shell[data-interface-mode] .playback-controls-row { flex-wrap: wrap; gap: 8px; }
+  .app-shell[data-interface-mode] .playback-controls-actions { flex-wrap: wrap; }
+  .app-shell[data-interface-mode] .preview-panel { padding-inline: 12px; }
+}
+@media (max-width:700px) {
+  .app-shell[data-interface-mode] .toolbar { grid-template-columns: minmax(0,1fr); gap: 10px; padding: 12px; }
+  .app-shell[data-interface-mode] .brand-lockup { justify-content: center; }
+  .app-shell[data-interface-mode] .brand-copy span { display: none; }
+  .app-shell[data-interface-mode] .brand-mark { width: 32px; height: 32px; flex-basis: 32px; }
+  .app-shell[data-interface-mode] .toolbar-actions { justify-content: center; }
+  .app-shell[data-interface-mode] .project-heading { justify-content: center; }
+  .app-shell[data-interface-mode] .project-heading strong { max-width: 90vw; }
+  .app-shell[data-interface-mode] .quick-flow button { flex-direction: column; gap: 4px; }
+  .app-shell[data-interface-mode] .first-project-start { padding: 12px; }
+  .app-shell[data-interface-mode] .first-project-steps { grid-template-columns: minmax(0,1fr); }
+  .app-shell[data-interface-mode] .first-project-steps li { justify-content: start; padding: 12px; }
+  .app-shell[data-interface-mode] .export-action { margin-inline-start: 0; }
+.interface-settings-body { position: fixed; inset: 12px; width: auto; max-height: calc(100dvh - 24px); }
+  .interface-settings[open] > summary { position: relative; z-index: 110; }
+  dialog.beginner-guide .guide-card { grid-template-columns: minmax(0,1fr); }
+  dialog.beginner-guide .guide-visual { min-height: 90px; }
+}
+/* Large controls need more room than the legacy narrow toolbar provides. */
+:root:is([data-ui-scale="1.5"],[data-ui-scale="1.75"],[data-ui-scale="2"]) .app-shell .toolbar { grid-template-columns: minmax(0,1fr); }
+:root:is([data-ui-scale="1.5"],[data-ui-scale="1.75"],[data-ui-scale="2"]) .app-shell .quick-flow { grid-template-columns: repeat(2,minmax(0,1fr)); }
+:root:is([data-ui-scale="1.5"],[data-ui-scale="1.75"],[data-ui-scale="2"]) .interface-settings-body label { grid-template-columns: minmax(0,1fr); }
+/* Reflow the workspace as one page when controls need more room. A fixed
+   desktop-height grid must never squeeze controls into overlapping rows. */
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-compact-workspace="true"],
+:root:is([data-ui-scale="1.5"],[data-ui-scale="1.75"],[data-ui-scale="2"]) .app-shell[data-interface-mode][data-workspace-mode="editor"] {
+  height: auto;
+  min-height: 100dvh;
+  grid-template-rows: auto minmax(min-content,1fr) minmax(min-content,var(--timeline-height,200px)) auto;
+}
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-compact-workspace="true"][data-workspace-notice="true"],
+:root:is([data-ui-scale="1.5"],[data-ui-scale="1.75"],[data-ui-scale="2"]) .app-shell[data-interface-mode][data-workspace-mode="editor"][data-workspace-notice="true"] {
+  grid-template-rows: auto auto minmax(min-content,1fr) minmax(min-content,var(--timeline-height,200px)) auto;
+}
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-compact-workspace="true"][data-timeline-visible="false"],
+:root:is([data-ui-scale="1.5"],[data-ui-scale="1.75"],[data-ui-scale="2"]) .app-shell[data-interface-mode][data-workspace-mode="editor"][data-timeline-visible="false"] { grid-template-rows: auto minmax(min-content,1fr) auto; }
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-compact-workspace="true"][data-timeline-visible="false"][data-workspace-notice="true"],
+:root:is([data-ui-scale="1.5"],[data-ui-scale="1.75"],[data-ui-scale="2"]) .app-shell[data-interface-mode][data-workspace-mode="editor"][data-timeline-visible="false"][data-workspace-notice="true"] { grid-template-rows: auto auto minmax(min-content,1fr) auto; }
+.app-shell[data-interface-mode][data-compact-workspace="true"] .workspace-grid,
+:root:is([data-ui-scale="1.5"],[data-ui-scale="1.75"],[data-ui-scale="2"]) .app-shell[data-interface-mode] .workspace-grid { min-height: min-content; overflow: visible; }
+.app-shell[data-interface-mode][data-compact-workspace="true"] .workspace-grid > .center-workspace { flex: 0 0 auto; min-height: min-content; }
+/* The same narrow window: the 素材庫 and 屬性面板 panes keep a usable height of their own (each scrolls inside)
+   instead of collapsing to a sliver under the panel tabs (seen at the 800×560 minimum window). */
+.app-shell[data-interface-mode][data-compact-workspace="true"] .workspace-grid > :is(.media-bin, .inspector) { flex: 0 0 auto; height: min(560px, max(360px, calc(100dvh - 140px))); }
+.app-shell[data-interface-mode][data-compact-workspace="true"] .timeline-region,
+:root:is([data-ui-scale="1.5"],[data-ui-scale="1.75"],[data-ui-scale="2"]) .app-shell[data-interface-mode] .timeline-region { min-height: min-content; }
+.app-shell[data-interface-mode][data-compact-workspace="true"] .timeline-shell,
+:root:is([data-ui-scale="1.5"],[data-ui-scale="1.75"],[data-ui-scale="2"]) .app-shell[data-interface-mode] .timeline-shell { height: auto; min-height: var(--timeline-height,200px); grid-template-rows: minmax(min-content,auto) minmax(170px,1fr); overflow: visible; }
+.app-shell[data-interface-mode][data-compact-workspace="true"] .timeline-quick-actions,
+:root:is([data-ui-scale="1.5"],[data-ui-scale="1.75"],[data-ui-scale="2"]) .app-shell[data-interface-mode] .timeline-quick-actions { flex-basis: 100%; }
+@media (prefers-reduced-motion:reduce) { .app-shell :is(button,summary), dialog.beginner-guide { transition: none; } .app-shell :is(button,summary):hover { transform: none; } }

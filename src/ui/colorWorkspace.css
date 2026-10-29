@@ -36,3 +36,21 @@
 .grade-control-grid input { width: 100%; accent-color: var(--accent); }
 .grade-reset { width: 100%; min-height: 40px; margin-top: 20px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); color: var(--soft); font-weight: 800; cursor: pointer; }
 @media (max-width: 900px) { .color-layout { grid-template-columns: 1fr; } .grade-controls { border-left: 0; border-top: 1px solid var(--line); } }
+.grade-v2-panel { display: grid; gap: 10px; margin-top: 18px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.grade-v2-panel > summary { color: var(--ink); font-size: 12px; font-weight: 850; cursor: pointer; }
+.grade-v2-panel p, .grade-v2-panel > small { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.grade-v2-panel > label { display: grid; gap: 6px; color: var(--muted); font-size: 10px; font-weight: 800; }
+.grade-v2-panel > label > span { display: flex; justify-content: space-between; }
+.grade-v2-panel output { color: var(--accent); font-variant-numeric: tabular-nums; }
+.grade-v2-panel input[type="range"] { width: 100%; accent-color: var(--accent); }
+.film-look-list { display: grid; gap: 6px; }
+.film-look-list button { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 38px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--soft); font-size: 11px; font-weight: 750; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.film-look-list button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.film-look-list button:disabled { cursor: not-allowed; opacity: .72; }
+.film-look-list small { flex: none; padding: 2px 6px; border-radius: 6px; font-size: 9px; }
+.film-look-list .certification-certified { background: #173026; color: #68f0a9; }
+.film-look-list .certification-pending { background: #2c2a17; color: #f0d868; }
+.film-look-list .certification-refused { background: #3c1721; color: #ff7b91; }
+.grade-v2-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.grade-v2-actions button { min-height: 36px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--soft); font-size: 10px; font-weight: 800; cursor: pointer; }
+.grade-v2-actions button:disabled { cursor: not-allowed; opacity: .6; }

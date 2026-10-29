@@ -8,8 +8,9 @@ import { analyzeMotionTrack } from "../application/motionTracking";
 import { buildPodcastDirectorCommand } from "../application/podcastDirector";
 import { resolveAestheticSystem } from "../application/editkinAesthetic";
 import { findAsset, findClip, summarizeProject } from "../domain/editGraph";
-import { applyProjectCommands, readProject, resolveWorkspaceMediaPath, workspaceRoot } from "./storage";
+import { applyProjectCommands, readProject, resolveWorkspaceMediaPath } from "./storage";
 import { creativePackRoot, errorResult, personalMusicRoot, personalVisualRoot, textResult } from "./toolRuntime";
+import { mcpCaptionRuntimeV1 } from "./captionRuntimeV1";
 
 export function registerPodcastTools(server: McpServer): void {
   server.registerTool("direct_podcast_speakers", {
@@ -29,14 +30,14 @@ export function registerPodcastTools(server: McpServer): void {
       if (asset.kind !== "video") throw new Error("雙人物導播只支援影片片段");
       const creativeId = creativeAssetIdFromUri(asset.uri);
       const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveWorkspaceMediaPath(asset.uri);
-      const ffmpegPath = process.env.HAO_FFMPEG_PATH ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../vendor/ffmpeg/win32-x64/ffmpeg.exe") : "ffmpeg");
+      // The same bundled ffmpeg/whisper-cli/model defaults as the caption tools: without whisperCliPath this BLOCKed outside the launcher env.
+      const captionRuntime = mcpCaptionRuntimeV1(), ffmpegPath = captionRuntime.ffmpegPath;
       const nativeCorePath = process.env.HAO_NATIVE_CORE_PATH ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../native/bin/win32-x64/hao-core.exe") : "hao-core");
-      const modelRoot = process.env.EDITKIN_MODEL_ROOT ?? resolve(workspaceRoot(), ".editkin-models");
       const requestBase = { sourcePath, sourceStart: clip.sourceStart, duration: clip.duration, fps: project.fps, sourceWidth: asset.width ?? project.width, sourceHeight: asset.height ?? project.height, initialTime, sourceSha256: asset.derivatives?.sourceSha256 };
       const [hostResult, guestResult, transcript] = await Promise.all([
         analyzeMotionTrack({ ...requestBase, initialRect: hostRect }, { ffmpegPath, nativeCorePath, cacheRoot: process.env.EDITKIN_CACHE_ROOT }),
         analyzeMotionTrack({ ...requestBase, initialRect: guestRect }, { ffmpegPath, nativeCorePath, cacheRoot: process.env.EDITKIN_CACHE_ROOT }),
-        transcribeAutomaticCaptions({ sourcePath, sourceStart: clip.sourceStart, duration: clip.duration, sourceSha256: asset.derivatives?.sourceSha256, language }, { ffmpegPath, modelRoot, modelPath: process.env.EDITKIN_WHISPER_MODEL_PATH, cacheRoot: process.env.EDITKIN_CACHE_ROOT ?? resolve(modelRoot, "../media-cache") }),
+        transcribeAutomaticCaptions({ sourcePath, sourceStart: clip.sourceStart, duration: clip.duration, sourceSha256: asset.derivatives?.sourceSha256, language }, captionRuntime),
       ]);
       const now = new Date().toISOString();
       const host = { id: `motion-host-${randomUUID()}`, clipId, name: "主持人", role: "host" as const, engine: hostResult.engine, analysisFps: hostResult.analysisFps, initialRect: hostRect, points: hostResult.points, lostRatio: hostResult.lostRatio, createdAt: now };

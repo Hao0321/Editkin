@@ -1,0 +1,47 @@
+/* P7 layer controls: the timeline track header's quick switches (TrackQuickTogglesV1), its inline rename, 軌道高度,
+   adjustment clips on the timeline, and the 圖層 panel's rows. */
+.track-row .track-label .track-copy { display: grid; align-content: center; gap: 2px; }
+/* The words 畫面／聲音／已鎖定／畫面已隱藏 stay for screen readers; the switches beside the name show the state. */
+.track-row .track-label .track-copy > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.track-quick-toggles { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.track-quick-toggles > button { display: grid; flex: 0 0 22px; place-items: center; width: 22px; height: 20px; padding: 0; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.track-quick-toggles > button > svg { width: 14px; height: 14px; }
+.track-quick-toggles > button:hover { border-color: var(--line); background: var(--surface-2); color: var(--ink); }
+.track-quick-toggles > button[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: var(--accent-soft); color: var(--accent); }
+.track-quick-toggles > .track-mute[aria-pressed="true"] { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger); }
+.track-quick-toggles > button:focus-visible, .track-name-editor:focus-visible { outline: 2px solid var(--focus-ring, var(--accent)); outline-offset: 1px; }
+.track-name-editor { box-sizing: border-box; width: 100%; min-width: 0; height: 22px; padding: 1px 5px; border: 1px solid var(--accent); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; font-weight: 700; }
+/* 軌道高度 小／中／大 (a preference of this computer). */
+.timeline-shell[data-track-height="s"] .timeline-row.track-row { height: 40px; }
+.timeline-shell[data-track-height="l"] .timeline-row.track-row { height: 76px; }
+.timeline-shell[data-track-height="s"] .track-row .track-kind { width: 22px; height: 22px; }
+.timeline-shell[data-track-height="s"] .track-row .timeline-clip { top: 3px; bottom: 3px; }
+.timeline-track-height { display: flex; align-items: center; gap: 6px; }
+.timeline-track-height > span { margin-inline-end: auto; color: var(--muted); font-size: 12px; font-weight: 700; }
+.timeline-track-height > button { min-width: 44px; min-height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--soft); cursor: pointer; }
+.timeline-track-height > button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.timeline-add-actions .easy-icon { width: 14px; height: 14px; margin-inline-end: 4px; vertical-align: -2px; }
+/* An adjustment layer on the timeline: no picture of its own, so a hatched band in the accent colour. */
+.timeline-clip.adjustment { border-style: dashed; background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent) 24%, var(--surface)) 0 8px, color-mix(in srgb, var(--accent) 12%, var(--surface)) 8px 16px); color: var(--accent); }
+/* The 圖層 panel. */
+.editor-layer-stack .layer-add-row { flex-wrap: wrap; }
+.editor-layer-stack .layer-add-row .easy-icon { width: 14px; height: 14px; margin-inline-end: 4px; vertical-align: -2px; }
+.editor-layer-stack .layer-track { border-radius: 8px; }
+.editor-layer-stack .layer-track[data-drop-target="true"] { box-shadow: 0 -3px 0 0 var(--accent); background: var(--accent-soft); }
+.editor-layer-stack .layer-track[data-dragging="true"] { opacity: .6; }
+.editor-layer-stack .layer-grip { display: grid; flex: 0 0 26px; place-items: center; width: 26px; padding: 0; color: var(--muted); cursor: grab; touch-action: none; }
+.editor-layer-stack .layer-grip:disabled { cursor: not-allowed; opacity: .4; }
+.editor-layer-stack .layer-grip > svg, .editor-layer-stack .layer-rename > svg, .editor-layer-stack .layer-eye > svg, .editor-layer-stack .layer-locked > svg { width: 14px; height: 14px; }
+.editor-layer-stack .layer-actions { flex-wrap: wrap; padding-inline-start: 30px; }
+.editor-layer-stack .layer-actions .track-quick-toggles > button { width: 30px; height: 30px; min-height: 30px; flex-basis: 30px; border-color: var(--line); }
+.editor-layer-stack .layer-rename { display: grid; place-items: center; width: 32px; padding: 0; }
+/* Clip rows: the name on one line (ellipsis), its start time under it, so badges and the eye keep their room. */
+.app-shell[data-interface-mode] .editor-layer-stack .layer-clip-row > button.layer-pick { display: grid; gap: 1px; white-space: nowrap; line-height: 1.25; }
+.editor-layer-stack .layer-pick-name, .editor-layer-stack .layer-pick-detail { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-layer-stack .layer-pick-detail { font-size: 11px; }
+.editor-layer-stack .layer-clip-row[data-layer-enabled="false"] .layer-pick { color: var(--muted); text-decoration: line-through; }
+.editor-layer-stack .layer-badge { flex: 0 0 auto; padding: 1px 6px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); color: var(--soft); font-size: 11px; white-space: nowrap; }
+.editor-layer-stack .layer-eye { display: grid; flex: 0 0 32px; place-items: center; width: 32px; padding: 0; color: var(--muted); }
+.editor-layer-stack .layer-eye[aria-pressed="true"] { color: var(--warning); }
+.editor-layer-stack .layer-locked { display: grid; place-items: center; color: var(--muted); }
+.editor-layer-stack .track-name-editor { flex: 1; height: 32px; font-size: 13px; }

@@ -10,6 +10,7 @@ import {
   whisperCaptionSegmentation,
   type AutomaticCaptionAnalysisResult,
 } from "./automaticCaptions";
+import { convertCaptionCuesScript } from "./captionScriptConversion";
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -23,15 +24,17 @@ async function cachedFixture(raw = "\uFEFF\r\n", mutate?: (record: { schemaVersi
   await writeFile(sourcePath, "cache-fixture-not-an-audio-inference");
   const request = { sourcePath, sourceSha256: sha("cache-fixture-not-an-audio-inference"), sourceStart: 0, duration: 3, language: "auto" };
   const runtime = { ffmpegPath: process.execPath, modelRoot: join(root, "models"), cacheRoot: root };
+  const parsed = parseWhisperRecognition(raw, 3), scripted = convertCaptionCuesScript(parsed.cues, "auto", "zh-TW");
   const result: AutomaticCaptionAnalysisResult = {
-    ...parseWhisperRecognition(raw, 3), engine: `whisper-cli-${PINNED_WHISPER_MODEL.id}`,
+    ...parsed, cues: scripted.cues, ...(scripted.scriptConversion ? { scriptConversion: scripted.scriptConversion } : {}),
+    engine: `whisper-cli-${PINNED_WHISPER_MODEL.id}`,
     modelId: PINNED_WHISPER_MODEL.id, modelSha256: PINNED_WHISPER_MODEL.sha256,
     language: "auto", analyzedSeconds: 3, elapsedMs: 1, modelDownloaded: false, cacheHit: false, acceleration: "cpu",
   };
-  const identity = { schemaVersion: 6, segmentationPolicy: whisperCaptionSegmentation("auto"), source: request.sourceSha256, sourceStart: 0, duration: 3, language: "auto", translationTarget: undefined, modelSha256: PINNED_WHISPER_MODEL.sha256, runtimeSha256: await automaticCaptionRuntimeSha256(runtime) };
+  const identity = { schemaVersion: 7, segmentationPolicy: whisperCaptionSegmentation("auto"), source: request.sourceSha256, sourceStart: 0, duration: 3, language: "auto", translationTarget: undefined, script: "zh-TW", modelSha256: PINNED_WHISPER_MODEL.sha256, runtimeSha256: await automaticCaptionRuntimeSha256(runtime) };
   const directory = join(root, "automatic-captions");
   await mkdir(directory);
-  const record = { schemaVersion: 6, result };
+  const record = { schemaVersion: 7, result };
   mutate?.(record);
   await writeFile(join(directory, `${sha(JSON.stringify(identity))}.json`), JSON.stringify(record));
   return { request, runtime, raw };
@@ -64,10 +67,43 @@ describe("successful recognition without usable captions", () => {
   it.each([
     "not an SRT", "{\"transcription\":[]}", "1\n00:00:00,000 --> broken\nhello",
     "1\n00:61:00,000 --> 00:61:01,000\nhello", "1\n00:00:02,000 --> 00:00:01,000\nhello",
-    "1\n00:00:00,000 --> 00:00:01,000\n", "1\n00:00:00,000 --> 00:00:01,000\nhello\n\nbroken tail",
+    "1\n00:00:00,000 --> 00:00:01,000\n", "broken head\n\nbroken tail",
     "oops\n00:00:00,000 --> 00:00:01,000\nhello",
-  ])("rejects malformed nonempty output rather than certifying empty: %s", (raw) => {
+  ])("rejects output with no valid block rather than certifying empty: %s", (raw) => {
     expect(() => parseWhisperRecognition(raw, 3)).toThrow(AutomaticCaptionParseError);
+  });
+
+  it("skips one malformed block, keeps every valid cue and reports what was skipped (roadmap 1.14)", () => {
+    const raw = [
+      "1\n00:00:00,000 --> 00:00:01,000\n風吹過來的聲音",
+      "2\n00:00:01,000 --> 00:00:01,000\n♪",
+      "broken tail",
+      "4\n00:00:01,500 --> 00:00:02,600\n<i></i>",
+      "5\n00:00:02,000 --> 00:00:03,000\n我們到了",
+    ].join("\n\n");
+    const result = parseWhisperRecognition(raw, 3);
+    expect(result.cues).toEqual([{ start: 0, end: 1, text: "風吹過來的聲音" }, { start: 2, end: 3, text: "我們到了" }]);
+    expect(result.recognition).toEqual({ status: "usable-cues", audioContent: "unverified", skippedBlocks: [
+      { block: 2, reason: "non-positive-duration" }, { block: 3, reason: "missing-timing" }, { block: 4, reason: "empty-text" },
+    ] });
+    expect(result.rawTranscript.text).toBe(raw);
+  });
+
+  it("attaches the raw transcript to a whole-output parse failure", () => {
+    try { parseWhisperRecognition("not an SRT", 3); throw new Error("expected a parse failure"); }
+    catch (error) {
+      expect(error).toBeInstanceOf(AutomaticCaptionParseError);
+      expect((error as AutomaticCaptionParseError).rawTranscript).toEqual({ format: "srt", text: "not an SRT", sha256: sha("not an SRT") });
+    }
+  });
+
+  it("returns skipped blocks with the caption API result and still caches/validates the transcript", async () => {
+    const raw = "1\n00:00:00,000 --> 00:00:01,000\n第一句\n\n2\n00:00:01,000 --> 00:00:00,500\n壞掉的時間\n\n3\n00:00:01,000 --> 00:00:02,000\n第三句";
+    const { request, runtime } = await cachedFixture(raw);
+    const result = await transcribeAutomaticCaptions(request, runtime);
+    expect(result.cues.map((cue) => cue.text)).toEqual(["第一句", "第三句"]);
+    expect(result.skippedCaptionBlocks).toEqual([{ block: 2, reason: "non-positive-duration" }]);
+    expect(result.cacheHit).toBe(true);
   });
 
   it("reads an empty analysis cache but the original caption API still throws a typed visible error", async () => {
@@ -95,14 +131,16 @@ describe("successful recognition without usable captions", () => {
   });
 
   it.each([
-    { sourceSha256: "f".repeat(64) }, { sourceStart: 1 }, { duration: 2 }, { language: "ko" },
-  ])("does not reuse an empty cache across source/window/language identity: %j", async (patch) => {
+    { sourceSha256: "f".repeat(64) }, { sourceStart: 1 }, { duration: 2 }, { language: "ko" }, { script: "original" as const },
+  ])("does not reuse an empty cache across source/window/language/script identity: %j", async (patch) => {
     const { request, runtime } = await cachedFixture();
     await expect(analyzeAutomaticCaptionTranscript({ ...request, ...patch }, runtime)).rejects.toThrow("無法確認自動字幕 runtime");
   });
 
   it.each<[string, (record: { schemaVersion: number; result: AutomaticCaptionAnalysisResult }) => void]>([
     ["old cache schema", (r) => { r.schemaVersion = 3; }],
+    ["previous cache schema 6 (pre script conversion)", (r) => { r.schemaVersion = 6; }],
+    ["script conversion claimed on non-Chinese cues", (r) => { r.result.scriptConversion = "s2twp"; }],
     ["missing raw", (r) => { delete (r.result as Partial<AutomaticCaptionAnalysisResult>).rawTranscript; }],
     ["wrong raw hash", (r) => { r.result.rawTranscript.sha256 = "0".repeat(64); }],
     ["malformed raw with matching hash", (r) => { r.result.rawTranscript.text = "not SRT"; r.result.rawTranscript.sha256 = sha("not SRT"); }],

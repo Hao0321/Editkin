@@ -1,0 +1,19 @@
+[package]
+name = "editkin-agent-generation-writer"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Release check helper: compiles the desktop's own src-tauri/src/agent_setup.rs and
+# calls activate_product_agent_generation for an extracted installer payload, so
+# scripts/release-checks/agent_connect_route.mjs never hand-writes a generation.
+# Same dependency versions as src-tauri (see Cargo.lock); build with --offline --locked.
+[dependencies]
+getrandom = "0.3"
+serde_json = "1"
+sha2 = "0.10"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+
+[workspace]

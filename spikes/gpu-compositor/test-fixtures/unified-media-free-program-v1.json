@@ -1,0 +1,23 @@
+{
+  "schema": "editkin.unified-native-composite/v1",
+  "graphId": "project:editkin-demo:r0:layer-order-v1:1.0",
+  "outputNode": "output:main",
+  "steps": [
+    {
+      "kind": "motion_graphic",
+      "index": 0,
+      "tailId": "motion-graphic:graphic",
+      "sourceNodeId": "motion-graphic:graphic",
+      "blendMode": "normal",
+      "opacity": 1
+    },
+    {
+      "kind": "caption",
+      "index": 0,
+      "tailId": "caption:captionA",
+      "sourceNodeId": "caption:captionA",
+      "blendMode": "normal",
+      "opacity": 1
+    }
+  ]
+}

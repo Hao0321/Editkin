@@ -1,0 +1,23 @@
+/** Claude's task 1: each shortcut row describes one action. */
+export const INTERFACE_MESSAGES: ReadonlyArray<readonly [string, string, string, string, string]> = [
+  ["開頭修到播放頭", "Trim the start to the playhead", "Recortar el inicio hasta el cabezal", "先頭を再生ヘッドまでトリム", "시작을 재생 헤드까지 자르기"],
+  ["結尾修到播放頭", "Trim the end to the playhead", "Recortar el final hasta el cabezal", "末尾を再生ヘッドまでトリム", "끝을 재생 헤드까지 자르기"],
+  ["往前一秒", "Go back one second", "Retroceder un segundo", "1秒戻る", "1초 뒤로 이동"],
+  ["往後一秒", "Go forward one second", "Avanzar un segundo", "1秒進む", "1초 앞으로 이동"],
+  ["回到開頭", "Go to the start", "Ir al inicio", "先頭に移動", "시작으로 이동"],
+  ["跳到結尾", "Go to the end", "Ir al final", "末尾に移動", "끝으로 이동"],
+  ["跳到下一個標記", "Go to the next marker", "Ir al marcador siguiente", "次のマーカーに移動", "다음 마커로 이동"],
+  ["跳到上一個標記", "Go to the previous marker", "Ir al marcador anterior", "前のマーカーに移動", "이전 마커로 이동"],
+  ["設定入點", "Set the in point", "Marcar la entrada", "イン点を設定", "시작점 설정"],
+  ["設定出點", "Set the out point", "Marcar la salida", "アウト点を設定", "종료점 설정"],
+  ["跳到入點", "Go to the in point", "Ir a la entrada", "イン点に移動", "시작점으로 이동"],
+  ["跳到出點", "Go to the out point", "Ir a la salida", "アウト点に移動", "종료점으로 이동"],
+  ["上一個編輯點", "Previous edit point", "Punto de edición anterior", "前の編集点", "이전 편집점"],
+  ["下一個編輯點", "Next edit point", "Punto de edición siguiente", "次の編集点", "다음 편집점"],
+  ["向前移動一格", "Move back one frame", "Mover un fotograma hacia atrás", "1フレーム前に移動", "한 프레임 뒤로 이동"],
+  ["向後移動一格", "Move forward one frame", "Mover un fotograma hacia delante", "1フレーム後に移動", "한 프레임 앞으로 이동"],
+  ["向前移動十格", "Move back ten frames", "Mover diez fotogramas hacia atrás", "10フレーム前に移動", "열 프레임 뒤로 이동"],
+  ["向後移動十格", "Move forward ten frames", "Mover diez fotogramas hacia delante", "10フレーム後に移動", "열 프레임 앞으로 이동"],
+  ["縮小時間軸", "Zoom the timeline out", "Alejar la línea de tiempo", "タイムラインを縮小", "타임라인 축소"],
+  ["或", "or", "o", "または", "또는"],
+];

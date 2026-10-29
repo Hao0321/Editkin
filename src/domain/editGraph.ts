@@ -8,9 +8,11 @@ import type {
   TimelineTrack,
   Transform2D,
 } from "./types";
+import { pinLegacyAcesPhonePolicyV1 } from "./acesPhoneMigrationV1";
 import { DEFAULT_CAPTION_STYLE, DEFAULT_CLIP_LAYER, DEFAULT_COLOR, DEFAULT_COLOR_MANAGEMENT, DEFAULT_SCENE_25D, DEFAULT_TRANSFORM, particleSimulationEmitters } from "./types";
 import { assertHaoExpression, evaluateHaoExpression } from "./expression";
 import { ANIMATION_TIME_EPSILON, clipAnimationPoints } from "./clipAnimation";
+import { withAuthoredClipMirrors } from "./clipMirrors";
 import { isTransformMotionBlurInstance, transformMotionBlurParameters } from "./transformMotionBlur";
 export { EditGraphError } from "./editGraphError";
 import { EditGraphError } from "./editGraphError";
@@ -36,7 +38,7 @@ export function createEmptyProject(
 ): EditProject {
   const now = new Date().toISOString();
   return {
-    schemaVersion: 8,
+    schemaVersion: 9,
     revision: 0,
     id: options.id ?? "project-untitled",
     name,
@@ -64,8 +66,21 @@ export function createEmptyProject(
 export function migrateProject(input: unknown): EditProject {
   if (!input || typeof input !== "object") throw new EditGraphError("專案內容不是有效物件");
   const raw = input as Record<string, unknown>;
-  if (raw.schemaVersion !== 1 && raw.schemaVersion !== 2 && raw.schemaVersion !== 3 && raw.schemaVersion !== 4 && raw.schemaVersion !== 5 && raw.schemaVersion !== 6 && raw.schemaVersion !== 7 && raw.schemaVersion !== 8) {
+  if (raw.schemaVersion !== 1 && raw.schemaVersion !== 2 && raw.schemaVersion !== 3 && raw.schemaVersion !== 4 && raw.schemaVersion !== 5 && raw.schemaVersion !== 6 && raw.schemaVersion !== 7 && raw.schemaVersion !== 8 && raw.schemaVersion !== 9 && raw.schemaVersion !== 10 && raw.schemaVersion !== 11) {
     throw new EditGraphError(`不支援的 EditGraph schema：${String(raw.schemaVersion)}`);
+  }
+  const sceneOwners = [raw, ...(Array.isArray(raw.compositions) ? raw.compositions : [])];
+  if (raw.schemaVersion !== 9 && raw.schemaVersion !== 10 && raw.schemaVersion !== 11 && sceneOwners.some(owner => owner && typeof owner === "object" && Object.prototype.hasOwnProperty.call(owner, "motionScenes"))) {
+    throw new EditGraphError("Motion scenes require schema 9; an older version must not silently discard scene data");
+  }
+  if (raw.schemaVersion !== 10 && raw.schemaVersion !== 11 && Object.prototype.hasOwnProperty.call(raw, "referenceMotionInstances")) {
+    throw new EditGraphError("Reference Motion instances require schema 10; older versions must not discard metadata");
+  }
+  if (sceneOwners.slice(1).some(owner => owner && typeof owner === "object" && Object.prototype.hasOwnProperty.call(owner, "referenceMotionInstances"))) {
+    throw new EditGraphError("Reference Motion instances are root project metadata only");
+  }
+  if (raw.schemaVersion !== 11 && sceneOwners.some(owner => owner && typeof owner === "object" && Object.prototype.hasOwnProperty.call(owner, "unifiedLayerOrderV1"))) {
+    throw new EditGraphError("UNIFIED_LAYER_ORDER_REQUIRES_SCHEMA11");
   }
   const source = structuredClone(input) as Record<string, unknown>;
   source.revision ??= 0;
@@ -88,6 +103,7 @@ export function migrateProject(input: unknown): EditProject {
   source.aestheticSystem ??= undefined;
   source.colorManagement = { ...DEFAULT_COLOR_MANAGEMENT, ...(source.colorManagement as object | undefined) };
   source.compositions ??= [];
+  pinLegacyAcesPhonePolicyV1(source);
   const normalizeScene25d = (owner: Record<string, unknown>) => {
     const scene = owner.scene25d;
     if (!scene || typeof scene !== "object") return;
@@ -143,13 +159,19 @@ export function migrateProject(input: unknown): EditProject {
     return Array.isArray(nested) ? nested as Array<Record<string, unknown>> : [];
   });
   for (const track of [...tracks, ...compositionTracks]) {
+    // Until 2026-10-11 「靜音」 on a video track also turned its picture off. A track saved that way keeps both off
+    // (hidden), so an old project looks and sounds exactly as before; a track muted since then carries `hidden` itself.
+    if (track.kind === "video" && track.muted === true && !Object.prototype.hasOwnProperty.call(track, "hidden")) track.hidden = true;
     const clips = Array.isArray(track.clips) ? track.clips as Array<Record<string, unknown>> : [];
     for (const clip of clips) {
       clip.transform ??= { ...DEFAULT_TRANSFORM };
       clip.color = { ...DEFAULT_COLOR, ...(clip.color as object | undefined) };
       clip.keyframes ??= [];
-      clip.layer = { ...DEFAULT_CLIP_LAYER, ...(clip.layer as object | undefined) };
-      clip.expressions ??= {};
+      // Current optional layer/role fields are authored shape, not migration
+      // omissions. Runtime validation resolves defaults without persisting them.
+      if (raw.schemaVersion !== 9 && raw.schemaVersion !== 10 && raw.schemaVersion !== 11) clip.layer = { ...DEFAULT_CLIP_LAYER, ...(clip.layer as object | undefined) };
+      // Current projects may omit expressions; preserve that authored shape on save/reopen.
+      if (raw.schemaVersion !== 9 && raw.schemaVersion !== 10 && raw.schemaVersion !== 11) clip.expressions ??= {};
       for (const keyframe of clip.keyframes as Array<Record<string, unknown>>) {
         keyframe.color = { ...(clip.color as ColorAdjustments), ...(keyframe.color as object | undefined) };
       }
@@ -186,7 +208,7 @@ export function migrateProject(input: unknown): EditProject {
       }
     }
   }
-  source.schemaVersion = 8;
+  source.schemaVersion = raw.schemaVersion === 11 ? 11 : raw.schemaVersion === 10 ? 10 : 9;
   return source as unknown as EditProject;
 }
 
@@ -195,6 +217,7 @@ export function cloneProject(project: EditProject): EditProject {
 }
 
 export function projectDuration(project: EditProject): number {
+  const meshDuration = project.scene3d?.enabled ? Math.max(0, ...project.scene3d.segments.map(s => s.timelineStart + s.duration)) : 0;
   const mediaDuration = project.tracks.reduce(
     (max, track) => track.clips.reduce(
       (trackMax, clip) => Math.max(trackMax, clip.timelineStart + clip.duration),
@@ -202,8 +225,9 @@ export function projectDuration(project: EditProject): number {
     ),
     0,
   );
-  const captionDuration = project.captions.reduce((max, caption) => Math.max(max, caption.start + caption.duration), mediaDuration);
-  return project.motionGraphics.reduce((max, graphic) => Math.max(max, graphic.timelineStart + graphic.duration), captionDuration);
+  const captionDuration = project.captions.reduce((max, caption) => Math.max(max, caption.start + caption.duration), Math.max(mediaDuration, meshDuration));
+  const graphicsDuration = project.motionGraphics.reduce((max, graphic) => Math.max(max, graphic.timelineStart + graphic.duration), captionDuration);
+  return (project.motionScenes ?? []).reduce((max, scene) => Math.max(max, (scene.startFrame + scene.durationFrames) / project.fps), graphicsDuration);
 }
 
 export function findAsset(project: EditProject, assetId: string): MediaAsset {
@@ -233,7 +257,7 @@ export function findCaption(project: EditProject, captionId: string): CaptionCue
 }
 
 export function activeVideoClip(project: EditProject, time: number): TimelineClip | undefined {
-  const videoTracks = project.tracks.filter((track) => track.kind === "video" && !track.muted).reverse();
+  const videoTracks = project.tracks.filter((track) => track.kind === "video" && !track.hidden).reverse();
   for (const track of videoTracks) {
     const clip = [...track.clips]
       .reverse()
@@ -247,6 +271,7 @@ export function activeVideoClip(project: EditProject, time: number): TimelineCli
 function interpolateValues<T extends Transform2D | ColorAdjustments>(previous: T, next: T, ratio: number): T {
   return Object.fromEntries(Object.keys(previous).map((key) => {
     const property = key as keyof T;
+    if (key === "flipX" || key === "flipY") return [property, previous[property]];
     const previousValue = Number(previous[property]);
     const nextValue = Number(next[property]);
     return [property, previousValue + (nextValue - previousValue) * ratio];
@@ -290,12 +315,13 @@ export function animatedClipState(clip: TimelineClip, localTime: number, fps = 3
   }
   const entrance = Math.max(0, Math.min(1, time / Math.min(0.28, Math.max(1 / fps, clip.duration / 3))));
   const exit = Math.max(0, Math.min(1, (clip.duration - time) / Math.min(0.28, Math.max(1 / fps, clip.duration / 3))));
-  for (const [property, expression] of Object.entries(clip.expressions ?? {}) as Array<[keyof Transform2D, string]>) {
+  for (const [property, expression] of Object.entries(clip.expressions ?? {}) as Array<[import("./types").ClipExpressionProperty, string]>) {
     state.transform[property] = evaluateHaoExpression(expression, {
       frame: Math.round(time * fps), fps, time, inPoint: 0, outPoint: clip.duration, duration: clip.duration,
       value: state.transform[property], entrance, exit,
     });
   }
+  state.transform = withAuthoredClipMirrors(clip, state.transform);
   return state;
 }
 
@@ -303,6 +329,7 @@ export function summarizeProject(project: EditProject): ProjectSummary {
   return {
     id: project.id,
     name: project.name,
+    revision: project.revision,
     resolution: `${project.width}x${project.height}`,
     fps: project.fps,
     duration: projectDuration(project),

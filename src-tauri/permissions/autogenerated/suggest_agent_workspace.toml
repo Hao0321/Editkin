@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-suggest-agent-workspace"
+description = "Enables the suggest_agent_workspace command without any pre-configured scope."
+commands.allow = ["suggest_agent_workspace"]
+
+[[permission]]
+identifier = "deny-suggest-agent-workspace"
+description = "Denies the suggest_agent_workspace command without any pre-configured scope."
+commands.deny = ["suggest_agent_workspace"]

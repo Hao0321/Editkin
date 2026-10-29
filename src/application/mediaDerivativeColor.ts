@@ -6,7 +6,7 @@ import { strictDisplayColorInterpretation } from "./sourceDisplayMetadata";
 export const BROWSER_PROXY_COLOR_CONTRACT = "editkin.browser-display-proxy/v1" as const;
 // Encoding interpretation and generation freshness are deliberately separate:
 // an old baked SDR proxy must never be mistaken for unconverted camera HDR.
-export const CURRENT_MEDIA_PREVIEW_RECIPE = "editkin.browser-proxy-bt2100-hable-thumbnail-srgb/2026-09-28-r4" as const;
+export const CURRENT_MEDIA_PREVIEW_RECIPE = "editkin.browser-proxy-bt2100-hable-thumbnail-srgb/2026-10-01-r5-physical-dar" as const;
 export function isMediaPreviewCurrent(derivatives: MediaDerivatives | undefined): boolean {
   return derivatives?.previewRecipe === CURRENT_MEDIA_PREVIEW_RECIPE
     && derivatives.proxyColorContract === BROWSER_PROXY_COLOR_CONTRACT
@@ -70,9 +70,12 @@ export function browserProxyFilters(plan: BrowserProxyColorPlan, targetHeight: n
   // Small inputs are not enlarged; PQ keeps its full-resolution curve path.
   const reduceHlg = plan.treatment === "hlg-to-sdr" && Number.isFinite(sourceHeight) && sourceHeight! > targetHeight * 2;
   const earlyScale = reduceHlg ? [`zscale=w=-2:h=${targetHeight * 2}:filter=bilinear`] : [];
+  // Proportional scale consumes the decoded upright DAR (including its SAR)
+  // before establishing square pixels. A later setsar alone would distort an
+  // anamorphic source; the derived bytes must preserve the complete view.
   const scale = plan.treatment === "source-transfer-preserved"
-    ? `scale=-2:${targetHeight}`
-    : `scale=-2:${targetHeight}:out_color_matrix=bt709:out_range=tv`;
+    ? `scale=-2:${targetHeight}:reset_sar=1`
+    : `scale=-2:${targetHeight}:reset_sar=1:out_color_matrix=bt709:out_range=tv`;
   return [...(fps ? [`fps=${fps}`] : []), ...earlyScale, ...plan.normalization, scale, "setsar=1", "format=yuv420p"].join(",");
 }
 
@@ -87,7 +90,7 @@ export function browserThumbnailFilters(plan: BrowserProxyColorPlan, fromProxy: 
     // need their input normalization, if known; never normalize a proxy twice.
     ...(fromProxy ? [] : plan.normalization),
     ...(knownRec709 ? rec709DisplayToSrgbFilters() : []),
-    knownRec709 ? "scale=480:-2:in_range=full:out_range=full:out_color_matrix=bt601" : "scale=480:-2",
+    knownRec709 ? "scale=480:-2:reset_sar=1:in_range=full:out_range=full:out_color_matrix=bt601" : "scale=480:-2:reset_sar=1",
     "setsar=1",
     ...(knownRec709 ? ["format=yuvj444p"] : []),
   ];

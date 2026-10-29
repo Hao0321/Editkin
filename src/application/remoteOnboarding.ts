@@ -45,6 +45,20 @@ export interface AgentConnectionsResult {
   claude: AgentConnectionSummary;
   preferredTarget?: "codex" | "claude";
   checkedAt: number;
+  /** Native check of the Video Autopilot Kit (three required files). Informational: connecting does not need it. */
+  kit?: { ready: boolean; cause?: "kit_missing"; kitUrl: string; detail?: string };
+  /** The same Skill state as the setup result reports it (desktop/mediaTypes.ts AgentVaSkillStatus). */
+  vaSkill?: import("../desktop/mediaTypes").AgentVaSkillStatus;
+  /**
+   * The start-up refresh of the agent runtime after an Editkin update (silent when it works). `failed` means
+   * 「更新後要重新連一次」: one connect re-activates it; agent configs were not touched.
+   */
+  agentRuntimeRepair?: {
+    state: "pending" | "ok" | "failed";
+    repaired?: boolean;
+    message?: string;
+    failure?: import("../desktop/mediaTypes").AgentSetupFailure;
+  };
 }
 
 export function remoteAgentReady(connection: AgentConnectionSummary): boolean {

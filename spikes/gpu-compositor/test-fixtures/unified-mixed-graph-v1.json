@@ -1,0 +1,346 @@
+{
+  "schema": "editkin.engine-graph/v1",
+  "graphId": "project:editkin-demo:r0:layer-order-v1:4.0.2.5.1.3",
+  "width": 64,
+  "height": 64,
+  "timebase": {
+    "numerator": 1,
+    "denominator": 30
+  },
+  "workingFormat": "rgba16_float",
+  "cacheBudgetMb": 1024,
+  "nodes": [
+    {
+      "id": "source:clip-demo",
+      "inputs": [],
+      "enabled": true,
+      "kind": "source",
+      "assetId": "asset-demo",
+      "mediaKind": "video",
+      "inputColorSpace": "rec709",
+      "alphaMode": "auto",
+      "timeline": {
+        "timelineStartFrame": 0,
+        "sourceStartFrame": 0,
+        "durationFrames": 360
+      }
+    },
+    {
+      "id": "transform:clip-demo",
+      "inputs": [
+        "source:clip-demo"
+      ],
+      "enabled": true,
+      "kind": "transform2d",
+      "x": 0,
+      "y": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "rotationRadians": 0,
+      "opacity": 1,
+      "keyframes": []
+    },
+    {
+      "id": "color:clip-demo",
+      "inputs": [
+        "transform:clip-demo"
+      ],
+      "enabled": true,
+      "kind": "color",
+      "processor": "editkin-rec709-primary/v2",
+      "inputSpace": "rec709",
+      "workingSpace": "rec709",
+      "outputSpace": "rec709_sdr",
+      "grade": {
+        "brightness": 0,
+        "contrast": 1,
+        "saturation": 1,
+        "hue": 0,
+        "exposure": 0,
+        "temperature": 0,
+        "tint": 0,
+        "pivot": 0.5,
+        "shadows": 0,
+        "highlights": 0,
+        "blacks": 0,
+        "whites": 0,
+        "whiteBalanceRed": 0,
+        "whiteBalanceGreen": 0,
+        "whiteBalanceBlue": 0
+      }
+    },
+    {
+      "id": "source:upper22",
+      "inputs": [],
+      "enabled": true,
+      "kind": "source",
+      "assetId": "asset-demo",
+      "mediaKind": "video",
+      "inputColorSpace": "rec709",
+      "alphaMode": "auto",
+      "timeline": {
+        "timelineStartFrame": 0,
+        "sourceStartFrame": 0,
+        "durationFrames": 360
+      }
+    },
+    {
+      "id": "transform:upper22",
+      "inputs": [
+        "source:upper22"
+      ],
+      "enabled": true,
+      "kind": "transform2d",
+      "x": 0,
+      "y": 0,
+      "scaleX": 1,
+      "scaleY": 1,
+      "rotationRadians": 0,
+      "opacity": 1,
+      "keyframes": []
+    },
+    {
+      "id": "color:upper22",
+      "inputs": [
+        "transform:upper22"
+      ],
+      "enabled": true,
+      "kind": "color",
+      "processor": "editkin-rec709-primary/v2",
+      "inputSpace": "rec709",
+      "workingSpace": "rec709",
+      "outputSpace": "rec709_sdr",
+      "grade": {
+        "brightness": 0,
+        "contrast": 1,
+        "saturation": 1,
+        "hue": 0,
+        "exposure": 0,
+        "temperature": 0,
+        "tint": 0,
+        "pivot": 0.5,
+        "shadows": 0,
+        "highlights": 0,
+        "blacks": 0,
+        "whites": 0,
+        "whiteBalanceRed": 0,
+        "whiteBalanceGreen": 0,
+        "whiteBalanceBlue": 0
+      }
+    },
+    {
+      "id": "source:transparent",
+      "inputs": [],
+      "enabled": true,
+      "kind": "source",
+      "assetId": "editkin.generator.transparent",
+      "mediaKind": "generator",
+      "inputColorSpace": "rec709",
+      "alphaMode": "straight"
+    },
+    {
+      "id": "caption:caption22",
+      "inputs": [],
+      "enabled": true,
+      "kind": "caption",
+      "cueId": "caption22",
+      "text": "Caption22",
+      "lines": [
+        "Caption22"
+      ],
+      "timeline": {
+        "timelineStartFrame": 0,
+        "sourceStartFrame": 0,
+        "durationFrames": 90
+      },
+      "fontFamily": "Noto Sans TC",
+      "fontSize": 54,
+      "textColor": "#FFFFFF",
+      "outlineColor": "#000000",
+      "outlineWidth": 4,
+      "backgroundColor": "#00000000",
+      "alignment": 2,
+      "marginVertical": 72,
+      "bold": true,
+      "italic": false,
+      "shadow": 1,
+      "letterSpacing": 0
+    },
+    {
+      "id": "composite:1",
+      "inputs": [
+        "source:transparent",
+        "caption:caption22"
+      ],
+      "enabled": true,
+      "kind": "composite",
+      "blendMode": "normal",
+      "opacity": 1
+    },
+    {
+      "id": "composite:2",
+      "inputs": [
+        "composite:1",
+        "color:clip-demo"
+      ],
+      "enabled": true,
+      "kind": "composite",
+      "blendMode": "normal",
+      "opacity": 1
+    },
+    {
+      "id": "adjustment:adjustA22",
+      "inputs": [
+        "composite:2"
+      ],
+      "enabled": true,
+      "kind": "adjustment",
+      "affectedInputs": [
+        "composite:2"
+      ],
+      "timeline": {
+        "timelineStartFrame": 0,
+        "sourceStartFrame": 0,
+        "durationFrames": 360
+      }
+    },
+    {
+      "id": "color:adjustA22",
+      "inputs": [
+        "adjustment:adjustA22"
+      ],
+      "enabled": true,
+      "kind": "color",
+      "processor": "editkin-rec709-primary/v2",
+      "inputSpace": "rec709",
+      "workingSpace": "rec709",
+      "outputSpace": "rec709_sdr",
+      "grade": {
+        "brightness": 0.1,
+        "contrast": 1,
+        "saturation": 1,
+        "hue": 0,
+        "exposure": 0,
+        "temperature": 0,
+        "tint": 0,
+        "pivot": 0.5,
+        "shadows": 0,
+        "highlights": 0,
+        "blacks": 0,
+        "whites": 0,
+        "whiteBalanceRed": 0,
+        "whiteBalanceGreen": 0,
+        "whiteBalanceBlue": 0
+      }
+    },
+    {
+      "id": "motion-graphic:graphic22",
+      "inputs": [],
+      "enabled": true,
+      "kind": "motion_graphic",
+      "graphicId": "graphic22",
+      "graphicKind": "title",
+      "text": "Motion22",
+      "timeline": {
+        "timelineStartFrame": 0,
+        "sourceStartFrame": 0,
+        "durationFrames": 90
+      },
+      "x": 0.08,
+      "y": 0.12,
+      "width": 0.7,
+      "fontSize": 72,
+      "fontFamily": "Noto Sans TC",
+      "fontWeight": 700,
+      "letterSpacing": 0,
+      "outlineWidth": 2,
+      "shadowDepth": 2,
+      "cornerRadius": 18,
+      "textColor": "#FFFFFF",
+      "backgroundColor": "#315CFFDD",
+      "accentColor": "#77E4FF",
+      "visualStyle": "solid_panel",
+      "animation": "slide_up",
+      "trackingMode": "anchor",
+      "offsetX": 0,
+      "offsetY": 0
+    },
+    {
+      "id": "composite:3",
+      "inputs": [
+        "color:adjustA22",
+        "motion-graphic:graphic22"
+      ],
+      "enabled": true,
+      "kind": "composite",
+      "blendMode": "normal",
+      "opacity": 1
+    },
+    {
+      "id": "composite:4",
+      "inputs": [
+        "composite:3",
+        "color:upper22"
+      ],
+      "enabled": true,
+      "kind": "composite",
+      "blendMode": "normal",
+      "opacity": 1
+    },
+    {
+      "id": "adjustment:adjustB22",
+      "inputs": [
+        "composite:4"
+      ],
+      "enabled": true,
+      "kind": "adjustment",
+      "affectedInputs": [
+        "composite:4"
+      ],
+      "timeline": {
+        "timelineStartFrame": 0,
+        "sourceStartFrame": 0,
+        "durationFrames": 360
+      }
+    },
+    {
+      "id": "color:adjustB22",
+      "inputs": [
+        "adjustment:adjustB22"
+      ],
+      "enabled": true,
+      "kind": "color",
+      "processor": "editkin-rec709-primary/v2",
+      "inputSpace": "rec709",
+      "workingSpace": "rec709",
+      "outputSpace": "rec709_sdr",
+      "grade": {
+        "brightness": 0.1,
+        "contrast": 1,
+        "saturation": 1,
+        "hue": 0,
+        "exposure": 0,
+        "temperature": 0,
+        "tint": 0,
+        "pivot": 0.5,
+        "shadows": 0,
+        "highlights": 0,
+        "blacks": 0,
+        "whites": 0,
+        "whiteBalanceRed": 0,
+        "whiteBalanceGreen": 0,
+        "whiteBalanceBlue": 0
+      }
+    },
+    {
+      "id": "output:main",
+      "inputs": [
+        "color:adjustB22"
+      ],
+      "enabled": true,
+      "kind": "output",
+      "format": "rgba16_float"
+    }
+  ],
+  "outputNode": "output:main"
+}

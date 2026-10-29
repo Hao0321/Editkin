@@ -11,6 +11,7 @@
   "materialKeyframeTypes.ts",
   "materialKeyframeValidation.ts",
   "materialIntelligence.ts",
+  "materialCacheStagingDirectoryV1.ts",
   "materialEvidenceCache.ts",
   "autoColorDecision.ts",
   "autoColorExposure.ts",

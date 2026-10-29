@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import type { MotionGraphic } from "../domain/types";
 import { motionPresetOverridesSchema, type MotionPresetVariant } from "../domain/schema";
+import { assertMotionPaintContract } from "../domain/motionPaint";
 import { findMotionGraphicPreset, type MotionGraphicPreset } from "../creative/motionGraphicPresets";
 import { createMotionGraphic } from "../motion/composition";
 
@@ -43,6 +44,8 @@ export function assertMotionPresetVariantBinding(graphic: MotionGraphic, presetI
     ...variant.overrides,
   } as unknown as Record<string, unknown>;
   const actual = graphic as unknown as Record<string, unknown>;
+  assertMotionPaintContract(expected as unknown as MotionGraphic);
+  assertMotionPaintContract(graphic);
   // Timing and text are validated against the editorial event, not the style.
   const eventFields = new Set(["id", "text", "timelineStart", "duration"]);
   for (const key of new Set([...Object.keys(expected), ...Object.keys(actual)])) {

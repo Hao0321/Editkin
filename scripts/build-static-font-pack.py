@@ -56,7 +56,8 @@ def main():
         font = TTFont(path, lazy=True)
         axes = {a.axisTag: a.defaultValue for a in font['fvar'].axes} if 'fvar' in font else {}
         ranges = {a.axisTag: [a.minValue, a.defaultValue, a.maxValue] for a in font['fvar'].axes} if 'fvar' in font else {}
-        weights = list(range(int(ranges['wght'][0]), int(ranges['wght'][2]) + 1, 50)) if 'wght' in ranges else [400]
+        # A static source keeps its own OS/2 weight (a Bold-only family is one 700 face, not a relabelled 400).
+        weights = list(range(int(ranges['wght'][0]), int(ranges['wght'][2]) + 1, 50)) if 'wght' in ranges else [font['OS/2'].usWeightClass]
         font.close()
         item['faces'] = []
         provenance.append({'id': item['id'], 'sourceSha256': item['sha256'], 'licenseSha256': item['licenseSha256'], 'axes': ranges, 'weights': weights})

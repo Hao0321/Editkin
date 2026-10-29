@@ -1,6 +1,9 @@
 import { haoExpressionToFfmpeg } from "../domain/expression";
+import { clipMirrorFlags, hasClipMirrors } from "../domain/clipMirrors";
+import { reflectedTransformExpressions } from "./clipMirrorExpressions";
 import { ANIMATION_TIME_EPSILON, clipAnimationPoints } from "../domain/clipAnimation";
 import type { ColorAdjustments, EditProject, KeyframeEasing, MediaAsset, TimelineClip, Transform2D } from "../domain/types";
+import { BLEND_KERNEL_V1 } from "./blendKernelV1";
 
 export function finite(value: number): string {
   if (!Number.isFinite(value)) throw new Error("render value 必須是有限數字");
@@ -29,7 +32,7 @@ function easingExpression(variable: string, easing: KeyframeEasing): string {
 
 function transformExpression(
   clip: TimelineClip,
-  property: keyof Transform2D,
+  property: Exclude<keyof Transform2D, "flipX" | "flipY">,
   variable: string,
   timeOffset = 0,
   fps = 30,
@@ -69,6 +72,8 @@ function transformExpression(
 }
 
 interface TransformExpressions {
+  flipX?: boolean;
+  flipY?: boolean;
   x: string;
   y: string;
   scale: string;
@@ -100,6 +105,7 @@ export function composedTransformExpressions(
 ): TransformExpressions {
   if (visiting.has(clip.id)) throw new Error(`圖層 parenting 循環：${clip.id}`);
   const local: TransformExpressions = {
+    ...clipMirrorFlags(clip.transform),
     x: transformExpression(clip, "x", projectTime, clip.timelineStart, fps),
     y: transformExpression(clip, "y", projectTime, clip.timelineStart, fps),
     scale: transformExpression(clip, "scale", projectTime, clip.timelineStart, fps),
@@ -113,6 +119,7 @@ export function composedTransformExpressions(
   const next = new Set(visiting);
   next.add(clip.id);
   const parentTransform = composedTransformExpressions(project, parent, projectTime, fps, next);
+  if (hasClipMirrors(parentTransform) || hasClipMirrors(local)) return reflectedTransformExpressions(parentTransform, local);
   const radians = `((${parentTransform.rotation})*PI/180)`;
   return {
     x: `(${parentTransform.x})+((${local.x})*(${parentTransform.scale})*cos(${radians}))-((${local.y})*(${parentTransform.scale})*sin(${radians}))`,
@@ -153,22 +160,18 @@ export function hasPrimaryToneAdjustment(color: ColorAdjustments): boolean {
     || color.whites !== 0;
 }
 
+/** FFmpeg's `blend` mode name for a layer mode. Operand order and exactness live in the blend kernel (blendKernelV1). */
 export function ffmpegBlendMode(mode: Exclude<NonNullable<TimelineClip["layer"]>["blendMode"], "normal">): string {
-  const modes: Record<typeof mode, string> = {
-    add: "addition", screen: "screen", multiply: "multiply", overlay: "overlay", soft_light: "softlight", hard_light: "hardlight",
-    difference: "difference", darken: "darken", lighten: "lighten", color_dodge: "dodge", color_burn: "burn",
-  };
-  return modes[mode];
+  return BLEND_KERNEL_V1[mode].ffmpeg.mode;
 }
 
-export function ffmpegBlendNeutral(mode: Exclude<NonNullable<TimelineClip["layer"]>["blendMode"], "normal">): string {
-  if (["multiply", "darken", "color_burn"].includes(mode)) return "white";
-  if (["overlay", "soft_light", "hard_light"].includes(mode)) return "gray";
-  return "black";
-}
+// FFmpeg 8.1 tracks a per-frame alpha mode, and `unpremultiply` passes frames that are not tagged premultiplied
+// through unchanged. A source the project declares premultiplied is tagged first, otherwise its colours would be
+// treated as straight alpha. `setparams` alpha_mode needs the pinned FFmpeg 8.1 build; 8.0 rejects the option.
+export const DECLARED_PREMULTIPLIED_TO_STRAIGHT: readonly string[] = ["setparams=alpha_mode=premultiplied", "unpremultiply=inplace=1"];
 
 export function sourceAlphaNormalizationFilters(asset: MediaAsset, opaqueMaximum = 255): string[] {
-  if (asset.alphaMode === "premultiplied") return ["unpremultiply=inplace=1"];
+  if (asset.alphaMode === "premultiplied") return [...DECLARED_PREMULTIPLIED_TO_STRAIGHT];
   if (asset.alphaMode === "opaque") return [`lut=a=${opaqueMaximum}`];
   return [];
 }

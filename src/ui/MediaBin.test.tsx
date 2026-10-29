@@ -36,6 +36,7 @@ describe("compact project media bin", () => {
   it("lets a project asset be dragged onto a chosen timeline frame", () => {
     const html = renderToStaticMarkup(<MediaBin assets={[assets[1]]} runtimeUrls={{}} onImport={vi.fn()} onAddAssetToTimeline={vi.fn()} onAssetDragStart={vi.fn()} />);
     expect(html).toContain(`data-asset-id="${assets[1].id}"`);
-    expect(html).toContain('draggable="true"');
+    expect(html).toContain('data-pointer-asset-drag="true"');
+    expect(html).not.toContain('draggable="true"');
   });
 });

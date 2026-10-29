@@ -1,3 +1,4 @@
+import { translateUi as uiText, useI18n } from "./i18n/interfacePreferences";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { applyChromaKeyRgbaInPlace } from "../domain/chromaKey";
 import type { ChromaKeySettings, MediaAsset } from "../domain/types";
@@ -69,9 +70,10 @@ function unavailablePlacement(style?: CSSProperties): CSSProperties {
 }
 
 export function KeyedPreviewUnavailable({ assetName, reason, className, style, testId }: { assetName: string; reason: string; className?: string; style?: CSSProperties; testId: string }) {
-  return <div className={[className, "keyed-preview-error"].filter(Boolean).join(" ")} style={unavailablePlacement(style)} role="alert" aria-live="polite" aria-label={`${assetName} 去背預覽受阻`} data-keyed-preview-status="error" data-testid={`${testId}-key-error`}>
-    <strong>去背預覽受阻</strong>
-    <span>為避免誤顯示未去背原片，這個片段暫時隱藏。</span>
+  useI18n();
+  return <div className={[className, "keyed-preview-error"].filter(Boolean).join(" ")} style={unavailablePlacement(style)} role="alert" aria-live="polite" aria-label={uiText("{value0} 去背預覽受阻", { value0: assetName })} data-keyed-preview-status="error" data-testid={`${testId}-key-error`}>
+    <strong>{uiText("去背預覽受阻")}</strong>
+    <span>{uiText("為避免誤顯示未去背原片，這個片段暫時隱藏。")}</span>
     <small>{reason}</small>
   </div>;
 }
@@ -81,6 +83,7 @@ export function KeyedPreviewUnavailable({ assetName, reason, className, style, t
  * rejects keyed clips until its scene-linear alpha shader implements the identical contract.
  */
 export default function KeyedPreviewMedia({ asset, source, settings, className, style, muted, videoRef, testId }: KeyedPreviewMediaProps) {
+  useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const internalVideoRef = useRef<HTMLVideoElement>(null);
@@ -139,11 +142,7 @@ export default function KeyedPreviewMedia({ asset, source, settings, className, 
     position: "absolute", width: 2, height: 2, opacity: 0, pointerEvents: "none",
   };
   return <>
-    {asset.kind === "image"
-      ? <img ref={imageRef} src={source} alt="" aria-hidden="true" style={sourceStyle} data-testid={`${testId}-key-source`} />
-      : <video key={source} ref={(node) => { internalVideoRef.current = node; videoRef?.(node); }} src={source} playsInline muted={muted} preload="auto" aria-hidden="true" style={sourceStyle} data-testid={`${testId}-key-source`} />}
-    {currentState.status === "error"
-      ? <KeyedPreviewUnavailable assetName={asset.name} reason={currentState.reason} className={className} style={style} testId={testId} />
-      : <canvas ref={canvasRef} className={className} style={style} aria-label={`${asset.name} 綠／藍幕去背預覽`} data-keyed-preview-status={currentState.status} data-testid={testId} />}
+    {asset.kind === "image" ? <img ref={imageRef} src={source} alt="" aria-hidden="true" style={sourceStyle} data-testid={`${testId}-key-source`} /> : <video key={source} ref={(node) => { internalVideoRef.current = node; videoRef?.(node); }} src={source} playsInline muted={muted} preload="auto" aria-hidden="true" style={sourceStyle} data-testid={`${testId}-key-source`} />}
+    {currentState.status === "error" ? <KeyedPreviewUnavailable assetName={asset.name} reason={currentState.reason} className={className} style={style} testId={testId} /> : <canvas ref={canvasRef} className={className} style={style} aria-label={uiText("{value0} 綠／藍幕去背預覽", { value0: String(asset.name) })} data-keyed-preview-status={currentState.status} data-testid={testId} />}
   </>;
 }

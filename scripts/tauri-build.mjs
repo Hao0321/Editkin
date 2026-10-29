@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
@@ -19,7 +19,10 @@ import {
 import {
   assertTauriProductFeatureArgs,
   assertTauriProductRustflagEnvironment,
+  encodeCargoRustflags,
+  rustupHomeFromSysroot,
   tauriProductBuildArgs,
+  tauriProductPathRemapRustflags,
 } from "./lib/tauri-product-feature-policy.mjs";
 
 function parseBuildArgs(args) {
@@ -102,6 +105,21 @@ if (existsSync(join(cargoDirectory, process.platform === "win32" ? "cargo.exe" :
   if (!entries.some((entry) => resolve(entry) === resolve(cargoDirectory))) environment[pathKey] = [cargoDirectory, ...entries].join(delimiter);
 }
 
+// Shipped binaries (editkin.exe and the native tools tauri:frontend rebuilds with this environment) must not embed this
+// machine's cargo home, rustup toolchain, checkout or target paths. The wrapper alone sets the flags (callers cannot).
+const rustcExecutable = join(cargoDirectory, process.platform === "win32" ? "rustc.exe" : "rustc");
+const sysroot = spawnSync(existsSync(rustcExecutable) ? rustcExecutable : "rustc", ["--print", "sysroot"], {
+  cwd: resolve("src-tauri"), env: environment, encoding: "utf8", windowsHide: true, timeout: 30_000,
+});
+if (sysroot.status !== 0 || !sysroot.stdout.trim()) throw new Error(`Rust sysroot lookup failed before the product build: ${sysroot.stderr || sysroot.error || "no output"}`);
+const pathRemapRustflags = tauriProductPathRemapRustflags({
+  rustupHome: rustupHomeFromSysroot(sysroot.stdout.trim()),
+  cargoHome: environment.CARGO_HOME,
+  workspaceRoot: resolve("."),
+  cargoTargetDir: candidate.cargoTargetDir,
+});
+environment.CARGO_ENCODED_RUSTFLAGS = encodeCargoRustflags(pathRemapRustflags);
+
 const child = spawn(buildNode, args, { stdio: "inherit", windowsHide: true, env: environment });
 const buildResult = await new Promise((resolvePromise, reject) => {
   child.once("error", reject);
@@ -139,6 +157,7 @@ if (process.platform === "win32") {
     desktopCandidateRuntime: desktopCandidateStage.relativeRuntime,
     command: { executable: buildNode, args },
     callerEnvironmentPolicy: "reject-rust-cargo-toolchain-feature-and-target-injection",
+    pathRemapRustflags,
     releaseManifest: { bytes: sourceManifest.length, sha256: sha256(sourceManifest) },
     stagedReleaseManifest: { bytes: stagedManifest.length, sha256: sha256(stagedManifest) },
     createdAt: new Date().toISOString(),

@@ -1,8 +1,13 @@
+import { composeClipTransforms } from "../domain/clipMirrors";
 import { animatedClipState, validateProject } from "../domain/editGraph";
 import { DEFAULT_COLOR, particleSimulationEmitters } from "../domain/types";
 import type { ColorAdjustments, EditProject, LayerBlendMode, TimelineClip, Transform2D } from "../domain/types";
 import { buildEngineRenderGraph, motionGraphicTracking, type EngineNode, type EngineRenderGraph } from "./engineGraph";
 import { isTransformMotionBlurInstance, transformMotionBlurParameters } from "../domain/transformMotionBlur";
+import { assertMotionGraphicV2Contract } from "../domain/motionCompositionV2Contract";
+import { nativeMotionPaintTrack, type PreparedNativeMotionPaint } from "../motion/nativeMotionPaint";
+import { LATIN_ONLY_CAPTION_FONTS } from "../creative/shortsCaptionStyle";
+import { captionLineText, captionPreviewText, captionShadowColor } from "./captionLayout";
 
 export function nativeMediaPath(uri: string): string | undefined {
   if (/^https?:/i.test(uri) || uri.startsWith("local://")) return undefined;
@@ -50,6 +55,11 @@ export interface GpuEngineVideoResourceEstimate {
   temporalResidentBytes: number;
   compositorWorkingBytes: number;
   overlayBytes: number;
+  nativePaintCount: number;
+  nativePaintCpuBytes: number;
+  nativePaintStagingBytes: number;
+  /** Conservative retained geometry/track reserve, not a measured allocation. */
+  nativePaintGeometryBytes: number;
   particleCount: number;
   particleSnapshotCapacityPerEmitter: 2;
   particleSnapshotBytes: number;
@@ -67,29 +77,46 @@ export interface GpuEngineVideoResourceEstimate {
 }
 
 /** Mirrors the native executor's product-owned allocation model before selecting it. */
-export function estimateGpuEngineVideoResources(width: number, height: number, cacheBudgetMb: number, videoLayerCount: number, overlayCount: number, adjustmentCount = 0, matteCount = 0, particleCount = 0, temporalSampleCount = 0, workingBytesPerPixel: 4 | 8 = 4, sceneDepthAttachmentCount = 0, depthOfFieldPassCount = 0): GpuEngineVideoResourceEstimate | undefined {
-  if (![width, height, cacheBudgetMb, videoLayerCount, overlayCount, adjustmentCount, matteCount, particleCount, temporalSampleCount, workingBytesPerPixel, sceneDepthAttachmentCount, depthOfFieldPassCount].every(Number.isSafeInteger)
-    || width <= 0 || height <= 0 || cacheBudgetMb < 64 || videoLayerCount < 1 || overlayCount < 0 || adjustmentCount < 0 || matteCount < 0 || matteCount > videoLayerCount || particleCount < 0 || particleCount > overlayCount
+export function estimateGpuEngineVideoResources(width: number, height: number, cacheBudgetMb: number, videoLayerCount: number, overlayCount: number, adjustmentCount = 0, matteCount = 0, particleCount = 0, temporalSampleCount = 0, workingBytesPerPixel: 4 | 8 = 4, sceneDepthAttachmentCount = 0, depthOfFieldPassCount = 0, nativePaintCount = 0): GpuEngineVideoResourceEstimate | undefined {
+  return estimateGpuEngineVisualResourcesV1(width, height, cacheBudgetMb, videoLayerCount, overlayCount, adjustmentCount, matteCount, particleCount, temporalSampleCount, workingBytesPerPixel, sceneDepthAttachmentCount, depthOfFieldPassCount, nativePaintCount, false);
+}
+
+/** Explicit zero-video allocation calculation. The original video-only estimator still refuses zero. */
+export function estimateGpuEngineMediaFreeResourcesV1(width: number, height: number, cacheBudgetMb: number, overlayCount: number, adjustmentCount = 0): GpuEngineVideoResourceEstimate | undefined {
+  return estimateGpuEngineVisualResourcesV1(width, height, cacheBudgetMb, 0, overlayCount, adjustmentCount, 0, 0, 0, 4, 0, 0, 0, true);
+}
+
+function estimateGpuEngineVisualResourcesV1(width: number, height: number, cacheBudgetMb: number, videoLayerCount: number, overlayCount: number, adjustmentCount = 0, matteCount = 0, particleCount = 0, temporalSampleCount = 0, workingBytesPerPixel: 4 | 8 = 4, sceneDepthAttachmentCount = 0, depthOfFieldPassCount = 0, nativePaintCount = 0, mediaFree = false): GpuEngineVideoResourceEstimate | undefined {
+  if (![width, height, cacheBudgetMb, videoLayerCount, overlayCount, adjustmentCount, matteCount, particleCount, temporalSampleCount, workingBytesPerPixel, sceneDepthAttachmentCount, depthOfFieldPassCount, nativePaintCount].every(Number.isSafeInteger)
+    || width <= 0 || height <= 0 || cacheBudgetMb < 64 || videoLayerCount < (mediaFree ? 0 : 1) || overlayCount < 0 || adjustmentCount < 0 || matteCount < 0 || matteCount > videoLayerCount || particleCount < 0 || particleCount > overlayCount
+    || (mediaFree && (videoLayerCount !== 0 || matteCount !== 0 || particleCount !== 0 || temporalSampleCount !== 0 || workingBytesPerPixel !== 4 || sceneDepthAttachmentCount !== 0 || depthOfFieldPassCount !== 0 || nativePaintCount !== 0))
     || (temporalSampleCount !== 0 && (temporalSampleCount < 2 || temporalSampleCount > 8))
     || sceneDepthAttachmentCount < 0 || sceneDepthAttachmentCount > 1 || depthOfFieldPassCount < 0 || depthOfFieldPassCount > 1
-    || (depthOfFieldPassCount === 1 && sceneDepthAttachmentCount !== 1)) return undefined;
+    || (depthOfFieldPassCount === 1 && sceneDepthAttachmentCount !== 1)
+    || nativePaintCount < 0 || nativePaintCount > overlayCount || nativePaintCount > 4
+    || (nativePaintCount > 0 && workingBytesPerPixel !== 8)) return undefined;
   const pixelCount = width * height;
   const bytesPerVideoLayer = pixelCount * 36;
   const temporalResidentRingSlots = Math.max(0, temporalSampleCount - 3);
   const temporalResidentBytes = pixelCount * temporalResidentRingSlots * 12;
   const compositorWorkingBytes = pixelCount * 3 * workingBytesPerPixel;
-  const overlayBytes = pixelCount * 4 * overlayCount;
+  const overlayBytes = pixelCount * 4 * (overlayCount + nativePaintCount);
+  // Native frame plus bounded reusable shadow masks, including offscreen halo.
+  // Reserve the consumer's full mask cap; this is not a measured peak allocation.
+  const nativePaintCpuBytes = (pixelCount * 16 + 64 * 1024 * 1024) * nativePaintCount;
+  const nativePaintStagingBytes = pixelCount * 8 * nativePaintCount;
+  const nativePaintGeometryBytes = nativePaintCount * 16 * 1024 * 1024;
   const particleSnapshotCapacityPerEmitter = 2 as const;
   const particleSnapshotBytes = pixelCount * 4 * particleCount * particleSnapshotCapacityPerEmitter;
   const adjustmentWorkingBytes = adjustmentCount ? pixelCount * 2 * workingBytesPerPixel : 0;
   const sceneDepthBytes = pixelCount * 4 * sceneDepthAttachmentCount;
   const depthOfFieldAdditionalWorkingBytes = 0;
   const maximumFullFramePassesPerPresent = sceneDepthAttachmentCount ? 2 + depthOfFieldPassCount : videoLayerCount + overlayCount + adjustmentCount + 1;
-  const requiredBytes = bytesPerVideoLayer * videoLayerCount + temporalResidentBytes + compositorWorkingBytes + overlayBytes + particleSnapshotBytes + adjustmentWorkingBytes + sceneDepthBytes;
+  const requiredBytes = bytesPerVideoLayer * videoLayerCount + temporalResidentBytes + compositorWorkingBytes + overlayBytes + nativePaintCpuBytes + nativePaintStagingBytes + nativePaintGeometryBytes + particleSnapshotBytes + adjustmentWorkingBytes + sceneDepthBytes;
   const budgetBytes = cacheBudgetMb * 1024 * 1024;
-  const maxVideoLayers = Math.max(0, Math.floor((budgetBytes - temporalResidentBytes - compositorWorkingBytes - overlayBytes - particleSnapshotBytes - adjustmentWorkingBytes - sceneDepthBytes) / bytesPerVideoLayer));
-  if (![pixelCount, bytesPerVideoLayer, temporalResidentRingSlots, temporalResidentBytes, compositorWorkingBytes, overlayBytes, particleSnapshotBytes, adjustmentWorkingBytes, sceneDepthBytes, maximumFullFramePassesPerPresent, requiredBytes, budgetBytes, maxVideoLayers].every(Number.isSafeInteger)) return undefined;
-  return { schema: "editkin.resident-video-resource-plan/v1", pixelCount, bytesPerVideoLayer, workingBytesPerPixel, temporalSampleCount, temporalResidentRingSlots, temporalResidentBytes, compositorWorkingBytes, overlayBytes, particleCount, particleSnapshotCapacityPerEmitter, particleSnapshotBytes, adjustmentCount, matteCount, adjustmentWorkingBytes, sceneDepthAttachmentCount, sceneDepthBytes, depthOfFieldPassCount, depthOfFieldAdditionalWorkingBytes, maximumFullFramePassesPerPresent, requiredBytes, budgetBytes, maxVideoLayers };
+  const maxVideoLayers = Math.max(0, Math.floor((budgetBytes - temporalResidentBytes - compositorWorkingBytes - overlayBytes - nativePaintCpuBytes - nativePaintStagingBytes - nativePaintGeometryBytes - particleSnapshotBytes - adjustmentWorkingBytes - sceneDepthBytes) / bytesPerVideoLayer));
+  if (![pixelCount, bytesPerVideoLayer, temporalResidentRingSlots, temporalResidentBytes, compositorWorkingBytes, overlayBytes, nativePaintCpuBytes, nativePaintStagingBytes, nativePaintGeometryBytes, particleSnapshotBytes, adjustmentWorkingBytes, sceneDepthBytes, maximumFullFramePassesPerPresent, requiredBytes, budgetBytes, maxVideoLayers].every(Number.isSafeInteger)) return undefined;
+  return { schema: "editkin.resident-video-resource-plan/v1", pixelCount, bytesPerVideoLayer, workingBytesPerPixel, temporalSampleCount, temporalResidentRingSlots, temporalResidentBytes, compositorWorkingBytes, overlayBytes, nativePaintCount, nativePaintCpuBytes, nativePaintStagingBytes, nativePaintGeometryBytes, particleCount, particleSnapshotCapacityPerEmitter, particleSnapshotBytes, adjustmentCount, matteCount, adjustmentWorkingBytes, sceneDepthAttachmentCount, sceneDepthBytes, depthOfFieldPassCount, depthOfFieldAdditionalWorkingBytes, maximumFullFramePassesPerPresent, requiredBytes, budgetBytes, maxVideoLayers };
 }
 
 /**
@@ -97,11 +124,11 @@ export function estimateGpuEngineVideoResources(width: number, height: number, c
  * and unsupported typography still stay out of the HWND airspace path so authored content cannot
  * disappear behind a native surface.
  */
-export function canPresentGpuVideoOnNativeSurface(project: EditProject): boolean {
-  return commonVideoCaptionsSupported(project) && commonVideoMotionGraphicsSupported(project);
+export function canPresentGpuVideoOnNativeSurface(project: EditProject, nativeMotionPaint?: PreparedNativeMotionPaint): boolean {
+  return commonVideoCaptionsSupported(project) && commonVideoMotionGraphicsSupported(project, nativeMotionPaint);
 }
 
-const COMMON_VIDEO_CAPTION_FONTS = new Set(["Noto Sans TC", "Noto Serif TC", "LXGW WenKai Mono TC", "Bebas Neue", "Fredoka"]);
+const COMMON_VIDEO_CAPTION_FONTS = new Set(["Noto Sans TC", "Noto Serif TC", "LXGW WenKai Mono TC", "Bebas Neue", "Fredoka", "LXGW WenKai TC"]);
 const COMMON_VIDEO_CAPTION_COLOR = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i;
 
 export function validSurfaceQuad(quad: Array<{ x: number; y: number }> | undefined): boolean {
@@ -117,7 +144,7 @@ export function validSurfaceQuad(quad: Array<{ x: number; y: number }> | undefin
 }
 
 export function commonVideoRanges(project: EditProject): Array<{ start: number; end: number }> {
-  return project.tracks.filter((track) => track.kind === "video" && !track.muted)
+  return project.tracks.filter((track) => track.kind === "video" && !track.hidden)
     .flatMap((track) => track.clips)
     .filter((clip) => clip.layer?.enabled !== false && (clip.layer?.role ?? "content") === "content")
     .map((clip) => ({
@@ -142,16 +169,37 @@ export function commonVideoCaptionsSupported(project: EditProject): boolean {
     || !Number.isFinite(style.marginV) || style.marginV < 0 || style.marginV > 4096
     || !Number.isFinite(style.shadow) || style.shadow < 0 || style.shadow > 10
     || !Number.isFinite(style.letterSpacing) || style.letterSpacing < -5 || style.letterSpacing > 20
-    || style.italic || ![style.color, style.outlineColor, style.backgroundColor].every((color) => COMMON_VIDEO_CAPTION_COLOR.test(color))) return false;
-  return project.captions.every((cue) => cue.text.trim().length > 0 && [...cue.text].length <= 256
-    && !cue.translation?.text.trim()
-    && [cue.start, cue.duration].every(Number.isFinite) && cue.start >= 0
-    && coveredByCommonVideoRange(cue.start, cue.duration, project));
+    || style.italic || ![style.color, style.outlineColor, style.backgroundColor, captionShadowColor(style)].every((color) => COMMON_VIDEO_CAPTION_COLOR.test(color))) return false;
+  // The native raster draws the export's lines and glyphs and never falls back to another face, so a caption
+  // whose export swaps in full-width stand-ins (，（）／) that a Latin-only face lacks stays on the HTML preview.
+  const latinOnly = LATIN_ONLY_CAPTION_FONTS.has(style.fontFamily);
+  return project.captions.every((cue) => {
+    const shown = captionPreviewText(cue.text, style, project.width);
+    return cue.text.trim().length > 0 && [...cue.text].length <= 256
+      && !(latinOnly && /[，（）／]/u.test(shown) && !/[，（）／]/u.test(captionLineText(cue.text, style)))
+      && !cue.translation?.text.trim()
+      && [cue.start, cue.duration].every(Number.isFinite) && cue.start >= 0
+      && coveredByCommonVideoRange(cue.start, cue.duration, project);
+  });
 }
 
-export function commonVideoMotionGraphicsSupported(project: EditProject): boolean {
+export function commonVideoMotionGraphicsSupported(project: EditProject, nativeMotionPaint?: PreparedNativeMotionPaint): boolean {
   if (project.motionGraphics.length > 4) return false;
   return project.motionGraphics.every((graphic) => {
+    if (graphic.paintV1 || graphic.visualStyle === "native_paint") {
+      if (!nativeMotionPaint
+        || project.colorManagement?.mode !== "aces2"
+        || project.colorManagement.configId !== "studio-config-v4.0.0_aces-v2.0_ocio-v2.5"
+        || !["rec709_sdr", "rec2100_pq_1000"].includes(project.colorManagement.outputTransform)
+        || (graphic.compositeLayer ?? "foreground") !== "foreground"
+        || !coveredByCommonVideoRange(graphic.timelineStart, graphic.duration, project)) return false;
+      try {
+        if (!nativeMotionPaint.graphicIds.includes(graphic.id)) return false;
+        assertMotionGraphicV2Contract(graphic, project.fps);
+        nativeMotionPaintTrack(project, nativeMotionPaint, graphic.id);
+        return true;
+      } catch { return false; }
+    }
     if (graphic.schema !== "hao.motion-composition/v1") return false;
     const fontFamily = graphic.fontFamily ?? "Noto Sans TC";
     const fontWeight = graphic.fontWeight ?? 700;
@@ -253,14 +301,7 @@ export interface ResolvedNativePrecomposition {
 }
 
 export function composeTransforms(parent: Transform2D, child: Transform2D): Transform2D {
-  const radians = parent.rotation * Math.PI / 180;
-  return {
-    x: parent.x + (child.x * Math.cos(radians) - child.y * Math.sin(radians)) * parent.scale,
-    y: parent.y + (child.x * Math.sin(radians) + child.y * Math.cos(radians)) * parent.scale,
-    scale: parent.scale * child.scale,
-    rotation: parent.rotation + child.rotation,
-    opacity: parent.opacity * child.opacity,
-  };
+  return composeClipTransforms(parent, child);
 }
 
 export function composeColors(parent: ColorAdjustments, child: ColorAdjustments): ColorAdjustments {
@@ -297,7 +338,7 @@ export function resolveNativeVideoPrecompositions(project: EditProject): { proje
   const assets = new Map(flattened.assets.map((asset) => [asset.id, asset]));
   const compositions = new Map(flattened.compositions.map((composition) => [composition.id, composition]));
   const markers: ResolvedNativePrecomposition[] = [];
-  for (const track of flattened.tracks.filter((candidate) => candidate.kind === "video" && !candidate.muted)) {
+  for (const track of flattened.tracks.filter((candidate) => candidate.kind === "video" && !candidate.hidden)) {
     for (const clip of track.clips) {
       if ((clip.layer?.role ?? "content") !== "content") continue;
       let asset = assets.get(clip.assetId);
@@ -314,7 +355,7 @@ export function resolveNativeVideoPrecompositions(project: EditProject): { proje
         const composition = compositions.get(asset.compositionId);
         if (!composition || composition.width !== project.width || composition.height !== project.height || Math.abs(composition.fps - project.fps) > 1e-6
           || composition.colorManagement?.mode === "aces2" || composition.captions.length || composition.motionGraphics.length) return undefined;
-        const visualTracks = composition.tracks.filter((candidate) => candidate.kind === "video" && !candidate.muted);
+        const visualTracks = composition.tracks.filter((candidate) => candidate.kind === "video" && !candidate.hidden);
         const visualClips = visualTracks.flatMap((candidate) => candidate.clips).filter((candidate) => (candidate.layer?.enabled ?? true));
         if (visualClips.length !== 1) return undefined;
         const child = visualClips[0];
@@ -373,7 +414,7 @@ export function applyResolvedPrecompositionMarkers(graph: EngineRenderGraph, mar
 }
 
 export function commonGpuEffectsSupported(project: EditProject): boolean {
-  return project.tracks.filter((track) => track.kind === "video" && !track.muted).flatMap((track) => track.clips)
+  return project.tracks.filter((track) => track.kind === "video" && !track.hidden).flatMap((track) => track.clips)
     .every((clip) => !(clip.creative?.nativeEffectInstances?.some((instance) => instance.enabled))
       && (clip.creative?.effectPresetIds ?? []).every((id) => COMMON_GPU_EFFECTS.has(id)));
 }

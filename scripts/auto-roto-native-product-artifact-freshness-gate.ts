@@ -20,6 +20,9 @@ const SHA256 = /^[a-f0-9]{64}$/;
 const PRODUCT_AUTO_ROTO_MODULES = new Set([
   "src/application/autoRotoNativeProduct.ts",
   "src/application/autoRotoProductContract.ts",
+  // Self-authored diagnostic V2, reviewed 2026-10-18: bounded local media/native core only; no model acquisition.
+  "src/application/autoRotoNativeProductV2.ts",
+  "src/application/autoRotoV2Contract.ts",
   "src/domain/autoRotoPreviewProjection.ts",
   "src/domain/autoRotoProductReceipt.ts",
   "src/render/autoRotoMatteIntegrity.ts",
@@ -29,9 +32,38 @@ const PRODUCT_NATIVE_ENGINE_MODULES = new Set([
   "src/application/autoRotoNativeProduct.ts",
   "src/application/autoRotoProductContract.ts",
   "src/domain/autoRotoProductReceipt.ts",
+  // Existing source-FPS probing, reviewed 2026-10-18: strict rational parser and Zod schema only.
+  "src/domain/mediaFrameRate.ts",
+  "src/render/sourceFrameRateProbe.ts",
+  // Render infrastructure reached through nativeCore's runProcess since the
+  // 2026-10-05 render-cancellation change; reviewed: no research markers.
+  "src/render/mediaDisplayGeometry.ts",
+  "src/render/mediaProcess.ts",
   "src/render/nativeCore.ts",
+  // Reviewed 2026-10-19: existing native plan work admission and exact-close
+  // retirement; node filesystem/temp primitives and bounded error state only.
+  "src/render/nativePlanWorkOwnerV1.ts",
+  "src/render/renderLifetime.ts",
+  // Export progress reporting (2026-10-10): mediaProcess reports FFmpeg output time through it;
+  // reviewed: imports node:async_hooks only, no research markers.
+  "src/render/renderProgress.ts",
+  "src/shared/boundedFile.ts",
+  "src/shared/localMediaPath.ts",
+  "src/shared/pendingNativeClose.ts",
   "src/shared/utf8ByteOrder.ts",
 ]);
+/** Exact product paths only. Keep this shared with calibration so unknown/research imports still fail. */
+function inspectProductImportGraph(importGraph: string[], nativeEngineImportGraph: string[]) {
+  const autoRotoImports = importGraph.filter((path) => /(?:^|\/)autoRoto[^/]*\.ts$/i.test(path));
+  const unexpectedAutoRotoImports = autoRotoImports.filter((path) => !PRODUCT_AUTO_ROTO_MODULES.has(path));
+  const nativeEngineProductModules = nativeEngineImportGraph.filter((path) => path.startsWith("src/"));
+  const nativeEngineUnexpectedModules = nativeEngineProductModules.filter((path) => !PRODUCT_NATIVE_ENGINE_MODULES.has(path));
+  const nativeEngineMissingModules = [...PRODUCT_NATIVE_ENGINE_MODULES].filter((path) => !nativeEngineProductModules.includes(path));
+  const productImportGraphClosed = autoRotoImports.includes("src/application/autoRotoNativeProduct.ts")
+    && unexpectedAutoRotoImports.length === 0 && nativeEngineUnexpectedModules.length === 0 && nativeEngineMissingModules.length === 0;
+  return { autoRotoImports, unexpectedAutoRotoImports, nativeEngineProductModules,
+    nativeEngineUnexpectedModules, nativeEngineMissingModules, productImportGraphClosed };
+}
 const SERVICE_RESEARCH_MARKERS = [
   "editkin-native-onnx-assisted-roto/v1",
   "editkin-sam21-video-memory-roto/v1",
@@ -497,6 +529,18 @@ function parseCandidateRuntimeArgs(args: string[]): { artifactRoot: string; desk
 }
 
 async function runSelfTest(): Promise<void> {
+  const cleanProductGraph = [...PRODUCT_AUTO_ROTO_MODULES], cleanNativeGraph = [...PRODUCT_NATIVE_ENGINE_MODULES];
+  if (!inspectProductImportGraph(cleanProductGraph, cleanNativeGraph).productImportGraphClosed) throw Error("reviewed product graph rejected");
+  const graphMutations = [
+    inspectProductImportGraph([...cleanProductGraph, "src/application/autoRotoSam21Research.ts"], cleanNativeGraph),
+    inspectProductImportGraph([...cleanProductGraph, "src/application/autoRotoUnknown.ts"], cleanNativeGraph),
+    inspectProductImportGraph(cleanProductGraph.filter(p => p !== "src/application/autoRotoNativeProduct.ts"), cleanNativeGraph),
+    inspectProductImportGraph(cleanProductGraph, [...cleanNativeGraph, "src/application/onnxResearch.ts"]),
+    inspectProductImportGraph(cleanProductGraph, [...cleanNativeGraph, "src/render/nativePlanWorkOwnerResearchV1.ts"]),
+    inspectProductImportGraph(cleanProductGraph, [...cleanNativeGraph, "src/shared/pendingNativeCloseResearch.ts"]),
+    ...cleanNativeGraph.map(path => inspectProductImportGraph(cleanProductGraph, cleanNativeGraph.filter(p => p !== path))),
+  ];
+  if (graphMutations.some(result => result.productImportGraphClosed)) throw Error("product graph mutation accepted");
   const clean = Buffer.from("editkin-native-color-temporal-roto/v1");
   const research = Buffer.from(`product ${SERVICE_RESEARCH_MARKERS[0]}`);
   const valid: FactSet = {
@@ -605,7 +649,7 @@ async function runSelfTest(): Promise<void> {
     || !parsedCandidates.artifactRoot || !parsedCandidates.desktop || !candidateArgsRejected) {
     throw new Error("freshness negative controls are not calibrated");
   }
-  process.stdout.write(`${JSON.stringify({ status: "GREEN_SELF_TEST", scope: "evaluator-controls-only", factMutations: factMutations.length, cleanServiceAccepted, staleServiceRejected, researchMarkerRejected, extraRejected: !extra.passed, symlinkRejected: !symlink.passed, featureArgMutationsRejected, standaloneFrontendAccepted, standaloneFeatureMutationsRejected: standaloneFeatureMutations.length, candidateArgMutationsRejected: candidateArgMutations.length, wrongDesktopCandidatesRejected: wrongDesktopCandidates.length, missingNativeHelpersRejected: requiredNativeHelpers.length, nativeInputMutationControls: 4, nativeReceiptInputIdentity: freshNativeInputs.identity, productFreshness: "NOT_RUN" })}\n`);
+  process.stdout.write(`${JSON.stringify({ status: "GREEN_SELF_TEST", scope: "evaluator-controls-only", productGraphMutationControls: graphMutations.length, factMutations: factMutations.length, cleanServiceAccepted, staleServiceRejected, researchMarkerRejected, extraRejected: !extra.passed, symlinkRejected: !symlink.passed, featureArgMutationsRejected, standaloneFrontendAccepted, standaloneFeatureMutationsRejected: standaloneFeatureMutations.length, candidateArgMutationsRejected: candidateArgMutations.length, wrongDesktopCandidatesRejected: wrongDesktopCandidates.length, missingNativeHelpersRejected: requiredNativeHelpers.length, nativeInputMutationControls: 4, nativeReceiptInputIdentity: freshNativeInputs.identity, productFreshness: "NOT_RUN" })}\n`);
 }
 
 const cliArgs = process.argv.slice(2);
@@ -653,12 +697,9 @@ const nativeEngineBuild = await build({
 if (!nativeEngineBuild.metafile) throw new Error("Expected a self-authored native Auto Roto engine metafile");
 const expectedService = Buffer.from(serviceBuild.outputFiles[0].contents);
 const importGraph = Object.keys(serviceBuild.metafile.inputs).map((path) => normalize(path)).sort();
-const autoRotoImports = importGraph.filter((path) => /(?:^|\/)autoRoto[^/]*\.ts$/i.test(path));
-const unexpectedAutoRotoImports = autoRotoImports.filter((path) => !PRODUCT_AUTO_ROTO_MODULES.has(path));
 const nativeEngineImportGraph = Object.keys(nativeEngineBuild.metafile.inputs).map((path) => normalize(path)).sort();
-const nativeEngineProductModules = nativeEngineImportGraph.filter((path) => path.startsWith("src/"));
-const nativeEngineUnexpectedModules = nativeEngineProductModules.filter((path) => !PRODUCT_NATIVE_ENGINE_MODULES.has(path));
-const nativeEngineMissingModules = [...PRODUCT_NATIVE_ENGINE_MODULES].filter((path) => !nativeEngineProductModules.includes(path));
+const { autoRotoImports, unexpectedAutoRotoImports, nativeEngineProductModules, nativeEngineUnexpectedModules,
+  nativeEngineMissingModules, productImportGraphClosed } = inspectProductImportGraph(importGraph, nativeEngineImportGraph);
 const expectedServiceResearchMarkers = markerFindings(expectedService, SERVICE_RESEARCH_MARKERS);
 
 const desktopServicePath = resolve(appRoot, "desktop-dist/service.mjs");
@@ -762,10 +803,7 @@ const nativeReceiptFresh = nativeReceipt?.schema === "editkin.native-core-build-
   && nativeReceipt?.promoted?.sha256 === (promotedNative ? sha256(promotedNative) : "");
 
 const facts: FactSet = {
-  productImportGraphClosed: autoRotoImports.includes("src/application/autoRotoNativeProduct.ts")
-    && unexpectedAutoRotoImports.length === 0
-    && nativeEngineUnexpectedModules.length === 0
-    && nativeEngineMissingModules.length === 0,
+  productImportGraphClosed,
   expectedServiceResearchFree: expectedServiceResearchMarkers.length === 0,
   desktopServiceFreshAndResearchFree: serviceArtifactFresh(expectedService, desktopService),
   tauriStagedServiceFreshAndResearchFree: serviceArtifactFresh(expectedService, tauriService),

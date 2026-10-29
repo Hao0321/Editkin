@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1600" viewBox="0 0 900 1600">
+  <rect width="900" height="1600" fill="#10172a"/>
+  <rect x="45" y="45" width="810" height="1510" rx="48" fill="#4567ff"/>
+  <text x="450" y="760" fill="#ffffff" font-family="sans-serif" font-size="96" font-weight="700" text-anchor="middle">9:16</text>
+  <text x="450" y="880" fill="#dce5ff" font-family="sans-serif" font-size="42" text-anchor="middle">PORTRAIT FIXTURE</text>
+</svg>

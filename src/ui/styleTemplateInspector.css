@@ -1,0 +1,23 @@
+/* 「模板片段」 inspector: the Motion Library inspector's look (motionLibrary.css) plus slot fields. */
+.st-inspector .ml-label{display:flex;align-items:center;gap:8px}
+.st-inspector .ml-label em,.st-text-head em{margin-left:6px;color:var(--accent,#fcc834);font-size:10.5px;font-style:normal;font-weight:800}
+.st-text{display:flex;flex-direction:column;gap:4px;min-width:0}
+.st-text-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;color:var(--muted);font-size:11.5px;font-weight:700}
+.st-counter{font-variant-numeric:tabular-nums;color:var(--muted)}
+.st-text[data-over] .st-counter,.st-over{color:var(--danger,#e5484d);font-weight:800}
+.st-text input{min-width:0;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2,var(--surface-1));color:var(--ink);font-size:13.5px}
+.st-text[data-over] input{border-color:var(--danger,#e5484d)}
+.st-color{display:flex;align-items:center;gap:6px}
+.st-color code{color:var(--muted);font-size:11px}
+.st-reset-all{margin-left:auto;height:24px;padding:0 8px;font-size:11px}
+.st-sources{display:flex;flex-wrap:wrap;gap:6px}
+.st-sources select{flex:1 1 140px;min-width:0;height:30px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2,var(--surface-1));color:var(--ink)}
+.st-source{overflow:hidden;color:var(--muted);font-size:11.5px;text-overflow:ellipsis;white-space:nowrap}
+.st-focal{position:relative;width:100%;max-width:220px;border:1px solid var(--line);border-radius:10px;background:#161a22 center/cover no-repeat;cursor:crosshair;touch-action:none}
+.st-focal:focus-visible{outline:2px solid var(--accent,#fcc834);outline-offset:2px}
+.st-focal i{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.55);pointer-events:none}
+.st-job{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:9px;background:rgba(10,11,14,.74);color:#fff;font-size:11.5px}
+.st-job span{flex:1 1 auto}
+.st-bar{position:relative;flex:0 0 72px;height:4px;overflow:hidden;border-radius:2px;background:rgba(255,255,255,.18)}
+.st-bar b{position:absolute;inset:0 auto 0 0;background:var(--accent,#fcc834)}
+.st-job button{display:flex;align-items:center;gap:3px;height:24px;padding:0 8px;border:0;border-radius:6px;background:rgba(255,255,255,.16);color:#fff;font-size:11px;cursor:pointer}

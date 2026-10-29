@@ -16,7 +16,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { basename, delimiter, isAbsolute, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   activateMcpGeneration,
   applySnapshotRuntimeBindings,
@@ -85,6 +85,12 @@ async function expectRejected(name, action, matcher) {
   controls.push(name);
 }
 
+// The fixture bundle records the URL it was evaluated under, so the launch path
+// can prove the verified bytes ran as the snapshot file, not a data: URL.
+function fixtureEntrypointBytes(marker) {
+  return Buffer.from(`globalThis.__EDITKIN_MCP_SNAPSHOT_TEST__ = ${JSON.stringify(marker)};\nglobalThis.__EDITKIN_MCP_SNAPSHOT_URL__ = import.meta.url;\n`);
+}
+
 async function writeCandidate(candidateId, marker, { largeAssetBytes = 0 } = {}) {
   const envelope = resolve(appRoot, "src-tauri/product-release-candidates", candidateId);
   const runtime = resolve(envelope, "runtime");
@@ -97,9 +103,9 @@ async function writeCandidate(candidateId, marker, { largeAssetBytes = 0 } = {})
       continue;
     }
     if (name === "NODE-MANIFEST.json") bytes = Buffer.from(canonicalJson(nodeManifest));
-    if (name === "mcp.mjs") bytes = Buffer.from(`globalThis.__EDITKIN_MCP_SNAPSHOT_TEST__ = ${JSON.stringify(marker)};\n`);
+    if (name === "mcp.mjs") bytes = fixtureEntrypointBytes(marker);
     if (name === "mcp.mjs.material-color-identity.json") {
-      const entrypoint = Buffer.from(`globalThis.__EDITKIN_MCP_SNAPSHOT_TEST__ = ${JSON.stringify(marker)};\n`);
+      const entrypoint = fixtureEntrypointBytes(marker);
       bytes = Buffer.from(JSON.stringify({ schema: "editkin.material-color-bundle/v1", bundle: { file: "mcp.mjs", size: entrypoint.length, sha256: hashBytes(entrypoint) }, implementations: [{ name: "fixture.ts", sha256: "a".repeat(64) }] }));
     }
     await writeFile(target, bytes);
@@ -598,8 +604,24 @@ try {
     importModule: (url) => import(`${url}#${randomUUID()}`),
   });
   assert.equal(globalThis.__EDITKIN_MCP_SNAPSHOT_TEST__, "generation-one");
+  assert(globalThis.__EDITKIN_MCP_SNAPSHOT_URL__.startsWith(`${pathToFileURL(generationFile(active, "runtime/mcp.mjs")).href}#`),
+    `Snapshot entrypoint ran under ${globalThis.__EDITKIN_MCP_SNAPSHOT_URL__}`);
   assert(process.env.HAO_FFMPEG_PATH.startsWith(active.contentRoot));
-  controls.push("verified-entrypoint-imported-from-data-url");
+  controls.push("verified-entrypoint-imported-with-snapshot-file-url");
+
+  globalThis.__EDITKIN_MCP_SNAPSHOT_TEST__ = "reset";
+  await expectRejected(
+    "verified-entrypoint-never-imported-without-module-hooks",
+    () => launchActiveMcpGeneration({
+      appRoot,
+      stateRoot,
+      execPath: vendorNode,
+      registerHooks: null,
+      importModule: (url) => import(`${url}#${randomUUID()}`),
+    }),
+    /verified-entrypoint-loader-unavailable/u,
+  );
+  assert.equal(globalThis.__EDITKIN_MCP_SNAPSHOT_TEST__, "reset");
 
   const sourceMutationTargets = [
     "runtime/mcp.mjs",
@@ -653,7 +675,7 @@ try {
     }), /material-color.*(?:identity|drift)/u);
     assert.equal(globalThis.__EDITKIN_MCP_SNAPSHOT_TEST__, "reset");
   });
-  controls.push("entrypoint-check-use-window-live-drift-rejected-before-verified-data-import");
+  controls.push("entrypoint-check-use-window-live-drift-rejected-before-verified-import");
 
   const roamingPlugins = resolve(fixtureRoot, "Roaming/Editkin/plugins");
   const appPlugins = resolve(appRoot, "plugins");

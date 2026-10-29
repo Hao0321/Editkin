@@ -1,0 +1,31 @@
+.grade-node-panel .grade-reset { margin-top: 8px; }
+.grade-node-list { display: grid; gap: 6px; }
+.grade-node-list button { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--soft); font-size: 11px; text-align: left; cursor: pointer; }
+.grade-node-list button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.grade-node-list small { color: var(--muted); font-size: 9px; overflow-wrap: anywhere; }
+.grade-node-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.grade-node-actions button { min-height: 34px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--soft); cursor: pointer; }
+.grade-node-wheels { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px 8px; margin-top: 18px; }
+.grade-node-wheel { display: grid; justify-items: center; gap: 7px; min-width: 0; }
+.grade-node-wheel strong { color: var(--soft); font-size: 11px; }
+.grade-wheel-disc { position: relative; width: min(122px,100%); aspect-ratio: 1; padding: 0; border: 1px solid var(--line-strong); border-radius: 50%; background: radial-gradient(circle,#9b9b9b 0%,transparent 90%),conic-gradient(from 90deg,#ef5e60,#bb67d9,#608be0,#6cc4c3,#81be72,#d7bd69,#ef5e60); touch-action: none; cursor: crosshair; }
+.grade-wheel-center { position: absolute; inset: 50%; width: 3px; height: 3px; transform: translate(-50%,-50%); border-radius: 50%; background: #1a2638; }
+.grade-wheel-cursor { position: absolute; width: 10px; height: 10px; transform: translate(-50%,-50%); border: 2px solid white; border-radius: 50%; box-shadow: 0 0 0 1px #152137; pointer-events: none; }
+.grade-wheel-disc:focus-visible, .grade-curve-point:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.grade-node-wheel > small { color: var(--muted); font-size: 8px; white-space: nowrap; }
+.grade-node-wheel label { display: grid; gap: 5px; width: 100%; color: var(--muted); font-size: 9px; }
+.grade-node-wheel label > span { display: flex; justify-content: space-between; }
+.grade-node-wheel input { width: 100%; accent-color: var(--accent); }
+.grade-curve-channel { display: grid; gap: 7px; margin: 18px 0 8px; color: var(--muted); font-size: 11px; }
+.grade-curve-channel select { height: 34px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); color: var(--ink); }
+.grade-curve-plot { display: block; width: 100%; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); touch-action: none; }
+.grade-curve-grid { stroke: var(--line); stroke-width: 1; fill: none; }
+.grade-curve-diagonal { stroke: var(--muted); stroke-dasharray: 3 4; stroke-width: .5; }
+.grade-curve-line { stroke: var(--ink); stroke-width: 2; fill: none; }
+.grade-curve-line.channel-R { stroke: #ff526f; }.grade-curve-line.channel-G { stroke: #56f2a7; }.grade-curve-line.channel-B { stroke: #55a6ff; }
+.grade-curve-point { fill: var(--accent); stroke: var(--accent-ink); stroke-width: 1.5; cursor: move; }
+.grade-curve-plot text { fill: var(--muted); font-size: 9px; }
+.grade-node-curve > small { display: block; margin-top: 7px; color: var(--muted); font-size: 9px; }
+.grade-node-panel button:disabled, .grade-node-panel input:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 900px) { .grade-node-wheels { grid-template-columns: repeat(4,minmax(0,1fr)); }.grade-curve-plot { max-width: 300px; } }
+@media (max-width: 560px) { .grade-node-wheels { grid-template-columns: repeat(2,minmax(0,1fr)); } }

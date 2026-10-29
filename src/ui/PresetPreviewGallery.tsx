@@ -1,9 +1,11 @@
+import { translateUi as uiText, useI18n } from "./i18n/interfacePreferences";
 import { useRef, useState } from "react";
 import { useNativeWheelScroll } from "./wheelScroll";
 import { cssFontFamily, resolveBundledFontFace } from "../typography/fontFaces";
 import { EFFECT_PRESETS, LOOK_PRESETS, TEXT_STYLE_PRESETS, TRANSITION_PRESETS, combineLookColor, previewEffectFilter, transitionRenderers } from "../creative/corePack";
 import { DEFAULT_COLOR, type ClipCreativeState } from "../domain/types";
 import { CinematicLanguageExplorer } from "./CinematicLanguageExplorer";
+import { AppliedPresetEffectStackV1, submitPresetEffectEditV1, type PresetEffectEditHandlerV1 } from "./AppliedPresetEffectStackV1";
 import "./presetPreviewGallery.css";
 
 function imageStyle(lookPresetId?: string, effectIds: string[] = []) {
@@ -12,16 +14,18 @@ function imageStyle(lookPresetId?: string, effectIds: string[] = []) {
 }
 
 function Visual({ source, style }: { source?: string; style?: React.CSSProperties }) {
+  useI18n();
   const [failedSource, setFailedSource] = useState<string>();
-  return <span className="preset-visual" style={style}>{source && source !== failedSource ? <img src={source} alt="目前畫面效果預覽" onError={() => setFailedSource(source)} /> : <i>請先選取畫面</i>}</span>;
+  return <span className="preset-visual" style={style}>{source && source !== failedSource ? <img src={source} alt={uiText("目前畫面效果預覽")} onError={() => setFailedSource(source)} /> : <i>{uiText("請先選取畫面")}</i>}</span>;
 }
 
 export function CaptionPresetGallery({ selected, onSelect }: { selected: string; onSelect: (id: string) => void }) {
+  useI18n();
   const row = useRef<HTMLDivElement>(null);
   useNativeWheelScroll(row, "horizontal");
-  return <div ref={row} className="caption-preset-gallery" tabIndex={0} aria-label="字幕樣式預覽，可捲動瀏覽">
+  return <div ref={row} className="caption-preset-gallery" tabIndex={0} aria-label={uiText("字幕樣式預覽，可捲動瀏覽")}>
     {TEXT_STYLE_PRESETS.map((preset) => { const face = resolveBundledFontFace(preset.style.fontFamily, preset.style.bold ? 800 : 400); return <button key={preset.id} type="button" className={selected === preset.id ? "active" : ""} aria-pressed={selected === preset.id} onClick={() => onSelect(preset.id)}>
-      <span data-font-weight-substituted={face?.weightSubstituted} title={face?.weightSubstituted ? `字重 ${face.requestedWeight} → ${face.fontWeight}` : undefined} style={{ fontFamily: cssFontFamily(face?.fontFamily ?? preset.style.fontFamily), fontWeight: face?.fontWeight ?? (preset.style.bold ? 800 : 400), fontSynthesis: "style", color: preset.style.color, background: preset.style.backgroundColor, WebkitTextStroke: `${Math.min(1.25, preset.style.outlineWidth * 16 / preset.style.fontSize)}px ${preset.style.outlineColor}`, paintOrder: "stroke fill" }}>字幕預覽</span><small>{preset.name}</small>
+      <span data-font-weight-substituted={face?.weightSubstituted} title={face?.weightSubstituted ? uiText("字重 {value0} → {value1}", { value0: face.requestedWeight, value1: face.fontWeight }) : undefined} style={{ fontFamily: cssFontFamily(face?.fontFamily ?? preset.style.fontFamily), fontWeight: face?.fontWeight ?? (preset.style.bold ? 800 : 400), fontSynthesis: "style", color: preset.style.color, background: preset.style.backgroundColor, WebkitTextStroke: `${Math.min(1.25, preset.style.outlineWidth * 16 / preset.style.fontSize)}px ${preset.style.outlineColor}`, paintOrder: "stroke fill" }}>{uiText("字幕預覽")}</span><small>{uiText(preset.name)}</small>
     </button>; })}
   </div>;
 }
@@ -34,6 +38,8 @@ interface CreativeProps {
   canTransitionOut: boolean;
   onChange: (patch: { lookPresetId?: string | null; effectPresetIds?: string[]; transitionIn?: ClipCreativeState["transitionIn"] | null; transitionOut?: ClipCreativeState["transitionOut"] | null }) => void;
   section?: "all" | "look" | "effect" | "transition";
+  onEffectEdit?: PresetEffectEditHandlerV1;
+  effectReadOnly?: boolean;
 }
 
 export type TransitionLibraryGroup = "recommended" | "gentle" | "motion" | "flash" | "compound" | "all";
@@ -52,7 +58,8 @@ export function filterTransitionPresets(group: TransitionLibraryGroup) {
   });
 }
 
-export function CreativePresetGallery({ source, creative, duration, canTransitionIn, canTransitionOut, onChange, section = "all" }: CreativeProps) {
+export function CreativePresetGallery({ source, creative, duration, canTransitionIn, canTransitionOut, onChange, onEffectEdit, effectReadOnly = false, section = "all" }: CreativeProps) {
+  useI18n();
   const lookRow = useRef<HTMLDivElement>(null), effectRow = useRef<HTMLDivElement>(null), transitionGrid = useRef<HTMLDivElement>(null);
   useNativeWheelScroll(lookRow, "horizontal", section);
   useNativeWheelScroll(effectRow, "horizontal", section);
@@ -61,30 +68,31 @@ export function CreativePresetGallery({ source, creative, duration, canTransitio
   const [transitionGroup, setTransitionGroup] = useState<TransitionLibraryGroup>("recommended");
   const visibleTransitions = filterTransitionPresets(transitionGroup);
   return <div className="creative-preview-galleries">
-    {(section === "all" || section === "look") && <><div className="preset-gallery-heading"><strong>濾鏡</strong><small>直接看套用後的畫面</small></div>
-    <div ref={lookRow} className="visual-preset-row" data-testid="look-preview-list" tabIndex={0} aria-label="濾鏡預覽，可捲動瀏覽">
-      <button type="button" className={!creative?.lookPresetId ? "active" : ""} onClick={() => onChange({ lookPresetId: null })}><Visual source={source} /><small>原始自然</small></button>
-      {LOOK_PRESETS.map((preset) => <button key={preset.id} type="button" className={creative?.lookPresetId === preset.id ? "active" : ""} onClick={() => onChange({ lookPresetId: preset.id })}><Visual source={source} style={imageStyle(preset.id)} /><small>{preset.name}</small></button>)}
+    {(section === "all" || section === "look") && <><div className="preset-gallery-heading"><strong>{uiText("濾鏡")}</strong><small>{uiText("直接看套用後的畫面")}</small></div>
+    <div ref={lookRow} className="visual-preset-row" data-testid="look-preview-list" tabIndex={0} aria-label={uiText("濾鏡預覽，可捲動瀏覽")}>
+      <button type="button" className={!creative?.lookPresetId ? "active" : ""} onClick={() => onChange({ lookPresetId: null })}><Visual source={source} /><small>{uiText("原始自然")}</small></button>
+      {LOOK_PRESETS.map((preset) => <button key={preset.id} type="button" className={creative?.lookPresetId === preset.id ? "active" : ""} onClick={() => onChange({ lookPresetId: preset.id })}><Visual source={source} style={imageStyle(preset.id)} /><small>{uiText(preset.name)}</small></button>)}
     </div></>}
-    {(section === "all" || section === "effect") && <><div className="preset-gallery-heading"><strong>畫面特效</strong><small>最多疊加 4 個</small></div>
-    <div ref={effectRow} className="visual-preset-row" data-testid="effect-preset-list" tabIndex={0} aria-label="特效預覽，可捲動瀏覽">
+    {(section === "all" || section === "effect") && <><div className="preset-gallery-heading"><strong>{uiText("畫面特效")}</strong><small>{uiText("最多疊加 4 個")}</small></div>
+    <AppliedPresetEffectStackV1 effectIds={effects} disabled={effectReadOnly} onEdit={onEffectEdit} onChange={onChange} />
+    <div ref={effectRow} className="visual-preset-row" data-testid="effect-preset-list" tabIndex={0} aria-label={uiText("特效預覽，可捲動瀏覽")}>
       {EFFECT_PRESETS.map((preset) => {
         const active = effects.includes(preset.id);
-        return <button key={preset.id} type="button" className={active ? "active" : ""} aria-pressed={active} disabled={!active && effects.length >= 4} title={active ? "再次點選即可移除" : effects.length >= 4 ? "已套用 4 個特效，請先移除一個" : preset.name} onClick={() => onChange({ effectPresetIds: active ? effects.filter((id) => id !== preset.id) : [...effects, preset.id].slice(0, 4) })}><Visual source={source} style={imageStyle(creative?.lookPresetId, [preset.id])} /><small>{active ? "✓ " : ""}{preset.name}</small></button>;
+        return <button key={preset.id} type="button" className={active ? "active" : ""} aria-pressed={active} disabled={effectReadOnly || (!active && effects.length >= 4)} title={active ? uiText("再次點選即可移除") : effects.length >= 4 ? uiText("已套用 4 個特效，請先移除一個") : uiText(preset.name)} onClick={() => { if (!effectReadOnly) submitPresetEffectEditV1(effects, { type: active ? "remove" : "add", effectId: preset.id }, onEffectEdit, onChange); }}><Visual source={source} style={imageStyle(creative?.lookPresetId, [preset.id])} /><small>{active ? "✓ " : ""}{uiText(preset.name)}</small></button>;
       })}
     </div></>}
-    {(section === "all" || section === "transition") && <><div className="preset-gallery-heading"><strong>入場與出場</strong><small>{TRANSITION_PRESETS.length} 款 · 相鄰片段才會啟用</small></div>
-    {(creative?.transitionIn || creative?.transitionOut) && <div className="applied-transition-actions" aria-label="已套用的轉場">
-      {creative.transitionIn && <button type="button" onClick={() => onChange({ transitionIn: null })} data-testid="remove-transition-in">移除入場 ×</button>}
-      {creative.transitionOut && <button type="button" onClick={() => onChange({ transitionOut: null })} data-testid="remove-transition-out">移除出場 ×</button>}
+    {(section === "all" || section === "transition") && <><div className="preset-gallery-heading"><strong>{uiText("入場與出場")}</strong><small>{TRANSITION_PRESETS.length} {uiText("款 · 相鄰片段才會啟用")}</small></div>
+    {(creative?.transitionIn || creative?.transitionOut) && <div className="applied-transition-actions" aria-label={uiText("已套用的轉場")}>
+      {creative.transitionIn && <button type="button" onClick={() => onChange({ transitionIn: null })} data-testid="remove-transition-in">{uiText("移除入場 ×")}</button>}
+      {creative.transitionOut && <button type="button" onClick={() => onChange({ transitionOut: null })} data-testid="remove-transition-out">{uiText("移除出場 ×")}</button>}
     </div>}
-    <div className="transition-library-tabs" role="tablist" aria-label="轉場分類">{([
+    <div className="transition-library-tabs" role="tablist" aria-label={uiText("轉場分類")}>{([
       ["recommended", "推薦"], ["gentle", "柔和"], ["motion", "動感"], ["flash", "亮閃"], ["compound", "複合"], ["all", "全部"],
-    ] as const).map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={transitionGroup === id} className={transitionGroup === id ? "active" : ""} onClick={() => setTransitionGroup(id)}>{label}</button>)}</div>
-    <small className="transition-truth-note">這裡是可直接輸出的片段入出場；蒙太奇與子彈時間會先檢查素材條件，不會用假名稱代替。</small>
-    <div ref={transitionGrid} className="transition-preview-grid" data-testid="transition-preview-list" tabIndex={0} aria-label="轉場預覽，可捲動瀏覽">
+    ] as const).map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={transitionGroup === id} className={transitionGroup === id ? "active" : ""} onClick={() => setTransitionGroup(id)}>{uiText(label)}</button>)}</div>
+    <small className="transition-truth-note">{uiText("這裡是可直接輸出的片段入出場；蒙太奇與子彈時間會先檢查素材條件，不會用假名稱代替。")}</small>
+    <div ref={transitionGrid} className="transition-preview-grid" data-testid="transition-preview-list" tabIndex={0} aria-label={uiText("轉場預覽，可捲動瀏覽")}>
       {visibleTransitions.map((preset) => <article key={preset.id} className={creative?.transitionIn?.presetId === preset.id || creative?.transitionOut?.presetId === preset.id ? "active" : ""}>
-        <div className={`transition-demo ${transitionRenderers(preset).map((renderer) => renderer.replace("transition-", "")).join(" ")}`}><i /><b /></div><strong>{preset.name}</strong><small>{transitionRenderers(preset).length > 1 ? `${transitionRenderers(preset).length} 種動作` : "單一動作"}</small><div><button type="button" disabled={!canTransitionIn} onClick={() => onChange({ transitionIn: { presetId: preset.id, duration: Math.min(preset.defaultDuration, duration) } })}>入場</button><button type="button" disabled={!canTransitionOut} onClick={() => onChange({ transitionOut: { presetId: preset.id, duration: Math.min(preset.defaultDuration, duration) } })}>離場</button></div>
+        <div className={`transition-demo ${transitionRenderers(preset).map((renderer) => renderer.replace("transition-", "")).join(" ")}`}><i /><b /></div><strong>{uiText(preset.name)}</strong><small>{transitionRenderers(preset).length > 1 ? uiText("{value0} 種動作", { value0: transitionRenderers(preset).length }) : uiText("單一動作")}</small><div><button type="button" disabled={!canTransitionIn} onClick={() => onChange({ transitionIn: { presetId: preset.id, duration: Math.min(preset.defaultDuration, duration) } })}>{uiText("入場")}</button><button type="button" disabled={!canTransitionOut} onClick={() => onChange({ transitionOut: { presetId: preset.id, duration: Math.min(preset.defaultDuration, duration) } })}>{uiText("離場")}</button></div>
       </article>)}
     </div><CinematicLanguageExplorer /></>}
   </div>;

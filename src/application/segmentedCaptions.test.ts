@@ -43,6 +43,22 @@ describe("bounded, resumable caption windows", () => {
     expect(progress.at(-1)).toBe(1); expect(output.segmentation?.windows).toHaveLength(3);
     expect(output.analyzedSeconds).toBe(65);
   });
+  it("one unreadable window or bad block loses only itself; the rest of the transcript survives with a report", async () => {
+    const raw = ["1\n00:00:05,000 --> 00:00:06,000\n第一段\n\n2\n00:00:07,000 --> 00:00:06,000\n壞的時間\n", "garbage from wind noise", "1\n00:00:02,000 --> 00:00:04,000\n最後一段\n"];
+    let call = 0;
+    const output = await analyzeSegmentedCaptions(request, runtime, async req => result(raw[call++], req.duration), parseWhisperRecognition);
+    expect(output.cues.map(cue => cue.text)).toEqual(["第一段", "最後一段"]);
+    expect(output.recognition.skippedBlocks).toEqual([
+      { block: 2, reason: "non-positive-duration", window: 0 },
+      { block: 1, reason: "unparseable-window", window: 1 },
+    ]);
+    expect(output.segmentation?.windows.map(window => window.rawTranscript.text)).toEqual(raw);
+    expect(output.cacheHit).toBe(false);
+  });
+  it("still fails when no window has any readable block", async () => {
+    await expect(analyzeSegmentedCaptions(request, runtime, async req => result("not an SRT", req.duration), parseWhisperRecognition))
+      .rejects.toMatchObject({ code: "AUTOMATIC_CAPTION_PARSE" });
+  });
   it("rejects a changed model and does not silently drop uncertain overlapping speech", async () => {
     let count = 0;
     await expect(analyzeSegmentedCaptions(request, runtime, async req => ({ ...result("", req.duration), modelSha256: String(count++) }), parseWhisperRecognition)).rejects.toThrow("身分不一致");

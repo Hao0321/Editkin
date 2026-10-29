@@ -114,7 +114,8 @@ async function main() {
     await client.connect(transport);
     const listed = await client.listTools();
     const names = listed.tools.map((tool) => tool.name).sort();
-    assert.deepEqual(names, ["add_creative_asset_to_timeline", "apply_autopilot_plan", "apply_creative_preset", "apply_edit_commands", "audit_autopilot_plan", "audit_editorial_batch_plan", "auto_add_music", "auto_cut_silence", "auto_edit_highlights", "auto_split_scenes", "auto_transcribe_captions", "build_autopilot_roto_keyer_decision", "cancel_autopilot_batch_job", "cancel_material_preparation_job", "compile_beat_montage", "compile_plugin_application", "configure_remote_access", "create_editorial_batch_projects", "create_project", "direct_podcast_speakers", "get_autopilot_batch_job", "get_autopilot_batch_status", "get_autopilot_contract", "get_autopilot_design_brief", "get_editkin_skill_pack", "get_editkin_workflow_profile", "get_material_context", "get_material_preparation_job", "get_plugin_capability", "get_project_summary", "get_remote_setup_status", "get_timeline_window", "inspect_roto_keyer_capabilities", "list_community_editing_knowledge", "list_creative_assets", "list_creative_presets", "list_installed_editkin_skills", "list_installed_plugins", "list_remote_provider_connectors", "prepare_ai_material", "prepare_autopilot_auto_roto", "prepare_autopilot_motion_track", "prepare_autopilot_template_package", "prepare_clip_motion_preset", "prepare_floating_frame_scene", "prepare_remote_setup", "propose_auto_color_exposure", "propose_reference_white_balance", "read_community_editing_knowledge", "record_autopilot_outcome", "record_material_semantics", "record_roto_keyer_evidence", "render_editorial_batch", "render_project", "resolve_autopilot_inference_route", "resolve_cinematic_recipe", "resolve_editkin_skill_workflow", "run_autopilot_batch", "start_ai_editing_session", "start_autopilot_batch_job", "track_subject_and_attach_label", "validate_project", "verify_remote_access", "view_material_keyframes"]);
+    // The default (compat) profile's advertised tools (W2-1 profiles; W2-4 added the v5 `job` slot). Every registered tool stays callable by name.
+    assert.deepEqual(names, ["add_creative_asset_to_timeline", "apply_autopilot_plan", "apply_creative_preset", "apply_edit_commands", "apply_longform_plan_set", "apply_media_source_relink", "audit_autopilot_plan", "audit_longform_plan_set", "auto_add_music", "build_autopilot_roto_keyer_decision", "cancel_material_preparation_job", "compile_beat_montage", "compile_plugin_application", "configure_remote_access", "create_project", "describe_tool_input_schema", "get_autopilot_contract", "get_autopilot_design_brief", "get_editkin_status", "get_material_context", "get_material_preparation_job", "get_plugin_capability", "get_project_summary", "get_remote_setup_status", "get_timeline_window", "inspect_reference_motion_instances", "inspect_roto_keyer_capabilities", "job", "list_creative_assets", "list_creative_presets", "list_editkin_modules", "list_editkin_templates", "list_installed_plugins", "list_mesh_3d_templates", "list_reference_motion_templates", "list_remote_provider_connectors", "prepare_ai_material", "prepare_autopilot_auto_roto", "prepare_autopilot_motion_track", "prepare_autopilot_template_package", "prepare_clip_motion_preset", "prepare_editkin_module", "prepare_editkin_template", "prepare_floating_frame_scene", "prepare_illustrated_music_video_draft", "prepare_media_bootstrap", "prepare_media_source_relink", "prepare_mesh_3d_template", "prepare_motion_graphic_creation", "prepare_motion_graphic_kit", "prepare_music_video_draft", "prepare_native_geometry_motion", "prepare_native_motion_revision", "prepare_native_motion_sequence", "prepare_native_reel_scene", "prepare_original_element", "prepare_original_motion_scene_2d", "prepare_original_motion_source", "prepare_original_motion_source_revision", "prepare_original_scene_graphic_revision", "prepare_proof_still", "prepare_reference_motion_design", "prepare_reference_motion_template", "prepare_reference_motion_template_reuse", "prepare_reference_motion_template_revision", "prepare_reference_motion_template_source_replacement", "prepare_remote_setup", "propose_auto_color_exposure", "propose_reference_white_balance", "rank_style_shots", "record_autopilot_outcome", "record_material_semantics", "record_roto_keyer_evidence", "render_original_motion_project", "render_project", "resolve_autopilot_inference_route", "resolve_cinematic_recipe", "resolve_editkin_skill_workflow", "start_ai_editing_session", "track_subject_and_attach_label", "validate_project", "verify_remote_access", "view_material_keyframes"]);
 
     const asyncBatchPath = join(workspace, "async-batch.json");
     await writeFile(asyncBatchPath, JSON.stringify({
@@ -175,7 +176,10 @@ async function main() {
     const presets = await client.callTool({ name: "list_creative_presets", arguments: { kind: "all" } });
     assert.equal(presets.isError, undefined);
     const presetsPayload = JSON.parse(String((presets.content[0] as { text?: string })?.text ?? "{}"));
-    assert.equal(presetsPayload.presets.motionGraphics.length, 64);
+    assert.equal(presetsPayload.presets.motionGraphics.length, 72);
+    assert.equal(presetsPayload.presets.motionGraphics.some((preset: { id: string }) => preset.id === "mv_illustrated_word"), true);
+    assert.equal(presetsPayload.presets.motionGraphics.some((preset: { id: string }) => preset.id === "mv_illustrated_word_fast"), true);
+    assert.equal(presetsPayload.presets.motionGraphics.some((preset: { id: string }) => preset.id === "mv_illustrated_word_impact"), true);
     assert.deepEqual(presetsPayload.presets.motionGraphics
       .filter((preset: { id: string }) => preset.id.startsWith("travel_editorial_"))
       .map((preset: { id: string }) => preset.id).sort(), [
@@ -186,6 +190,7 @@ async function main() {
     assert.equal(presetsPayload.presets.cinematicLanguage.recipes.filter((recipe: { executionStatus: string }) => recipe.executionStatus === "planning_only").length, 10);
     assert.equal(presetsPayload.presets.cinematicLanguage.recipes.filter((recipe: { executionStatus: string }) => recipe.executionStatus === "evidence_compilable").length, 1);
     assert.equal(presetsPayload.presets.cinematicLanguage.bulletTime.length, 3);
+    assert.equal(presetsPayload.presets.cinematicLanguage.shotSelectionStyles.length, 9);
     assert.equal(presetsPayload.presets.formatTemplates.shortForm.length, 10);
     assert.equal(presetsPayload.presets.formatTemplates.longForm.length, 6);
     assert.equal(presetsPayload.presets.formatTemplates.longForm.every((template: Record<string, unknown>) => template.captionColorPolicy === "white_only"), true);
@@ -201,6 +206,17 @@ async function main() {
     assert.equal(cinematicDraftPayload.status, "DRAFT_PLAN_CANDIDATE");
     assert.equal(cinematicDraftPayload.executionStatus, "planning_only");
     assert.equal(cinematicDraftPayload.evidenceAuthority, "caller_asserted_unverified");
+    const shotRanking = await client.callTool({ name: "rank_style_shots", arguments: { styleId: "vlog", candidates: [
+      { id: "source-shot", sourceRef: "source:01@00:10-00:14", rightsApproved: true, beatPurposeMatched: true,
+        observations: [{ signal: "first_person_interaction", evidenceRef: "frame:301" }] },
+      { id: "unlicensed", sourceRef: "source:02@00:01", rightsApproved: false, beatPurposeMatched: true,
+        observations: [{ signal: "everyday_action", evidenceRef: "frame:30" }] },
+    ] } });
+    assert.equal(shotRanking.isError, undefined);
+    const shotRankingPayload = JSON.parse(String((shotRanking.content[0] as { text?: string })?.text ?? "{}"));
+    assert.equal(shotRankingPayload.directApplyAllowed, false);
+    assert.equal(shotRankingPayload.rows[0].status, "DRAFT_RANKING_REVIEW_REQUIRED");
+    assert.equal(shotRankingPayload.rows[1].status, "BLOCKED");
     const montageCompilerDraft = await client.callTool({ name: "resolve_cinematic_recipe", arguments: { recipeId: "beat_aligned_montage", availableCapabilities: ["shot_evidence", "caller_beat_grid"] } });
     assert.equal(montageCompilerDraft.isError, undefined);
     const montageCompilerDraftPayload = JSON.parse(String((montageCompilerDraft.content[0] as { text?: string })?.text ?? "{}"));

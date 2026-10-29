@@ -1,0 +1,11 @@
+{
+  "schema": "editkin.blend-kernel-vector-identity/v1",
+  "capturedBeforeKernel": true,
+  "values": {
+    "rec709-normal-stack": "1df8cedf94e6fe099b6fae7d566583531020da625e36088f5690d0805c8bef8a",
+    "rec709-normal-alpha-master": "ecfacaf6638039c46c249798cef0df43820d8e29e1194c15e46699bbb69750aa",
+    "aces2-phone-normal-stack": "b33c709e862bfb31b2c7f27bafc7e8209a2e3812c20ced63fa5f12403e766927",
+    "aces2-legacy-normal-stack": "28d8f6332a654141a89fbfa925e2b24029141915f17c78b4d82644e5f49119d9",
+    "rec709-adjustment-and-hidden-track": "134b663dd0113425a851af06e39601f6f9bd129eef2e6d35e43c3c0c392c2653"
+  }
+}

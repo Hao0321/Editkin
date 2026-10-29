@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAgentInspectionArgs,
-  buildAgentSetupCommand,
   buildAgentSetupInvocation,
   EDITKIN_AGENT_SETUP_CONTRACT,
   EDITKIN_AGENT_STARTER_PROMPT,
@@ -70,27 +69,6 @@ describe("Agent setup command", () => {
     expect(EDITKIN_AGENT_STARTER_PROMPT).toContain("原始影片、整份逐字稿與整批關鍵幀不得送進 Agent context");
   });
 
-  it("builds the official Codex stdio add shape and escapes PowerShell values", () => {
-    const command = buildAgentSetupCommand("codex", options);
-    expect(command).toContain("codex mcp add editkin");
-    expect(command).toContain("--env 'ELECTRON_RUN_AS_NODE=1'");
-    expect(command).toContain("Hao''s Projects");
-    expect(command).toContain("--env 'EDITKIN_WORKSPACE=");
-    expect(command).toContain("--env 'EDITKIN_VIDEO_AUTOPILOT_SKILL=");
-    expect(command).toContain("--env 'EDITKIN_CREATIVE_PACK_ROOT=");
-    expect(command).toContain("--env 'EDITKIN_PERSONAL_MUSIC_ROOT=");
-    expect(command).toContain("--env 'EDITKIN_PERSONAL_VISUAL_ROOT=");
-    expect(command).toContain("--env 'EDITKIN_PLUGIN_ROOTS=");
-    expect(command).toContain("--env 'EDITKIN_WORKFLOW_PROFILE_PATH=");
-    expect(command).toContain("--env 'EDITKIN_MODEL_ROOT=");
-    expect(command).toContain("--env 'EDITKIN_WHISPER_CLI_PATH=");
-    expect(command).toContain("--env 'EDITKIN_CACHE_ROOT=");
-    expect(command).toContain("--env 'EDITKIN_AGENT_STATE_ROOT=");
-    expect(command).toContain("-- 'C:\\Program Files\\Editkin\\Editkin.exe'");
-    expect(command).toContain("'C:\\Program Files\\Editkin\\resources\\agent-runtime-v3\\launcher.mjs'");
-    expect(command).not.toContain("desktop-dist\\mcp.mjs");
-  });
-
   it("builds argument arrays without shell interpolation or AI secrets", () => {
     const invocation = buildAgentSetupInvocation("codex", options);
     expect(invocation.command).toBe("codex");
@@ -100,16 +78,6 @@ describe("Agent setup command", () => {
     expect(invocation.args.at(-1)).toBe(options.launcherPath);
     expect(invocation.args).not.toContain("C:\\Program Files\\Editkin\\resources\\app.asar\\desktop-dist\\mcp.mjs");
     expect(JSON.stringify(invocation)).not.toMatch(/API_KEY|AUTH_TOKEN|OPENAI_API|ANTHROPIC_API/);
-  });
-
-  it("builds the official Claude Code user-scoped stdio add shape", () => {
-    const command = buildAgentSetupCommand("claude", options);
-    expect(command).toContain("claude mcp add-json --scope user editkin");
-    expect(command).toContain('"type":"stdio"');
-    expect(command).toContain('"EDITKIN_WORKSPACE"');
-    expect(command).toContain('"EDITKIN_AGENT_STATE_ROOT"');
-    expect(command).toContain("agent-runtime-v3\\\\launcher.mjs");
-    expect(command).not.toContain("desktop-dist\\\\mcp.mjs");
   });
 
   it("reads the installed MCP back and distinguishes configured from connected", () => {

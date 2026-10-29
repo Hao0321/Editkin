@@ -3,6 +3,7 @@
 #[cfg(feature = "auto-roto-research")]
 compile_error!("Editkin product route retired: feature auto-roto-research is research history only and cannot be compiled.");
 
+mod agent_connect;
 mod agent_runtime_probe;
 mod agent_setup;
 mod audio_preview_events;
@@ -10,28 +11,45 @@ mod audio_session_host;
 mod audio_session_registry;
 mod audio_session_desktop;
 mod creative_preview;
+mod desktop_files;
+mod desktop_color_luts_v1;
 mod gpu_command_worker;
 mod gpu_preview_cache;
+mod gpu_offscreen_preview;
 mod gpu_preview_owner;
 mod gpu_resident_process;
 mod media_probe_fields;
+mod native_dialog_labels;
 mod native_preview_playback;
+mod outside_media_grants;
+#[cfg(test)]
+mod media_source_path_tests;
 mod preview_process_platform;
 mod preview_service_process;
 mod remote_agent_launcher;
 mod remote_provider_connector;
+mod render_jobs;
+mod engine_tasks_v1;
+mod desktop_batch_commands_v1;
+use desktop_batch_commands_v1::{
+    batch_engine_complete_v1, batch_engine_input_v1, verified_batch_session_v1, BatchSession,
+};
 mod resident_service;
 #[cfg(test)]
 mod resident_av_clock_tests;
 mod service_pool;
+mod template_short;
+mod window_close_guard;
 
-use agent_runtime_probe::probe_current_editkin_mcp;
+use native_dialog_labels::DialogText;
 use agent_setup::{
-    activate_product_agent_generation, build_agent_setup_invocation,
-    rollback_product_agent_generation, selected_agent_workspace, ProductAgentGenerationPaths,
+    activate_product_agent_generation, rollback_product_agent_generation, selected_agent_workspace,
+    ProductAgentGenerationPaths,
 };
+#[cfg(test)]
+use agent_connect::{claude_mcp_text_inspection, codex_mcp_json_is_exact};
 use arboard::Clipboard;
-use media_probe_fields::append_media_dimensions;
+use media_probe_fields::{append_media_dimensions, imported_media_defaults_batch};
 use remote_agent_launcher::{
     login_probe_is_ready, read_bounded, remote_agent_task_prompt, remote_verification_matches,
     BoundedCapture, CodexClosedMcp, RemoteAgentTarget, RemoteVerificationContext,
@@ -66,6 +84,10 @@ const REMOTE_RELAY_CONFIG: &str = include_str!("../remote-relay.json");
 const EDITKIN_AGENT_SETUP_CONTRACT: &str = include_str!("../../src/shared/agentSetupContract.json");
 /// Publisher identity this build trusts for updates; shared with the Node service so both agree.
 const UPDATE_PUBLISHER_PIN: &str = include_str!("../../src/shared/updatePublisherPin.json");
+const BUNDLED_FONT_FACE_INDEX: &str = include_str!("../../src/generated/fontFaceIndex.json");
+const BUNDLED_FONT_EM_METRICS: &str = include_str!("../../src/generated/fontEmMetrics.json");
+const MAX_BUNDLED_FONT_FACE_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_BUNDLED_FONT_MANIFEST_BYTES: u64 = 1024 * 1024;
 
 fn editkin_agent_setup_contract() -> Result<Value, String> {
     serde_json::from_str(EDITKIN_AGENT_SETUP_CONTRACT)
@@ -161,6 +183,7 @@ struct AppState {
     audio_preview_generation: std::sync::atomic::AtomicU64,
     creative_previews: Arc<creative_preview::PreviewLimiter>,
     remote_agent_controller: Mutex<Option<RemoteAgentController>>,
+    template_short: template_short::TemplateShortJobs,
 }
 
 struct RemoteAgentController {
@@ -328,6 +351,7 @@ struct RuntimePaths {
     creative_pack_root: PathBuf,
     personal_music_root: PathBuf,
     personal_visual_root: PathBuf,
+    personal_color_lut_root: Option<PathBuf>,
     font_root: PathBuf,
     color_root: PathBuf,
     plugin_roots: Vec<PathBuf>,
@@ -357,49 +381,20 @@ struct PickedMedia {
     preview_path: String,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct BatchJob {
-    id: String,
-    source_path: String,
-    source_name: String,
-    status: String,
-    project_path: Option<String>,
-    output_path: Option<String>,
-    receipt_path: Option<String>,
-    warnings: Vec<String>,
-    error: Option<String>,
-}
-
-#[derive(Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct BatchSession {
-    schema_version: u8,
-    id: String,
-    #[serde(default = "default_editorial_profile")]
-    editorial_profile: String,
-    output_root: String,
-    created_at: String,
-    updated_at: String,
-    jobs: Vec<BatchJob>,
-}
-
-fn default_editorial_profile() -> String {
-    "auto".into()
-}
-
-fn valid_editorial_profile(value: &str) -> bool {
-    matches!(
-        value,
-        "auto" | "gaming" | "food" | "travel" | "podcast_on_camera" | "podcast_no_face"
-    )
-}
-
+/// Development checkout root (debug builds run from the repository).
+#[cfg(debug_assertions)]
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("src-tauri must live under the repository root")
         .to_path_buf()
+}
+
+/// Release builds read packaged resources only. `env!("CARGO_MANIFEST_DIR")` would embed the build machine's checkout
+/// path in the shipped binary (--remap-path-prefix does not rewrite env! values), so release has no repository root.
+#[cfg(not(debug_assertions))]
+fn repo_root() -> PathBuf {
+    PathBuf::new()
 }
 
 fn process_compatible_path(path: PathBuf) -> PathBuf {
@@ -732,6 +727,7 @@ fn runtime_paths(app: &AppHandle) -> Result<RuntimePaths, String> {
         auto_roto_allow_research_candidate,
         creative_pack_root: from_env("EDITKIN_CREATIVE_PACK_ROOT", creative_pack_root),
         personal_music_root: from_env("EDITKIN_PERSONAL_MUSIC_ROOT", personal_music_root),
+        personal_color_lut_root: desktop_color_luts_v1::root_for_visual(&personal_visual_root).ok(),
         personal_visual_root,
         font_root: from_env("EDITKIN_FONT_ROOT", font_root),
         color_root: from_env("EDITKIN_COLOR_ROOT", color_root),
@@ -768,6 +764,418 @@ fn bounded_color_asset_relative_path(relative_path: &str) -> Result<PathBuf, Str
         return Err("色彩資產不在允許清單".into());
     }
     Ok(PathBuf::from(directory).join(file_name))
+}
+
+#[tauri::command(async)]
+fn read_mesh_3d_font(app: AppHandle, weight: u16) -> Result<tauri::ipc::Response, String> {
+    const MAX_BYTES: u64 = 16 * 1024 * 1024;
+    if weight != 700 && weight != 900 {
+        return Err("3D 字型只接受內建 Noto Sans TC 700／900".into());
+    }
+    let runtime = runtime_paths(&app)?;
+    let root = fs::canonicalize(&runtime.font_root).map_err(|error| error.to_string())?;
+    let relative = format!("render/EditkinFace-noto-sans-tc-{weight}.ttf");
+    let target = runtime.font_root.join(&relative);
+    let canonical = fs::canonicalize(&target).map_err(|error| error.to_string())?;
+    if !canonical.starts_with(&root) {
+        return Err("3D 字型不可指向字型目錄之外".into());
+    }
+    let manifest_path = runtime.font_root.join("editkin-open-fonts.json");
+    let (mut manifest_file, manifest_before) = open_remote_file_no_follow(&manifest_path)?;
+    if manifest_before.len > 1024 * 1024 {
+        return Err("3D 字型 manifest 超出安全大小".into());
+    }
+    let mut manifest_bytes = Vec::new();
+    Read::by_ref(&mut manifest_file)
+        .take(1024 * 1024 + 1)
+        .read_to_end(&mut manifest_bytes)
+        .map_err(|error| error.to_string())?;
+    if manifest_bytes.len() as u64 != manifest_before.len
+        || remote_file_identity(&manifest_file)? != manifest_before
+        || remote_file_identity_at_path(&manifest_path)? != Some(manifest_before)
+    {
+        return Err("3D 字型 manifest 在讀取時改變".into());
+    }
+    let manifest: Value =
+        serde_json::from_slice(&manifest_bytes).map_err(|error| error.to_string())?;
+    let face = manifest
+        .get("fonts")
+        .and_then(Value::as_array)
+        .and_then(|fonts| {
+            fonts
+                .iter()
+                .find(|font| font.get("family").and_then(Value::as_str) == Some("Noto Sans TC"))
+        })
+        .and_then(|font| font.get("faces"))
+        .and_then(Value::as_array)
+        .and_then(|faces| {
+            faces
+                .iter()
+                .find(|face| face.get("weight").and_then(Value::as_u64) == Some(weight as u64))
+        })
+        .ok_or_else(|| "3D 物理字型 manifest 不合法".to_string())?;
+    let expected_sha = face
+        .get("sha256")
+        .and_then(Value::as_str)
+        .filter(|value| valid_sha256(value))
+        .ok_or_else(|| "3D 物理字型 SHA 不合法".to_string())?;
+    if manifest.get("schemaVersion").and_then(Value::as_u64) != Some(2)
+        || face.get("file").and_then(Value::as_str) != Some(relative.as_str())
+    {
+        return Err("3D 物理字型 manifest 不合法".into());
+    }
+    let (mut file, before) = open_remote_file_no_follow(&target)?;
+    if before.len == 0
+        || before.len > MAX_BYTES
+        || face.get("bytes").and_then(Value::as_u64) != Some(before.len)
+    {
+        return Err("3D 物理字型超出安全大小".into());
+    }
+    let mut bytes = Vec::with_capacity(before.len as usize);
+    Read::by_ref(&mut file)
+        .take(MAX_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| error.to_string())?;
+    if bytes.len() as u64 != before.len
+        || remote_file_identity(&file)? != before
+        || remote_file_identity_at_path(&target)? != Some(before)
+        || format!("{:x}", Sha256::digest(&bytes)) != expected_sha
+    {
+        return Err("3D 物理字型在讀取時改變或 SHA 不符".into());
+    }
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct BundledFontFaceSpec {
+    face_id: String,
+    font_family: String,
+    font_weight: u16,
+    font_file: String,
+    sha256: String,
+    manifest_sha256: String,
+    logical_family: String,
+}
+
+// Both inputs are compiled generated assets, never paths or digests from an IPC request.
+fn bundled_font_face_catalog_from(
+    index_json: &str,
+    metrics_json: &str,
+) -> Result<Vec<BundledFontFaceSpec>, String> {
+    let index: Vec<(String, String, Vec<u16>)> =
+        serde_json::from_str(index_json).map_err(|error| format!("內建字型索引不合法：{error}"))?;
+    let metrics: Value = serde_json::from_str(metrics_json)
+        .map_err(|error| format!("內建字型度量索引不合法：{error}"))?;
+    let manifest_sha256 = metrics.get("manifestSha256").and_then(Value::as_str)
+        .filter(|value| valid_sha256(value))
+        .ok_or("內建字型 manifest SHA 不合法")?;
+    let metric_faces = metrics.get("faces").and_then(Value::as_array)
+        .ok_or("內建字型度量索引缺少 faces")?;
+    if index.len() != 6 || metric_faces.len() != 44
+        || metrics.get("schema").and_then(Value::as_str) != Some("editkin.font-em-metrics/v1")
+    {
+        return Err("內建字型索引必須包含精確 44 個物理字型".into());
+    }
+    let mut metric_shas = std::collections::BTreeMap::new();
+    for face in metric_faces {
+        let id = face.get("id").and_then(Value::as_str).ok_or("內建字型缺少 id")?;
+        let sha = face.get("sha256").and_then(Value::as_str)
+            .filter(|value| valid_sha256(value)).ok_or("內建字型 SHA 不合法")?;
+        if metric_shas.insert(id, sha).is_some() {
+            return Err("內建字型度量索引有重複 id".into());
+        }
+    }
+    let mut family_ids = BTreeSet::new();
+    let mut family_names = BTreeSet::new();
+    let mut face_ids = BTreeSet::new();
+    let mut specs = Vec::with_capacity(44);
+    for (logical_family, logical_id, weights) in index {
+        if logical_family.trim().is_empty() || logical_id.is_empty()
+            || !logical_id.bytes().all(|byte| byte.is_ascii_lowercase() || byte == b'-')
+            || logical_id.starts_with('-') || logical_id.ends_with('-')
+            || !family_ids.insert(logical_id.clone())
+            || !family_names.insert(logical_family.clone()) || weights.is_empty()
+        {
+            return Err("內建字型邏輯索引不合法".into());
+        }
+        for font_weight in weights {
+            let face_id = format!("EditkinFace-{logical_id}-{font_weight}");
+            if !(100..=900).contains(&font_weight) || !face_ids.insert(face_id.clone()) {
+                return Err("內建字型索引字重或 id 不合法".into());
+            }
+            let sha256 = metric_shas.get(face_id.as_str()).ok_or("內建字型索引與度量 id 不符")?;
+            specs.push(BundledFontFaceSpec {
+                font_family: format!("EditkinFace {logical_id} {font_weight}"),
+                font_file: format!("render/{face_id}.ttf"),
+                face_id,
+                font_weight,
+                sha256: (*sha256).to_string(),
+                manifest_sha256: manifest_sha256.to_string(),
+                logical_family: logical_family.clone(),
+            });
+        }
+    }
+    if specs.len() != 44 || face_ids.iter().map(String::as_str).collect::<BTreeSet<_>>()
+        != metric_shas.keys().copied().collect::<BTreeSet<_>>()
+    {
+        return Err("內建字型索引與度量必須是相同的精確 44 個 id".into());
+    }
+    Ok(specs)
+}
+
+fn bundled_font_face_spec(face_id: &str) -> Result<BundledFontFaceSpec, String> {
+    bundled_font_face_catalog_from(BUNDLED_FONT_FACE_INDEX, BUNDLED_FONT_EM_METRICS)?
+        .into_iter().find(|spec| spec.face_id == face_id)
+        .ok_or_else(|| "物理字型只接受內建 44 個精確 faceId".to_string())
+}
+
+struct BundledFontDirectory {
+    path: PathBuf,
+    canonical: PathBuf,
+    file: fs::File,
+    identity: RemoteFileIdentity,
+}
+
+fn open_bundled_font_directory(path: &Path) -> Result<BundledFontDirectory, String> {
+    let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    if !metadata.is_dir() || remote_agent_directory_is_link(&metadata) {
+        return Err("物理字型資料夾必須是一般資料夾；link/reparse 已拒絕".into());
+    }
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::{
+            FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+        };
+        options.custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW);
+    }
+    let file = options.open(path).map_err(|error| error.to_string())?;
+    let identity = remote_file_identity(&file)?;
+    if identity.reparse || !file.metadata().map_err(|error| error.to_string())?.is_dir() {
+        return Err("物理字型資料夾 handle 不是一般資料夾".into());
+    }
+    let canonical = fs::canonicalize(path).map_err(|error| error.to_string())?;
+    Ok(BundledFontDirectory { path: path.to_path_buf(), canonical, file, identity })
+}
+
+fn verify_bundled_font_directory(directory: &BundledFontDirectory) -> Result<(), String> {
+    let current = open_bundled_font_directory(&directory.path)?;
+    let same_directory = |identity: RemoteFileIdentity| {
+        identity.storage_id == directory.identity.storage_id
+            && identity.file_id == directory.identity.file_id
+            && identity.reparse == directory.identity.reparse && !identity.reparse
+    };
+    if !directory.file.metadata().map_err(|error| error.to_string())?.is_dir()
+        || !same_directory(remote_file_identity(&directory.file)?)
+        || !same_directory(current.identity) || current.canonical != directory.canonical
+    {
+        return Err("物理字型資料夾在讀取期間被替換或修改".into());
+    }
+    Ok(())
+}
+
+fn open_bundled_font_directory_chain(root: &Path) -> Result<Vec<BundledFontDirectory>, String> {
+    let mut path = PathBuf::new();
+    let mut directories = Vec::new();
+    for component in root.components() {
+        match component {
+            std::path::Component::Prefix(prefix) => {
+                #[cfg(windows)]
+                if !matches!(prefix.kind(), std::path::Prefix::Disk(_) | std::path::Prefix::VerbatimDisk(_)) {
+                    return Err("物理字型 root 必須位於本機磁碟".into());
+                }
+                path.push(prefix.as_os_str());
+            }
+            std::path::Component::RootDir | std::path::Component::Normal(_) => {
+                path.push(component.as_os_str());
+                directories.push(open_bundled_font_directory(&path)?);
+            }
+            _ => return Err("物理字型 root 不可包含相對或父層路徑".into()),
+        }
+    }
+    if directories.last().is_none_or(|directory| directory.path != root) {
+        return Err("物理字型 root ancestor 契約不合法".into());
+    }
+    Ok(directories)
+}
+
+fn verify_bundled_font_directory_chain(directories: &[BundledFontDirectory]) -> Result<(), String> {
+    for directory in directories { verify_bundled_font_directory(directory)?; }
+    Ok(())
+}
+
+struct BundledFontRead {
+    path: PathBuf,
+    canonical: PathBuf,
+    file: fs::File,
+    identity: RemoteFileIdentity,
+    bytes: Vec<u8>,
+}
+
+fn open_bundled_font_file_no_follow(path: &Path) -> Result<(fs::File, RemoteFileIdentity), String> {
+    let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    if !metadata.is_file() || remote_agent_directory_is_link(&metadata) {
+        return Err("物理字型檔案必須是一般檔案；link/reparse 或特殊檔案已拒絕".into());
+    }
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT;
+        options.custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    let file = options.open(path).map_err(|error| error.to_string())?;
+    let identity = remote_file_identity(&file)?;
+    if identity.reparse || !identity.regular || !file.metadata().map_err(|error| error.to_string())?.is_file() {
+        return Err("物理字型檔案 handle 必須是一般檔案；link/reparse 或特殊檔案已拒絕".into());
+    }
+    Ok((file, identity))
+}
+
+fn verify_bundled_font_read(read: &BundledFontRead) -> Result<(), String> {
+    if !read.file.metadata().map_err(|error| error.to_string())?.is_file()
+        || remote_file_identity(&read.file)? != read.identity
+        || open_bundled_font_file_no_follow(&read.path)?.1 != read.identity
+        || fs::canonicalize(&read.path).map_err(|error| error.to_string())? != read.canonical
+    {
+        return Err("物理字型檔案在 bounded handle 讀取期間被替換或修改".into());
+    }
+    Ok(())
+}
+
+fn read_bundled_font_file(
+    path: &Path,
+    directory: &BundledFontDirectory,
+    max_bytes: u64,
+) -> Result<BundledFontRead, String> {
+    let canonical = fs::canonicalize(path).map_err(|error| error.to_string())?;
+    if canonical.parent() != Some(directory.canonical.as_path()) {
+        return Err("物理字型檔案不可指向字型目錄之外".into());
+    }
+    let (mut file, before) = open_bundled_font_file_no_follow(path)?;
+    if !file.metadata().map_err(|error| error.to_string())?.is_file()
+        || before.len == 0 || before.len > max_bytes
+    {
+        return Err("物理字型檔案不是一般檔案或超出安全大小".into());
+    }
+    let mut bytes = Vec::with_capacity(before.len as usize);
+    Read::by_ref(&mut file).take(max_bytes + 1).read_to_end(&mut bytes)
+        .map_err(|error| error.to_string())?;
+    if bytes.len() as u64 != before.len || bytes.len() as u64 > max_bytes {
+        return Err("物理字型檔案在 bounded handle 讀取期間被替換或修改".into());
+    }
+    let read = BundledFontRead {
+        path: path.to_path_buf(), canonical, file, identity: before, bytes,
+    };
+    verify_bundled_font_read(&read)?;
+    verify_bundled_font_directory(directory)?;
+    Ok(read)
+}
+
+fn bundled_font_manifest_face_size(
+    manifest_bytes: &[u8],
+    spec: &BundledFontFaceSpec,
+) -> Result<u64, String> {
+    if format!("{:x}", Sha256::digest(manifest_bytes)) != spec.manifest_sha256 {
+        return Err("物理字型 manifest 原始 SHA 與編譯索引不符".into());
+    }
+    let manifest: Value = serde_json::from_slice(manifest_bytes)
+        .map_err(|error| format!("物理字型 manifest 不合法：{error}"))?;
+    let fonts = manifest.get("fonts").and_then(Value::as_array)
+        .ok_or("物理字型 manifest 缺少 fonts")?;
+    if manifest.get("schemaVersion").and_then(Value::as_u64) != Some(2)
+        || manifest.get("id").and_then(Value::as_str) != Some("studio.hao.editkin-open-fonts")
+        || fonts.len() != 6
+    {
+        return Err("物理字型 manifest header 不合法".into());
+    }
+    let face = fonts.iter()
+        .find(|font| font.get("family").and_then(Value::as_str) == Some(spec.logical_family.as_str()))
+        .and_then(|font| font.get("faces")).and_then(Value::as_array)
+        .and_then(|faces| faces.iter().find(|face| face.get("id").and_then(Value::as_str)
+            == Some(spec.face_id.as_str())))
+        .ok_or("物理字型 manifest 缺少指定 face")?;
+    let bytes = face.get("bytes").and_then(Value::as_u64).ok_or("物理字型 manifest 缺少大小")?;
+    if bytes == 0 || bytes > MAX_BUNDLED_FONT_FACE_BYTES
+        || face.get("weight").and_then(Value::as_u64) != Some(u64::from(spec.font_weight))
+        || face.get("file").and_then(Value::as_str) != Some(spec.font_file.as_str())
+        || face.get("family").and_then(Value::as_str) != Some(spec.font_family.as_str())
+        || face.get("sha256").and_then(Value::as_str) != Some(spec.sha256.as_str())
+    {
+        return Err("物理字型 manifest 與編譯 face 契約不符".into());
+    }
+    Ok(bytes)
+}
+
+fn read_bundled_font_face_bytes(
+    font_root: &Path,
+    spec: &BundledFontFaceSpec,
+) -> Result<Vec<u8>, String> {
+    if !font_root.is_absolute() {
+        return Err("物理字型 root 必須是絕對路徑".into());
+    }
+    let ancestors = open_bundled_font_directory_chain(font_root)?;
+    let root = ancestors.last().ok_or("物理字型 root 缺少 ancestor")?;
+    let render = open_bundled_font_directory(&font_root.join("render"))?;
+    if render.canonical.parent() != Some(root.canonical.as_path()) {
+        return Err("物理字型 render 資料夾不可指向字型目錄之外".into());
+    }
+    verify_bundled_font_directory_chain(&ancestors)?;
+    verify_bundled_font_directory(&render)?;
+    let manifest = read_bundled_font_file(
+        &font_root.join("editkin-open-fonts.json"), root, MAX_BUNDLED_FONT_MANIFEST_BYTES,
+    )?;
+    let expected_size = bundled_font_manifest_face_size(&manifest.bytes, spec)?;
+    let face = read_bundled_font_file(
+        &font_root.join(&spec.font_file), &render, MAX_BUNDLED_FONT_FACE_BYTES,
+    )?;
+    if face.bytes.len() as u64 != expected_size || format!("{:x}", Sha256::digest(&face.bytes)) != spec.sha256 {
+        return Err("物理字型實際大小或 SHA 與編譯 face 契約不符".into());
+    }
+    // Retain both original handles through the whole transaction. Equal-byte replacement is still drift.
+    verify_bundled_font_read(&manifest)?;
+    verify_bundled_font_read(&face)?;
+    verify_bundled_font_directory(&render)?;
+    verify_bundled_font_directory_chain(&ancestors)?;
+    Ok(face.bytes)
+}
+
+#[tauri::command(async)]
+fn read_bundled_font_face(app: AppHandle, face_id: String) -> Result<tauri::ipc::Response, String> {
+    // Reject unknown IDs before resolving runtime resources or opening any file.
+    let spec = bundled_font_face_spec(&face_id)?;
+    let runtime = runtime_paths(&app)?;
+    read_bundled_font_face_bytes(&runtime.font_root, &spec).map(tauri::ipc::Response::new)
+}
+
+#[tauri::command]
+async fn list_color_luts_v1(app: AppHandle, window: tauri::WebviewWindow, offset: Option<u64>, limit: Option<u64>) -> Result<Value, String> {
+    desktop_color_luts_v1::list_color_luts_v1(app, window, offset, limit).await
+}
+#[tauri::command]
+async fn pick_color_lut_v1(app: AppHandle, window: tauri::WebviewWindow, ui_locale: Option<String>) -> Result<Value, String> {
+    desktop_color_luts_v1::pick_color_lut_v1(app, window, ui_locale).await
+}
+#[tauri::command]
+async fn import_color_lut_v1(app: AppHandle, window: tauri::WebviewWindow, request: desktop_color_luts_v1::ImportRequestV1) -> Result<Value, String> {
+    desktop_color_luts_v1::import_color_lut_v1(app, window, request).await
+}
+#[tauri::command]
+async fn read_color_lut_v1(app: AppHandle, window: tauri::WebviewWindow, id: String, sha256: String, input_space: String) -> Result<tauri::ipc::Response, String> {
+    desktop_color_luts_v1::read_color_lut_v1(app, window, id, sha256, input_space).await
 }
 
 #[tauri::command]
@@ -808,7 +1216,6 @@ fn workflow_profile_path(app: &AppHandle) -> Result<PathBuf, String> {
         .join("workflow-profile.json"))
 }
 
-#[cfg(feature = "auto-roto-research")]
 fn valid_sha256(value: &str) -> bool {
     value.len() == 64
         && value
@@ -879,6 +1286,7 @@ fn service_request_value(runtime: &RuntimePaths, command: &str, payload: Value) 
         "creativePackRoot": runtime.creative_pack_root,
         "personalMusicRoot": runtime.personal_music_root,
         "personalVisualRoot": runtime.personal_visual_root,
+        "personalColorLutRoot": runtime.personal_color_lut_root,
         "fontRoot": runtime.font_root,
         "colorRoot": runtime.color_root,
         "pluginRoots": runtime.plugin_roots
@@ -988,41 +1396,6 @@ fn recovery_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(application_data_root(app)?.join("recovery/session.json"))
 }
 
-fn batch_session_path(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(application_data_root(app)?.join("batch/current-session.json"))
-}
-
-fn persist_batch_session(app: &AppHandle, session: &BatchSession) -> Result<(), String> {
-    let value = serde_json::to_value(session).map_err(|error| error.to_string())?;
-    write_json_atomic(&batch_session_path(app)?, &value)
-}
-
-fn load_batch_session(app: &AppHandle) -> Result<Option<BatchSession>, String> {
-    let Some(value) = read_json(&batch_session_path(app)?)? else {
-        return Ok(None);
-    };
-    let mut session: BatchSession =
-        serde_json::from_value(value).map_err(|error| format!("批次工作紀錄損壞：{error}"))?;
-    if session.schema_version != 1 || session.id.is_empty() || session.jobs.is_empty() {
-        return Err("批次工作紀錄格式不合法".into());
-    }
-    if !valid_editorial_profile(&session.editorial_profile) {
-        session.editorial_profile = default_editorial_profile();
-    }
-    let mut recovered = false;
-    for job in &mut session.jobs {
-        if job.status == "running" {
-            job.status = "queued".into();
-            job.error = Some("上次執行中斷，已排回佇列等待重試".into());
-            recovered = true;
-        }
-    }
-    if recovered {
-        session.updated_at = unix_time_ms().to_string();
-        persist_batch_session(app, &session)?;
-    }
-    Ok(Some(session))
-}
 
 fn read_json(path: &Path) -> Result<Option<Value>, String> {
     if !path.exists() {
@@ -1485,7 +1858,9 @@ fn string_field<'a>(value: &'a Value, field: &str) -> Result<&'a str, String> {
 /// UNC (`\\host\share`), `\\?\UNC\` and device (`\\.\`, `\\?\Volume{..}`) paths
 /// are absolute on Windows, but touching one opens an SMB connection (and may
 /// send NTLM credentials) to a host named by an untrusted project file. Only a
-/// verbatim drive path (`\\?\C:\`) stays local.
+/// verbatim drive path (`\\?\C:\`) stays local. `\??\` hands the rest of the
+/// path to the NT object manager unparsed (`\??\UNC\host\share`), so no path
+/// with that prefix is local media. Mirrors `src/shared/localMediaPath.ts`.
 fn is_windows_network_path(path: &str) -> bool {
     let normalized = path.replace('/', "\\");
     let bytes = normalized.as_bytes();
@@ -1494,22 +1869,155 @@ fn is_windows_network_path(path: &str) -> bool {
         && bytes[4].is_ascii_alphabetic()
         && bytes[5] == b':'
         && bytes.get(6).is_none_or(|byte| *byte == b'\\');
-    normalized.starts_with("\\\\") && !verbatim_drive
+    (normalized.starts_with("\\\\") && !verbatim_drive)
+        || normalized.starts_with("\\??\\")
+        || normalized
+            .split(['\\', ':'])
+            .any(is_windows_reserved_device_name)
+}
+
+/// Win32 opens a DOS device instead of a file for these names in any letter
+/// case, also with trailing spaces (`NUL `) and, before Windows 11, with an
+/// extension (`nul.txt`, `NUL .txt`); `:` also ends a name (`C:NUL`). Classic
+/// Win32 only maps the final component to a device; every component is checked
+/// anyway, a conservative choice that also covers a folder later opened on its
+/// own. COM0 and LPT0 are not on Microsoft's current list but are rejected too.
+fn is_windows_reserved_device_name(name: &str) -> bool {
+    let base = name
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(' ')
+        .to_uppercase();
+    match base.as_str() {
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$" => true,
+        _ => base
+            .strip_prefix("COM")
+            .or_else(|| base.strip_prefix("LPT"))
+            .is_some_and(|port| {
+                let mut chars = port.chars();
+                matches!(chars.next(), Some('0'..='9' | '¹' | '²' | '³')) && chars.next().is_none()
+            }),
+    }
+}
+
+/// What keeps a path string from being a plain local absolute path, decided from its text alone (no file-system
+/// call), or None when it is one. This is the one shared rule for every path Editkin takes from the webview, a
+/// chooser or a project: each caller maps the verdict to its own message and adds its own extra rules on top.
+/// A network or device form is reported as `NetworkOrDevice` even when it is also not absolute (`\??\…`, `C:NUL`),
+/// so a caller that refuses only network paths can never let one through. Network, device and stream forms are
+/// Windows rules; elsewhere `//x`, `NUL` and `a:b` are ordinary paths. Mirrors `localPathTextProblem` in
+/// `src/shared/localMediaPath.ts`; both are checked against `src/shared/localPathVerdicts.json`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LocalPathProblem {
+    NotAbsolute,
+    NetworkOrDevice,
+    AlternateStream,
+}
+
+pub(crate) fn local_path_text_problem(path: &str) -> Option<LocalPathProblem> {
+    if cfg!(windows) && is_windows_network_path(path) {
+        return Some(LocalPathProblem::NetworkOrDevice);
+    }
+    if !Path::new(path).is_absolute() {
+        return Some(LocalPathProblem::NotAbsolute);
+    }
+    if cfg!(windows) && windows_alternate_stream_path(path) {
+        return Some(LocalPathProblem::AlternateStream);
+    }
+    None
+}
+
+/// The single-import check for a media source path, decided from its text before anything opens it: an
+/// absolute path that is not a network share, a device or an NTFS alternate data stream. `allow_path` runs it
+/// on every import; the media chooser, drag-and-drop, the batch chooser and relink run it on their paths before
+/// any probe or file-system call, and preview/export bindings before asking whether the file exists.
+fn media_source_path_check(path: &str) -> Result<(), String> {
+    match local_path_text_problem(path) {
+        None => Ok(()),
+        Some(LocalPathProblem::NetworkOrDevice) if Path::new(path).is_absolute() => Err(format!(
+            "拒絕網路共用或裝置路徑作為媒體來源，請先以一般檔名複製到本機磁碟：{path}"
+        )),
+        Some(LocalPathProblem::AlternateStream) => Err(format!(
+            "拒絕檔名裡帶冒號的路徑作為媒體來源（這是檔案的隱藏資料串流，不是檔案本身），請改用一般檔名：{path}"
+        )),
+        // Not absolute, including a device form that is not even absolute (`\??\…`, `C:NUL`): the not-absolute
+        // message, as before.
+        Some(LocalPathProblem::NotAbsolute | LocalPathProblem::NetworkOrDevice) => {
+            Err(format!("媒體路徑不是 absolute path：{path}"))
+        }
+    }
+}
+
+/// `C:\clip.mp4:stream` names an NTFS alternate data stream of `clip.mp4`, not a file. Any `:` after the drive
+/// prefix (`C:` or the verbatim `\\?\C:`) is one, or an invalid name; no ordinary Windows file name has one.
+fn windows_alternate_stream_path(path: &str) -> bool {
+    let normalized = path.replace('/', "\\");
+    let rest = normalized.strip_prefix("\\\\?\\").unwrap_or(&normalized);
+    let bytes = rest.as_bytes();
+    let after_drive = if bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' { &rest[2..] } else { rest };
+    after_drive.contains(':')
+}
+
+/// A media path a preview or export binding names: it must pass the single-import check, and only then is it asked
+/// whether it is a regular file (the one file-system call).
+fn local_media_binding(path: &str) -> bool {
+    local_media_binding_with(path, Path::is_file)
+}
+
+/// `local_media_binding` with the file-system question injected (tests count its calls).
+fn local_media_binding_with(path: &str, is_file: impl FnOnce(&Path) -> bool) -> bool {
+    media_source_path_check(path).is_ok() && is_file(Path::new(path))
+}
+
+/// Image layers of a GPU render graph name files the GPU worker opens: each passes the single-import check before
+/// the graph is written or the worker sees it. Solid layers name no file.
+fn gpu_render_layers_local(layers: &[Value]) -> Result<(), String> {
+    for layer in layers {
+        if let Some(path) = layer.pointer("/source/path") {
+            media_source_path_check(path.as_str().ok_or("GPU render graph 圖層的 path 必須是文字")?)?;
+        }
+    }
+    Ok(())
 }
 
 fn allow_path(app: &AppHandle, path: &str) -> Result<(), String> {
     let candidate = Path::new(path);
-    if !candidate.is_absolute() {
-        return Err(format!("媒體路徑不是 absolute path：{path}"));
-    }
-    if cfg!(windows) && is_windows_network_path(path) {
-        return Err(format!(
-            "拒絕網路共用或裝置路徑作為媒體來源，請先複製到本機磁碟：{path}"
-        ));
-    }
+    media_source_path_check(path)?;
     app.asset_protocol_scope()
         .allow_file(candidate)
         .map_err(|error| error.to_string())
+}
+
+/// Records outside-workspace media read grants for files the creator brought into Editkin in this
+/// desktop app (chooser, drag-and-drop, relink); the MCP server only reads them. Opening a project
+/// grants nothing: the creator is asked first (outside_media_grants::grant_project_outside_media).
+/// See outside_media_grants.rs. Best effort: a failure never blocks the import.
+async fn record_outside_media_grants(
+    app: &AppHandle,
+    paths: Vec<String>,
+    source: outside_media_grants::GrantSource,
+) {
+    if paths.is_empty() {
+        return;
+    }
+    let root = match application_data_root(app) {
+        Ok(root) => root,
+        Err(error) => {
+            eprintln!("Outside media grants not recorded: {error}");
+            return;
+        }
+    };
+    let now_ms = u64::try_from(unix_time_ms()).unwrap_or(0);
+    match tauri::async_runtime::spawn_blocking(move || {
+        outside_media_grants::record(&root, &paths, source, now_ms)
+    })
+    .await
+    {
+        Ok(Ok(_)) => {}
+        Ok(Err(error)) => eprintln!("Outside media grants not recorded: {error}"),
+        Err(error) => eprintln!("Outside media grants not recorded: {error}"),
+    }
 }
 
 const PRODUCT_AUTO_ROTO_ENGINE: &str = "editkin-native-color-temporal-roto/v1";
@@ -2395,19 +2903,46 @@ mod runtime_original_projection_tests {
 }
 
 #[tauri::command]
-async fn pick_media(app: AppHandle) -> Result<Vec<PickedMedia>, String> {
-    let selected = FileDialog::new()
-        .set_title("匯入影片、聲音或圖片")
+async fn pick_media(app: AppHandle, ui_locale: Option<String>, image_only: Option<bool>) -> Result<Vec<PickedMedia>, String> {
+    // imageOnly: the 「模板片段」 picture slot chooser (one still picture); otherwise the media chooser (several files).
+    let image_only = image_only.unwrap_or(false);
+    let dialog = FileDialog::new()
+        .set_title(native_dialog_labels::text(ui_locale.as_deref(), DialogText::MediaTitle))
         .add_filter(
-            "媒體素材",
-            &[
-                "mp4", "mov", "mkv", "webm", "m4v", "mp3", "wav", "m4a", "aac", "flac", "png",
-                "jpg", "jpeg", "webp", "exr", "json",
-            ],
-        )
-        .pick_files()
-        .unwrap_or_default();
+            native_dialog_labels::text(ui_locale.as_deref(), DialogText::MediaFilter),
+            media_picker_extensions(image_only),
+        );
+    let selected = if image_only { dialog.pick_file().into_iter().collect() } else { dialog.pick_files().unwrap_or_default() };
     import_media_path_bufs(&app, selected).await
+}
+
+/// File types the media chooser offers; the template picture chooser offers still pictures only.
+fn media_picker_extensions(image_only: bool) -> &'static [&'static str] {
+    if image_only {
+        return &["png", "jpg", "jpeg", "webp"];
+    }
+    &[
+        "mp4", "mov", "mkv", "webm", "m4v", "mp3", "wav", "m4a", "aac", "flac", "png",
+        "jpg", "jpeg", "webp", "exr", "json",
+    ]
+}
+
+#[cfg(test)]
+mod media_picker_extension_tests {
+    use super::*;
+    #[test]
+    fn style_template_picture_chooser_offers_still_pictures_only() {
+        let pictures = media_picker_extensions(true);
+        assert_eq!(pictures, &["png", "jpg", "jpeg", "webp"]);
+        for extension in pictures {
+            assert!(media_picker_extensions(false).contains(extension));
+            assert!(supported_media_path(Path::new(&format!("picture.{extension}"))));
+        }
+        for extension in ["mp4", "mov", "wav", "exr", "json"] {
+            assert!(!pictures.contains(&extension));
+            assert!(media_picker_extensions(false).contains(&extension));
+        }
+    }
 }
 
 fn supported_media_path(path: &Path) -> bool {
@@ -2423,36 +2958,30 @@ fn supported_media_path(path: &Path) -> bool {
     .contains(&extension.as_str())
 }
 
-fn imported_media_defaults(path: &Path) -> (&'static str, &'static str, &'static str) {
-    let extension = path
-        .extension()
-        .and_then(|value| value.to_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if extension == "exr" || extension == "json" {
-        return ("image", "linear_rec709", "straight");
-    }
-    if ["png", "jpg", "jpeg", "webp"].contains(&extension.as_str()) {
-        return ("image", "auto", "auto");
-    }
-    if ["mp3", "wav", "m4a", "aac", "flac"].contains(&extension.as_str()) {
-        return ("audio", "auto", "auto");
-    }
-    ("video", "auto", "auto")
-}
-
 #[tauri::command]
 async fn import_media_paths(
     app: AppHandle,
     paths: Vec<String>,
 ) -> Result<Vec<PickedMedia>, String> {
+    let selected = checked_drop_paths(paths, Path::is_file)?;
+    import_media_path_bufs(&app, selected).await
+}
+
+/// Drag-and-drop paths, checked before anything touches them. A relative path keeps the drag-drop message; a network
+/// share, device or stream path is refused by the single-import check; only then is `is_file` (the one file-system
+/// call, injected for tests) asked.
+fn checked_drop_paths(paths: Vec<String>, is_file: impl Fn(&Path) -> bool) -> Result<Vec<PathBuf>, String> {
     if paths.len() > 256 {
         return Err("一次最多拖入 256 份素材".into());
     }
     let mut selected = Vec::with_capacity(paths.len());
     for raw in paths {
         let path = PathBuf::from(raw);
-        if !path.is_absolute() || !path.is_file() {
+        // The single-import check before anything touches the path.
+        if path.is_absolute() {
+            media_source_path_check(&path.to_string_lossy())?;
+        }
+        if !path.is_absolute() || !is_file(path.as_path()) {
             return Err("拖入項目不是可讀取的媒體檔案".into());
         }
         if !supported_media_path(&path) {
@@ -2460,7 +2989,25 @@ async fn import_media_paths(
         }
         selected.push(path);
     }
-    import_media_path_bufs(&app, selected).await
+    Ok(selected)
+}
+
+/// The single-import check on every chooser pick, then the media probe of the checked paths (in the app,
+/// `inspect_media_batch`): a network share, device or stream path is refused before the probe runs.
+async fn probe_import_picks<F, Fut>(selected: &[PathBuf], inspect: F) -> Result<(Vec<String>, Value), String>
+where
+    F: FnOnce(Vec<String>) -> Fut,
+    Fut: std::future::Future<Output = Result<Value, String>>,
+{
+    let path_strings: Vec<String> = selected
+        .iter()
+        .map(|path| path.to_string_lossy().to_string())
+        .collect();
+    for path in &path_strings {
+        media_source_path_check(path)?;
+    }
+    let probes = inspect(path_strings.clone()).await?;
+    Ok((path_strings, probes))
 }
 
 async fn import_media_path_bufs(
@@ -2470,14 +3017,13 @@ async fn import_media_path_bufs(
     if selected.is_empty() {
         return Ok(Vec::new());
     }
-    let path_strings: Vec<String> = selected
-        .iter()
-        .map(|path| path.to_string_lossy().to_string())
-        .collect();
-    let probes = call_service(app, "inspect_media_batch", json!({ "paths": path_strings })).await?;
+    // The single-import check on every pick before the probe (or anything else) reads it.
+    let (path_strings, probes) =
+        probe_import_picks(&selected, |paths| call_service(app, "inspect_media_batch", json!({ "paths": paths }))).await?;
     let probes = probes
         .as_array()
         .ok_or("inspect_media_batch 回應不是陣列")?;
+    let defaults = imported_media_defaults_batch(&selected, probes)?;
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| error.to_string())?
@@ -2486,7 +3032,7 @@ async fn import_media_path_bufs(
     for (index, path) in selected.iter().enumerate() {
         let path_string = path.to_string_lossy().to_string();
         allow_path(app, &path_string)?;
-        let (kind, interpretation, alpha_mode) = imported_media_defaults(path);
+        let (kind, interpretation, alpha_mode) = defaults[index];
         let probe = probes.get(index).ok_or("inspect_media_batch 長度不符")?;
         let image_sequence = probe.get("imageSequence").filter(|value| !value.is_null());
         let duration = if image_sequence.is_some() {
@@ -2535,264 +3081,10 @@ async fn import_media_path_bufs(
             preview_path,
         });
     }
+    record_outside_media_grants(app, path_strings, outside_media_grants::GrantSource::Import).await;
     Ok(result)
 }
 
-#[tauri::command]
-async fn pick_batch_media(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    editorial_profile: String,
-) -> Result<Value, String> {
-    if !valid_editorial_profile(&editorial_profile) {
-        return Err("未知的剪輯類型".into());
-    }
-    let selected = FileDialog::new()
-        .set_title("選取要批量自動剪輯的新影片")
-        .add_filter("影片素材", &["mp4", "mov", "mkv", "webm", "m4v"])
-        .pick_files()
-        .unwrap_or_default();
-    if selected.is_empty() {
-        return Ok(json!({ "canceled": true }));
-    }
-    let Some(output_root) = FileDialog::new()
-        .set_title("選擇批量成片與可編輯專案的儲存資料夾")
-        .pick_folder()
-    else {
-        return Ok(json!({ "canceled": true }));
-    };
-    let source_paths: Vec<String> = selected
-        .iter()
-        .map(|path| path.to_string_lossy().to_string())
-        .collect();
-    let probes = call_service(
-        &app,
-        "inspect_media_batch",
-        json!({ "paths": source_paths }),
-    )
-    .await?;
-    let probes = probes
-        .as_array()
-        .ok_or("inspect_media_batch 回應不是陣列")?;
-    if probes.len() != selected.len() {
-        return Err("inspect_media_batch 長度不符".into());
-    }
-    for (index, probe) in probes.iter().enumerate() {
-        if probe.get("hasVideo").and_then(Value::as_bool) != Some(true)
-            || probe.get("duration").and_then(Value::as_f64).unwrap_or(0.0) <= 0.0
-        {
-            return Err(format!(
-                "{} 不是可解碼的影片，批次尚未開始",
-                selected[index].to_string_lossy()
-            ));
-        }
-    }
-    let session_id = format!("batch-{}", unix_time_ms());
-    let now = unix_time_ms().to_string();
-    let jobs = selected
-        .iter()
-        .enumerate()
-        .map(|(index, path)| BatchJob {
-            id: format!("job-{:03}", index + 1),
-            source_path: path.to_string_lossy().to_string(),
-            source_name: path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("新影片")
-                .to_string(),
-            status: "queued".into(),
-            project_path: None,
-            output_path: None,
-            receipt_path: None,
-            warnings: Vec::new(),
-            error: None,
-        })
-        .collect();
-    let session = BatchSession {
-        schema_version: 1,
-        id: session_id,
-        editorial_profile,
-        output_root: output_root.to_string_lossy().to_string(),
-        created_at: now.clone(),
-        updated_at: now,
-        jobs,
-    };
-    persist_batch_session(&app, &session)?;
-    *state
-        .batch_session
-        .lock()
-        .map_err(|_| "batch session lock poisoned")? = Some(session.clone());
-    Ok(json!({ "canceled": false, "session": session }))
-}
-
-#[tauri::command]
-fn get_batch_session(app: AppHandle, state: State<'_, AppState>) -> Result<Value, String> {
-    let mut current = state
-        .batch_session
-        .lock()
-        .map_err(|_| "batch session lock poisoned")?;
-    if current.is_none() {
-        *current = load_batch_session(&app)?;
-    }
-    Ok(current
-        .as_ref()
-        .map(|session| json!({ "session": session }))
-        .unwrap_or_else(|| json!({ "session": null })))
-}
-
-#[tauri::command]
-async fn run_batch_auto_edit_item(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    session_id: String,
-    job_id: String,
-) -> Result<Value, String> {
-    let (source_path, output_root, editorial_profile) = {
-        let mut current = state
-            .batch_session
-            .lock()
-            .map_err(|_| "batch session lock poisoned")?;
-        if current.is_none() {
-            *current = load_batch_session(&app)?;
-        }
-        let session = current.as_mut().ok_or("找不到批次工作")?;
-        if session.id != session_id {
-            return Err("批次 session 身分不一致".into());
-        }
-        let job = session
-            .jobs
-            .iter_mut()
-            .find(|job| job.id == job_id)
-            .ok_or("找不到批次項目")?;
-        if job.status == "completed" {
-            return Ok(json!({ "session": session }));
-        }
-        let source_path = job.source_path.clone();
-        job.status = "running".into();
-        job.error = None;
-        session.updated_at = unix_time_ms().to_string();
-        persist_batch_session(&app, session)?;
-        (
-            source_path,
-            session.output_root.clone(),
-            session.editorial_profile.clone(),
-        )
-    };
-    let service_result = call_service(
-        &app,
-        "batch_auto_edit_item",
-        json!({
-            "jobId": job_id,
-            "sourcePath": source_path,
-            "outputRoot": output_root,
-            "language": "auto",
-            "targetRatio": 0.65,
-            "addMusic": true,
-            "editorialProfile": editorial_profile
-        }),
-    )
-    .await;
-    let mut current = state
-        .batch_session
-        .lock()
-        .map_err(|_| "batch session lock poisoned")?;
-    let session = current.as_mut().ok_or("批次工作在執行期間遺失")?;
-    if session.id != session_id {
-        return Err("批次 session 在執行期間遭替換".into());
-    }
-    let job = session
-        .jobs
-        .iter_mut()
-        .find(|job| job.id == job_id)
-        .ok_or("批次項目在執行期間遺失")?;
-    match service_result {
-        Ok(result) => {
-            job.status = result
-                .get("status")
-                .and_then(Value::as_str)
-                .unwrap_or("failed")
-                .to_string();
-            job.project_path = result
-                .get("projectPath")
-                .and_then(Value::as_str)
-                .map(str::to_string);
-            job.output_path = result
-                .get("outputPath")
-                .and_then(Value::as_str)
-                .map(str::to_string);
-            job.receipt_path = result
-                .get("receiptPath")
-                .and_then(Value::as_str)
-                .map(str::to_string);
-            job.warnings = result
-                .get("warnings")
-                .and_then(Value::as_array)
-                .map(|items| {
-                    items
-                        .iter()
-                        .filter_map(Value::as_str)
-                        .map(str::to_string)
-                        .collect()
-                })
-                .unwrap_or_default();
-            job.error = result
-                .get("error")
-                .and_then(Value::as_str)
-                .map(str::to_string);
-        }
-        Err(error) => {
-            job.status = "failed".into();
-            job.error = Some(error);
-        }
-    }
-    session.updated_at = unix_time_ms().to_string();
-    persist_batch_session(&app, session)?;
-    Ok(json!({ "session": session }))
-}
-
-#[tauri::command]
-async fn open_batch_project(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    session_id: String,
-    job_id: String,
-) -> Result<Value, String> {
-    let project_path = {
-        let mut current = state
-            .batch_session
-            .lock()
-            .map_err(|_| "batch session lock poisoned")?;
-        if current.is_none() {
-            *current = load_batch_session(&app)?;
-        }
-        let session = current.as_ref().ok_or("找不到批次工作")?;
-        if session.id != session_id {
-            return Err("批次 session 身分不一致".into());
-        }
-        let job = session
-            .jobs
-            .iter()
-            .find(|job| job.id == job_id)
-            .ok_or("找不到批次項目")?;
-        job.project_path
-            .clone()
-            .ok_or("這個批次項目尚未產生可編輯專案")?
-    };
-    let project = call_service(&app, "read_project", json!({ "path": project_path })).await?;
-    let assets = project
-        .get("assets")
-        .and_then(Value::as_array)
-        .ok_or("專案缺少 assets")?;
-    let runtime_paths = collect_runtime_paths_async(&app, assets).await?;
-    let matte_preview_paths = collect_product_auto_roto_preview_paths(&app, &project)?;
-    Ok(json!({
-        "canceled": false,
-        "path": project_path,
-        "project": project,
-        "runtimePaths": runtime_paths,
-        "mattePreviewPaths": matte_preview_paths
-    }))
-}
 
 #[tauri::command]
 async fn preview_paths(app: AppHandle, assets: Vec<Value>) -> Result<Value, String> {
@@ -2802,8 +3094,8 @@ async fn preview_paths(app: AppHandle, assets: Vec<Value>) -> Result<Value, Stri
 }
 
 #[tauri::command]
-async fn list_creative_library(app: AppHandle) -> Result<Value, String> {
-    call_service(&app, "list_creative_library", json!({})).await
+async fn list_creative_library(app: AppHandle, include_original_sfx_candidates: Option<bool>) -> Result<Value, String> {
+    call_service(&app, "list_creative_library", if include_original_sfx_candidates == Some(true) { json!({ "includeOriginalSfxCandidates": true }) } else { json!({}) }).await
 }
 
 #[tauri::command]
@@ -3003,6 +3295,20 @@ async fn prepare_media(app: AppHandle, asset: Value) -> Result<Value, String> {
         "runtimePaths": paths,
         "cacheHit": prepared.get("cacheHit").and_then(Value::as_bool).unwrap_or(false)
     }))
+}
+
+#[tauri::command]
+async fn clip_media_derivative(app: AppHandle, mut request: Value) -> Result<Value, String> {
+    if let Some(uri) = request.get("sourcePath").and_then(Value::as_str).map(str::to_string) {
+        if let Some(asset_id) = creative_asset_id(&uri)? {
+            let resolved = call_service(&app, "resolve_creative_asset", json!({ "assetId": asset_id })).await?;
+            request["sourcePath"] = json!(string_field(&resolved, "absolutePath")?);
+        }
+    }
+    let result = call_service(&app, "clip_media_derivative", request).await?;
+    let asset = result.get("asset").ok_or("clip_media_derivative missing asset")?;
+    allow_path(&app, string_field(asset, "uri")?)?;
+    Ok(result)
 }
 
 #[tauri::command]
@@ -3310,15 +3616,17 @@ async fn analyze_auto_roto(app: AppHandle, mut request: Value) -> Result<Value, 
 }
 
 #[tauri::command]
-async fn open_project(app: AppHandle) -> Result<Value, String> {
+async fn open_project(app: AppHandle, ui_locale: Option<String>) -> Result<Value, String> {
     let Some(path) = FileDialog::new()
-        .set_title("開啟 Editkin 專案")
-        .add_filter("Editkin EditGraph", &["json"])
+        .set_title(native_dialog_labels::text(ui_locale.as_deref(), DialogText::OpenProject))
+        .add_filter(native_dialog_labels::text(ui_locale.as_deref(), DialogText::ProjectFilter), &["json"])
         .pick_file()
     else {
         return Ok(json!({ "canceled": true }));
     };
-    let project = call_service(&app, "read_project", json!({ "path": path })).await?;
+    let opened = call_service(&app, "read_project", json!({ "path": path, "captureFileIdentity": true })).await?;
+    let project = opened.get("project").cloned().ok_or("read receipt missing project")?;
+    let project_file_identity = opened.get("fileIdentity").cloned().ok_or("read receipt missing byte identity")?;
     let assets = project
         .get("assets")
         .and_then(Value::as_array)
@@ -3326,7 +3634,7 @@ async fn open_project(app: AppHandle) -> Result<Value, String> {
     let runtime_paths = collect_runtime_paths_async(&app, assets).await?;
     let matte_preview_paths = collect_product_auto_roto_preview_paths(&app, &project)?;
     Ok(
-        json!({ "canceled": false, "path": path, "project": project, "runtimePaths": runtime_paths, "mattePreviewPaths": matte_preview_paths }),
+        json!({ "canceled": false, "path": path, "project": project, "fileIdentity": project_file_identity, "runtimePaths": runtime_paths, "mattePreviewPaths": matte_preview_paths }),
     )
 }
 
@@ -3352,8 +3660,16 @@ async fn save_project(
     project: Value,
     current_path: Option<String>,
     save_as: Option<bool>,
+    expected_file_identity: Option<Value>,
+    ui_locale: Option<String>,
 ) -> Result<Value, String> {
     let regular_save = !save_as.unwrap_or(false) && current_path.is_some();
+    // A regular save writes to the path the webview holds: a network share or device path is refused before the write.
+    if regular_save {
+        if let Some(current) = current_path.as_deref() {
+            desktop_files::local_project_path(current)?;
+        }
+    }
     let target = if regular_save {
         current_path.map(PathBuf::from)
     } else {
@@ -3363,9 +3679,9 @@ async fn save_project(
         Some(path) => path,
         None => {
             let Some(path) = FileDialog::new()
-                .set_title("儲存 Editkin 專案")
+                .set_title(native_dialog_labels::text(ui_locale.as_deref(), DialogText::SaveProject))
                 .set_file_name(format!("{}.editkin.json", safe_project_name(&project)))
-                .add_filter("Editkin EditGraph", &["editkin.json", "haoedit.json"])
+                .add_filter(native_dialog_labels::text(ui_locale.as_deref(), DialogText::ProjectFilter), &["editkin.json", "haoedit.json"])
                 .save_file()
             else {
                 return Ok(json!({ "canceled": true }));
@@ -3390,19 +3706,28 @@ async fn save_project(
     } else {
         Value::Null
     };
-    let saved = call_service(
+    let saved_reply = call_service(
         &app,
         "write_project",
         json!({
             "path": path,
             "project": project,
-            "expectedRevision": expected_revision
+            "expectedRevision": expected_revision,
+            "captureFileIdentity": true,
+            "captureRetainedProjectV1": true,
+            "expectedFileIdentity": if regular_save { expected_file_identity } else { None }
         }),
     )
     .await?;
+    if saved_reply.get("saveFailed").and_then(Value::as_bool) == Some(true) {
+        return Ok(json!({ "canceled": false, "saveFailed": true, "path": path,
+            "message": saved_reply.get("message"), "retainedProject": saved_reply.get("retainedProject") }));
+    }
+    let saved = saved_reply.get("project").cloned().ok_or("save receipt missing project")?;
+    let project_file_identity = saved_reply.get("fileIdentity").cloned().ok_or("save receipt missing byte identity")?;
     let matte_preview_paths = collect_product_auto_roto_preview_paths(&app, &saved)?;
     Ok(
-        json!({ "canceled": false, "path": path, "project": saved, "mattePreviewPaths": matte_preview_paths }),
+        json!({ "canceled": false, "path": path, "project": saved, "fileIdentity": project_file_identity, "mattePreviewPaths": matte_preview_paths }),
     )
 }
 
@@ -3432,6 +3757,7 @@ async fn save_recovery(
     project: Value,
     project_path: Option<String>,
     clean_updated_at: String,
+    base_file_identity: Option<Value>,
 ) -> Result<(), String> {
     call_service(
         &app,
@@ -3440,7 +3766,8 @@ async fn save_recovery(
             "path": recovery_path(&app)?,
             "project": project,
             "projectPath": project_path,
-            "cleanUpdatedAt": clean_updated_at
+            "cleanUpdatedAt": clean_updated_at,
+            "baseFileIdentity": base_file_identity
         }),
     )
     .await?;
@@ -3468,11 +3795,11 @@ fn integration_smoke_enabled() -> bool {
 }
 
 #[tauri::command]
-async fn render_project(app: AppHandle, project: Value) -> Result<Value, String> {
+async fn render_project(app: AppHandle, project: Value, ui_locale: Option<String>, job_id: Option<String>) -> Result<Value, String> {
     let Some(path) = FileDialog::new()
-        .set_title("輸出完成影片")
+        .set_title(native_dialog_labels::text(ui_locale.as_deref(), DialogText::ExportVideo))
         .set_file_name(format!("{}.mp4", safe_project_name(&project)))
-        .add_filter("MP4 影片", &["mp4"])
+        .add_filter(native_dialog_labels::text(ui_locale.as_deref(), DialogText::Mp4Filter), &["mp4"])
         .save_file()
     else {
         return Ok(json!({ "canceled": true }));
@@ -3486,12 +3813,18 @@ async fn render_project(app: AppHandle, project: Value) -> Result<Value, String>
     } else {
         path.with_extension("mp4")
     };
-    let rendered = call_service(
+    let render_jobs::ExportOutcome::Completed(rendered) = render_jobs::run_export(
         &app,
-        "render_project",
+        job_id.as_deref(),
+        &output_path,
         json!({ "project": project, "outputPath": output_path }),
     )
-    .await?;
+    .await?
+    else {
+        return Ok(json!({ "canceled": true, "stoppedByUser": true }));
+    };
+    // 「播放」 plays the finished file inside Editkin; a path the asset scope refuses only disables that button.
+    let _ = allow_path(&app, &output_path.to_string_lossy());
     let mut result = rendered
         .as_object()
         .cloned()
@@ -3501,9 +3834,9 @@ async fn render_project(app: AppHandle, project: Value) -> Result<Value, String>
 }
 
 #[tauri::command]
-async fn render_alpha_master(app: AppHandle, project: Value) -> Result<Value, String> {
+async fn render_alpha_master(app: AppHandle, project: Value, ui_locale: Option<String>, job_id: Option<String>) -> Result<Value, String> {
     let Some(path) = FileDialog::new()
-        .set_title("輸出透明背景 ProRes 4444 Alpha 主檔")
+        .set_title(native_dialog_labels::text(ui_locale.as_deref(), DialogText::ExportAlpha))
         .set_file_name(format!("{}-Alpha.mov", safe_project_name(&project)))
         .add_filter("ProRes 4444 Alpha", &["mov"])
         .save_file()
@@ -3519,16 +3852,20 @@ async fn render_alpha_master(app: AppHandle, project: Value) -> Result<Value, St
     } else {
         path.with_extension("mov")
     };
-    let rendered = call_service(
+    let render_jobs::ExportOutcome::Completed(rendered) = render_jobs::run_export(
         &app,
-        "render_project",
+        job_id.as_deref(),
+        &output_path,
         json!({
             "project": project,
             "outputPath": output_path,
             "deliveryProfile": "prores4444_alpha_10bit"
         }),
     )
-    .await?;
+    .await?
+    else {
+        return Ok(json!({ "canceled": true, "stoppedByUser": true }));
+    };
     let mut result = rendered
         .as_object()
         .cloned()
@@ -3566,7 +3903,7 @@ fn validate_openexr_sequence_request(
                 path.is_empty()
                     || path.len() > 32_768
                     || !Path::new(path).is_absolute()
-                    || !Path::new(path).is_file()
+                    || !local_media_binding(path)
             })
         })
     {
@@ -3641,12 +3978,13 @@ async fn render_openexr_sequence(
     asset_bindings: Value,
     start_frame: u64,
     frame_count: u64,
+    ui_locale: Option<String>,
 ) -> Result<Value, String> {
     if project_name.trim().is_empty() || project_name.len() > 200 {
         return Err("OpenEXR 序列專案名稱不合法".into());
     }
     let Some(parent) = FileDialog::new()
-        .set_title("選擇 OpenEXR 影格序列的上層資料夾（不含音訊）")
+        .set_title(native_dialog_labels::text(ui_locale.as_deref(), DialogText::ExrFolder))
         .pick_folder()
     else {
         return Ok(json!({ "canceled": true }));
@@ -5421,6 +5759,79 @@ fn get_mobile_remote_status(state: State<'_, AppState>) -> Result<Value, String>
     Ok(status)
 }
 
+/// Credential hashes of revoked devices, written only by the desktop. The Remote
+/// server (`src/remote/server.ts`) also rewrites the trusted-device file, and a
+/// write it based on a read taken just before a revoke can land just after it
+/// and list the device again; the server refuses every credential listed here.
+fn mobile_revoked_devices_path(trusted_devices_path: &Path) -> PathBuf {
+    trusted_devices_path.with_file_name("revoked-devices.json")
+}
+
+const MOBILE_REVOKED_CREDENTIAL_LIMIT: usize = 256;
+
+fn revoke_trusted_device(trusted_path: &Path, device_id: &str) -> Result<bool, String> {
+    let mut store = fs::read_to_string(trusted_path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<Value>(&content).ok())
+        .unwrap_or_else(|| json!({ "schemaVersion": 1, "devices": [] }));
+    let devices = store
+        .get_mut("devices")
+        .and_then(Value::as_array_mut)
+        .ok_or("永久綁定裝置資料格式不正確")?;
+    let before = devices.len();
+    let mut credential_hashes = Vec::new();
+    devices.retain(|device| {
+        if device.get("id").and_then(Value::as_str) != Some(device_id) {
+            return true;
+        }
+        if let Some(hash) = device
+            .get("credentialHash")
+            .and_then(Value::as_str)
+            .filter(|hash| {
+                hash.len() == 64
+                    && hash
+                        .bytes()
+                        .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+            })
+        {
+            credential_hashes.push(hash.to_owned());
+        }
+        false
+    });
+    let revoked = devices.len() != before;
+    if !credential_hashes.is_empty() {
+        let revoked_path = mobile_revoked_devices_path(trusted_path);
+        // An unreadable list is replaced so that this revoke still takes effect.
+        let mut listed: Vec<String> = read_remote_json(&revoked_path)
+            .ok()
+            .flatten()
+            .and_then(|value| {
+                value
+                    .get("credentialHashes")
+                    .and_then(Value::as_array)
+                    .map(|hashes| {
+                        hashes
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .map(str::to_owned)
+                            .collect()
+                    })
+            })
+            .unwrap_or_default();
+        listed.retain(|hash| !credential_hashes.contains(hash));
+        listed.extend(credential_hashes);
+        let excess = listed.len().saturating_sub(MOBILE_REVOKED_CREDENTIAL_LIMIT);
+        listed.drain(..excess);
+        // Listed before the trusted file changes, so the device is refused from here on.
+        write_remote_json_atomic(
+            &revoked_path,
+            &json!({ "schemaVersion": 1, "credentialHashes": listed }),
+        )?;
+    }
+    write_json_atomic(trusted_path, &store)?;
+    Ok(revoked)
+}
+
 #[tauri::command]
 fn revoke_mobile_device(
     app: AppHandle,
@@ -5431,25 +5842,17 @@ fn revoke_mobile_device(
     if device_id.is_empty() || device_id.len() > 100 {
         return Err("裝置識別碼不合法".into());
     }
-    let trusted_path = state
+    // Held until the revoke is written, so two revokes cannot drop each other's
+    // entry from the revocation list.
+    let remote_state = state
         .mobile_remote
         .lock()
-        .map_err(|_| "mobile remote lock poisoned")?
+        .map_err(|_| "mobile remote lock poisoned")?;
+    let trusted_path = remote_state
         .as_ref()
         .map(|remote| remote.trusted_devices_path.clone())
         .unwrap_or(mobile_trusted_devices_path(&app)?);
-    let mut store = fs::read_to_string(&trusted_path)
-        .ok()
-        .and_then(|content| serde_json::from_str::<Value>(&content).ok())
-        .unwrap_or_else(|| json!({ "schemaVersion": 1, "devices": [] }));
-    let devices = store
-        .get_mut("devices")
-        .and_then(Value::as_array_mut)
-        .ok_or("永久綁定裝置資料格式不正確")?;
-    let before = devices.len();
-    devices.retain(|device| device.get("id").and_then(Value::as_str) != Some(device_id));
-    let revoked = devices.len() != before;
-    write_json_atomic(&trusted_path, &store)?;
+    let revoked = revoke_trusted_device(&trusted_path, device_id)?;
     Ok(json!({ "revoked": revoked, "deviceId": device_id }))
 }
 
@@ -5591,7 +5994,7 @@ fn get_update_job_result(state: State<'_, AppState>) -> Result<Value, String> {
 }
 
 #[tauri::command]
-fn install_update(app: AppHandle, state: State<'_, AppState>) -> Result<Value, String> {
+fn install_update(app: AppHandle, state: State<'_, AppState>, ui_locale: Option<String>) -> Result<Value, String> {
     if !cfg!(windows) {
         return Ok(json!({ "started": false, "message": "macOS 更新尚未接上已公證的發行頻道。" }));
     }
@@ -5635,11 +6038,8 @@ fn install_update(app: AppHandle, state: State<'_, AppState>) -> Result<Value, S
     }
     let confirmed = MessageDialog::new()
         .set_level(MessageLevel::Info)
-        .set_title("安裝更新")
-        .set_description(format!(
-            "安裝版本 {}？\n專案檔不會被移動。",
-            string_field(&pending, "version")?
-        ))
+        .set_title(native_dialog_labels::text(ui_locale.as_deref(), DialogText::UpdateTitle))
+        .set_description(native_dialog_labels::update_confirmation(ui_locale.as_deref(), string_field(&pending, "version")?))
         .set_buttons(MessageButtons::YesNo)
         .show();
     if confirmed != MessageDialogResult::Yes {
@@ -6283,11 +6683,12 @@ fn start_resident_gpu(runtime: &RuntimePaths, cancel: Arc<AtomicBool>) -> Result
         ));
     }
     // Preserve inherited runtime settings without logging their values. The
-    // platform API takes a full environment, not additions to an implicit one.
-    let mut environment: Vec<_> = std::env::vars_os()
-        .filter(|(key, _)| !key.eq_ignore_ascii_case("EDITKIN_FONT_ROOT"))
-        .collect();
-    environment.push(("EDITKIN_FONT_ROOT".into(), runtime.font_root.as_os_str().to_owned()));
+    // platform API takes a full environment, not additions to an implicit one;
+    // child_environment makes the inherited Windows block spawnable (#101).
+    let environment = gpu_resident_process::child_environment(
+        std::env::vars_os(),
+        &[("EDITKIN_FONT_ROOT".into(), runtime.font_root.as_os_str().to_owned())],
+    );
     ResidentGpuProcess::launch(&runtime.gpu_compositor, &["serve".into()], &environment, cancel)
 }
 
@@ -6305,6 +6706,8 @@ fn resident_gpu_timeout(command: &str) -> Duration {
         | "video_seek"
         | "video_release"
         | "engine_video_load"
+        | "offscreen_bind"
+        | "engine_video_verify_frame"
         | "engine_video_stage_frame"
         | "engine_video_release"
         | "recover_device" => Duration::from_secs(30),
@@ -6594,7 +6997,7 @@ async fn load_gpu_engine_preview_session(
         if bindings.len() > 64
             || bindings.values().any(|value| {
                 value.as_str().is_none_or(|path| {
-                    path.is_empty() || path.len() > 32_768 || !Path::new(path).is_file()
+                    path.is_empty() || path.len() > 32_768 || !local_media_binding(path)
                 })
             })
         {
@@ -6658,76 +7061,130 @@ fn engine_video_binding_keys_match(
             .all(|asset_id| required_assets.contains(asset_id.as_str()))
 }
 
-#[tauri::command]
-async fn load_gpu_engine_video_preview_session(
-    app: AppHandle,
-    session_id: String,
-    graph: Value,
-    asset_bindings: Value,
-    timeline_frame: u64,
-    preview_owner: Option<String>,
-) -> Result<Value, String> {
-    run_gpu_preview_command(app, preview_owner, Some((session_id.clone(), gpu_preview_owner::PreviewResource::EngineVideo)), move |app| {
-        let state = app.state::<AppState>();
-        validate_gpu_session_id(&session_id)?;
-        if graph.get("schema").and_then(Value::as_str) != Some("editkin.engine-graph/v1") {
-            return Err("Common video engine graph schema 不合法".into());
-        }
-        let nodes = graph
-            .get("nodes")
-            .and_then(Value::as_array)
-            .ok_or("Common video engine graph 缺少 nodes")?;
-        if nodes.is_empty() {
-            return Err("Common video engine graph nodes 不得為空".into());
-        }
-        let bindings = asset_bindings
-            .as_object()
-            .ok_or("Common video engine graph assetBindings 必須是 object")?;
-        if !engine_video_binding_keys_match(nodes, bindings)
-            || bindings.values().any(|value| {
-                value.as_str().is_none_or(|path| {
-                    path.is_empty() || path.len() > 32_768 || !Path::new(path).is_file()
-                })
+fn load_gpu_engine_video_preview_inner(app: AppHandle, session_id: String, graph: Value,
+    asset_bindings: Value, timeline_frame: u64, offscreen: bool) -> Result<Value, String> {
+    let state = app.state::<AppState>();
+    validate_gpu_session_id(&session_id)?;
+    if graph.get("schema").and_then(Value::as_str) != Some("editkin.engine-graph/v1") {
+        return Err("Common video engine graph schema 不合法".into());
+    }
+    let nodes = graph
+        .get("nodes")
+        .and_then(Value::as_array)
+        .ok_or("Common video engine graph 缺少 nodes")?;
+    if nodes.is_empty() {
+        return Err("Common video engine graph nodes 不得為空".into());
+    }
+    let bindings = asset_bindings
+        .as_object()
+        .ok_or("Common video engine graph assetBindings 必須是 object")?;
+    if !engine_video_binding_keys_match(nodes, bindings)
+        || bindings.values().any(|value| {
+            value.as_str().is_none_or(|path| {
+                path.is_empty() || path.len() > 32_768 || !local_media_binding(path)
             })
-        {
-            return Err("Common video engine graph 必須精確綁定所有有效的本機影片檔".into());
-        }
-        let runtime = runtime_paths(&app)?;
-        let effect_bindings = service_request(
-            &state.services,
-            &runtime,
-            "resolve_gpu_effect_bindings",
-            json!({ "graph": graph.clone() }),
+        })
+    {
+        return Err("Common video engine graph 必須精確綁定所有有效的本機影片檔".into());
+    }
+    let offscreen_size = if offscreen {
+        Some(gpu_offscreen_preview::graph_size(&graph)?)
+    } else { None };
+    let runtime = runtime_paths(&app)?;
+    let effect_bindings = service_request(
+        &state.services,
+        &runtime,
+        "resolve_gpu_effect_bindings",
+        json!({ "graph": graph.clone() }),
+    )?;
+    if effect_bindings.get("schema").and_then(Value::as_str)
+        != Some("editkin.gpu-effect-bindings/v1")
+        || effect_bindings
+            .get("bindings")
+            .and_then(Value::as_object)
+            .is_none_or(|bindings| bindings.len() > 64)
+    {
+        return Err("GPU effect binding resolver 回傳不合法".into());
+    }
+    let receipt = with_gpu_preview_inputs(&app, &[&graph, &asset_bindings, &effect_bindings], |paths| {
+        let graph_path = &paths[0];
+        let bindings_path = &paths[1];
+        let effect_bindings_path = &paths[2];
+        with_resident_gpu(&runtime, &state, |process| {
+        let bound_identity = if let Some((width, height)) = offscreen_size {
+            let (selected_sha, selected_bytes, _) = bounded_file_sha256(&runtime.gpu_compositor, 512 * 1024 * 1024)?;
+            gpu_offscreen_preview::validate_ready(&process.ready, &selected_sha, selected_bytes)?;
+            let retired = resident_gpu_request(process, "engine_video_release", json!({"sessionId": session_id}))?;
+            gpu_offscreen_preview::validate_release(&retired, &session_id)?;
+            let released = resident_gpu_request(process, "surface_release", json!({}))?;
+            if released.get("released").and_then(Value::as_bool).is_none() { return Err("Offscreen target cleanup receipt invalid".into()); }
+            let target = resident_gpu_request(process, "offscreen_bind", json!({"width": width, "height": height}))?;
+            gpu_offscreen_preview::validate_target(&target, process.ready.get("generation").and_then(Value::as_u64).ok_or("GPU generation missing")?,
+                width, height, &selected_sha, selected_bytes)?;
+            Some(target["videoTargetIdentity"].clone())
+        } else { None };
+        let loaded = resident_gpu_request(
+            process,
+            "engine_video_load",
+            json!({
+                "sessionId": session_id,
+                "graphPath": graph_path,
+                "bindingsPath": bindings_path,
+                "effectBindingsPath": effect_bindings_path,
+                "timelineFrame": timeline_frame
+            }),
         )?;
-        if effect_bindings.get("schema").and_then(Value::as_str)
-            != Some("editkin.gpu-effect-bindings/v1")
-            || effect_bindings
-                .get("bindings")
-                .and_then(Value::as_object)
-                .is_none_or(|bindings| bindings.len() > 64)
-        {
-            return Err("GPU effect binding resolver 回傳不合法".into());
+        if bound_identity.as_ref().is_some_and(|identity| loaded.get("videoTargetIdentity") != Some(identity)) {
+            return Err("Offscreen load changed actual target identity".into());
         }
-        let receipt = with_gpu_preview_inputs(&app, &[&graph, &asset_bindings, &effect_bindings], |paths| {
-            let graph_path = &paths[0];
-            let bindings_path = &paths[1];
-            let effect_bindings_path = &paths[2];
-            with_resident_gpu(&runtime, &state, |process| {
-            resident_gpu_request(
-                process,
-                "engine_video_load",
-                json!({
-                    "sessionId": session_id,
-                    "graphPath": graph_path,
-                    "bindingsPath": bindings_path,
-                    "effectBindingsPath": effect_bindings_path,
-                    "timelineFrame": timeline_frame
-                }),
-            )
-            })
+        Ok(loaded)
+        })
+    })?;
+    if !offscreen { state.gpu_playback.bind(native_preview_playback::GraphBinding::from_load(&session_id, &graph, &receipt)?)?; }
+    if offscreen {
+        let target = receipt.get("videoTargetIdentity").ok_or("Offscreen load target missing")?;
+        let (width, height) = offscreen_size.ok_or("Offscreen dimensions missing")?;
+        gpu_offscreen_preview::validate_identity(target, receipt.get("generation").and_then(Value::as_u64).ok_or("Offscreen generation missing")?, width, height)?;
+    }
+    Ok(receipt)
+}
+
+#[tauri::command]
+async fn load_gpu_engine_video_preview_session(app: AppHandle, session_id: String, graph: Value,
+    asset_bindings: Value, timeline_frame: u64, preview_owner: Option<String>) -> Result<Value, String> {
+    run_gpu_preview_command(app, preview_owner, Some((session_id.clone(), gpu_preview_owner::PreviewResource::EngineVideo)), move |app| {
+        load_gpu_engine_video_preview_inner(app, session_id, graph, asset_bindings, timeline_frame, false)
+    }).await
+}
+
+#[tauri::command]
+async fn load_gpu_engine_video_frame_preview_session(app: AppHandle, session_id: String, graph: Value,
+    asset_bindings: Value, timeline_frame: u64, preview_owner: Option<String>) -> Result<Value, String> {
+    if preview_owner.is_none() { return Err("Offscreen preview requires an owned generation".into()); }
+    run_gpu_preview_command(app, preview_owner, Some((session_id.clone(), gpu_preview_owner::PreviewResource::EngineVideo)), move |app| {
+        load_gpu_engine_video_preview_inner(app, session_id, graph, asset_bindings, timeline_frame, true)
+    }).await
+}
+
+#[tauri::command]
+async fn render_gpu_engine_video_preview_frame(app: AppHandle, session_id: String, timeline_frame: u64,
+    tolerance_seconds: f64, preview_owner: Option<String>) -> Result<Value, String> {
+    if preview_owner.is_none() { return Err("Offscreen preview requires an owned generation".into()); }
+    run_gpu_preview_command(app, preview_owner, Some((session_id.clone(), gpu_preview_owner::PreviewResource::EngineVideo)), move |app| {
+        validate_gpu_session_id(&session_id)?;
+        if !tolerance_seconds.is_finite() || tolerance_seconds <= 0.0 || tolerance_seconds > 0.25 { return Err("Offscreen tolerance outside (0,.25]".into()); }
+        let state = app.state::<AppState>();
+        let runtime = runtime_paths(&app)?;
+        let output_path = gpu_preview_frame_path(&app, &session_id, gpu_preview_cache::FrameKind::Video)?;
+        let receipt = with_resident_gpu(&runtime, &state, |process| {
+            resident_gpu_request(process, "engine_video_verify_frame", json!({"sessionId": session_id,
+                "timelineFrame": timeline_frame, "toleranceSeconds": tolerance_seconds, "outputPath": output_path}))
         })?;
-        state.gpu_playback.bind(native_preview_playback::GraphBinding::from_load(&session_id, &graph, &receipt)?)?;
-        Ok(receipt)
+        let (width,height) = gpu_offscreen_preview::validate_frame(&receipt, &session_id, timeline_frame)?;
+        // Copy this exact bounded generated PNG while still on the owner FIFO.
+        // Mutable disk slots are never used as frontend image identity.
+        let (bytes, sha) = gpu_offscreen_preview::read_png(&output_path, width, height)?;
+        Ok(json!({"schema": "editkin.engine-video-png-preview/v1", "pngBytes": bytes, "pngSha256": sha, "receipt": receipt}))
     }).await
 }
 
@@ -6774,13 +7231,16 @@ async fn release_gpu_engine_video_preview_session(
         let state = app.state::<AppState>();
         validate_gpu_session_id(&session_id)?;
         let runtime = runtime_paths(&app)?;
-        with_resident_gpu(&runtime, &state, |process| {
+        let receipt = with_resident_gpu(&runtime, &state, |process| {
             resident_gpu_request(
                 process,
                 "engine_video_release",
                 json!({ "sessionId": session_id }),
             )
-        })
+        })?;
+        gpu_offscreen_preview::validate_release(&receipt, &session_id)?;
+        retire_gpu_session_cache(&app, &session_id, &receipt)?;
+        Ok(receipt)
     }).await
 }
 
@@ -6858,6 +7318,8 @@ async fn open_gpu_video_preview_session(
     run_gpu_preview_command(app, preview_owner, Some((session_id.clone(), gpu_preview_owner::PreviewResource::Video)), move |app| {
         let state = app.state::<AppState>();
         validate_gpu_session_id(&session_id)?;
+        // The single-import check before the path is resolved or opened.
+        media_source_path_check(&input_path)?;
         let input_path = fs::canonicalize(&input_path)
             .map_err(|error| format!("影片路徑不存在或無法讀取：{error}"))?;
         if !input_path.is_file() {
@@ -7248,6 +7710,7 @@ async fn render_gpu_composition(
         if layers.is_empty() || layers.len() > 64 {
             return Err("GPU render graph 圖層數必須介於 1..=64".into());
         }
+        gpu_render_layers_local(layers)?;
         let runtime = runtime_paths(&app)?;
         let job_root = application_cache_root(&app)?
             .join("gpu-compositor")
@@ -7305,9 +7768,10 @@ fn remote_agent_proxy_has_credentials(value: &str) -> bool {
         .is_some_and(|authority| authority.contains('@'))
 }
 
-const REMOTE_AGENT_CLEAN_ENV_KEYS: [&str; 21] = [
+const REMOTE_AGENT_CLEAN_ENV_KEYS: [&str; 22] = [
     "ALL_PROXY",
     "APPDATA",
+    "CLAUDE_CONFIG_DIR",
     "CODEX_HOME",
     "HOME",
     "HOMEDRIVE",
@@ -7403,19 +7867,27 @@ fn remote_agent_process_environment(
     Ok(environment)
 }
 
+/// Finds the agent CLI where it is installed now, including an install made while Editkin was open
+/// (「裝好了，再找一次」): agent_connect::agent_cli_search_directories re-reads the user and machine PATH from the
+/// registry and adds the standard install folders.
 fn locate_agent_cli(target: &str) -> Option<AgentCli> {
+    locate_agent_cli_in(target, &agent_connect::agent_cli_search_directories())
+}
+
+fn locate_agent_cli_in(target: &str, path_directories: &[PathBuf]) -> Option<AgentCli> {
     if !matches!(target, "codex" | "claude") {
         return None;
     }
-    let path_directories = env::var_os("PATH")
-        .map(|value| {
-            env::split_paths(&value)
-                .filter(|directory| directory.is_absolute())
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let path_directories = path_directories.to_vec();
+    // A linked file (an installer's bin link) is followed: the identity is pinned on, and the command runs from,
+    // the canonical target, which must itself be a regular file and not a reparse point.
     let canonical_regular = |candidate: &Path| {
-        let metadata = fs::symlink_metadata(candidate).ok()?;
+        let link = fs::symlink_metadata(candidate).ok()?;
+        if !link.is_file() && !link.file_type().is_symlink() {
+            return None;
+        }
+        let canonical = fs::canonicalize(candidate).ok()?;
+        let metadata = fs::symlink_metadata(&canonical).ok()?;
         if metadata.file_type().is_symlink() || !metadata.is_file() {
             return None;
         }
@@ -7427,7 +7899,6 @@ fn locate_agent_cli(target: &str) -> Option<AgentCli> {
                 return None;
             }
         }
-        let canonical = fs::canonicalize(candidate).ok()?;
         let identity = remote_file_identity_at_path(&canonical).ok().flatten()?;
         Some((canonical, identity))
     };
@@ -7461,6 +7932,29 @@ fn locate_agent_cli(target: &str) -> Option<AgentCli> {
                 }
             }
         }
+        if target == "claude" {
+            // Older npm packages ship cli.js, started by node, instead of bin\claude.exe.
+            if let Some((node, node_identity)) = path_directories
+                .iter()
+                .find_map(|directory| canonical_regular(&directory.join("node.exe")))
+            {
+                for directory in &path_directories {
+                    let script = directory
+                        .join("node_modules")
+                        .join("@anthropic-ai")
+                        .join("claude-code")
+                        .join("cli.js");
+                    if let Some((script, script_identity)) = canonical_regular(&script) {
+                        return Some(AgentCli {
+                            command: node,
+                            command_identity: node_identity,
+                            prefix_args: vec![script.to_string_lossy().to_string()],
+                            prefix_path_identities: vec![(script, script_identity)],
+                        });
+                    }
+                }
+            }
+        }
         if target == "codex" {
             let (node, node_identity) = path_directories
                 .iter()
@@ -7486,25 +7980,60 @@ fn locate_agent_cli(target: &str) -> Option<AgentCli> {
     }
     #[cfg(not(windows))]
     {
-        path_directories.iter().find_map(|directory| {
-            canonical_regular(&directory.join(target)).map(|(command, command_identity)| AgentCli {
-                command,
-                command_identity,
-                prefix_args: Vec::new(),
-                prefix_path_identities: Vec::new(),
-            })
-        })
+        locate_posix_agent_cli(target, &path_directories, &canonical_regular)
     }
+}
+
+/// macOS: `<folder>/<target>` resolved through its links to the real file (npm and Homebrew install links, Claude's
+/// native installer). A native binary runs directly. An npm script (`#!/usr/bin/env node`: codex.js, an older
+/// claude cli.js) runs through an absolute `node` found in the same folders, because the clean agent environment has
+/// no PATH for `env` to search. Any other script (a shell wrapper) is skipped. Compiled on every system so Windows
+/// builds type-check it; only macOS calls it.
+#[cfg_attr(windows, allow(dead_code))]
+fn locate_posix_agent_cli(
+    target: &str,
+    directories: &[PathBuf],
+    canonical_regular: &dyn Fn(&Path) -> Option<(PathBuf, RemoteFileIdentity)>,
+) -> Option<AgentCli> {
+    let node = || {
+        directories.iter().find_map(|directory| {
+            let (path, identity) = canonical_regular(&directory.join("node"))?;
+            (agent_connect::cli_file_kind(&path) == agent_connect::CliFileKind::Binary).then_some((path, identity))
+        })
+    };
+    for directory in directories {
+        let Some((command, command_identity)) = canonical_regular(&directory.join(target)) else {
+            continue;
+        };
+        match agent_connect::cli_file_kind(&command) {
+            agent_connect::CliFileKind::Binary => {
+                return Some(AgentCli {
+                    command,
+                    command_identity,
+                    prefix_args: Vec::new(),
+                    prefix_path_identities: Vec::new(),
+                })
+            }
+            agent_connect::CliFileKind::NodeScript => {
+                if let Some((node, node_identity)) = node() {
+                    return Some(AgentCli {
+                        command: node,
+                        command_identity: node_identity,
+                        prefix_args: vec![command.to_string_lossy().to_string()],
+                        prefix_path_identities: vec![(command, command_identity)],
+                    });
+                }
+            }
+            agent_connect::CliFileKind::OtherScript | agent_connect::CliFileKind::NotExecutable => {}
+        }
+    }
+    None
 }
 
 struct AgentCliOutput {
     success: bool,
     stdout: Vec<u8>,
     stderr: Vec<u8>,
-}
-
-fn run_agent_cli(cli: &AgentCli, args: &[String]) -> Result<AgentCliOutput, String> {
-    run_agent_cli_with_timeout(cli, args, Duration::from_secs(30))
 }
 
 fn run_agent_cli_with_timeout(
@@ -7636,262 +8165,6 @@ fn run_agent_cli_with_timeout_in_environment(
     })
 }
 
-struct AgentInspection {
-    configured: bool,
-    exact_configuration: bool,
-    health: &'static str,
-    detail: String,
-}
-
-fn exact_existing_path(value: &str, expected: &Path) -> bool {
-    let candidate = Path::new(value);
-    candidate.is_absolute()
-        && fs::canonicalize(candidate)
-            .ok()
-            .zip(fs::canonicalize(expected).ok())
-            .is_some_and(|(candidate, expected)| candidate == expected)
-}
-
-fn codex_mcp_json_is_exact(
-    value: &Value,
-    executable: &Path,
-    launcher: &Path,
-    state_root: &Path,
-    expected_environment_keys: &BTreeSet<String>,
-) -> bool {
-    let Some(object) = value.as_object() else {
-        return false;
-    };
-    let object_keys = object.keys().map(String::as_str).collect::<BTreeSet<_>>();
-    if object_keys
-        != [
-            "disabled_reason",
-            "disabled_tools",
-            "enabled",
-            "enabled_tools",
-            "name",
-            "startup_timeout_sec",
-            "tool_timeout_sec",
-            "transport",
-        ]
-        .into_iter()
-        .collect()
-        || object.get("name").and_then(Value::as_str) != Some("editkin")
-        || object.get("enabled").and_then(Value::as_bool) != Some(true)
-        || object.get("disabled_reason") != Some(&Value::Null)
-        || object.get("enabled_tools") != Some(&Value::Null)
-        || object.get("disabled_tools") != Some(&Value::Null)
-        || object.get("startup_timeout_sec") != Some(&Value::Null)
-        || object.get("tool_timeout_sec") != Some(&Value::Null)
-    {
-        return false;
-    }
-    let Some(transport) = object.get("transport").and_then(Value::as_object) else {
-        return false;
-    };
-    let transport_keys = transport
-        .keys()
-        .map(String::as_str)
-        .collect::<BTreeSet<_>>();
-    if transport_keys
-        != ["args", "command", "cwd", "env", "env_vars", "type"]
-            .into_iter()
-            .collect()
-        || transport.get("type").and_then(Value::as_str) != Some("stdio")
-        || !transport
-            .get("command")
-            .and_then(Value::as_str)
-            .is_some_and(|value| exact_existing_path(value, executable))
-        || !transport
-            .get("args")
-            .and_then(Value::as_array)
-            .is_some_and(|args| {
-                args.len() == 1
-                    && args[0]
-                        .as_str()
-                        .is_some_and(|value| exact_existing_path(value, launcher))
-            })
-        || !transport
-            .get("env_vars")
-            .and_then(Value::as_array)
-            .is_some_and(Vec::is_empty)
-        || transport.get("cwd") != Some(&Value::Null)
-    {
-        return false;
-    }
-    let Some(environment) = transport.get("env").and_then(Value::as_object) else {
-        return false;
-    };
-    if environment.keys().cloned().collect::<BTreeSet<_>>() != *expected_environment_keys
-        || environment.values().any(|value| {
-            value
-                .as_str()
-                .is_none_or(|value| value.is_empty() || value.chars().any(char::is_control))
-        })
-    {
-        return false;
-    }
-    environment
-        .get("EDITKIN_AGENT_STATE_ROOT")
-        .and_then(Value::as_str)
-        .is_some_and(|value| exact_existing_path(value, state_root))
-}
-
-fn claude_mcp_text_inspection(
-    bytes: &[u8],
-    executable: &Path,
-    launcher: &Path,
-    state_root: &Path,
-    expected_environment_keys: &BTreeSet<String>,
-) -> Option<(bool, bool)> {
-    let text = std::str::from_utf8(bytes).ok()?.replace("\r\n", "\n");
-    let mut lines = text.lines();
-    if lines.next()? != "editkin:" {
-        return None;
-    }
-    let mut fields = std::collections::BTreeMap::<String, String>::new();
-    let mut environment = serde_json::Map::new();
-    let mut in_environment = false;
-    for line in lines {
-        if line.is_empty() {
-            continue;
-        }
-        if line == "To remove this server, run: claude mcp remove \"editkin\" -s user" {
-            in_environment = false;
-            continue;
-        }
-        if line == "  Environment:" {
-            if in_environment || fields.contains_key("Environment") {
-                return None;
-            }
-            fields.insert("Environment".into(), String::new());
-            in_environment = true;
-            continue;
-        }
-        if in_environment {
-            let entry = line.strip_prefix("    ")?;
-            let (key, value) = entry.split_once('=')?;
-            if key.is_empty()
-                || value.is_empty()
-                || value.chars().any(char::is_control)
-                || environment
-                    .insert(key.to_string(), Value::String(value.to_string()))
-                    .is_some()
-            {
-                return None;
-            }
-            continue;
-        }
-        let field = line.strip_prefix("  ")?;
-        let (key, value) = field.split_once(": ")?;
-        if value.is_empty() || fields.insert(key.to_string(), value.to_string()).is_some() {
-            return None;
-        }
-    }
-    if fields.keys().map(String::as_str).collect::<BTreeSet<_>>()
-        != ["Args", "Command", "Environment", "Scope", "Status", "Type"]
-            .into_iter()
-            .collect()
-        || fields.get("Scope").map(String::as_str)
-            != Some("User config (available in all your projects)")
-        || fields.get("Type").map(String::as_str) != Some("stdio")
-    {
-        return None;
-    }
-    let connected = fields.get("Status").map(String::as_str) == Some("✓ Connected");
-    let recognized_status = connected
-        || fields
-            .get("Status")
-            .is_some_and(|status| status.starts_with("✗ "));
-    if !recognized_status {
-        return None;
-    }
-    let environment_keys = environment.keys().cloned().collect::<BTreeSet<_>>();
-    let exact = fields
-        .get("Command")
-        .is_some_and(|value| exact_existing_path(value, executable))
-        && fields
-            .get("Args")
-            .is_some_and(|value| exact_existing_path(value, launcher))
-        && environment_keys == *expected_environment_keys
-        && environment
-            .get("EDITKIN_AGENT_STATE_ROOT")
-            .and_then(Value::as_str)
-            .is_some_and(|value| exact_existing_path(value, state_root));
-    Some((exact, connected))
-}
-
-fn inspect_agent_connection(
-    target: &str,
-    output: &AgentCliOutput,
-    executable: &Path,
-    launcher: &Path,
-    state_root: &Path,
-    expected_environment_keys: &BTreeSet<String>,
-) -> AgentInspection {
-    let detail = format!(
-        "{}\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let parsed = (target == "codex" && output.success && output.stderr.is_empty())
-        .then(|| serde_json::from_slice::<Value>(&output.stdout).ok())
-        .flatten();
-    let claude = (target == "claude" && output.success && output.stderr.is_empty())
-        .then(|| {
-            claude_mcp_text_inspection(
-                &output.stdout,
-                executable,
-                launcher,
-                state_root,
-                expected_environment_keys,
-            )
-        })
-        .flatten();
-    let configured = if target == "codex" {
-        parsed
-            .as_ref()
-            .is_some_and(|value| value.get("name").and_then(Value::as_str) == Some("editkin"))
-    } else {
-        claude.is_some()
-    };
-    let exact_configuration = if target == "codex" {
-        parsed.as_ref().is_some_and(|value| {
-            codex_mcp_json_is_exact(
-                value,
-                executable,
-                launcher,
-                state_root,
-                expected_environment_keys,
-            )
-        })
-    } else {
-        claude.is_some_and(|(exact, _)| exact)
-    };
-    let connected = claude.is_some_and(|(_, connected)| connected);
-    let failed = !output.success || !configured || (target == "claude" && !connected);
-    AgentInspection {
-        configured,
-        exact_configuration,
-        health: if failed {
-            "failed"
-        } else if connected {
-            "connected"
-        } else {
-            "configured"
-        },
-        detail: detail
-            .trim()
-            .chars()
-            .rev()
-            .take(1_000)
-            .collect::<String>()
-            .chars()
-            .rev()
-            .collect(),
-    }
-}
-
 fn agent_login_ready(target: RemoteAgentTarget, cli: &AgentCli) -> bool {
     let args = target.login_probe_args();
     run_agent_cli_with_timeout_for_target(cli, &args, Duration::from_secs(5), target)
@@ -7901,24 +8174,131 @@ fn agent_login_ready(target: RemoteAgentTarget, cli: &AgentCli) -> bool {
         })
 }
 
+/// Browser-side twin: agentConnectOutcomeV1.ts AGENT_CONNECT_KIT_URL_V1 (autopilotInvocationIdentity.ts VIDEO_AUTOPILOT_KIT_URL).
+const VIDEO_AUTOPILOT_KIT_URL: &str = "https://github.com/Hao0321/video-autopilot-kit";
+/// The Kit files a run needs beside SKILL.md (autopilotInvocationIdentity.ts assertVideoAutopilotKitInstalled).
+const VIDEO_AUTOPILOT_KIT_FILES: [&str; 2] = ["workflow_contract.json", "editkin_design_bridge.py"];
+
+/// EDITKIN_VIDEO_AUTOPILOT_SKILL when set, else ~/.codex/skills/video-autopilot/SKILL.md.
+fn video_autopilot_skill_candidate(configured: Option<OsString>, home: Option<PathBuf>) -> Option<PathBuf> {
+    configured.map(PathBuf::from).or_else(|| {
+        home.map(|home| home.join(".codex").join("skills").join("video-autopilot").join("SKILL.md"))
+    })
+}
+
+/// The same three-file check as assertVideoAutopilotKitInstalled: SKILL.md, workflow_contract.json and
+/// editkin_design_bridge.py. Ok(the Skill path), or Err(the first missing piece, in the TypeScript wording).
+fn video_autopilot_kit_check(skill: Option<PathBuf>, configured: bool) -> Result<PathBuf, String> {
+    let missing_skill = if configured {
+        "找不到 EDITKIN_VIDEO_AUTOPILOT_SKILL 指向的 video-autopilot SKILL.md。"
+    } else {
+        "這台電腦還沒有安裝 Video Autopilot Kit（找不到 ~/.codex/skills/video-autopilot/SKILL.md）。"
+    };
+    let skill = skill.filter(|path| path.is_file()).ok_or(missing_skill)?;
+    if !skill
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.eq_ignore_ascii_case("SKILL.md"))
+    {
+        return Err("EDITKIN_VIDEO_AUTOPILOT_SKILL 必須指向 video-autopilot SKILL.md".into());
+    }
+    for name in VIDEO_AUTOPILOT_KIT_FILES {
+        if !skill.with_file_name(name).is_file() {
+            return Err(format!("已安裝的 Video Autopilot Kit 不完整或太舊（缺少 {name}）。"));
+        }
+    }
+    Ok(skill)
+}
+
+fn video_autopilot_kit(app: &AppHandle) -> Result<PathBuf, String> {
+    let configured = env::var_os("EDITKIN_VIDEO_AUTOPILOT_SKILL");
+    let is_configured = configured.is_some();
+    video_autopilot_kit_check(
+        video_autopilot_skill_candidate(configured, app.path().home_dir().ok()),
+        is_configured,
+    )
+}
+
+/// The Kit as inspect_agent_connections reports it, so the dialog knows before anyone chooses a folder.
+fn video_autopilot_kit_status(kit: &Result<PathBuf, String>) -> Value {
+    match kit {
+        Ok(_) => json!({ "ready": true, "kitUrl": VIDEO_AUTOPILOT_KIT_URL }),
+        Err(detail) => json!({ "ready": false, "cause": "kit_missing", "kitUrl": VIDEO_AUTOPILOT_KIT_URL, "detail": detail }),
+    }
+}
+
+#[cfg(test)]
+mod agent_kit_preflight_tests {
+    use super::*;
+
+    fn kit_root(name: &str) -> PathBuf {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let root = env::temp_dir().join(format!("editkin-kit-{name}-{}-{nonce}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    #[test]
+    fn kit_check_requires_skill_contract_and_bridge() {
+        let root = kit_root("check");
+        let skill = root.join("SKILL.md");
+        let missing = video_autopilot_kit_check(Some(skill.clone()), false).unwrap_err();
+        assert!(missing.contains("~/.codex/skills/video-autopilot/SKILL.md"), "{missing}");
+        assert!(video_autopilot_kit_check(Some(skill.clone()), true).unwrap_err().contains("EDITKIN_VIDEO_AUTOPILOT_SKILL"));
+        assert!(video_autopilot_kit_check(None, false).is_err());
+        fs::write(&skill, "name: video-autopilot\n").unwrap();
+        assert!(video_autopilot_kit_check(Some(skill.clone()), false).unwrap_err().contains("workflow_contract.json"));
+        fs::write(root.join("workflow_contract.json"), "{}").unwrap();
+        assert!(video_autopilot_kit_check(Some(skill.clone()), false).unwrap_err().contains("editkin_design_bridge.py"));
+        // A folder with the bridge's name is not the bridge.
+        fs::create_dir(root.join("editkin_design_bridge.py")).unwrap();
+        assert!(video_autopilot_kit_check(Some(skill.clone()), false).unwrap_err().contains("editkin_design_bridge.py"));
+        fs::remove_dir(root.join("editkin_design_bridge.py")).unwrap();
+        fs::write(root.join("editkin_design_bridge.py"), "").unwrap();
+        assert_eq!(video_autopilot_kit_check(Some(skill.clone()), false).unwrap(), skill);
+        // EDITKIN_VIDEO_AUTOPILOT_SKILL must name SKILL.md itself, not another file of the Kit.
+        assert!(video_autopilot_kit_check(Some(root.join("workflow_contract.json")), true).unwrap_err().contains("必須指向"));
+        assert!(video_autopilot_kit_check(Some(root.clone()), true).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn skill_candidate_prefers_the_configured_path() {
+        // Assembled so the source never spells a Windows profile path (the public export refuses one).
+        let home = PathBuf::from(concat!("C:", "/", "Users", "/someone"));
+        assert_eq!(video_autopilot_skill_candidate(None, Some(home.clone())).unwrap(),
+            home.join(".codex").join("skills").join("video-autopilot").join("SKILL.md"));
+        assert_eq!(video_autopilot_skill_candidate(Some(OsString::from("D:/kit/SKILL.md")), Some(home)).unwrap(), PathBuf::from("D:/kit/SKILL.md"));
+        assert!(video_autopilot_skill_candidate(None, None).is_none());
+    }
+
+    #[test]
+    fn kit_status_is_reported_but_never_required_to_connect() {
+        let missing: Result<PathBuf, String> = Err("已安裝的 Video Autopilot Kit 不完整或太舊（缺少 workflow_contract.json）。".into());
+        let ready: Result<PathBuf, String> = Ok(PathBuf::from("C:/kit/SKILL.md"));
+        assert_eq!(video_autopilot_kit_status(&ready), json!({ "ready": true, "kitUrl": VIDEO_AUTOPILOT_KIT_URL }));
+        assert_eq!(video_autopilot_kit_status(&missing)["cause"], "kit_missing");
+        assert_eq!(video_autopilot_kit_status(&missing)["ready"], false);
+        // #106: no Skill gate before or after the folder picker; the only pre-picker check is the agent CLI.
+        let source = include_str!("main.rs");
+        // Split so this test never contains the needle other source checks search for.
+        let needle = concat!("\nfn copy_agent", "_setup(");
+        let start = source.find(needle).expect("copy_agent_setup");
+        let command = &source[start..start + source[start..].find("\n}").expect("end of copy_agent_setup")];
+        assert!(!command.contains("video_autopilot_kit") && !command.contains("kit_missing"), "{command}");
+        let connect = include_str!("agent_connect.rs");
+        let detect = &connect[connect.find("pub fn detect(").unwrap()..connect.find("pub fn discard(self)").unwrap()];
+        assert!(!detect.contains("video_autopilot_kit") && !detect.contains("kit_missing"), "{detect}");
+    }
+}
+
 fn base_agent_environment(
     app: &AppHandle,
     runtime: &RuntimePaths,
     agent_state_root: &Path,
+    video_autopilot_skill: &Path,
 ) -> Result<Vec<(String, String)>, String> {
     let plugin_roots = joined_plugin_roots(runtime)?;
-    let video_autopilot_skill = env::var_os("EDITKIN_VIDEO_AUTOPILOT_SKILL")
-        .map(PathBuf::from)
-        .or_else(|| {
-            app.path().home_dir().ok().map(|home| {
-                home.join(".codex")
-                    .join("skills")
-                    .join("video-autopilot")
-                    .join("SKILL.md")
-            })
-        })
-        .filter(|path| path.is_file())
-        .ok_or("找不到最新版 video-autopilot SKILL.md；Editkin 不會在缺少規則真相時假裝已連線")?;
     Ok(vec![
         ("ELECTRON_RUN_AS_NODE".to_string(), "1".to_string()),
         (
@@ -8070,6 +8450,10 @@ fn inspect_agent_target_status(target: &str) -> Value {
 
 fn inspect_agent_connections_blocking(app: AppHandle) -> Result<Value, String> {
     let _ = runtime_paths(&app)?;
+    // The same Kit check copy_agent_setup runs before its folder picker.
+    let kit = video_autopilot_kit_status(&video_autopilot_kit(&app));
+    // Optional (#106): connecting never needs the Skill; the UI offers it as a next step.
+    let va_skill = agent_connect::va_skill_status(&app).to_json();
     let codex = inspect_agent_target_status("codex");
     let claude = inspect_agent_target_status("claude");
     let ready =
@@ -8084,6 +8468,9 @@ fn inspect_agent_connections_blocking(app: AppHandle) -> Result<Value, String> {
     Ok(json!({
         "codex": codex,
         "claude": claude,
+        "kit": kit,
+        "vaSkill": va_skill,
+        "agentRuntimeRepair": agent_connect::agent_runtime_repair_status(),
         "preferredTarget": preferred,
         "checkedAt": unix_time_ms()
     }))
@@ -9883,269 +10270,63 @@ fn cancel_remote_setup_agent(state: State<'_, AppState>, job_id: String) -> Valu
     })
 }
 
-#[tauri::command]
-fn copy_agent_setup(app: AppHandle, target: String) -> Result<Value, String> {
+#[tauri::command(async)]
+fn copy_agent_setup(
+    app: AppHandle,
+    webview: tauri::Webview,
+    target: String,
+    ui_locale: Option<String>,
+    workspace_token: Option<String>,
+    on_progress: Option<tauri::ipc::JavaScriptChannelId>,
+) -> Result<Value, String> {
     if target != "codex" && target != "claude" {
         return Err("不支援的 Agent 目標".to_string());
     }
-    // Selection is the sole workspace authority. Cancel before runtime_paths,
-    // probes or CLI work: those steps may create caches or change host config.
-    let selected = FileDialog::new()
-        .set_title("選擇要授權給 AI 的工作資料夾（專案與素材需在此範圍內）")
-        .pick_folder();
-    let workspace = match selected_agent_workspace(selected.as_deref()) {
-        Ok(Some(workspace)) => workspace,
-        Ok(None) => {
-            return Ok(json!({
-                "canceled": true, "target": target,
-                "message": "已取消選擇工作資料夾；沒有變更 Codex／Claude 設定"
-            }))
-        }
-        Err(message) => {
-            return Ok(json!({
-                "canceled": false, "target": target, "status": "failed", "health": "failed",
-                "message": message,
-                "repairSteps": [
-                    "重新按連接，選擇已存在且可存取的工作資料夾",
-                    "確認要剪輯的專案與素材都在所選資料夾範圍內"
-                ]
-            }))
-        }
-    };
-    let agent_setup_contract = editkin_agent_setup_contract()?;
-    let launcher_contract = editkin_agent_launcher_contract(&agent_setup_contract)?;
-    let starter_prompt = editkin_agent_starter_prompt(&agent_setup_contract)?;
-    let runtime = runtime_paths(&app)?;
-    let state_directory_name = launcher_contract
-        .get("stateDirectoryName")
-        .and_then(Value::as_str)
-        .ok_or("Embedded Agent launcher contract has no state directory")?;
-    let agent_state_root = application_data_root(&app)?.join(state_directory_name);
-    let mut agent_environment = base_agent_environment(&app, &runtime, &agent_state_root)?;
-    let expected_environment_keys = agent_setup_contract
-        .get("envKeys")
-        .and_then(Value::as_array)
-        .ok_or("Embedded agent setup contract has no envKeys")?
-        .iter()
-        .map(|value| {
-            value
-                .as_str()
-                .map(str::to_string)
-                .ok_or("Embedded agent setup contract has a non-string env key")
-        })
-        .collect::<Result<BTreeSet<_>, _>>()?;
-    let generation = activate_product_agent_generation(
-        &agent_state_root,
-        &ProductAgentGenerationPaths {
-            resource_root: runtime.resource_root.clone(),
-            embedded_contract: runtime.agent_contract.clone(),
-            entrypoint: runtime.mcp.clone(),
-            entrypoint_identity: runtime.mcp_identity.clone(),
-            ffmpeg: runtime.ffmpeg.clone(),
-            ffprobe: runtime.ffprobe.clone(),
-            gpu_compositor: runtime.gpu_compositor.clone(),
-            launcher: runtime.agent_launcher.clone(),
-            native_core: runtime.native_core.clone(),
-            node: runtime.node.clone(),
-            node_manifest: runtime.node_manifest.clone(),
-            whisper: runtime.whisper_cli.clone(),
-            color: runtime.color_root.clone(),
-            creative_pack: runtime.creative_pack_root.clone(),
-            fonts: runtime.font_root.clone(),
-            personal_music: runtime.personal_music_root.clone(),
-            personal_visual: runtime.personal_visual_root.clone(),
-            plugins: runtime
-                .plugin_roots
-                .first()
-                .cloned()
-                .ok_or("Editkin 沒有可綁定的內建 plugin root")?,
+    // One attempt, one log under <app data>/logs; every failure is a structured result (agent_connect). The agent
+    // CLI is detected before any folder is chosen so a missing CLI is reported, with its fix, first. The Video
+    // Autopilot Skill is reported as vaSkill and never required to connect (#106). Runs off the main thread so
+    // the progress channel reaches the screen while the setup works.
+    let window = webview.label().to_string();
+    let mut attempt = agent_connect::AgentConnectAttempt::begin(&app, &target);
+    if let Some(id) = on_progress {
+        let channel: tauri::ipc::Channel<Value> = id.channel_on(webview);
+        attempt.report_progress(Box::new(move |event| {
+            let _ = channel.send(event);
+        }));
+    }
+    if let Some(failure) = attempt.detect() {
+        return Ok(failure);
+    }
+    let workspace = match workspace_token {
+        // A folder chosen natively a moment ago (suggest_agent_workspace / pick_agent_workspace): the webview only
+        // ever holds an opaque single-use token, never a path it could choose itself.
+        Some(token) => match attempt.workspace_from_token(&token, &window) {
+            Ok(workspace) => workspace,
+            Err(failure) => return Ok(failure),
         },
-        EDITKIN_AGENT_SETUP_CONTRACT.as_bytes(),
-    )?;
-    let Some(state_binding) = agent_environment
-        .iter_mut()
-        .find(|(key, _)| key == "EDITKIN_AGENT_STATE_ROOT")
-    else {
-        rollback_product_agent_generation(&generation)?;
-        return Err("Agent environment 缺少 generation state binding".into());
-    };
-    state_binding.1 = generation.state_root.to_string_lossy().to_string();
-    let setup = match build_agent_setup_invocation(
-        &target,
-        &runtime.node,
-        &runtime.agent_launcher,
-        &workspace,
-        agent_environment,
-        &expected_environment_keys,
-    ) {
-        Ok(setup) => setup,
-        Err(error) => {
-            rollback_product_agent_generation(&generation)?;
-            return Err(error);
-        }
-    };
-    let agent_environment = setup.environment;
-    let actual_environment_keys = agent_environment
-        .iter()
-        .map(|(key, _)| key.clone())
-        .collect::<BTreeSet<_>>();
-    if expected_environment_keys != actual_environment_keys {
-        rollback_product_agent_generation(&generation)?;
-        return Err(
-            "Embedded agent setup environment contract drifted from the native installer"
-                .to_string(),
-        );
-    }
-    let runtime_probe =
-        match probe_current_editkin_mcp(&runtime.node, &runtime.agent_launcher, &agent_environment)
-        {
-            Ok(probe) => probe,
-            Err(error) => {
-                let rollback = rollback_product_agent_generation(&generation)
-                    .map(|_| "generation rollback complete".to_string())
-                    .unwrap_or_else(|rollback_error| {
-                        format!("generation rollback failed: {rollback_error}")
-                    });
-                return Err(format!(
-                    "最新版 Editkin MCP generation readiness 驗證失敗：{error}；{rollback}"
-                ));
-            }
-        };
-    let command = setup.command;
-    let args = setup.args;
-
-    let agent_name = if target == "codex" {
-        "Codex"
-    } else {
-        "Claude Code"
-    };
-    let repair_steps = json!([
-        format!("確認 {agent_name} 已安裝並完成登入"),
-        "開啟終端機，貼上已複製的設定指令並按 Enter",
-        format!("重新開啟 {agent_name} 或建立新 session，再用 /mcp 確認 editkin")
-    ]);
-    let install_result = locate_agent_cli(&target)
-        .ok_or_else(|| format!("{agent_name} CLI 尚未安裝或不在 PATH"))
-        .and_then(|cli| {
-            let get_args = if target == "codex" {
-                ["mcp", "get", "editkin", "--json"]
-                    .map(str::to_string)
-                    .to_vec()
-            } else {
-                ["mcp", "get", "editkin"].map(str::to_string).to_vec()
-            };
-            // Claude's `mcp get` starts the configured server. Do not execute a
-            // pre-existing user command before overwriting `editkin` with the
-            // frozen product config; the post-install readback is then safe.
-            if target == "codex" {
-                let before_output = run_agent_cli(&cli, &get_args)?;
-                let before = inspect_agent_connection(
-                    &target,
-                    &before_output,
-                    &runtime.node,
-                    &runtime.agent_launcher,
-                    &generation.state_root,
-                    &expected_environment_keys,
-                );
-                if before.exact_configuration && before.health != "failed" {
-                    return Ok(("already_installed", before));
+        None => {
+            // Selection is the sole workspace authority. Cancel before runtime_paths,
+            // probes or CLI work: those steps may create caches or change host config.
+            let selected = FileDialog::new()
+                .set_title(native_dialog_labels::text(ui_locale.as_deref(), DialogText::AgentFolder))
+                .pick_folder();
+            match selected_agent_workspace(selected.as_deref()) {
+                Ok(Some(workspace)) => match agent_connect::workspace_safety(workspace.path()) {
+                    Ok(()) => workspace,
+                    Err(message) => return Ok(attempt.workspace_unsafe(&message)),
+                },
+                Ok(None) => {
+                    attempt.discard();
+                    return Ok(json!({
+                        "canceled": true, "target": target,
+                        "message": "已取消選擇工作資料夾；沒有變更 Codex／Claude 設定"
+                    }));
                 }
+                Err(message) => return Ok(attempt.workspace_rejected(&message)),
             }
-            let installed = run_agent_cli(&cli, &args)?;
-            if !installed.success {
-                let detail = format!(
-                    "{}\n{}",
-                    String::from_utf8_lossy(&installed.stdout),
-                    String::from_utf8_lossy(&installed.stderr)
-                );
-                return Err(detail
-                    .trim()
-                    .chars()
-                    .rev()
-                    .take(500)
-                    .collect::<String>()
-                    .chars()
-                    .rev()
-                    .collect());
-            }
-            let verified_output = run_agent_cli(&cli, &get_args)?;
-            let verified = inspect_agent_connection(
-                &target,
-                &verified_output,
-                &runtime.node,
-                &runtime.agent_launcher,
-                &generation.state_root,
-                &expected_environment_keys,
-            );
-            if !verified.configured || !verified.exact_configuration || verified.health == "failed"
-            {
-                return Err(format!(
-                    "HEALTH_CHECK:{}",
-                    if verified.detail.is_empty() {
-                        "設定已寫入，但 MCP 健康檢查沒有通過".to_string()
-                    } else {
-                        verified.detail
-                    }
-                ));
-            }
-            Ok(("installed", verified))
-        });
-    match install_result {
-        Ok((status, inspection)) => Ok(json!({
-            "canceled": false, "target": target, "workspace": workspace.path(), "status": status,
-            "health": inspection.health, "apiKeyRequired": false, "usesCurrentSession": false,
-            "runtimeVerified": true,
-            "generationPointerIdentity": generation.pointer_identity.as_str(),
-            "runtimeToolCount": runtime_probe.tool_count,
-            "autopilotPlanSchema": runtime_probe.plan_schema,
-            "liveInvocationBinding": runtime_probe.live_invocation_binding,
-            "starterPrompt": starter_prompt.as_str(), "clientRestartRequired": status == "installed",
-            "repairSteps": repair_steps,
-            "verification": format!("已真實啟動最新 v3 generation launcher（{} tools／v4 live identity），並由 {agent_name} mcp get editkin 讀回精確 launcher 與 user-scoped state", runtime_probe.tool_count),
-            "message": if inspection.health == "connected" {
-                format!("{agent_name} 已連上最新版 Editkin MCP。重新開啟或建立新 session 後，貼上開工指令即可使用自己的訂閱額度。")
-            } else {
-                format!("{agent_name} 已設定最新版 Editkin MCP；本機 runtime 已通過真握手。請建立新 session，再用 /mcp 或首次工具呼叫確認 Agent session 已連線。")
-            }
-        })),
-        Err(error) if error.starts_with("HEALTH_CHECK:") => Ok(json!({
-            "canceled": false, "target": target, "workspace": workspace.path(), "status": "failed",
-            "health": "failed", "apiKeyRequired": false, "usesCurrentSession": false,
-            "runtimeVerified": true,
-            "generationPointerIdentity": generation.pointer_identity.as_str(),
-            "runtimeToolCount": runtime_probe.tool_count,
-            "autopilotPlanSchema": runtime_probe.plan_schema,
-            "liveInvocationBinding": runtime_probe.live_invocation_binding,
-            "starterPrompt": starter_prompt.as_str(), "clientRestartRequired": true,
-            "repairSteps": [
-                format!("完全關閉並重新開啟 {agent_name}"),
-                "在新 session 輸入 /mcp，檢查 editkin 的錯誤訊息",
-                "回到 Editkin 按「返回重試」重新驗證"
-            ],
-            "message": format!("{agent_name} 已收到設定，但健康檢查未通過；Editkin 不會把它誤報為已連線。請依下方步驟在新 session 查看狀態。")
-        })),
-        result => {
-            Clipboard::new()
-                .and_then(|mut clipboard| clipboard.set_text(command))
-                .map_err(|error| error.to_string())?;
-            let detail = match result {
-                Ok((_status, inspection)) => inspection.detail,
-                Err(error) => error,
-            };
-            Ok(json!({
-                "canceled": false, "target": target, "workspace": workspace.path(), "status": "command_copied",
-                "health": "manual_step", "apiKeyRequired": false, "usesCurrentSession": false,
-                "runtimeVerified": true,
-                "generationPointerIdentity": generation.pointer_identity.as_str(),
-                "runtimeToolCount": runtime_probe.tool_count,
-                "autopilotPlanSchema": runtime_probe.plan_schema,
-                "liveInvocationBinding": runtime_probe.live_invocation_binding,
-                "starterPrompt": starter_prompt.as_str(), "clientRestartRequired": true,
-                "repairSteps": repair_steps,
-                "message": format!("{}；安全備援指令已複製。", if detail.contains("尚未安裝") || detail.contains("PATH") { format!("尚未找到可用的 {agent_name} CLI") } else { format!("{agent_name} 沒有接受自動設定") })
-            }))
         }
-    }
+    };
+    Ok(attempt.run(&app, &workspace))
 }
 
 #[tauri::command]
@@ -10154,9 +10335,366 @@ fn release_input_manifest() -> Result<Value, String> {
         .map_err(|error| format!("Embedded build manifest is invalid: {error}"))
 }
 
+/// Test, smoke and research commands stay outside the static main-window capability. They are
+/// granted at runtime only inside the isolated integration runtime (or a research build), so the
+/// shipped IPC surface never exposes them.
+fn grant_isolated_runtime_commands(app: &AppHandle) -> tauri::Result<()> {
+    if env::var("EDITKIN_INTEGRATION_SMOKE").as_deref() == Ok("1") {
+        app.add_capability(
+            tauri::ipc::CapabilityBuilder::new("integration-smoke-commands")
+                .window("main")
+                .permission("allow-render-project-smoke")
+                .permission("allow-render-openexr-sequence-smoke")
+                .permission("allow-batch-auto-edit-smoke")
+                .permission("allow-inject-gpu-device-loss-for-test"),
+        )?;
+    }
+    #[cfg(feature = "auto-roto-research")]
+    app.add_capability(
+        tauri::ipc::CapabilityBuilder::new("auto-roto-research-commands")
+            .window("main")
+            .permission("allow-inspect-auto-roto-video-model")
+            .permission("allow-install-auto-roto-video-model")
+            .permission("allow-pick-and-install-auto-roto-video-model")
+            .permission("allow-repair-auto-roto-video-model"),
+    )?;
+    Ok(())
+}
+
+// ---- In-app template Shorts (M1 wave 4.1): the easy flow's 「直的短影音」 path -----------------------------------
+// One owned `node mcp.mjs --editkin-one-shot` child per job with a closed environment, a no-progress watchdog and a
+// kill on cancel. The logic and its unit tests live in template_short.rs; these are the IPC entry points.
+
+fn template_short_launch(
+    app: &AppHandle,
+    workspace: &Path,
+) -> Result<(RuntimePaths, Vec<(OsString, OsString)>), String> {
+    let runtime = runtime_paths(app)?;
+    if !runtime.mcp.is_file() || !runtime.mcp_identity.is_file() {
+        return Err("找不到 Editkin 的自動剪輯程式（mcp.mjs 與它的素材色彩身份檔）".into());
+    }
+    let tools = template_short::ChildTools {
+        python: template_short::discover_python(
+            env::var_os("EDITKIN_PYTHON_EXECUTABLE"),
+            env::var_os("PATH"),
+        ),
+        video_autopilot_skill: env::var_os("EDITKIN_VIDEO_AUTOPILOT_SKILL")
+            .map(PathBuf::from)
+            .or_else(|| {
+                app.path().home_dir().ok().map(|home| {
+                    home.join(".codex")
+                        .join("skills")
+                        .join("video-autopilot")
+                        .join("SKILL.md")
+                })
+            })
+            .filter(|path| path.is_absolute() && path.is_file()),
+        workflow_profile: workflow_profile_path(app).ok(),
+    };
+    let environment = template_short::template_short_child_environment(
+        &runtime,
+        workspace,
+        &tools,
+        &|key| env::var_os(key),
+    )?;
+    if cfg!(windows) && !environment.iter().any(|(key, _)| key == "SYSTEMROOT") {
+        return Err("缺少 Windows SYSTEMROOT；不以不完整的環境啟動自動剪輯".into());
+    }
+    Ok((runtime, environment))
+}
+
+fn template_short_workspace_source(
+    source_path: &str,
+) -> Result<template_short::WorkspaceSource, String> {
+    if local_path_text_problem(source_path) == Some(LocalPathProblem::NetworkOrDevice) {
+        return Err("請先把影片複製到這台電腦的磁碟".into());
+    }
+    template_short::resolve_workspace_source(source_path)?
+        .ok_or_else(|| "這支影片不在工作資料夾裡".to_string())
+}
+
+#[tauri::command(async)]
+fn template_short_prepare(source_path: String) -> Result<Value, String> {
+    if local_path_text_problem(&source_path) == Some(LocalPathProblem::NetworkOrDevice) {
+        return Err("請先把影片複製到這台電腦的磁碟".into());
+    }
+    template_short::prepare_status(&source_path)
+}
+
+/// Writes `.autopilot/template-short-defaults.json` only after the creator's explicit 「是，這是我自己拍的素材」 click
+/// (`confirmed`), and only when the file does not exist yet; an existing file is never replaced.
+#[tauri::command]
+async fn template_short_confirm_rights(
+    app: AppHandle,
+    source_path: String,
+    brand_mark: Option<String>,
+    confirmed: bool,
+) -> Result<Value, String> {
+    if !confirmed {
+        return Err("沒有確認是自己拍的素材；沒有寫入任何設定".into());
+    }
+    let source = template_short_workspace_source(&source_path)?;
+    if template_short::defaults_present(&source.workspace) {
+        return Ok(json!({ "written": false, "exists": true }));
+    }
+    let brand_mark = template_short::validate_brand_mark(brand_mark)?;
+    let (runtime, environment) = template_short_launch(&app, &source.workspace)?;
+    let mut payload = json!({
+        "confirmedByCreatorClick": true,
+        "scope": source.scope,
+        "scopeKind": if source.scope_is_file { "file" } else { "folder" },
+    });
+    if let Some(mark) = brand_mark {
+        payload["brandMark"] = json!(mark);
+    }
+    let request = json!({ "command": "template_short_write_defaults", "payload": payload });
+    tauri::async_runtime::spawn_blocking(move || {
+        template_short::run_one_shot(
+            &runtime.node,
+            &runtime.mcp,
+            &environment,
+            &source.workspace,
+            &request,
+            Duration::from_secs(90),
+        )
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command(async)]
+fn start_template_short_job(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    source_path: String,
+    genre: String,
+    copy: Value,
+) -> Result<Value, String> {
+    if !template_short::GENRES.contains(&genre.as_str()) {
+        return Err("影片類型不合法".into());
+    }
+    let copy = template_short::validate_copy(&copy)?;
+    let source = template_short_workspace_source(&source_path)?;
+    if !template_short::defaults_present(&source.workspace) {
+        return Err("還沒有確認這些影片是你自己拍的".into());
+    }
+    let (runtime, environment) = template_short_launch(&app, &source.workspace)?;
+    let job_root = application_data_root(&app)?.join("template-short-jobs");
+    let job_id = state.template_short.start(template_short::JobLaunch {
+        node: runtime.node,
+        script: runtime.mcp,
+        environment,
+        workspace: source.workspace,
+        request: json!({ "command": "template_short_run", "payload": {
+            "sourcePath": source.relative, "genre": genre, "copy": copy,
+        } }),
+        job_root,
+        no_progress_limit: template_short::NO_PROGRESS_LIMIT,
+    })?;
+    Ok(json!({ "jobId": job_id }))
+}
+
+#[tauri::command]
+fn template_short_job_status(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    job_id: String,
+) -> Result<Value, String> {
+    let (status, output) = state
+        .template_short
+        .status(&job_id)
+        .ok_or("找不到這個自動剪輯工作")?;
+    if let Some(output) = output {
+        allow_path(&app, &output.to_string_lossy())?;
+    }
+    Ok(status)
+}
+
+#[tauri::command]
+fn cancel_template_short_job(state: State<'_, AppState>, job_id: String) -> Value {
+    json!({ "jobId": job_id, "canceled": state.template_short.cancel(&job_id) })
+}
+
+/// Copies the delivered mp4 into the system Videos folder under the creator's title; never replaces a file.
+#[tauri::command(async)]
+fn save_template_short_video(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    job_id: String,
+    file_name: String,
+) -> Result<Value, String> {
+    let output = state
+        .template_short
+        .delivered_output(&job_id)
+        .ok_or("這支短影音還沒有做好")?;
+    let videos = app
+        .path()
+        .video_dir()
+        .map(process_compatible_path)
+        .map_err(|error| format!("找不到「影片」資料夾：{error}"))?;
+    let saved = template_short::save_video_copy(&output, &videos, &file_name, "Editkin Short")?;
+    Ok(json!({
+        "path": saved.to_string_lossy(),
+        "fileName": saved.file_name().map(|name| name.to_string_lossy().to_string()),
+        "folderName": videos.file_name().map(|name| name.to_string_lossy().to_string()),
+    }))
+}
+
+/// 「我想自己細調」: the new Short project (never the creator's open project), with its preview paths.
+#[tauri::command]
+async fn open_template_short_project(app: AppHandle, job_id: String) -> Result<Value, String> {
+    let project_path = app
+        .state::<AppState>()
+        .template_short
+        .delivered_project(&job_id)
+        .ok_or("這支短影音的專案還沒有做好")?;
+    let path = project_path.to_string_lossy().to_string();
+    let opened = call_service(&app, "read_project", json!({ "path": path, "captureFileIdentity": true })).await?;
+    let project = opened.get("project").cloned().ok_or("read receipt missing project")?;
+    let project_file_identity = opened.get("fileIdentity").cloned().ok_or("read receipt missing byte identity")?;
+    let assets = project
+        .get("assets")
+        .and_then(Value::as_array)
+        .ok_or("專案缺少 assets")?;
+    let runtime_paths = collect_runtime_paths_async(&app, assets).await?;
+    let matte_preview_paths = collect_product_auto_roto_preview_paths(&app, &project)?;
+    Ok(json!({
+        "canceled": false,
+        "path": path,
+        "project": project,
+        "fileIdentity": project_file_identity,
+        "runtimePaths": runtime_paths,
+        "mattePreviewPaths": matte_preview_paths
+    }))
+}
+
+/// 「打開資料夾」: the folder with the saved file selected (Windows Explorer /select). Only an existing regular file.
+#[tauri::command(async)]
+fn reveal_in_folder(path: String) -> Result<(), String> {
+    if local_path_text_problem(&path) == Some(LocalPathProblem::NetworkOrDevice) {
+        return Err("不能打開網路上的位置".into());
+    }
+    template_short::reveal_in_folder(Path::new(&path))
+}
+
+// ---- Desktop safety (usable-v1 ROADMAP 2.9-2.11, 1.15): export progress and cancel, closing with unsaved work,
+// crash-recovery choices, missing media, project changes by other programs, and the version shown in Settings.
+// The logic and its unit tests live in render_jobs.rs, window_close_guard.rs and desktop_files.rs.
+
+#[tauri::command]
+async fn run_engine_task_v1(app: AppHandle, window: tauri::WebviewWindow, request: engine_tasks_v1::EngineRequestV1, on_event: tauri::ipc::Channel<Value>) -> Result<Value, String> {
+    engine_tasks_v1::run(app, window, request, on_event).await
+}
+
+
+#[tauri::command]
+fn render_job_progress(jobs: State<'_, render_jobs::RenderJobs>, job_id: String) -> Value {
+    jobs.progress(&job_id)
+}
+
+/// 「停止輸出」: the renderer is asked to stop first (FFmpeg exits, its temporary files are removed); a renderer
+/// that does not answer in time has its worker stopped.
+#[tauri::command]
+fn cancel_render_job(jobs: State<'_, render_jobs::RenderJobs>, job_id: String) -> Value {
+    jobs.request_cancel(&job_id, render_jobs::HARD_CANCEL_GRACE)
+}
+
+#[tauri::command]
+fn app_build_info(app: AppHandle) -> Value {
+    desktop_files::build_info(RELEASE_INPUT_MANIFEST, &app.package_info().version.to_string())
+}
+
+#[tauri::command]
+fn set_close_guard(guard: State<'_, window_close_guard::CloseGuard>, armed: bool) {
+    guard.set_armed(armed);
+}
+
+#[tauri::command]
+fn acknowledge_close_request(guard: State<'_, window_close_guard::CloseGuard>) {
+    guard.acknowledge();
+}
+
+/// The creator chose to close (after saving, or without saving); the guard lets this close through.
+#[tauri::command(async)]
+fn close_window_confirmed(app: AppHandle, guard: State<'_, window_close_guard::CloseGuard>) -> Result<(), String> {
+    guard.approve();
+    match app.get_webview_window("main") {
+        Some(window) => window.close().map_err(|error| error.to_string()),
+        None => Ok(()),
+    }
+}
+
+#[tauri::command]
+async fn inspect_project_file(app: AppHandle, path: String, known_modified_ms: Option<u64>) -> Result<Value, String> {
+    let _ = known_modified_ms; // mtime is not content identity.
+    if !desktop_files::local_absolute(&path) { return Ok(json!({ "exists": false })); }
+    call_service(&app, "inspect_project_file", json!({ "path": path })).await
+}
+
+/// Opens a project the UI already knows (recent list, the open file after another program changed it, the last
+/// saved file at crash recovery) without a file dialog; the same reader and preview paths as `open_project`.
+#[tauri::command]
+async fn open_project_path(app: AppHandle, path: String) -> Result<Value, String> {
+    let path = desktop_files::validate_project_path(&path)?;
+    let opened = call_service(&app, "read_project", json!({ "path": path, "captureFileIdentity": true })).await?;
+    let project = opened.get("project").cloned().ok_or("read receipt missing project")?;
+    let project_file_identity = opened.get("fileIdentity").cloned().ok_or("read receipt missing byte identity")?;
+    let assets = project
+        .get("assets")
+        .and_then(Value::as_array)
+        .ok_or("專案缺少 assets")?;
+    let runtime_paths = collect_runtime_paths_async(&app, assets).await?;
+    let matte_preview_paths = collect_product_auto_roto_preview_paths(&app, &project)?;
+    Ok(
+        json!({ "canceled": false, "path": path, "project": project, "fileIdentity": project_file_identity, "runtimePaths": runtime_paths, "mattePreviewPaths": matte_preview_paths }),
+    )
+}
+
+#[tauri::command(async)]
+fn check_media_paths(paths: Vec<String>) -> Result<Vec<bool>, String> {
+    desktop_files::check_media_paths(&paths)
+}
+
+/// 「重新找檔案」: the creator picks the moved file; its SHA-256 lets the edit graph's relink prove it is the very
+/// same file before anything in the project changes.
+#[tauri::command]
+async fn pick_relink_media(app: AppHandle, ui_locale: Option<String>) -> Result<Value, String> {
+    let Some(path) = FileDialog::new()
+        .set_title(native_dialog_labels::text(ui_locale.as_deref(), DialogText::RelinkMedia))
+        .add_filter(
+            native_dialog_labels::text(ui_locale.as_deref(), DialogText::MediaFilter),
+            &["mp4", "mov", "mkv", "webm", "m4v", "mp3", "wav", "m4a", "aac", "flac"],
+        )
+        .pick_file()
+    else {
+        return Ok(json!({ "canceled": true }));
+    };
+    let text = path.to_string_lossy().to_string();
+    // The single-import check (network share, device, stream) before the file is hashed.
+    media_source_path_check(&text)?;
+    let hashed = path.clone();
+    let (sha256, bytes) = tauri::async_runtime::spawn_blocking(move || desktop_files::sha256_file(&hashed))
+        .await
+        .map_err(|error| error.to_string())??;
+    allow_path(&app, &text)?;
+    record_outside_media_grants(&app, vec![text.clone()], outside_media_grants::GrantSource::Relink).await;
+    Ok(json!({ "canceled": false, "path": text, "sha256": sha256, "bytes": bytes }))
+}
+
+/// Keeps the crash-recovery copy in `recovery/kept/` instead of deleting it.
+#[tauri::command]
+fn keep_recovery_aside(app: AppHandle) -> Result<Value, String> {
+    let kept = desktop_files::keep_recovery_aside(&recovery_path(&app)?, unix_time_ms())?;
+    Ok(json!({ "kept": kept.is_some(), "path": kept.map(|path| path.to_string_lossy().to_string()) }))
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(AppState::default())
+        .manage(desktop_color_luts_v1::ColorLutSelectionsV1::default())
+        .manage(render_jobs::RenderJobs::default())
+        .manage(window_close_guard::CloseGuard::default())
+        .on_window_event(window_close_guard::handle_window_event)
         .on_page_load(|webview, payload| {
             if webview.label() == "main"
                 && matches!(payload.event(), tauri::webview::PageLoadEvent::Started)
@@ -10172,19 +10710,24 @@ fn main() {
             }
         })
         .setup(|app| {
+            grant_isolated_runtime_commands(app.handle())?;
             let pending = begin_update_launch(&app.handle()).map_err(std::io::Error::other)?;
             app.state::<AppState>()
                 .update_health_pending
                 .store(pending, Ordering::SeqCst);
+            // After an update the saved agent generation still records the previous release's files and the
+            // launcher would refuse it; re-activate it from the installed files in the background (silent on
+            // success, reported by inspect_agent_connections otherwise). Agent configs are not touched.
+            agent_connect::repair_agent_generation_in_background(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             pick_media,
             import_media_paths,
-            pick_batch_media,
-            get_batch_session,
-            run_batch_auto_edit_item,
-            open_batch_project,
+            desktop_batch_commands_v1::pick_batch_media,
+            desktop_batch_commands_v1::get_batch_session,
+            desktop_batch_commands_v1::run_batch_auto_edit_item,
+            desktop_batch_commands_v1::open_batch_project,
             preview_paths,
             list_creative_library,
             list_installed_plugins,
@@ -10194,8 +10737,15 @@ fn main() {
             compile_plugin_tool,
             import_creative_asset,
             preview_creative_asset,
+            read_mesh_3d_font,
+            read_bundled_font_face,
             read_color_asset,
+            list_color_luts_v1,
+            pick_color_lut_v1,
+            import_color_lut_v1,
+            read_color_lut_v1,
             prepare_media,
+            clip_media_derivative,
             smart_cut_media,
             automatic_caption_media,
             detect_scenes,
@@ -10249,6 +10799,8 @@ fn main() {
             load_gpu_engine_preview_session,
             update_gpu_engine_preview_frame,
             load_gpu_engine_video_preview_session,
+            load_gpu_engine_video_frame_preview_session,
+            render_gpu_engine_video_preview_frame,
             present_gpu_engine_video_preview_frame,
             release_gpu_engine_video_preview_session,
             update_gpu_preview_properties,
@@ -10277,9 +10829,35 @@ fn main() {
             resident_audio_status,
             copy_agent_setup,
             inspect_agent_connections,
+            agent_connect::open_external_url,
+            agent_connect::suggest_agent_workspace,
+            agent_connect::pick_agent_workspace,
             launch_remote_setup_agent,
             get_remote_setup_agent_status,
-            cancel_remote_setup_agent
+            cancel_remote_setup_agent,
+            template_short_prepare,
+            template_short_confirm_rights,
+            start_template_short_job,
+            template_short_job_status,
+            cancel_template_short_job,
+            save_template_short_video,
+            open_template_short_project,
+            reveal_in_folder,
+            render_job_progress,
+            cancel_render_job,
+            run_engine_task_v1,
+            desktop_batch_commands_v1::cancel_engine_task_v1,
+            app_build_info,
+            set_close_guard,
+            acknowledge_close_request,
+            close_window_confirmed,
+            inspect_project_file,
+            open_project_path,
+            check_media_paths,
+            pick_relink_media,
+            outside_media_grants::inspect_project_outside_media,
+            outside_media_grants::grant_project_outside_media,
+            keep_recovery_aside
         ])
         .build(tauri::generate_context!())
         .expect("Editkin Tauri runtime failed")
@@ -10327,6 +10905,273 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const BUNDLED_FONT_TEST_FACE: &str = "EditkinFace-bebas-neue-400";
+
+    struct BundledFontFixture {
+        root: PathBuf,
+        parent: PathBuf,
+        spec: BundledFontFaceSpec,
+        expected: Vec<u8>,
+    }
+
+    impl BundledFontFixture {
+        fn new() -> Self {
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let parent = fs::canonicalize(env::temp_dir()).unwrap();
+            let root = parent.join(format!(
+                "editkin-bundled-font-test-{}-{}-{}",
+                std::process::id(),
+                SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos(),
+                NEXT.fetch_add(1, Ordering::Relaxed),
+            ));
+            fs::create_dir(&root).unwrap();
+            fs::create_dir(root.join("render")).unwrap();
+            let spec = bundled_font_face_spec(BUNDLED_FONT_TEST_FACE).unwrap();
+            let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../public/fonts");
+            let expected = fs::read(source.join(&spec.font_file)).unwrap();
+            assert!(expected.len() < 128 * 1024, "fixture must remain a small physical face");
+            fs::write(root.join(&spec.font_file), &expected).unwrap();
+            fs::copy(source.join("editkin-open-fonts.json"), root.join("editkin-open-fonts.json")).unwrap();
+            Self { root, parent, spec, expected }
+        }
+    }
+
+    impl Drop for BundledFontFixture {
+        fn drop(&mut self) {
+            // Delete only this exclusively created root; never a computed ancestor or alias.
+            let Ok(metadata) = fs::symlink_metadata(&self.root) else { return; };
+            if !metadata.is_dir() || remote_agent_directory_is_link(&metadata) { return; }
+            let Ok(canonical) = fs::canonicalize(&self.root) else { return; };
+            if canonical.parent() == Some(self.parent.as_path())
+                && canonical.file_name().and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with("editkin-bundled-font-test-"))
+                && canonical == self.root
+            {
+                let _ = fs::remove_dir_all(&self.root);
+            }
+        }
+    }
+
+    #[test]
+    fn bundled_font_catalog_is_exact_and_request_cannot_choose_path_or_sha() {
+        let specs = bundled_font_face_catalog_from(BUNDLED_FONT_FACE_INDEX, BUNDLED_FONT_EM_METRICS).unwrap();
+        assert_eq!(specs.len(), 44);
+        assert_eq!(specs.iter().map(|spec| &spec.face_id).collect::<BTreeSet<_>>().len(), 44);
+        for spec in &specs {
+            assert_eq!(bundled_font_face_spec(&spec.face_id).unwrap(), *spec);
+            assert_eq!(spec.font_file, format!("render/{}.ttf", spec.face_id));
+            assert!(valid_sha256(&spec.sha256));
+            assert_eq!(spec.manifest_sha256, "374de0ff4986d41085a5421980374223af027fc22f6c2abc8c8ece00653ef738");
+        }
+        for id in [
+            "", "EditkinFace-noto-sans-tc-701", "EditkinFace-bebas-neue-400 ",
+            " editkinFace-bebas-neue-400", "editkinface-bebas-neue-400",
+            "../EditkinFace-bebas-neue-400", "render/EditkinFace-bebas-neue-400.ttf",
+            "render\\EditkinFace-bebas-neue-400.ttf", "C:\\secret.ttf",
+            "EditkinFace-bebas-neue-400\0", "EditkinFace-bebas-neue-400?sha256=abc",
+        ] {
+            assert!(bundled_font_face_spec(id).is_err(), "{id:?}");
+        }
+    }
+
+    #[test]
+    fn bundled_font_catalog_rejects_conflicting_generated_contracts() {
+        let metrics: Value = serde_json::from_str(BUNDLED_FONT_EM_METRICS).unwrap();
+        let index: Value = serde_json::from_str(BUNDLED_FONT_FACE_INDEX).unwrap();
+        let mut duplicate = metrics.clone();
+        duplicate["faces"][1] = duplicate["faces"][0].clone();
+        let mut missing = metrics.clone();
+        missing["faces"].as_array_mut().unwrap().pop();
+        let mut foreign = metrics.clone();
+        foreign["faces"][0]["id"] = json!("EditkinFace-unknown-100");
+        let mut bad_sha = metrics.clone();
+        bad_sha["faces"][0]["sha256"] = json!("A".repeat(64));
+        let mut bad_manifest_sha = metrics.clone();
+        bad_manifest_sha["manifestSha256"] = json!("0".repeat(63));
+        for changed in [duplicate, missing, foreign, bad_sha, bad_manifest_sha] {
+            assert!(bundled_font_face_catalog_from(BUNDLED_FONT_FACE_INDEX, &changed.to_string()).is_err());
+        }
+        let mut duplicate_weight = index.clone();
+        duplicate_weight[0][2][1] = duplicate_weight[0][2][0].clone();
+        let mut unsafe_id = index.clone();
+        unsafe_id[0][1] = json!("../noto-sans-tc");
+        for changed in [duplicate_weight, unsafe_id] {
+            assert!(bundled_font_face_catalog_from(&changed.to_string(), BUNDLED_FONT_EM_METRICS).is_err());
+        }
+    }
+
+    #[test]
+    fn bundled_font_reader_returns_exact_selected_physical_bytes() {
+        let fixture = BundledFontFixture::new();
+        assert_eq!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap(), fixture.expected);
+        assert!(read_bundled_font_face_bytes(Path::new("relative-font-root"), &fixture.spec).is_err());
+    }
+
+    #[test]
+    fn bundled_font_reader_rejects_raw_manifest_drift_and_overgrowth() {
+        let fixture = BundledFontFixture::new();
+        let manifest_path = fixture.root.join("editkin-open-fonts.json");
+        let original = fs::read(&manifest_path).unwrap();
+        let mut normalized_equivalent = original.clone();
+        normalized_equivalent.push(b'\n');
+        fs::write(&manifest_path, normalized_equivalent).unwrap();
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap_err().contains("原始 SHA"));
+        let oversized = fs::File::create(&manifest_path).unwrap();
+        oversized.set_len(MAX_BUNDLED_FONT_MANIFEST_BYTES + 1).unwrap();
+        drop(oversized);
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap_err().contains("安全大小"));
+    }
+
+    #[test]
+    fn bundled_font_reader_rejects_same_size_corruption_truncation_empty_and_overgrowth() {
+        let fixture = BundledFontFixture::new();
+        let face_path = fixture.root.join(&fixture.spec.font_file);
+        let mut corrupted = fixture.expected.clone();
+        corrupted[0] ^= 1;
+        fs::write(&face_path, corrupted).unwrap();
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap_err().contains("SHA"));
+        fs::write(&face_path, &fixture.expected[..fixture.expected.len() - 1]).unwrap();
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap_err().contains("大小或 SHA"));
+        fs::write(&face_path, b"").unwrap();
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap_err().contains("安全大小"));
+        let oversized = fs::File::create(&face_path).unwrap();
+        oversized.set_len(MAX_BUNDLED_FONT_FACE_BYTES + 1).unwrap();
+        drop(oversized);
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap_err().contains("安全大小"));
+    }
+
+    #[test]
+    fn bundled_font_reader_rejects_non_directory_render_and_directory_swap() {
+        let fixture = BundledFontFixture::new();
+        let render_path = fixture.root.join("render");
+        let render = open_bundled_font_directory(&render_path).unwrap();
+        fs::rename(&render_path, fixture.root.join("render-original")).unwrap();
+        fs::create_dir(&render_path).unwrap();
+        assert!(verify_bundled_font_directory(&render).unwrap_err().contains("被替換"));
+        drop(render);
+        fs::remove_dir(&render_path).unwrap();
+        fs::write(&render_path, b"not a directory").unwrap();
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap_err().contains("一般資料夾"));
+    }
+
+    #[test]
+    fn bundled_font_reader_retains_manifest_handle_and_rejects_identical_byte_replacement() {
+        let fixture = BundledFontFixture::new();
+        let root = open_bundled_font_directory(&fixture.root).unwrap();
+        let path = fixture.root.join("editkin-open-fonts.json");
+        let read = read_bundled_font_file(&path, &root, MAX_BUNDLED_FONT_MANIFEST_BYTES).unwrap();
+        fs::rename(&path, fixture.root.join("manifest-original.json")).unwrap();
+        fs::write(&path, &read.bytes).unwrap();
+        assert_eq!(format!("{:x}", Sha256::digest(fs::read(&path).unwrap())), fixture.spec.manifest_sha256);
+        assert!(verify_bundled_font_read(&read).unwrap_err().contains("被替換"));
+    }
+
+    #[test]
+    fn bundled_font_directory_identity_allows_unrelated_new_siblings() {
+        let fixture = BundledFontFixture::new();
+        let ancestors = open_bundled_font_directory_chain(&fixture.root).unwrap();
+        let render = open_bundled_font_directory(&fixture.root.join("render")).unwrap();
+        fs::write(fixture.root.join("unrelated-root-sibling"), b"unrelated").unwrap();
+        fs::write(fixture.root.join("render/unrelated-render-sibling"), b"unrelated").unwrap();
+        verify_bundled_font_directory_chain(&ancestors).unwrap();
+        verify_bundled_font_directory(&render).unwrap();
+        assert_eq!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).unwrap(), fixture.expected);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn bundled_font_reader_rejects_windows_parent_junction_in_owned_fixture() {
+        use std::os::windows::{fs::OpenOptionsExt, io::AsRawHandle};
+        use windows_sys::Win32::Storage::FileSystem::{FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT};
+        // Creating this owned NTFS mount-point fixture needs no shell or symlink privilege.
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn DeviceIoControl(
+                handle: *mut std::ffi::c_void, code: u32,
+                input: *const std::ffi::c_void, input_bytes: u32,
+                output: *mut std::ffi::c_void, output_bytes: u32,
+                returned_bytes: *mut u32, overlapped: *mut std::ffi::c_void,
+            ) -> i32;
+        }
+        let fixture = BundledFontFixture::new();
+        let parent = fixture.root.join("real-parent");
+        let pack = parent.join("pack");
+        fs::create_dir(&parent).unwrap();
+        fs::create_dir(&pack).unwrap();
+        fs::create_dir(pack.join("render")).unwrap();
+        fs::copy(fixture.root.join("editkin-open-fonts.json"), pack.join("editkin-open-fonts.json")).unwrap();
+        fs::copy(fixture.root.join(&fixture.spec.font_file), pack.join(&fixture.spec.font_file)).unwrap();
+        assert_eq!(read_bundled_font_face_bytes(&pack, &fixture.spec).unwrap(), fixture.expected);
+        let alias = fixture.root.join("parent-junction");
+        fs::create_dir(&alias).unwrap();
+        let owned_root = fs::canonicalize(&fixture.root).unwrap();
+        let target = fs::canonicalize(&parent).unwrap();
+        assert!(target.starts_with(&owned_root));
+        assert_eq!(fs::canonicalize(&alias).unwrap().parent(), Some(owned_root.as_path()));
+        let target_string = target.to_str().unwrap();
+        let print = target_string.strip_prefix("\\\\?\\").unwrap_or(target_string);
+        let substitute: Vec<u16> = format!("\\??\\{print}").encode_utf16().collect();
+        let print: Vec<u16> = print.encode_utf16().collect();
+        let data_bytes = 8 + (substitute.len() + print.len() + 2) * 2;
+        assert!(data_bytes < 16 * 1024 && data_bytes <= u16::MAX as usize);
+        let mut buffer = Vec::with_capacity(8 + data_bytes);
+        buffer.extend_from_slice(&0xA0000003_u32.to_le_bytes()); // IO_REPARSE_TAG_MOUNT_POINT
+        buffer.extend_from_slice(&(data_bytes as u16).to_le_bytes());
+        buffer.extend_from_slice(&0_u16.to_le_bytes());
+        buffer.extend_from_slice(&0_u16.to_le_bytes()); // SubstituteNameOffset
+        buffer.extend_from_slice(&((substitute.len() * 2) as u16).to_le_bytes());
+        buffer.extend_from_slice(&(((substitute.len() + 1) * 2) as u16).to_le_bytes());
+        buffer.extend_from_slice(&((print.len() * 2) as u16).to_le_bytes());
+        for unit in substitute.iter().chain([0_u16].iter()).chain(print.iter()).chain([0_u16].iter()) {
+            buffer.extend_from_slice(&unit.to_le_bytes());
+        }
+        let handle = fs::OpenOptions::new().write(true)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT).open(&alias).unwrap();
+        let mut returned = 0_u32;
+        let result = unsafe { DeviceIoControl(
+            handle.as_raw_handle(), 0x000900A4, buffer.as_ptr().cast(), buffer.len() as u32,
+            std::ptr::null_mut(), 0, &mut returned, std::ptr::null_mut(),
+        ) };
+        assert_ne!(result, 0, "owned junction fixture creation failed: {}", std::io::Error::last_os_error());
+        drop(handle);
+        assert!(remote_agent_directory_is_link(&fs::symlink_metadata(&alias).unwrap()));
+        assert!(read_bundled_font_face_bytes(&alias.join("pack"), &fixture.spec)
+            .unwrap_err().contains("link/reparse"));
+        fs::remove_dir(&alias).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bundled_font_reader_rejects_unix_fifo_without_opening_a_blocking_reader() {
+        use std::os::unix::ffi::OsStrExt;
+        let fixture = BundledFontFixture::new();
+        let path = fixture.root.join(&fixture.spec.font_file);
+        fs::remove_file(&path).unwrap();
+        let name = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec)
+            .unwrap_err().contains("特殊檔案"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bundled_font_reader_rejects_file_root_and_render_symlinks() {
+        use std::os::unix::fs::symlink;
+        let fixture = BundledFontFixture::new();
+        let face_path = fixture.root.join(&fixture.spec.font_file);
+        fs::rename(&face_path, fixture.root.join("real-face.ttf")).unwrap();
+        symlink(fixture.root.join("real-face.ttf"), &face_path).unwrap();
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).is_err());
+        fs::remove_file(&face_path).unwrap();
+        fs::rename(fixture.root.join("real-face.ttf"), &face_path).unwrap();
+        fs::rename(fixture.root.join("render"), fixture.root.join("render-original")).unwrap();
+        symlink(fixture.root.join("render-original"), fixture.root.join("render")).unwrap();
+        assert!(read_bundled_font_face_bytes(&fixture.root, &fixture.spec).is_err());
+        let root_alias = fixture.root.join("root-alias");
+        symlink(&fixture.root, &root_alias).unwrap();
+        assert!(read_bundled_font_face_bytes(&root_alias, &fixture.spec).is_err());
+    }
 
     #[test]
     fn color_asset_route_is_closed_to_known_data_files() {
@@ -10551,19 +11396,19 @@ mod tests {
     #[test]
     fn openexr_import_is_an_explicit_scene_linear_straight_alpha_image() {
         assert_eq!(
-            imported_media_defaults(Path::new("C:\\plates\\beauty.EXR")),
+            media_probe_fields::imported_media_defaults(Path::new("C:\\plates\\beauty.EXR"), &json!({ "hasVideo": true, "hasAudio": false })).unwrap(),
             ("image", "linear_rec709", "straight")
         );
         assert_eq!(
-            imported_media_defaults(Path::new("C:\\stills\\cover.png")),
+            media_probe_fields::imported_media_defaults(Path::new("C:\\stills\\cover.png"), &json!({ "hasVideo": true, "hasAudio": false })).unwrap(),
             ("image", "auto", "auto")
         );
         assert_eq!(
-            imported_media_defaults(Path::new("C:\\plates\\editkin-openexr-sequence.json")),
+            media_probe_fields::imported_media_defaults(Path::new("C:\\plates\\editkin-openexr-sequence.json"), &json!({ "hasVideo": true, "hasAudio": false })).unwrap(),
             ("image", "linear_rec709", "straight")
         );
         assert_eq!(
-            imported_media_defaults(Path::new("C:\\video\\shot.mov")),
+            media_probe_fields::imported_media_defaults(Path::new("C:\\video\\shot.mov"), &json!({ "hasVideo": true, "hasAudio": false })).unwrap(),
             ("video", "auto", "auto")
         );
     }
@@ -10739,6 +11584,39 @@ mod tests {
             r"\\?\Volume{01234567-89ab-cdef-0123-456789abcdef}\clip.mp4",
             r"\\?\GLOBALROOT\Device\HarddiskVolume1\clip.mp4",
             r"\\?\",
+            r"\??\UNC\host\share\clip.mp4",
+            r"\??\C:\media\clip.mp4",
+            "/??/UNC/host/share/clip.mp4",
+            r"C:\media\NUL",
+            r"C:\media\nul.txt",
+            r"C:\x\CON",
+            r"C:\media\aux.mp4",
+            r"C:\media\PRN",
+            r"C:\media\COM1",
+            r"C:\media\com9.mp4",
+            r"C:\media\LPT1",
+            r"C:\media\lpt9.wav",
+            r"C:\media\COM¹",
+            r"C:\media\com².mp4",
+            r"C:\media\COM³",
+            r"C:\media\LPT¹.mp4",
+            r"C:\media\lpt²",
+            r"C:\media\LPT³",
+            r"C:\media\CONIN$",
+            r"C:\media\conout$.mp4",
+            r"C:\media\nul.",
+            r"C:\media\NUL .txt",
+            r"C:\media\NUL ",
+            r"C:\media\Nul.tar.gz",
+            "C:/media/nul.mp4",
+            "C:NUL",
+            r"C:\media\NUL:stream",
+            "nul.mp4",
+            // Conservative choices: a non-final component, a verbatim path, COM0 and LPT0.
+            r"C:\media\NUL\clip.mp4",
+            r"\\?\C:\media\NUL",
+            r"C:\media\COM0.mp4",
+            r"C:\media\LPT0.mp4",
         ] {
             assert!(is_windows_network_path(path), "{path}");
         }
@@ -10749,6 +11627,13 @@ mod tests {
             r"\\?\c:",
             "/Users/someone/clip.mp4",
             "media/clip.mp4",
+            r"C:\media\null.mp4",
+            r"C:\media\console.mp4",
+            r"C:\media\COM10.mp4",
+            r"C:\media\LPT10.mp4",
+            r"C:\media\clip.nul.mp4",
+            r"C:\media\auxiliary\clip.mp4",
+            r"C:\media\nul-cut\clip.mp4",
         ] {
             assert!(!is_windows_network_path(path), "{path}");
         }
@@ -10788,6 +11673,78 @@ mod tests {
         fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
         restrict_to_owner(&path, 0o600).unwrap();
         assert_eq!(mode(&path), 0o600);
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn revoking_a_mobile_device_lists_its_credential_before_dropping_it() {
+        let root = env::temp_dir().join(format!("editkin-mobile-revoke-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let trusted = root.join("mobile-remote").join("trusted-devices.json");
+        let revoked = mobile_revoked_devices_path(&trusted);
+        let hash = |index: usize| format!("{index:064x}");
+        let device = |id: &str, credential: usize| {
+            json!({
+                "id": id,
+                "name": id,
+                "credentialHash": hash(credential),
+                "pairedAt": "2026-01-01T00:00:00.000Z",
+                "lastSeen": "2026-01-01T00:00:00.000Z"
+            })
+        };
+        let listed = || read_remote_json(&revoked).unwrap().unwrap()["credentialHashes"].clone();
+        let trusted_ids = || {
+            let store: Value =
+                serde_json::from_str(&fs::read_to_string(&trusted).unwrap()).unwrap();
+            store["devices"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|item| item["id"].as_str().unwrap().to_owned())
+                .collect::<Vec<_>>()
+        };
+        write_json_atomic(
+            &trusted,
+            &json!({ "schemaVersion": 1, "devices": [device("phone", 1), device("tablet", 2)] }),
+        )
+        .unwrap();
+
+        assert_eq!(
+            revoked,
+            root.join("mobile-remote").join("revoked-devices.json")
+        );
+        assert!(revoke_trusted_device(&trusted, "phone").unwrap());
+        assert_eq!(listed(), json!([hash(1)]));
+        assert_eq!(trusted_ids(), ["tablet"]);
+        assert!(!revoke_trusted_device(&trusted, "phone").unwrap());
+        assert_eq!(listed(), json!([hash(1)]));
+
+        // An unreadable list is replaced instead of blocking the revoke.
+        fs::write(&revoked, "not json").unwrap();
+        assert!(revoke_trusted_device(&trusted, "tablet").unwrap());
+        assert_eq!(listed(), json!([hash(2)]));
+        assert!(trusted_ids().is_empty());
+
+        // A full list keeps the most recent revocations.
+        let full = (100..100 + MOBILE_REVOKED_CREDENTIAL_LIMIT)
+            .map(hash)
+            .collect::<Vec<_>>();
+        write_remote_json_atomic(
+            &revoked,
+            &json!({ "schemaVersion": 1, "credentialHashes": full }),
+        )
+        .unwrap();
+        write_json_atomic(
+            &trusted,
+            &json!({ "schemaVersion": 1, "devices": [device("watch", 3)] }),
+        )
+        .unwrap();
+        assert!(revoke_trusted_device(&trusted, "watch").unwrap());
+        let hashes = listed();
+        let hashes = hashes.as_array().unwrap();
+        assert_eq!(hashes.len(), MOBILE_REVOKED_CREDENTIAL_LIMIT);
+        assert_eq!(hashes.first(), Some(&json!(hash(101))));
+        assert_eq!(hashes.last(), Some(&json!(hash(3))));
         fs::remove_dir_all(&root).unwrap();
     }
 
@@ -11433,6 +12390,51 @@ mod tests {
                     &expected_keys,
                 ),
                 Some((true, true))
+            );
+        }
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn claude_mcp_readback_accepts_the_claude_code_2_1_311_report() {
+        // #104: Claude Code 2.1.311 prints the remove hint unquoted; the health check then failed a server that
+        // `claude mcp list` showed as ✓ Connected.
+        let root = std::env::temp_dir().join(format!(
+            "editkin-claude-mcp-2-1-311-{}-{}",
+            std::process::id(),
+            unix_time_ms()
+        ));
+        fs::create_dir_all(root.join("state")).expect("create state fixture");
+        let executable = root.join(if cfg!(windows) { "node.exe" } else { "node" });
+        let launcher = root.join("launcher.mjs");
+        fs::write(&executable, b"fixture").expect("write executable fixture");
+        fs::write(&launcher, b"fixture").expect("write launcher fixture");
+        let expected_keys = ["EDITKIN_AGENT_STATE_ROOT", "EDITKIN_WORKSPACE"]
+            .into_iter()
+            .map(str::to_string)
+            .collect::<BTreeSet<_>>();
+        let report = format!(
+            "editkin:\n  Scope: User config (available in all your projects)\n  Status: ✓ Connected\n  Type: stdio\n  Command: {}\n  Args: {}\n  Environment:\n    EDITKIN_AGENT_STATE_ROOT={}\n    EDITKIN_WORKSPACE={}\n\nTo remove this server, run: claude mcp remove editkin -s user\n",
+            executable.display(),
+            launcher.display(),
+            root.join("state").display(),
+            root.display(),
+        );
+        for text in [
+            report.clone(),
+            report.replace("-s user", "--scope user"),
+            report.replace('\n', "\r\n"),
+        ] {
+            assert_eq!(
+                claude_mcp_text_inspection(
+                    text.as_bytes(),
+                    &executable,
+                    &launcher,
+                    &root.join("state"),
+                    &expected_keys,
+                ),
+                Some((true, true)),
+                "{text}"
             );
         }
         let _ = fs::remove_dir_all(&root);

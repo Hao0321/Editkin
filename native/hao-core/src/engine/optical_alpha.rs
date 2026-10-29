@@ -53,6 +53,16 @@ pub struct OpticalAlphaResult {
     pub receipt: OpticalAlphaReceipt,
 }
 
+/// Unquantized diagnostic output for the opt-in edge v2 bake. Alpha is normalized coverage,
+/// not RGB radiometry. The existing three public refiners still return their frozen u8 result.
+#[derive(Clone, Debug)]
+pub struct OpticalAlphaFloatResult {
+    pub matte: MatteFrame,
+    pub alpha: Vec<f32>,
+    pub solve_confidence: Vec<f32>,
+    pub receipt: OpticalAlphaReceipt,
+}
+
 #[derive(Clone)]
 struct IntegralPlane {
     stride: usize,
@@ -137,6 +147,7 @@ pub fn refine_optical_alpha(
         previous,
         settings,
         LocalSolveStrategy::FrozenFixedWindow,
+        None,
     )
 }
 
@@ -156,6 +167,7 @@ pub fn refine_adaptive_optical_alpha(
         previous,
         settings,
         LocalSolveStrategy::AdaptiveColorLine,
+        None,
     )
 }
 
@@ -175,7 +187,29 @@ pub fn refine_texture_aware_optical_alpha(
         previous,
         settings,
         LocalSolveStrategy::GuardedTextureAware,
+        None,
     )
+}
+
+/// EG3 W3-2: capture the v3 solve before u8 encoding; never expand quantized u8 as fake alpha16.
+/// This explicit bounded API leaves old entry points and their allocation/output contract intact.
+pub fn refine_texture_aware_optical_alpha_f32(
+    rgb: &[u8],
+    coarse: &MatteFrame,
+    settings: OpticalAlphaSettings,
+) -> Result<OpticalAlphaFloatResult, String> {
+    coarse.validate()?;
+    validate_settings(settings)?;
+    if coarse.alpha.len() > 2_073_600 || rgb.len() != coarse.alpha.len() * 3 {
+        return Err("float optical alpha exceeds bounded 1080p layout or RGB differs".into());
+    }
+    let mut alpha: Vec<f32> = coarse.alpha.iter().map(|a| *a as f32 / 255.0).collect();
+    let mut solve_confidence = vec![0.0; alpha.len()];
+    let result = refine_optical_alpha_with_strategy(
+        rgb, coarse, None, settings, LocalSolveStrategy::GuardedTextureAware,
+        Some((&mut alpha, &mut solve_confidence)),
+    )?;
+    Ok(OpticalAlphaFloatResult { matte: result.matte, alpha, solve_confidence, receipt: result.receipt })
 }
 
 fn refine_optical_alpha_with_strategy(
@@ -184,6 +218,7 @@ fn refine_optical_alpha_with_strategy(
     previous: Option<&MatteFrame>,
     settings: OpticalAlphaSettings,
     strategy: LocalSolveStrategy,
+    mut float_output: Option<(&mut [f32], &mut [f32])>,
 ) -> Result<OpticalAlphaResult, String> {
     coarse.validate()?;
     validate_settings(settings)?;
@@ -382,6 +417,10 @@ fn refine_optical_alpha_with_strategy(
                     refined = refined * (1.0 - settings.temporal_stability)
                         + prior * settings.temporal_stability;
                 }
+            }
+            if let Some((alpha, solve_confidence)) = &mut float_output {
+                alpha[index] = refined;
+                solve_confidence[index] = confidence;
             }
             let encoded = (refined * 255.0).round() as u8;
             if encoded != coarse.alpha[index] {

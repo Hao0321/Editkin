@@ -10,6 +10,12 @@ export interface MediaProbe {
   encodedHeight?: number;
   /** Raw ffprobe display-matrix angle (legacy rotate tag if no matrix). */
   displayRotationDegrees?: number;
+  /** Parsed source SAR. Absent means ffprobe supplied no known positive SAR. */
+  sampleAspectRatio?: number;
+  /** Upright physical display ratio, derived only from a known source SAR. */
+  displayAspectRatio?: number;
+  /** Validated ffprobe avg_frame_rate; absence remains unknown, including VFR without an average. */
+  frameRate?: import("../domain/mediaFrameRate").MediaFrameRate;
   hasVideo: boolean;
   hasAudio: boolean;
   colorPrimaries?: string;

@@ -1,0 +1,36 @@
+/* Inspector › 調整 › 混合 (ClipBlendControlsV1): one compact card that wraps to two lines on a narrow panel. */
+.clip-blend-controls { display: grid; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); }
+.clip-blend-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+.clip-blend-heading strong { font-size: calc(13px * var(--ui-scale, 1)); }
+.clip-blend-heading span { color: var(--muted); font-size: calc(11px * var(--ui-scale, 1)); }
+.clip-blend-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.clip-blend-mode, .clip-blend-opacity { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--soft); font-size: calc(12px * var(--ui-scale, 1)); font-weight: 700; }
+.clip-blend-mode { flex: 1 1 168px; }
+.clip-blend-opacity { flex: 1 1 200px; }
+.clip-blend-mode > span, .clip-blend-opacity > span:first-child { flex: 0 0 auto; white-space: nowrap; }
+.clip-blend-trigger { display: flex; flex: 1 1 auto; align-items: center; gap: 7px; min-width: 0; min-height: var(--ui-target-size, 36px); padding: 4px 9px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); color: var(--ink); font: inherit; font-weight: 750; cursor: pointer; }
+.clip-blend-trigger > span { overflow: hidden; min-width: 0; flex: 1; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.clip-blend-trigger > b { color: var(--muted); font-size: 11px; }
+.clip-blend-trigger:hover:not(:disabled), .clip-blend-trigger[aria-expanded="true"] { border-color: var(--accent); }
+.clip-blend-trigger:disabled { background: var(--disabled-bg); color: var(--disabled-ink); cursor: not-allowed; }
+.clip-blend-opacity input[type="range"] { flex: 1 1 80px; width: 100%; min-width: 60px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.clip-blend-opacity input[type="number"] { box-sizing: border-box; flex: 0 0 auto; width: 58px; min-height: 32px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+.clip-blend-opacity > span:last-child { color: var(--muted); font-weight: 600; }
+.clip-blend-opacity :disabled { cursor: not-allowed; opacity: .55; }
+.clip-blend-keyframe { flex: 0 0 auto; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); color: var(--muted); font-size: 15px; line-height: 1; cursor: pointer; }
+.clip-blend-keyframe[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.clip-blend-keyframe:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.clip-blend-keyframe:disabled { opacity: .45; cursor: not-allowed; }
+.clip-blend-controls :focus-visible, .clip-blend-menu :focus-visible { outline: 2px solid var(--focus-ring, var(--accent)); outline-offset: 2px; }
+/* The swatch: a light-to-dark strip under an orange dot drawn with the mode itself, so each mode's effect is visible. */
+.clip-blend-swatch { position: relative; flex: 0 0 auto; width: 22px; height: 16px; overflow: hidden; border-radius: 4px; background: linear-gradient(90deg, #121821 0 34%, #7d8796 34% 67%, #f4f1ea 67%); isolation: isolate; box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
+.clip-blend-swatch > b { position: absolute; inset: 2px 3px; border-radius: 50%; background: #ff7a2f; }
+.clip-blend-menu { position: fixed; z-index: 5000; box-sizing: border-box; display: grid; align-content: start; gap: 2px; padding: 6px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.clip-blend-group { display: grid; gap: 1px; }
+.clip-blend-group + .clip-blend-group { margin-top: 3px; padding-top: 4px; border-top: 1px solid var(--line); }
+.clip-blend-group > small { padding: 2px 8px 1px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.clip-blend-menu [role="option"] { display: flex; align-items: center; gap: 9px; min-height: 30px; padding: 3px 8px; border-radius: 8px; font-size: calc(13px * var(--ui-scale, 1)); cursor: pointer; }
+.clip-blend-menu [role="option"] > span { flex: 1; min-width: 0; }
+.clip-blend-menu [role="option"] > b { color: var(--accent); }
+.clip-blend-menu [role="option"][data-active="true"] { background: var(--accent-soft); color: var(--accent); }
+.clip-blend-menu [role="option"][aria-selected="true"] { font-weight: 800; }

@@ -1,6 +1,7 @@
 import { constants as fsConstants } from "node:fs";
 import { copyFile, cp, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { productAgentRuntimeResources } from "./lib/agent-launcher-closure.mjs";
 import { assertSelfAuthoredProductResourceRoots, assertSelfAuthoredProductResources } from "./lib/self-authored-product-resources.mjs";
 import { assertPinnedWindowsProductRuntime } from "./lib/pinned-product-runtime.mjs";
 import { assertTauriStageReplacementTarget, resolveTauriStageTarget } from "./lib/tauri-stage-target-policy.mjs";
@@ -50,10 +51,23 @@ const resources = [
   ["public/demo-source.mp4", "demo-source.mp4"],
   ["public/editkin-demo-preview.mp4", "editkin-demo-preview.mp4"],
 ];
-const agentResources = mcpCandidateStage ? [] : [
-  ["scripts/editkin-product-mcp-launcher.mjs", "launcher.mjs"],
-  ["src/shared/agentSetupContract.json", "agent-setup-contract.json"],
-];
+// The launcher plus every module it imports (transitively) and the embedded contract.
+const agentResources = mcpCandidateStage ? [] : productAgentRuntimeResources(appRoot)
+  .map(({ source, destination }) => [source, destination]);
+
+async function regularFilesBelow(root) {
+  const files = [];
+  async function visit(directory) {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) await visit(path);
+      else if (entry.isFile()) files.push(relative(root, path).split(sep).join("/"));
+      else throw new Error(`Tauri staged Agent runtime contains a non-regular entry: ${path}`);
+    }
+  }
+  await visit(root);
+  return files.sort();
+}
 
 assertSelfAuthoredProductResources(
   [...resources.flat(), ...agentResources.flat()],
@@ -117,12 +131,10 @@ try {
     await copyFile(resolve(source), output, fsConstants.COPYFILE_EXCL);
   }
   if (!mcpCandidateStage) {
-    const agentEntries = await readdir(stagedAgentRuntime, { withFileTypes: true });
     const expectedAgentFiles = agentResources.map(([, destination]) => destination).sort();
-    const actualAgentFiles = agentEntries.map((entry) => entry.name).sort();
-    if (agentEntries.some((entry) => !entry.isFile())
-      || JSON.stringify(actualAgentFiles) !== JSON.stringify(expectedAgentFiles)) {
-      throw new Error("Tauri staged Agent runtime must contain exactly the launcher and embedded contract");
+    const actualAgentFiles = await regularFilesBelow(stagedAgentRuntime);
+    if (JSON.stringify(actualAgentFiles) !== JSON.stringify(expectedAgentFiles)) {
+      throw new Error("Tauri staged Agent runtime must contain exactly the launcher, its imported modules and the embedded contract");
     }
   }
   const runtimeEntries = await readdir(stagedRuntime, { withFileTypes: true });

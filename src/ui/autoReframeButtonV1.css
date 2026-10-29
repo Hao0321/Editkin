@@ -1,0 +1,16 @@
+.auto-reframe-v1 { display: grid; gap: 8px; min-width: 0; color: var(--text); }
+.auto-reframe-v1 p { margin: 0; overflow-wrap: anywhere; }
+.auto-reframe-help { color: var(--soft); font-size: .875em; }
+.auto-reframe-modes, .auto-reframe-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.auto-reframe-v1 button { width: auto; max-width: 100%; min-height: var(--ui-target-size, 40px); padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--text); font: inherit; overflow-wrap: anywhere; }
+.auto-reframe-v1 button[aria-pressed=true] { background: var(--accent); color: var(--accent-ink); }
+.auto-reframe-v1 button:disabled { opacity: .55; cursor: default; }
+.auto-reframe-v1 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.auto-reframe-progress { display: grid; gap: 8px; }
+.auto-reframe-progress progress { width: 100%; accent-color: var(--accent); }
+.auto-reframe-v1 svg { display: block; width: 100%; height: 200px; border: 1px solid var(--line); border-radius: 8px; box-sizing: border-box; background: var(--surface-2); }
+.auto-reframe-boundary { fill: none; stroke: var(--line); vector-effect: non-scaling-stroke; }
+.auto-reframe-crop { fill: none; stroke: var(--soft); stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; }
+.auto-reframe-line { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.auto-reframe-start { fill: var(--accent); }
+.auto-reframe-end { fill: var(--surface-2); stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }

@@ -5,6 +5,7 @@
 .native-effect-instance header { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; }
 .native-effect-instance header b { display: grid; min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
 .native-effect-instance header small { color: var(--muted); font-weight: 500; }
+.native-effect-instance header small.preview-approximate-badge { justify-self: start; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px; font-size: 11px; line-height: 1.5; white-space: nowrap; cursor: help; }
 .native-effect-instance header button { min-height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); color: var(--ink); }
 .native-effect-actions { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-end; gap: 5px; }
 .native-effect-actions button:first-child,.native-effect-actions button:nth-child(2) { width: 34px; padding: 0; font-size: 15px; }

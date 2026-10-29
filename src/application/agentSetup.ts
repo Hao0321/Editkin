@@ -69,10 +69,6 @@ export const EDITKIN_AGENT_SETUP_CONTRACT: AgentSetupContract = Object.freeze({
 
 export const EDITKIN_AGENT_STARTER_PROMPT = EDITKIN_AGENT_SETUP_CONTRACT.starterPrompt;
 
-function powerShellQuote(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`;
-}
-
 function setupEnvironment(options: AgentSetupOptions): Record<string, string> {
   return {
     ELECTRON_RUN_AS_NODE: "1",
@@ -91,13 +87,6 @@ function setupEnvironment(options: AgentSetupOptions): Record<string, string> {
     EDITKIN_MODEL_ROOT: options.modelRoot,
     EDITKIN_CACHE_ROOT: options.cacheRoot,
   };
-}
-
-function environmentFlags(options: AgentSetupOptions): string {
-  const environment = setupEnvironment(options);
-  return Object.entries(environment)
-    .map(([key, value]) => `--env ${powerShellQuote(`${key}=${value}`)}`)
-    .join(" ");
 }
 
 export function buildAgentSetupInvocation(target: AgentTarget, options: AgentSetupOptions): AgentSetupInvocation {
@@ -135,12 +124,4 @@ export function inspectAgentConnection(target: AgentTarget, result: AgentInspect
     health: failed ? "failed" : connected ? "connected" : "configured",
     detail: detail.slice(-1_000),
   };
-}
-
-export function buildAgentSetupCommand(target: AgentTarget, options: AgentSetupOptions): string {
-  const server = `${powerShellQuote(options.executablePath)} ${powerShellQuote(options.launcherPath)}`;
-  const env = environmentFlags(options);
-  if (target === "codex") return `codex mcp add editkin ${env} -- ${server}`;
-  const config = JSON.stringify({ type: "stdio", command: options.executablePath, args: [options.launcherPath], env: setupEnvironment(options) });
-  return `claude mcp add-json --scope user editkin ${powerShellQuote(config)}`;
 }

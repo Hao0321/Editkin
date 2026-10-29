@@ -28,35 +28,37 @@ export const STUDIO_MOTION_ASSETS: StudioMotionAsset[] = [
 let studioCreativeInitialized = false;
 
 const STUDIO_LOOKS: LookPreset[] = [
-  ["studio_skin_daylight", "人物日光清透", { brightness: .035, contrast: 1.04, saturation: 1.02, hue: -2 }],
-  ["studio_food_amber", "食物暖琥珀", { brightness: .02, contrast: 1.08, saturation: 1.12, hue: -7 }],
-  ["studio_city_cyan", "城市青橙", { brightness: -.01, contrast: 1.14, saturation: 1.08, hue: 8 }],
-  ["studio_film_cream", "奶油底片", { brightness: .045, contrast: .94, saturation: .88, hue: -4 }],
-  ["studio_product_white", "產品高級白", { brightness: .06, contrast: 1.02, saturation: .94, hue: 0 }],
-  ["studio_night_violet", "夜景紫藍", { brightness: -.045, contrast: 1.18, saturation: 1.12, hue: 14 }],
-  ["studio_documentary_olive", "紀錄橄欖", { brightness: -.018, contrast: 1.1, saturation: .78, hue: -12 }],
-  ["studio_soft_pink", "柔霧蜜桃", { brightness: .04, contrast: .96, saturation: .92, hue: -9 }],
+  ["studio_skin_daylight", "舊版・人物日光清透（基本色調＋整張偏色）", { brightness: .035, contrast: 1.04, saturation: 1.02, hue: -2 }],
+  ["studio_food_amber", "舊版・食物暖琥珀（基本色調＋整張偏色）", { brightness: .02, contrast: 1.08, saturation: 1.12, hue: -7 }],
+  ["studio_city_cyan", "舊版・城市青橙（基本色調＋整張偏色）", { brightness: -.01, contrast: 1.14, saturation: 1.08, hue: 8 }],
+  ["studio_film_cream", "舊版・奶油底片（基本色調＋整張偏色）", { brightness: .045, contrast: .94, saturation: .88, hue: -4 }],
+  ["studio_product_white", "產品高級白（基本色調）", { brightness: .06, contrast: 1.02, saturation: .94, hue: 0 }],
+  ["studio_night_violet", "舊版・夜景紫藍（基本色調＋整張偏色）", { brightness: -.045, contrast: 1.18, saturation: 1.12, hue: 14 }],
+  ["studio_documentary_olive", "舊版・紀錄橄欖（基本色調＋整張偏色）", { brightness: -.018, contrast: 1.1, saturation: .78, hue: -12 }],
+  ["studio_soft_pink", "舊版・柔霧蜜桃（基本色調＋整張偏色）", { brightness: .04, contrast: .96, saturation: .92, hue: -9 }],
 ].map(([id, name, patch]) => ({ id: id as string, name: name as string, license: "MIT", provenance: "Editkin original grade preset", renderer: "editkin-primary-grade", color: { ...DEFAULT_COLOR, ...(patch as Partial<typeof DEFAULT_COLOR>) } }));
 
 export const STUDIO_CINEMATIC_LOOKS: LookPreset[] = [
-  ["cine_neutral_balance", "中性平衡", { brightness: .008, contrast: 1.01, saturation: .99, hue: 0 }],
-  ["cine_creator_clean_pop", "創作者清透", { brightness: .025, contrast: 1.09, saturation: 1.07, hue: -2 }],
-  ["cine_soft_daylight_skin", "柔光日常膚色", { brightness: .04, contrast: .96, saturation: .98, hue: -4 }],
-  ["cine_cool_precision", "冷調精密", { brightness: .005, contrast: 1.12, saturation: .9, hue: 8 }],
-  ["cine_warm_documentary", "溫暖紀實", { brightness: -.008, contrast: 1.08, saturation: .84, hue: -10 }],
-  ["cine_muted_editorial", "低彩編輯誌", { brightness: .018, contrast: .92, saturation: .7, hue: -3 }],
-  ["cine_dense_print", "深色印刷感", { brightness: -.045, contrast: 1.24, saturation: .88, hue: 0 }],
-  ["cine_pastel_air", "空氣粉彩", { brightness: .06, contrast: .86, saturation: .76, hue: -6 }],
-  ["cine_neon_night_guard", "霓虹夜景保護", { brightness: -.035, contrast: 1.2, saturation: 1.18, hue: 10 }],
-  ["cine_dawn_gold", "黎明金", { brightness: .025, contrast: 1.05, saturation: 1.02, hue: -14 }],
-  ["cine_moonlit_steel", "月光鋼藍", { brightness: -.02, contrast: 1.15, saturation: .82, hue: 16 }],
-  ["cine_silver_monochrome", "銀灰黑白", { brightness: .01, contrast: 1.18, saturation: 0, hue: 0 }],
+  ["cine_neutral_balance", "中性平衡（基本色調）", { brightness: .008, contrast: 1.01, saturation: .99, hue: 0 }],
+  ["cine_creator_clean_pop", "舊版・創作者清透（基本色調＋整張偏色）", { brightness: .025, contrast: 1.09, saturation: 1.07, hue: -2 }],
+  ["cine_soft_daylight_skin", "舊版・柔光日常膚色（基本色調＋整張偏色）", { brightness: .04, contrast: .96, saturation: .98, hue: -4 }],
+  ["cine_cool_precision", "舊版・冷調精密（基本色調＋整張偏色）", { brightness: .005, contrast: 1.12, saturation: .9, hue: 8 }],
+  ["cine_warm_documentary", "舊版・溫暖紀實（基本色調＋整張偏色）", { brightness: -.008, contrast: 1.08, saturation: .84, hue: -10 }],
+  ["cine_muted_editorial", "舊版・低彩編輯誌（基本色調＋整張偏色）", { brightness: .018, contrast: .92, saturation: .7, hue: -3 }],
+  ["cine_dense_print", "深色印刷感（基本色調）", { brightness: -.045, contrast: 1.24, saturation: .88, hue: 0 }],
+  ["cine_pastel_air", "舊版・空氣粉彩（基本色調＋整張偏色）", { brightness: .06, contrast: .86, saturation: .76, hue: -6 }],
+  ["cine_neon_night_guard", "舊版・霓虹夜景保護（基本色調＋整張偏色）", { brightness: -.035, contrast: 1.2, saturation: 1.18, hue: 10 }],
+  ["cine_dawn_gold", "舊版・黎明金（基本色調＋整張偏色）", { brightness: .025, contrast: 1.05, saturation: 1.02, hue: -14 }],
+  ["cine_moonlit_steel", "舊版・月光鋼藍（基本色調＋整張偏色）", { brightness: -.02, contrast: 1.15, saturation: .82, hue: 16 }],
+  ["cine_silver_monochrome", "銀灰黑白（基本色調）", { brightness: .01, contrast: 1.18, saturation: 0, hue: 0 }],
 ].map(([id, name, patch]) => ({ id: id as string, name: name as string, license: "MIT", provenance: "Editkin original parameterized primary-grade preset", renderer: "editkin-primary-grade", color: { ...DEFAULT_COLOR, ...(patch as Partial<typeof DEFAULT_COLOR>) } }));
 
 const STUDIO_EFFECTS: EffectPreset[] = [
   ["studio_vignette_soft", "柔和聚焦暗角", "ffmpeg-vignette"], ["studio_clean_denoise", "乾淨降噪", "ffmpeg-denoise"],
   ["studio_detail_pop", "產品細節增強", "ffmpeg-detail-pop"], ["studio_pastel_wash", "柔霧粉彩", "ffmpeg-pastel"],
   ["studio_night_depth", "夜景深邃", "ffmpeg-night-depth"], ["studio_highlight_rolloff", "高光柔化", "ffmpeg-highlight-soft"],
+  // Non-full-frame shots: the same image, enlarged and softly blurred, fills the frame behind sharp windows.
+  ["studio_backdrop_soft", "同圖放大柔焦背景", "ffmpeg-backdrop-soft"],
 ].map(([id, name, renderer]) => ({ id, name, renderer, license: "MIT", provenance: "Editkin original FFmpeg filter preset" }));
 
 const STUDIO_TRANSITIONS: TransitionPreset[] = [

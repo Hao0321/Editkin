@@ -2,6 +2,7 @@ import type { MediaAsset, MediaColorMetadata } from "../domain/types";
 import { HLG_DISPLAY_LINEAR_FILTER } from "../color/displayTransfer";
 import { hasLinearWhiteBalance, linearWhiteBalanceFilters, rec709OetfDecodeFilters, type LinearWhiteBalanceColor } from "../color/linearWhiteBalance";
 import { strictMediaColorInterpretation } from "../application/sourceDisplayMetadata";
+import { DECLARED_PREMULTIPLIED_TO_STRAIGHT } from "./ffmpegExpressions";
 
 export type LinearWhiteBalanceInputConvention = "rec709-oetf" | "hlg-linear" | "pq-display-linear";
 const PQ_WHITE_BALANCE_UNAVAILABLE = "PQ 線性／參考白平衡尚未完成版本化與輸出驗證；已停止套用並保留原有參數，零白平衡與一般曝光不受影響";
@@ -59,7 +60,7 @@ export function whiteBalanceAssetWithMetadata(asset: MediaAsset, discovered: Omi
 }
 
 function straightFloatAlphaFilters(asset: MediaAsset): string[] {
-  if (asset.alphaMode === "premultiplied") return ["unpremultiply=inplace=1"];
+  if (asset.alphaMode === "premultiplied") return [...DECLARED_PREMULTIPLIED_TO_STRAIGHT];
   // lut=a=255 is an integer filter and would silently quantize a FLOAT stream.
   if (asset.alphaMode === "opaque") return ["geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a=1:i=nearest"];
   return [];

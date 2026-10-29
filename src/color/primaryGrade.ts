@@ -1,4 +1,5 @@
 import type { ColorAdjustments, ColorManagementSettings, InputColorSpace, MediaAsset } from "../domain/types";
+import { acesSdrOutputLutPathV1 } from "./acesPhoneInputV1";
 import { DEFAULT_COLOR_MANAGEMENT } from "../domain/types";
 import { strictMediaColorInterpretation } from "../application/sourceDisplayMetadata";
 import { HLG_DISPLAY_LINEAR_FILTER, HLG_SDR_TONEMAP_FILTER } from "./displayTransfer";
@@ -108,7 +109,8 @@ export function inputNormalizationFilters(asset: MediaAsset, management: ColorMa
 export function acesOutputFilter(management: ColorManagementSettings = DEFAULT_COLOR_MANAGEMENT, colorRoot?: string): string | undefined {
   if (management.mode !== "aces2") return undefined;
   if (!colorRoot) throw new Error("ACES 2.0 Output Transform 資源未載入。");
-  return `lut3d=file='${filterPath(`${colorRoot}/luts/output-acescct-to-${management.outputTransform}.cube`)}':interp=tetrahedral`;
+  const file = management.outputTransform === "rec709_sdr" ? acesSdrOutputLutPathV1(management) : `luts/output-acescct-to-${management.outputTransform}.cube`;
+  return `lut3d=file='${filterPath(`${colorRoot}/${file}`)}':interp=tetrahedral`;
 }
 
 export function primaryGradeFilters(color: ColorAdjustments): string[] {

@@ -6,24 +6,22 @@ import { CINEMATIC_LANGUAGE_RECIPES } from "../creative/cinematicLanguage";
 import { isTemplateGeneratedGraphic, isTemplateGeneratedMarker } from "./templateLifecycle";
 
 describe("long-form template compiler", () => {
-  it("builds every long-form package with rhythm, graphics, VFX, transition and grade", () => {
+  it("applies long-form narrative settings without injecting slides, invented subtitles or changing source footage", () => {
     for (const template of LONG_FORM_TEMPLATES) {
       let id = 0;
       const source = applyCommand(createDemoProject(), { type: "split_clip", clipId: "clip-demo", at: 6, newClipId: "clip-demo-b" });
       const result = applyCommand(source, buildLongFormTemplateCommand(source, template.id, (prefix) => `${prefix}-${id++}`));
       expect(result).toMatchObject({ width: source.width, height: source.height });
       expect(result.templateApplication).toMatchObject({ templateId: template.id, format: "long" });
-      expect(result.motionGraphics.map((item) => item.kind)).toEqual(expect.arrayContaining(["title", "card", "tag", "counter"]));
-      expect(result.captions).toHaveLength(1);
+      expect(result.motionGraphics).toEqual(source.motionGraphics);
+      expect(result.captions).toEqual(source.captions);
       expect(result.captionStyle).toMatchObject(LONG_FORM_WHITE_CAPTION_STYLE);
       expect(result.captionStyle.color).toBe("#FFFFFF");
       expect(result.captionStyle.translationColor).toBe("#FFFFFF");
       expect(result.director.markers).toHaveLength(3);
       expect(result.director.markers[0].note).toContain(template.cinematicRecipeId);
       expect(CINEMATIC_LANGUAGE_RECIPES.some((recipe) => recipe.id === template.cinematicRecipeId)).toBe(true);
-      const clip = result.tracks.flatMap((track) => track.clips)[0];
-      expect(clip.creative).toMatchObject({ lookPresetId: template.lookPresetId, effectPresetIds: template.effectPresetIds });
-      expect(clip.creative?.transitionOut?.presetId).toBe("luma_fade");
+      expect(result.tracks).toEqual(source.tracks);
     }
   });
 
@@ -48,7 +46,7 @@ describe("long-form template compiler", () => {
     const first = applyCommand(source, buildLongFormTemplateCommand(source, "hao_tutorial", (prefix) => `${prefix}-${id++}`));
     const second = applyCommand(first, buildLongFormTemplateCommand(first, "interview_story", (prefix) => `${prefix}-${id++}`));
     expect(second.motionGraphics.filter((graphic) => graphic.id === "user-card")).toHaveLength(1);
-    expect(second.motionGraphics.filter(isTemplateGeneratedGraphic)).toHaveLength(4);
+    expect(second.motionGraphics.filter(isTemplateGeneratedGraphic)).toHaveLength(0);
     expect(second.director.markers.filter(isTemplateGeneratedMarker)).toHaveLength(3);
     expect(second.director.markers).toHaveLength(3);
   });

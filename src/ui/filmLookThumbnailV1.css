@@ -1,0 +1,7 @@
+.film-look-list button:has(.film-look-thumbnail) { display: grid; grid-template-columns: 96px minmax(0,1fr) max-content; }
+.film-look-thumbnail { display: grid; place-items: center; width: 96px; min-height: 54px; border: 1px solid var(--line); border-radius: 6px; background: #03060b; overflow: hidden; }
+.film-look-thumbnail img { display: block; width: 96px; height: 54px; object-fit: contain; }
+.film-look-thumbnail > span { font-size: 9px; color: var(--muted); font-weight: 400; }
+.look-thumbnail-renderer,.look-thumbnail-source { position: fixed; left: -10000px; top: 0; width: 192px; height: 108px; visibility: hidden; pointer-events: none; }
+.film-look-list [data-testid="look-thumbnails-status"] { grid-column: 1/-1; font-size: 9px; line-height: 1.5; color: var(--muted); }
+@media (max-width: 900px) { .film-look-list button:has(.film-look-thumbnail) { grid-template-columns: 96px minmax(0,1fr) max-content; } }

@@ -1,8 +1,9 @@
 import { expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { REPO_TMP, useTempRoots } from "../test/tempRoot.mjs";
 import { createDemoProject } from "../domain/demo";
 import { alignTime } from "../domain/editGraph";
 import { buildRenderPlan } from "./planner";
@@ -12,14 +13,14 @@ import { compositeFrameClock } from "./compositeFrameClock";
 const app = fileURLToPath(new URL("../../", import.meta.url));
 const ff = resolve(app, "vendor/ffmpeg/win32-x64/ffmpeg.exe");
 const fp = resolve(app, "vendor/ffmpeg/win32-x64/ffprobe.exe");
+const temp = useTempRoots();
 function run(args: string[]) {
   const result = spawnSync(ff, args, { windowsHide: true, timeout: 30000, maxBuffer: 16 * 1024 * 1024 });
   if (result.status !== 0) throw new Error(result.stderr.toString());
   return result.stdout;
 }
 it.each([30,24,25,60,30000/1001,29.97])("actual composite keeps exact boundaries and final frame at %s fps", async fps => {
-  await mkdir(resolve(app, ".rd/tmp"), { recursive: true });
-  const dir = await mkdtemp(resolve(app, ".rd/tmp/composite-frame-clock-"));
+  const dir = await temp.create("composite-frame-clock-", { parent: REPO_TMP });
   const project = createDemoProject(); project.width = 32; project.height = 32; project.fps = fps;
   const seed = project.tracks[0].clips[0]; project.assets = []; project.tracks[0].clips = [];
   const cuts = [0,87,185,274,360], colors = ["red","lime","blue","white"];
@@ -50,7 +51,7 @@ it("uses explicit rational ticks and the domain nearest-frame policy", () => {
   expect(compositeFrameClock(30, .51/30).startFrame).toBe(1);
   for (const value of [-1,NaN,Infinity,Number.MAX_SAFE_INTEGER]) expect(()=>compositeFrameClock(30,value)).toThrow();
   for (const value of [0,-1,NaN,Infinity]) expect(()=>compositeFrameClock(value)).toThrow();
-});
+}, 30_000);
 
 it.each([
   [24000/1001, .0625625], [30000/1001, 1.0844166666666666],
@@ -59,7 +60,7 @@ it.each([
 ])("matches actual domain alignTime including half-frame ties (%s, %s)", (fps,start) => {
   const aligned = alignTime(start,fps);
   expect(compositeFrameClock(fps,start).startFrame).toBe(Math.round(aligned*fps));
-});
+}, 30_000);
 
 it.each([30,30000/1001])("source and lower-rate pixel matte have the identical first project tick at %s", fps => {
   const clock = compositeFrameClock(fps,274/fps);
@@ -70,10 +71,10 @@ it.each([30,30000/1001])("source and lower-rate pixel matte have the identical f
     observed.push(Number(result.stderr.toString().match(/n:\s*0 pts:\s*(\d+)/)![1]));
   }
   expect(observed).toEqual([274,274]);
-});
+}, 30_000);
 
 it("public compositor keeps a track-matte target visible on its last intended frame", async () => {
-  const dir=await mkdtemp(resolve(app,".rd/tmp/composite-track-clock-"));
+  const dir=await temp.create("composite-track-clock-",{parent:REPO_TMP});
   const project=createDemoProject(); project.width=32;project.height=32;
   const clip=project.tracks[0].clips[0];
   const source=resolve(dir,"white.mp4");
@@ -81,7 +82,8 @@ it("public compositor keeps a track-matte target visible on its last intended fr
   project.assets[0].uri=source;project.assets[0].duration=4;
   clip.timelineStart=274/30;clip.duration=86/30;clip.volume=0;
   clip.layer={enabled:true,role:"content",blendMode:"normal",trackMatte:{sourceClipId:"matte",mode:"luma"}};
-  project.tracks.push({id:"matte-track",name:"matte",kind:"video",locked:false,muted:true,clips:[{...structuredClone(clip),id:"matte",trackId:"matte-track",layer:{enabled:true,role:"content",blendMode:"normal"}}]});
+  // The matte source's own picture is off (「隱藏畫面」; before 2026-10-11 「靜音」 meant that too) and it is silent.
+  project.tracks.push({id:"matte-track",name:"matte",kind:"video",locked:false,muted:true,hidden:true,clips:[{...structuredClone(clip),id:"matte",trackId:"matte-track",layer:{enabled:true,role:"content",blendMode:"normal"}}]});
   const output=resolve(dir,"output.mp4");
   await renderComposite(ff,fp,output,project,buildRenderPlan(project,p=>p),undefined,"libx264",30000);
   const raw=run(["-v","error","-i",output,"-an","-fps_mode","passthrough","-pix_fmt","rgb24","-f","rawvideo","-"]);

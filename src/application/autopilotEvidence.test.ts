@@ -24,4 +24,12 @@ describe("autopilot learning event", () => {
     expect(() => autopilotOutcomeSchema.parse({ ...event(), metrics: {} })).toThrow();
     expect(() => autopilotOutcomeSchema.parse({ ...event(), selectedMemoryRuleIds: ["M117", "M117"] })).toThrow();
   });
+
+  it("records authorized agent review honestly and requires an evidence receipt", () => {
+    const agent = { ...event(), checkpoint: "agent_review", metrics: {}, review: { ...event().review, reviewer: "agent", evidenceSha256: "b".repeat(64) } };
+    expect(autopilotOutcomeSchema.parse(agent).checkpoint).toBe("agent_review");
+    expect(() => autopilotOutcomeSchema.parse({ ...agent, review: { ...agent.review, evidenceSha256: undefined } })).toThrow(/evidence/);
+    expect(() => autopilotOutcomeSchema.parse({ ...agent, checkpoint: "human_review" })).toThrow(/human approval/);
+    expect(() => autopilotOutcomeSchema.parse({ ...agent, review: { ...agent.review, reviewer: "human" } })).toThrow(/agent reviewer/);
+  });
 });

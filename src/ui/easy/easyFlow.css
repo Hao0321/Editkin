@@ -1,0 +1,385 @@
+/* Easy flow (簡易流程). Theme tokens only (sky / candy / volt), sized from --ui-scale so the
+   80–200% interface sizes reflow instead of clipping. Body text never below 17px. */
+
+/* While the easy flow is on screen it owns the window: keep the brand and the interface settings,
+   hide the editor's step bar, help, project menu, status bar and import notices. */
+.app-shell.app-shell.app-shell[data-interface-mode]:has(> .easy-flow) { grid-template-rows: auto minmax(0, 1fr); height: auto; min-height: 100dvh; }
+.app-shell.app-shell.app-shell:has(> .easy-flow) > :is(.status-bar, .workspace-notices) { display: none; }
+.app-shell.app-shell.app-shell:has(> .easy-flow) .toolbar { grid-template-columns: minmax(0, 1fr) auto; }
+.app-shell.app-shell.app-shell:has(> .easy-flow) .toolbar :is(.project-flow, .help-action, .project-menu) { display: none; }
+.app-shell.app-shell.app-shell:has(> .easy-flow) .toolbar-actions { grid-column: auto; }
+.app-shell.app-shell.app-shell:has(> .easy-flow) .brand-copy strong { font-size: max(17px, calc(17px * var(--ui-scale, 1))); }
+.app-shell.app-shell.app-shell[data-interface-mode] > .easy-flow { grid-row: 2; }
+
+.easy-flow {
+  --easy-scale: var(--ui-scale, 1);
+  --easy-body: max(17px, calc(18px * var(--easy-scale)));
+  --easy-small: max(17px, calc(17px * var(--easy-scale)));
+  --easy-lead: max(18px, calc(20px * var(--easy-scale)));
+  --easy-label: max(19px, calc(21px * var(--easy-scale)));
+  --easy-title: max(26px, calc(31px * var(--easy-scale)));
+  --easy-primary-height: max(60px, calc(62px * var(--easy-scale)));
+  --easy-secondary-height: max(52px, calc(54px * var(--easy-scale)));
+  --easy-gap: calc(22px * var(--easy-scale));
+  --easy-radius: calc(18px * var(--easy-scale));
+  --easy-max: calc(940px * var(--easy-scale));
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  padding: clamp(18px, 4vh, 44px) 24px 40px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: var(--easy-body);
+  line-height: 1.55;
+}
+.easy-flow .easy-icon { flex: 0 0 auto; width: 1.2em; height: 1.2em; }
+
+.easy-screen { display: flex; flex-direction: column; gap: var(--easy-gap); width: min(100%, var(--easy-max)); min-width: 0; margin-block: auto; }
+.easy-topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.easy-back {
+  display: inline-flex; align-items: center; gap: 8px; min-height: max(48px, calc(48px * var(--easy-scale)));
+  padding: 4px 18px 4px 12px; border: 2px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink);
+  font-size: var(--easy-small); font-weight: 750; cursor: pointer;
+}
+.easy-back:hover { border-color: var(--accent); color: var(--accent); }
+.easy-step { color: var(--muted); font-size: var(--easy-small); font-weight: 750; }
+.easy-title {
+  margin: 0; color: var(--ink); font-size: var(--easy-title); font-weight: 850; line-height: 1.28; letter-spacing: -.01em;
+  text-align: center; word-break: keep-all; overflow-wrap: anywhere; text-wrap: balance; outline: none;
+}
+/* The title only receives focus so a new screen is announced from the top; it is not a control. */
+.easy-flow .easy-title.easy-title.easy-title:is(:focus, :focus-visible) { outline: none; box-shadow: none; }
+/* CJK lines break at punctuation (keep-all) and are balanced; anywhere is only the overflow fallback. */
+.easy-lead { max-width: min(100%, 34em); margin: calc(-10px * var(--easy-scale)) auto 0; color: var(--soft); font-size: var(--easy-lead); line-height: 1.6; text-align: center; word-break: keep-all; overflow-wrap: anywhere; text-wrap: balance; }
+.easy-muted { margin: 0; color: var(--muted); font-size: var(--easy-small); line-height: 1.6; text-align: center; overflow-wrap: anywhere; }
+
+/* Cards: native radio buttons inside big labels, so arrows, Tab and screen readers work as usual. */
+.easy-choices { display: grid; gap: calc(14px * var(--easy-scale)); min-width: 0; margin: 0; padding: 0; border: 0; }
+.easy-legend { width: 100%; margin: 0 0 calc(12px * var(--easy-scale)); padding: 0; color: var(--ink); font-size: var(--easy-label); font-weight: 800; text-align: center; }
+.easy-radio { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.easy-choice {
+  position: relative; display: grid; min-width: 0; border: 2px solid var(--line); border-radius: var(--easy-radius);
+  background: var(--surface); color: var(--ink); cursor: pointer;
+}
+.easy-choice:hover { border-color: var(--line-strong); }
+.easy-choice[data-selected="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.easy-choice:has(.easy-radio:focus-visible) { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+.easy-choice:has(.easy-radio:disabled) { cursor: progress; }
+.easy-check {
+  position: absolute; inset-block-start: 12px; inset-inline-end: 12px; display: grid; place-items: center;
+  width: calc(36px * var(--easy-scale)); height: calc(36px * var(--easy-scale)); border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink); opacity: 0; transform: scale(.6);
+}
+.easy-choice[data-selected="true"] .easy-check { opacity: 1; transform: none; }
+.easy-flow .easy-check .easy-icon { width: 62%; height: 62%; stroke-width: 3; }
+
+.easy-format-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(300px * var(--easy-scale))), 1fr)); gap: calc(18px * var(--easy-scale)); }
+.easy-format { justify-items: center; align-content: start; gap: calc(14px * var(--easy-scale)); padding: calc(26px * var(--easy-scale)) calc(22px * var(--easy-scale)) calc(22px * var(--easy-scale)); text-align: center; }
+.easy-frame {
+  display: grid; place-items: center; border: calc(4px * var(--easy-scale)) solid var(--accent); border-radius: calc(14px * var(--easy-scale));
+  background: var(--surface); color: var(--accent);
+}
+.easy-frame-vertical { width: calc(66px * var(--easy-scale)); height: calc(116px * var(--easy-scale)); }
+.easy-frame-horizontal { width: calc(150px * var(--easy-scale)); height: calc(86px * var(--easy-scale)); margin-block: calc(15px * var(--easy-scale)); }
+.easy-flow .easy-frame .easy-icon { width: calc(30px * var(--easy-scale)); height: calc(30px * var(--easy-scale)); fill: currentColor; }
+.easy-choice-text { display: grid; gap: 4px; min-width: 0; }
+.easy-choice-text strong { font-size: max(21px, calc(24px * var(--easy-scale))); font-weight: 850; line-height: 1.3; overflow-wrap: anywhere; }
+.easy-choice-text small { color: var(--soft); font-size: var(--easy-small); overflow-wrap: anywhere; }
+.easy-badge {
+  display: inline-flex; max-width: 100%; padding: 4px 14px; border: 1px solid color-mix(in srgb, var(--warning) 55%, var(--line));
+  border-radius: 999px; background: color-mix(in srgb, var(--warning) 10%, var(--surface)); color: var(--ink);
+  font-size: var(--easy-small); font-weight: 750; line-height: 1.45; overflow-wrap: anywhere;
+}
+
+.easy-genre-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, max(calc(210px * var(--easy-scale)), 30%)), 1fr)); gap: calc(14px * var(--easy-scale)); }
+.easy-genre {
+  grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: calc(14px * var(--easy-scale));
+  min-height: calc(86px * var(--easy-scale)); padding: 12px calc(56px * var(--easy-scale)) 12px calc(16px * var(--easy-scale));
+}
+.easy-genre strong { font-size: var(--easy-label); font-weight: 800; line-height: 1.35; overflow-wrap: anywhere; }
+.easy-genre-icon {
+  display: grid; place-items: center; width: calc(54px * var(--easy-scale)); height: calc(54px * var(--easy-scale));
+  border-radius: calc(14px * var(--easy-scale)); background: var(--surface-2); color: var(--accent);
+}
+.easy-flow .easy-genre-icon .easy-icon { width: 60%; height: 60%; }
+.easy-genre[data-selected="true"] .easy-genre-icon { background: var(--surface); }
+.easy-genre .easy-check { inset-block-start: 50%; transform: translateY(-50%) scale(.6); }
+.easy-genre[data-selected="true"] .easy-check { transform: translateY(-50%); }
+.easy-genre-auto { border-style: dashed; }
+.easy-genre-auto[data-selected="true"] { border-style: solid; }
+
+/* Messages */
+:is(.easy-note, .easy-hint, .easy-alert, .easy-error) {
+  display: flex; align-items: flex-start; gap: 12px; margin: 0; padding: calc(14px * var(--easy-scale)) calc(18px * var(--easy-scale));
+  border-radius: calc(14px * var(--easy-scale)); font-size: var(--easy-body); line-height: 1.6; overflow-wrap: anywhere;
+}
+:is(.easy-note, .easy-hint, .easy-alert, .easy-error) > .easy-icon { margin-top: .2em; }
+.easy-note { border: 1px solid var(--line); background: var(--surface-2); color: var(--soft); }
+.easy-note > .easy-icon { color: var(--accent); }
+.easy-hint { border: 2px solid var(--accent); background: var(--accent-soft); color: var(--ink); font-weight: 750; }
+.easy-hint > .easy-icon { color: var(--accent); }
+.easy-alert { border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line)); background: color-mix(in srgb, var(--danger) 8%, var(--surface)); color: var(--ink); }
+.easy-alert > .easy-icon { color: var(--danger); }
+.easy-alert p { margin: 0; }
+.easy-error { padding-block: 10px; border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line)); background: color-mix(in srgb, var(--danger) 8%, var(--surface)); color: var(--danger); font-weight: 800; }
+.easy-flow details summary {
+  display: list-item; min-height: 44px; padding: 10px 4px; color: var(--soft); font-size: var(--easy-small); font-weight: 750; line-height: 1.4; cursor: pointer;
+}
+.easy-flow details p { margin: 4px 0 0; color: var(--soft); font-size: var(--easy-small); overflow-wrap: anywhere; }
+.easy-details { align-self: center; max-width: 100%; }
+
+/* Buttons: one big primary, outlined secondaries, underlined small links. */
+.easy-cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+.easy-primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 12px; width: min(100%, calc(470px * var(--easy-scale)));
+  min-height: var(--easy-primary-height); padding: 12px 28px; border: 0; border-radius: calc(16px * var(--easy-scale));
+  background: var(--accent); color: var(--accent-ink); font-size: max(20px, calc(22px * var(--easy-scale))); font-weight: 850; line-height: 1.3;
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--accent) 26%, transparent); cursor: pointer;
+}
+.easy-primary:hover { filter: brightness(1.06); }
+.easy-primary:active { transform: translateY(1px); }
+.easy-primary:disabled { border: 0; background: var(--accent); color: var(--accent-ink); opacity: .9; cursor: progress; }
+.easy-primary > span { overflow-wrap: anywhere; }
+.easy-secondary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: var(--easy-secondary-height);
+  padding: 10px 22px; border: 2px solid var(--line-strong); border-radius: calc(14px * var(--easy-scale)); background: var(--surface);
+  color: var(--ink); font-size: max(18px, calc(19px * var(--easy-scale))); font-weight: 750; line-height: 1.3; cursor: pointer;
+}
+.easy-secondary:hover { border-color: var(--accent); color: var(--accent); }
+.easy-secondary > span, .easy-link > span { overflow-wrap: anywhere; }
+.easy-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(190px * var(--easy-scale))), 1fr)); gap: 12px; }
+.easy-working .easy-actions { justify-self: center; width: min(100%, calc(300px * var(--easy-scale))); margin-inline: auto; }
+.easy-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 30px; }
+.easy-link {
+  display: inline-flex; align-items: center; gap: 8px; min-height: max(48px, calc(48px * var(--easy-scale))); padding: 4px 8px;
+  border: 0; background: transparent; color: var(--soft); font-size: var(--easy-small); font-weight: 750;
+  text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 5px; cursor: pointer;
+}
+.easy-link:hover { color: var(--accent); }
+
+/* The chosen video */
+.easy-video-chip {
+  align-self: center; display: flex; align-items: center; gap: 14px; max-width: 100%; min-width: 0;
+  padding: 8px 20px 8px 8px; border: 1px solid var(--line); border-radius: calc(16px * var(--easy-scale)); background: var(--surface);
+}
+.easy-video-thumb {
+  display: grid; place-items: center; flex: 0 0 auto; width: calc(76px * var(--easy-scale)); height: calc(50px * var(--easy-scale));
+  overflow: hidden; border-radius: calc(10px * var(--easy-scale)); background: var(--preview-bg); color: #fff;
+}
+.easy-video-thumb :is(img, video) { width: 100%; height: 100%; object-fit: cover; }
+.easy-video-text { display: grid; min-width: 0; line-height: 1.35; }
+.easy-video-text small { color: var(--muted); font-size: var(--easy-small); }
+.easy-video-text strong { overflow: hidden; color: var(--ink); font-size: var(--easy-body); text-overflow: ellipsis; white-space: nowrap; }
+.easy-video-time { color: var(--soft); font-size: var(--easy-small); font-variant-numeric: tabular-nums; }
+
+/* Title form */
+.easy-form { display: grid; gap: calc(22px * var(--easy-scale)); }
+.easy-field { display: grid; gap: 8px; min-width: 0; }
+.easy-field > label { color: var(--ink); font-size: var(--easy-label); font-weight: 800; }
+.easy-input {
+  width: 100%; min-height: max(56px, calc(58px * var(--easy-scale))); padding: 10px 16px; border: 2px solid var(--line-strong);
+  border-radius: calc(14px * var(--easy-scale)); background: var(--surface); color: var(--ink); font-size: max(19px, calc(20px * var(--easy-scale)));
+}
+.easy-input-title { min-height: max(66px, calc(72px * var(--easy-scale))); font-size: max(22px, calc(26px * var(--easy-scale))); font-weight: 750; }
+.easy-input::placeholder { color: var(--muted); opacity: 1; font-weight: 500; }
+.easy-input:focus { border-color: var(--accent); outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 1px; }
+.easy-field[data-invalid="true"] .easy-input { border-color: var(--danger); }
+.easy-counter { color: var(--muted); font-size: var(--easy-small); }
+
+/* Working */
+.easy-steps { display: grid; gap: 10px; width: min(100%, calc(600px * var(--easy-scale))); margin: 0 auto; padding: 0; list-style: none; }
+.easy-steps li {
+  display: flex; align-items: center; gap: 14px; min-height: calc(58px * var(--easy-scale)); padding: 10px 18px;
+  border: 1px solid var(--line); border-radius: calc(14px * var(--easy-scale)); background: var(--surface); color: var(--muted); font-size: var(--easy-body);
+}
+.easy-steps li[data-status="current"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); color: var(--ink); font-weight: 800; }
+.easy-steps li[data-status="done"] { color: var(--soft); }
+.easy-step-mark { display: grid; place-items: center; flex: 0 0 auto; width: calc(34px * var(--easy-scale)); height: calc(34px * var(--easy-scale)); border-radius: 50%; }
+li[data-status="done"] > .easy-step-mark { background: var(--success); color: var(--surface); }
+li[data-status="current"] > .easy-step-mark { color: var(--accent); }
+li[data-status="waiting"] > .easy-step-mark { color: var(--line-strong); }
+.easy-flow .easy-step-mark .easy-icon { width: 64%; height: 64%; }
+.easy-flow li[data-status="done"] > .easy-step-mark .easy-icon { stroke-width: 3; }
+.easy-step-label { min-width: 0; overflow-wrap: anywhere; }
+.easy-progress { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; width: min(100%, calc(600px * var(--easy-scale))); margin: 0 auto; }
+.easy-progress-part { position: relative; height: calc(14px * var(--easy-scale)); overflow: hidden; border-radius: 999px; background: var(--surface-3); }
+.easy-progress-part[data-status="done"] { background: var(--accent); }
+.easy-progress-part[data-status="current"] { background: color-mix(in srgb, var(--accent) 24%, var(--surface-3)); }
+.easy-progress-part[data-status="current"] > span {
+  position: absolute; inset-block: 0; inset-inline-start: 0; width: 40%; border-radius: inherit; background: var(--accent);
+  animation: easy-slide 1.8s ease-in-out infinite;
+}
+.easy-progress-part[data-status="current"] > span[style] { animation: none; transition: width .4s ease; }
+.easy-progress-indeterminate { grid-template-columns: 1fr; height: calc(14px * var(--easy-scale)); overflow: hidden; border-radius: 999px; background: var(--surface-3); }
+.easy-progress-indeterminate > span { display: block; width: 35%; height: 100%; border-radius: inherit; background: var(--accent); animation: easy-slide 1.8s ease-in-out infinite; }
+/* 存成影片 with a measured step: one plain bar that only moves forward */
+.easy-progress-measured { grid-template-columns: 1fr; height: calc(14px * var(--easy-scale)); overflow: hidden; border-radius: 999px; background: var(--surface-3); }
+.easy-progress-measured > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .4s ease; }
+.easy-save-stage { margin: 0; color: var(--soft); font-size: var(--easy-lead); text-align: center; overflow-wrap: anywhere; }
+.easy-save-confirm { display: grid; gap: 12px; justify-self: center; width: min(100%, calc(560px * var(--easy-scale))); margin-inline: auto; padding: 16px;
+  border: 1px solid var(--line); border-radius: var(--easy-radius); background: var(--surface-2); text-align: center; }
+.easy-save-confirm p { margin: 0; color: var(--ink); font-size: var(--easy-lead); overflow-wrap: anywhere; }
+.easy-time { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0; color: var(--ink); font-size: var(--easy-lead); font-weight: 750; font-variant-numeric: tabular-nums; }
+.easy-time .easy-icon { color: var(--accent); }
+.easy-spinner {
+  display: inline-block; width: 1.15em; height: 1.15em; border: 3px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-top-color: currentColor; border-radius: 50%; animation: easy-spin .9s linear infinite;
+}
+.easy-step-mark > .easy-spinner { width: 70%; height: 70%; }
+@keyframes easy-spin { to { transform: rotate(360deg); } }
+@keyframes easy-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+
+/* Result */
+.easy-flags {
+  display: flex; gap: 14px; padding: calc(16px * var(--easy-scale)) calc(20px * var(--easy-scale)); border: 2px solid var(--warning);
+  border-radius: calc(16px * var(--easy-scale)); background: color-mix(in srgb, var(--warning) 10%, var(--surface)); color: var(--ink);
+}
+.easy-flow .easy-flags > .easy-icon { width: 1.7em; height: 1.7em; color: var(--warning); }
+.easy-flags > div { display: grid; gap: 8px; min-width: 0; }
+.easy-flags h2 { margin: 0; font-size: var(--easy-label); font-weight: 850; }
+.easy-flags ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.easy-flags li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: var(--easy-body); overflow-wrap: anywhere; }
+.easy-flags li b { margin-inline-end: 10px; }
+.easy-flags p { margin: 0; color: var(--soft); }
+.easy-chip-button {
+  min-height: 44px; padding: 6px 18px; border: 2px solid var(--warning); border-radius: 999px; background: var(--surface); color: var(--ink);
+  font-size: var(--easy-small); font-weight: 750; cursor: pointer;
+}
+.easy-result { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: calc(26px * var(--easy-scale)); }
+.easy-result-media { display: grid; flex: 0 1 auto; justify-items: center; min-width: 0; max-width: 100%; }
+.easy-result-actions { display: grid; flex: 1 1 calc(320px * var(--easy-scale)); gap: 16px; min-width: 0; max-width: calc(520px * var(--easy-scale)); }
+.easy-result-actions .easy-primary { width: 100%; }
+.easy-result-actions .easy-link { justify-self: center; }
+.easy-player { display: block; max-width: 100%; border-radius: var(--easy-radius); background: #000; box-shadow: var(--shadow); }
+.easy-result-vertical .easy-player { width: auto; height: clamp(260px, 52vh, calc(560px * var(--easy-scale))); aspect-ratio: 9 / 16; object-fit: cover; }
+.easy-result-horizontal .easy-result-media { flex: 1 1 100%; }
+.easy-result-horizontal .easy-player { width: min(100%, calc(860px * var(--easy-scale)), max(320px, calc((100vh - 480px) * 16 / 9))); aspect-ratio: 16 / 9; object-fit: contain; }
+.easy-result-horizontal .easy-result-actions { flex-basis: 100%; }
+.easy-summary {
+  display: grid; gap: 14px; width: min(100%, calc(640px * var(--easy-scale))); padding: calc(22px * var(--easy-scale));
+  border: 1px solid var(--line); border-radius: var(--easy-radius); background: var(--surface);
+}
+.easy-summary .easy-video-chip { align-self: start; justify-self: start; }
+.easy-summary h2 { margin: 0; font-size: var(--easy-label); font-weight: 850; }
+.easy-summary ul { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.easy-summary li { display: flex; align-items: center; gap: 12px; font-size: var(--easy-body); }
+.easy-summary li > .easy-icon { color: var(--accent); }
+.easy-summary .easy-muted { text-align: start; }
+
+/* Saved and the honest exits */
+.easy-hero-icon {
+  align-self: center; display: grid; place-items: center; width: calc(92px * var(--easy-scale)); height: calc(92px * var(--easy-scale)); border-radius: 50%;
+}
+.easy-flow .easy-hero-icon .easy-icon { width: 52%; height: 52%; stroke-width: 2.4; }
+.easy-tone-info { background: var(--accent-soft); color: var(--accent); }
+.easy-tone-success { background: color-mix(in srgb, var(--success) 16%, var(--surface)); color: var(--success); }
+.easy-tone-warning { background: color-mix(in srgb, var(--warning) 16%, var(--surface)); color: var(--warning); }
+.easy-saved-where { display: grid; gap: 6px; justify-items: center; text-align: center; font-size: var(--easy-lead); }
+.easy-saved-where p { margin: 0; overflow-wrap: anywhere; }
+.easy-path {
+  max-width: 100%; padding: 10px 16px; border-radius: calc(10px * var(--easy-scale)); background: var(--surface-2); color: var(--ink);
+  font-family: ui-monospace, Consolas, "Microsoft JhengHei", monospace; font-size: var(--easy-small); overflow-wrap: anywhere;
+}
+.easy-saved .easy-cta, .easy-unavailable .easy-cta { flex-direction: column; align-items: center; }
+.easy-saved .easy-secondary { width: min(100%, calc(470px * var(--easy-scale))); }
+.easy-saved .easy-saved-player { justify-self: center; margin-inline: auto; }
+.easy-saved.easy-result-horizontal .easy-saved-player { width: min(100%, calc(640px * var(--easy-scale)), max(280px, calc((100vh - 520px) * 16 / 9))); }
+.easy-saved.easy-result-vertical .easy-saved-player { height: clamp(220px, 40vh, calc(420px * var(--easy-scale))); }
+
+/* Template Shorts: the skip button under 大家原本以為, the "watch it once" banner, the points form */
+.easy-skip { justify-self: center; width: min(100%, calc(300px * var(--easy-scale))); margin-inline: auto; }
+.easy-review { border-color: var(--accent); background: var(--accent-soft); }
+.easy-flow .easy-review > .easy-icon { color: var(--accent); }
+/* Four answers on one screen: each counter sits on its label's row, so the start button stays in view in the 1440×900 window. */
+.easy-points-screen .easy-form { gap: calc(14px * var(--easy-scale)); }
+.easy-points-screen .easy-field { grid-template-columns: minmax(0, 1fr) auto; align-items: end; column-gap: 12px; row-gap: 6px; }
+.easy-points-screen .easy-field > label { grid-column: 1; grid-row: 1; }
+.easy-points-screen .easy-field > .easy-counter { grid-column: 2; grid-row: 1; white-space: nowrap; }
+.easy-points-screen .easy-field > :not(label, .easy-counter) { grid-column: 1 / -1; }
+.easy-points-screen .easy-input { min-height: max(50px, calc(52px * var(--easy-scale))); }
+.easy-result-actions .easy-note { margin: 0; }
+
+/* Recent projects on the first screen: one large row each, the name first and when it was last opened under it. */
+.easy-recent { display: grid; gap: calc(12px * var(--easy-scale)); width: min(100%, calc(640px * var(--easy-scale))); margin: 0 auto; }
+.easy-recent-title { margin: 0; color: var(--ink); font-size: var(--easy-label); font-weight: 800; line-height: 1.35; text-align: center; }
+.easy-recent-list { display: grid; gap: calc(10px * var(--easy-scale)); margin: 0; padding: 0; list-style: none; }
+.easy-recent-item { display: grid; gap: 8px; min-width: 0; }
+.easy-recent-open {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: calc(14px * var(--easy-scale)); width: 100%;
+  min-height: max(64px, calc(68px * var(--easy-scale))); padding: calc(10px * var(--easy-scale)) calc(18px * var(--easy-scale));
+  border: 2px solid var(--line); border-radius: var(--easy-radius); background: var(--surface); color: var(--ink); text-align: start; cursor: pointer;
+}
+.easy-recent-open:hover:not(:disabled) { border-color: var(--accent); }
+.easy-recent-open:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+.easy-recent-open:disabled { cursor: default; }
+/* While one project opens the others wait (the theme's disabled look); the one opening and a gone file look their own. */
+.easy-recent-item[data-state="opening"] .easy-recent-open { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); cursor: progress; }
+.easy-recent-item[data-state="missing"] .easy-recent-open { border-color: var(--line-strong); border-style: dashed; background: var(--surface-2); color: var(--soft); cursor: default; }
+.easy-flow .easy-recent-open > :is(.easy-icon, .easy-spinner) { width: calc(30px * var(--easy-scale)); height: calc(30px * var(--easy-scale)); color: var(--accent); }
+.easy-flow .easy-recent-item[data-state="missing"] .easy-recent-open > .easy-icon { color: var(--warning); }
+.easy-flow .easy-recent-open > .easy-recent-go { width: calc(24px * var(--easy-scale)); height: calc(24px * var(--easy-scale)); color: var(--muted); }
+.easy-recent-text { display: grid; gap: 2px; min-width: 0; }
+.easy-recent-text strong { font-size: var(--easy-label); font-weight: 800; line-height: 1.35; overflow-wrap: anywhere; }
+.easy-recent-text small { color: var(--soft); font-size: var(--easy-small); line-height: 1.45; overflow-wrap: anywhere; }
+.easy-recent-text .easy-recent-folder { color: var(--muted); }
+.easy-recent-problem { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding-inline: calc(6px * var(--easy-scale)); }
+.easy-recent-problem > p { flex: 1 1 calc(240px * var(--easy-scale)); margin: 0; color: var(--ink); font-size: var(--easy-body); line-height: 1.5; overflow-wrap: anywhere; }
+.easy-recent-problem > .easy-details { align-self: auto; }
+.easy-recent-forget {
+  min-height: max(48px, calc(48px * var(--easy-scale))); padding: 8px 18px; border: 2px solid var(--line-strong); border-radius: calc(12px * var(--easy-scale));
+  background: var(--surface); color: var(--ink); font-size: var(--easy-small); font-weight: 750; line-height: 1.3; cursor: pointer;
+}
+.easy-recent-forget:hover { border-color: var(--accent); color: var(--accent); }
+.easy-recent-forget:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+
+@media (max-width: 640px) {
+  .easy-flow { padding-inline: 16px; }
+  .easy-format { padding-inline: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .easy-flow :is(.easy-spinner, .easy-progress-part > span, .easy-progress-indeterminate > span) { animation: none; }
+  .easy-progress-part[data-status="current"] > span:not([style]) { width: 50%; }
+  .easy-progress-indeterminate > span { width: 100%; opacity: .5; }
+  .easy-primary:active { transform: none; }
+}
+
+/* A short window with recent projects (1280×720, 1280×800): the two format cards lie flat — the picture beside the
+   words — and the spacing tightens, so 「選擇影片」 (still the only filled button) and the first two recent projects are
+   in view without scrolling. A very short window (the 800×560 minimum) does the same with or without recent projects,
+   so 「選擇影片」 is never below the fold. */
+@media (max-height: 820px) {
+  .easy-flow:has(.easy-recent) { padding-top: clamp(14px, 2.5vh, 24px); }
+  .easy-home:has(.easy-recent) { gap: calc(16px * var(--easy-scale)); }
+  .easy-home:has(.easy-recent) .easy-legend { margin-bottom: calc(10px * var(--easy-scale)); }
+  .easy-home:has(.easy-recent) .easy-format {
+    grid-template-columns: calc(104px * var(--easy-scale)) minmax(0, 1fr); align-items: center; justify-items: start; column-gap: calc(18px * var(--easy-scale));
+    row-gap: 6px; padding: calc(14px * var(--easy-scale)) calc(58px * var(--easy-scale)) calc(14px * var(--easy-scale)) calc(18px * var(--easy-scale)); text-align: start;
+  }
+  .easy-home:has(.easy-recent) .easy-format > .easy-frame { grid-row: 1 / span 2; justify-self: center; }
+  .easy-home:has(.easy-recent) .easy-format > :is(.easy-choice-text, .easy-badge) { grid-column: 2; }
+  .easy-home:has(.easy-recent) .easy-frame-vertical { width: calc(44px * var(--easy-scale)); height: calc(76px * var(--easy-scale)); }
+  .easy-home:has(.easy-recent) .easy-frame-horizontal { width: calc(104px * var(--easy-scale)); height: calc(60px * var(--easy-scale)); margin-block: 0; }
+  .easy-home:has(.easy-recent) .easy-check { inset-block-start: 50%; transform: translateY(-50%) scale(.6); }
+  .easy-home:has(.easy-recent) .easy-choice[data-selected="true"] .easy-check { transform: translateY(-50%); }
+  .easy-home:has(.easy-recent) .easy-recent { gap: calc(10px * var(--easy-scale)); }
+}
+@media (max-height: 640px) {
+  .easy-flow:has(.easy-home) { padding-top: clamp(14px, 2.5vh, 24px); }
+  .easy-home { gap: calc(16px * var(--easy-scale)); }
+  .easy-home .easy-legend { margin-bottom: calc(10px * var(--easy-scale)); }
+  .easy-home .easy-format {
+    grid-template-columns: calc(104px * var(--easy-scale)) minmax(0, 1fr); align-items: center; justify-items: start; column-gap: calc(18px * var(--easy-scale));
+    row-gap: 6px; padding: calc(14px * var(--easy-scale)) calc(58px * var(--easy-scale)) calc(14px * var(--easy-scale)) calc(18px * var(--easy-scale)); text-align: start;
+  }
+  .easy-home .easy-format > .easy-frame { grid-row: 1 / span 2; justify-self: center; }
+  .easy-home .easy-format > :is(.easy-choice-text, .easy-badge) { grid-column: 2; }
+  .easy-home .easy-frame-vertical { width: calc(44px * var(--easy-scale)); height: calc(76px * var(--easy-scale)); }
+  .easy-home .easy-frame-horizontal { width: calc(104px * var(--easy-scale)); height: calc(60px * var(--easy-scale)); margin-block: 0; }
+  .easy-home .easy-check { inset-block-start: 50%; transform: translateY(-50%) scale(.6); }
+  .easy-home .easy-choice[data-selected="true"] .easy-check { transform: translateY(-50%); }
+}
+
+/* 讓 AI 幫我剪片 on the first screen (desktop, 2026-10-29): one big card in plain sight (agentConnect/agentHelpEntry.css),
+   outlined rather than filled so 選擇影片 stays the one primary button. */
+.easy-ai { display: grid; justify-items: center; align-self: stretch; min-width: 0; }

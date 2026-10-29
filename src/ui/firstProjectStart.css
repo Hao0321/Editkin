@@ -102,6 +102,7 @@
 .first-project-secondary { display: flex; align-items: center; justify-content: center; gap: 4px 16px; min-height: 40px; margin-top: 12px; }
 .first-project-secondary button { min-height: 40px; padding: 0 4px; border: 0; background: transparent; color: var(--soft); font-size: 12px; font-weight: 750; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--soft) 35%, transparent); text-underline-offset: 3px; cursor: pointer; }
 .first-project-secondary button:hover { color: var(--accent); }
+.first-project-agent { display: grid; margin: 16px 0 14px; }
 .first-project-trust { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; color: var(--muted); font-size: 11px; }
 .first-project-trust span::first-letter { color: var(--success); }
 
@@ -144,4 +145,30 @@
   .first-project-drop-hint { margin-block: 6px 10px; }
   .first-project-steps li { min-height: 54px; padding-block: 7px; }
   .first-project-secondary { margin-top: 6px; }
+}
+
+/* The 示範模式 banner sits in the preview's top row (where 「預覽畫面 · N 個畫面圖層」 and the format badges are, hidden
+   while it shows) instead of floating over them or over the compact panel tabs. It never covers the picture: GPU 直出
+   draws that in a native window that would hide it. Wide layout: the grid area of the preview column (the third
+   column when the media panel is shown, else the first); compact layout: under the panel tabs, preview tab only.
+   When the preview column scrolls, the banner fades out with the row it replaces (scroll-linked; ignored where unsupported). */
+.workspace-grid:has(> .demo-workspace-banner) { timeline-scope: --editkin-preview-column; }
+.workspace-grid:has(> .demo-workspace-banner) > .center-workspace { scroll-timeline: --editkin-preview-column block; }
+.workspace-grid > .demo-workspace-banner {
+  top: 5px; right: 24px; left: 24px; justify-content: flex-start; min-height: 36px; padding: 3px 12px;
+  line-height: 1.35; text-align: start; overflow-wrap: anywhere; transform: none;
+  animation: demo-banner-scroll-away linear both; animation-timeline: --editkin-preview-column; animation-range: 0 36px;
+}
+.workspace-grid > .demo-workspace-banner b { flex: 0 0 auto; }
+.workspace-grid > .demo-workspace-banner span { min-width: 0; word-break: keep-all; text-wrap: pretty; }
+.workspace-grid:has(> .demo-workspace-banner) .preview-toolbar > :is(span:first-child, .preview-badges) { visibility: hidden; }
+@keyframes demo-banner-scroll-away { to { opacity: 0; visibility: hidden; } }
+@media (min-width: 1040px) {
+  /* Both lines are explicit: an absolutely placed grid child with an auto end line reaches the grid's far edge. */
+  .workspace-grid > .demo-workspace-banner { grid-row: 1 / 2; grid-column: 1 / 2; }
+  .workspace-grid:has(> .media-bin) > .demo-workspace-banner { grid-column: 3 / 4; }
+}
+@media (max-width: 1039px) {
+  .workspace-grid > .demo-workspace-banner { top: calc(var(--ui-target-size, 44px) + 21px); right: 12px; left: 12px; }
+  .app-shell[data-active-pane]:not([data-active-pane="preview"]) .workspace-grid > .demo-workspace-banner { display: none; }
 }

@@ -345,6 +345,36 @@ impl Drop for GpuResidentProcess {
     }
 }
 
+/// The complete environment for an owned GPU child: the inherited block plus explicit overrides (#101).
+///
+/// A Windows process block holds hidden per-drive entries such as `=C:=C:\work` (cmd.exe creates them and every
+/// program it starts inherits them) and can hold one name twice in different case (`Path`/`PATH`, e.g. from
+/// MSYS/Cygwin hosts). Neither is a variable a child can use, and the strict owned-process validator rightly
+/// rejects both, so they are dropped here at the source: keys that are empty, contain `=` or control characters
+/// are skipped, the first spelling of a name wins (as Windows' own lookup does), and an override replaces every
+/// inherited spelling instead of being added beside it.
+pub fn child_environment<I>(inherited: I, overrides: &[(OsString, OsString)]) -> Vec<(OsString, OsString)>
+where
+    I: IntoIterator<Item = (OsString, OsString)>,
+{
+    let mut seen = std::collections::BTreeSet::new();
+    let mut environment = Vec::new();
+    for (key, value) in overrides.iter().cloned().chain(inherited) {
+        let name = key.to_string_lossy();
+        if name.is_empty()
+            || name.contains('=')
+            || name.chars().any(char::is_control)
+            || value.to_string_lossy().contains('\0')
+        {
+            continue;
+        }
+        if seen.insert(name.to_ascii_uppercase()) {
+            environment.push((key, value));
+        }
+    }
+    environment
+}
+
 /// A failed constructor may not discard a still-owned process. Keep a retired
 /// owner until cleanup is confirmed, including when readiness itself fails.
 pub fn with_ready_gpu<T>(

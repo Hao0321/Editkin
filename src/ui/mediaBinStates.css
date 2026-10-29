@@ -29,3 +29,7 @@
 .media-bin .import-drop.has-media strong { font-size: 14px; line-height: 1.4; }
 .media-bin .import-drop.has-media small { min-width: 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .media-bin .asset-list { min-height: 76px; }
+/* A short window must not squeeze one card under the next: the cards keep their full height, only the asset list
+   flexes, and the panel scrolls when even that is not enough. */
+.media-bin { overflow-y: auto; }
+.media-bin > :is(.panel-title, .media-tabs, .import-drop, .library-discovery, .media-more, .project-media-search, .privacy-note) { flex-shrink: 0; }

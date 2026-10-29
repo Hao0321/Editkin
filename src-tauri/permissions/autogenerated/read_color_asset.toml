@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-read-color-asset"
+description = "Enables the read_color_asset command without any pre-configured scope."
+commands.allow = ["read_color_asset"]
+
+[[permission]]
+identifier = "deny-read-color-asset"
+description = "Denies the read_color_asset command without any pre-configured scope."
+commands.deny = ["read_color_asset"]

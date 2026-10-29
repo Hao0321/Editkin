@@ -1,0 +1,4 @@
+.color-comparison-controls { display: grid; grid-template-columns: max-content minmax(0,1fr) max-content; gap: 8px; align-items: center; margin-top: 9px; color: #bcd0ea; font-size: 10px; }
+.color-comparison-controls input { width: 100%; accent-color: var(--accent); }
+.color-comparison-controls label { display: grid; gap: 4px; min-width: 0; }
+.color-comparison-controls label > span { display: flex; justify-content: space-between; }

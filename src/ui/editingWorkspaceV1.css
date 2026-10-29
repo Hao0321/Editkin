@@ -1,0 +1,33 @@
+.editing-workspaces { display: flex; justify-content: center; gap: 8px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--line); flex: 0 0 auto; }
+.editing-workspaces > button { min-width: 92px; padding: 10px 20px; border: 1px solid transparent; background: transparent; color: var(--muted); font: inherit; font-weight: 700; border-radius: 6px; }
+.editing-workspaces > button[aria-selected="true"] { color: var(--accent); border-color: var(--accent); background: var(--surface); }
+.editing-workspaces > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.brand-mark.editing-brand-image { display: block; object-fit: contain; border-radius: 0; }
+.editor-layer-stack { min-width: 0; padding: 12px; overflow: auto; background: var(--surface); border: 1px solid var(--line); }
+.editor-layer-stack h2 { margin: 0 0 12px; font-size: 15px; }
+.editor-layer-stack summary { padding: 8px 0; cursor: pointer; font-weight: 700; }
+.editor-layer-stack .layer-row { display: flex; align-items: center; gap: 4px; margin: 3px 0; min-width: 0; }
+.editor-layer-stack .layer-pick { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-layer-stack button { min-height: 32px; border: 1px solid var(--line); border-radius: 4px; background: transparent; color: var(--ink); padding: 5px 8px; }
+.editor-layer-stack button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.editor-layer-stack .layer-children { padding-left: 12px; border-left: 1px solid var(--line); }
+.editor-layer-stack .layer-pages { display: flex; gap: 8px; justify-content: space-between; margin: 8px 0; }
+.editor-layer-stack small { color: var(--muted); }
+.editor-workspace-left { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.editor-workspace-left > .media-bin { min-height: 160px; flex: 1; }
+.editor-workspace-left > .editor-layer-stack { flex: 1; min-height: 160px; }
+.color-workspace-backdrop[data-embedded="true"] { position: static; display: block; background: transparent; padding: 0; z-index: auto; width: 100%; min-height: 0; overflow: auto; }
+.color-workspace-backdrop[data-embedded="true"] > .color-workspace { width: 100%; max-width: none; max-height: none; height: 100%; box-shadow: none; border: 0; border-radius: 0; }
+.color-workspace-backdrop[data-embedded="true"] .color-layout { display: flex; flex-direction: column; overflow: visible; }
+.color-workspace-backdrop[data-embedded="true"] .grade-controls { max-height: none; overflow: visible; }
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-editing-workspace] { grid-template-rows: auto auto minmax(240px,1fr) minmax(170px,var(--timeline-height,200px)) auto; }
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-editing-workspace] > .editing-workspaces { grid-row: 2; }
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-editing-workspace] > .workspace-grid { grid-row: 3; }
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-editing-workspace] > .timeline-region { grid-row: 4; }
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-editing-workspace] > .status-bar { grid-row: 5; }
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-editing-workspace][data-workspace-notice="true"] { grid-template-rows: auto auto auto minmax(240px,1fr) minmax(170px,var(--timeline-height,200px)) auto; }
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-editing-workspace][data-workspace-notice="true"] > .workspace-notices { grid-row: 3; }
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-editing-workspace][data-workspace-notice="true"] > .workspace-grid { grid-row: 4; }
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-editing-workspace][data-workspace-notice="true"] > .timeline-region { grid-row: 5; }
+.app-shell[data-interface-mode][data-workspace-mode="editor"][data-editing-workspace][data-workspace-notice="true"] > .status-bar { grid-row: 6; }
+@media (max-width: 1040px) { .editing-workspaces { gap: 4px; padding: 6px; } .editing-workspaces > button { min-width: 0; flex: 1; padding: 8px; } }

@@ -93,7 +93,7 @@ fn blend_color(backdrop: vec3<f32>, source: vec3<f32>, mode: u32) -> vec3<f32> {
         return select(low, high, backdrop > vec3<f32>(0.5));
     }
     if (mode == 5u) {
-        return (vec3<f32>(1.0) - 2.0 * source) * backdrop * backdrop + 2.0 * source * backdrop;
+        let d = select(sqrt(max(backdrop, vec3<f32>(0.0))), ((16.0 * backdrop - vec3<f32>(12.0)) * backdrop + vec3<f32>(4.0)) * backdrop, backdrop <= vec3<f32>(0.25)); return select(backdrop + (2.0 * source - vec3<f32>(1.0)) * (d - backdrop), backdrop - (vec3<f32>(1.0) - 2.0 * source) * backdrop * (vec3<f32>(1.0) - backdrop), source <= vec3<f32>(0.5));
     }
     if (mode == 6u) {
         let low = 2.0 * backdrop * source;

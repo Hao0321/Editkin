@@ -10,10 +10,11 @@ interface Options {
   playing: boolean;
   hasAudio: boolean;
   seekRevision: number;
+  previewEpoch?: number;
   playhead: MutableRefObject<number>;
   onClock: (time:number, ended:boolean)=>void;
 }
-export function useResidentAudioTransport({api, project, playing, hasAudio, seekRevision, playhead, onClock}:Options) {
+export function useResidentAudioTransport({api, project, playing, hasAudio, seekRevision, previewEpoch = 0, playhead, onClock}:Options) {
   const [admission,setAdmission]=useState<{api?:ResidentAudioApi;caps?:Awaited<ReturnType<ResidentAudioApi["capabilities"]>>}>({});
   const [view,setView]=useState<ResidentAudioView>({mode:"idle"});
   const transport=useRef<ResidentAudioTransport|undefined>(undefined);
@@ -36,10 +37,16 @@ export function useResidentAudioTransport({api, project, playing, hasAudio, seek
   },[api,route,admission.caps]);
   useEffect(()=>{
     if(route!=="resident")return;
-    transport.current?.update({project,playing:playing&&hasAudio,seekRevision,timelineStartSeconds:playhead.current});
-  },[route,api,project.id,project.revision,project.updatedAt,playing,hasAudio,seekRevision]);
+    const controller=transport.current;
+    const update=()=>controller?.update({project,playing:playing&&hasAudio,prepare:hasAudio,seekRevision,previewEpoch,timelineStartSeconds:playhead.current});
+    // A settled paused seek warms the existing bounded native owner. Play never waits for this debounce.
+    if(playing){update();return;}
+    const timer=setTimeout(update,150);
+    return()=>clearTimeout(timer);
+  },[route,api,project.id,project.revision,project.updatedAt,playing,hasAudio,seekRevision,previewEpoch]);
   const bound=view.stage;
-  const stale=bound&&(bound.projectId!==project.id||bound.projectRevision!==project.revision||bound.projectUpdatedAt!==project.updatedAt||view.seekRevision!==seekRevision);
-  return {route,view:!hasAudio?{mode:playing?"compatible":"idle"} as ResidentAudioView
-    :stale?{...view,mode:playing?"preparing":"idle",generation:undefined,stage:undefined} as ResidentAudioView:view};
+  const stale=bound&&(bound.projectId!==project.id||bound.projectRevision!==project.revision||bound.projectUpdatedAt!==project.updatedAt||view.seekRevision!==seekRevision||(view.previewEpoch??0)!==previewEpoch);
+  // A failed owner stays visible across seeks until the user retries it.
+  return {route,retry:()=>transport.current?.retry(),view:!hasAudio?{mode:playing?"compatible":"idle"} as ResidentAudioView
+    :stale&&view.mode!=="failed"?{...view,mode:playing?"preparing":"idle",generation:undefined,stage:undefined} as ResidentAudioView:view};
 }

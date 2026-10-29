@@ -1,8 +1,29 @@
+import { registerLongformSidecarBundleToolsV1 } from "./longformSidecarBundleToolsV1";
+import { registerCaptionDeliveryTools } from "./captionDeliveryTools";
+import { registerCaptionTextReplacementToolsV1 } from "./captionTextReplacementToolsV1";
+import { registerLongformCaptionDraftToolsV1 } from "./longformCaptionDraftToolsV1";
+import { timelineWindow } from "./timelineWindow";
+import { registerClipRetimeTools } from "./clipRetimeTools";
+import { registerClipTimeRemapToolsV1 } from "./clipTimeRemapToolsV1";
+import { registerAutoReframeToolsV1 } from "./autoReframeToolsV1";
+import { registerAutoReframeSparseToolsV2 } from "./autoReframeSparseToolsV2";
+import { registerClipAudioGainTools } from "./clipAudioGainTools";
+import { registerMediaDiscoveryTools } from "./mediaDiscoveryTools";
+import { registerMediaConversionTools } from "./mediaConversionTools";
+import { registerProjectMediaSearchTools } from "./projectMediaSearchTools";
+import { motionGraphicCreationInputSchema } from "../application/motionGraphicCreation";
+import { registerAgentPaletteTools } from "./agentPaletteTools";
+import { prepareMotionGraphicCreationFile } from "./motionGraphicCreationFile";
+import { originalMotionScene2dInputSchema, prepareOriginalMotionScene2d } from "../application/originalMotionScene2d";
+import { originalSceneGraphicRevisionInputSchema, prepareOriginalSceneGraphicRevision } from "../application/originalSceneGraphicRevision";
+import { prepareOriginalMotionSourceFile } from "./originalMotionSourceFile";
+import { prepareOriginalMotionSourceRevisionFile } from "./originalMotionSourceRevisionFile";
+import { readBundledFontFace } from "../render/bundledFontSource";
+import { prepareGlyphRun } from "../typography/preparedGlyphRun";
 import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
-import { resolveAestheticSystem } from "../application/editkinAesthetic";
-import { findAsset, findClip, findTrack, projectDuration, summarizeProject } from "../domain/editGraph";
+import { findAsset, findClip, findTrack } from "../domain/editGraph";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { analyzeSmartCut } from "../application/smartCut";
@@ -14,40 +35,84 @@ import { planSemanticAutoEdit } from "../application/semanticAutoEdit";
 import { buildSemanticAutoEditCommand } from "../application/semanticAutoEditCommands";
 import { inspectMedia } from "../application/inspectMedia";
 import { creativeAssetIdFromUri, creativeAssetUri, listCreativeLibrary, resolveCreativeLibraryAsset } from "../application/creativeLibrary";
-import { selectAutomaticMusicAsset } from "../creative/musicSelection";
-import { EFFECT_PRESETS, LOOK_PRESETS, TEXT_STYLE_PRESETS, TRANSITION_PRESETS, captionStyleFromPreset, findEffectPreset, findLookPreset, findTransitionPreset } from "../creative/corePack";
+import { automaticMusicPreferences, chooseAutomaticMusicAsset, describeAutomaticMusicChoice } from "../creative/musicSelection";
+import { buildLoopingMusicPlan, musicBedDuration } from "../application/loopingMusic";
+import { clipTimeRemapRenderBlockersV1 } from "../domain/clipTimeRemapCommandsV1";
+import { EFFECT_PRESETS, LOOK_PRESETS, TEXT_STYLE_PRESETS, TRANSITION_PRESETS } from "../creative/corePack";
 import { DEFAULT_COLOR, DEFAULT_TRANSFORM } from "../domain/types";
 import { editorCommandSchema } from "./schemas";
+import { applyEditCommandsWithTemplates } from "./templateFollowEditCommands";
 import { analyzeMotionTrack } from "../application/motionTracking";
 import type { EditorCommand } from "../domain/commands";
-import { createMotionGraphic } from "../motion/composition";
-import { FLOATING_VIDEO_FRAME_PRESETS, floatingVideoFramePreset } from "../motion/floatingVideoFrame";
-import { FLOATING_FRAME_SCENE_PRESETS, floatingFrameSceneCommands } from "../motion/floatingFrameScenes";
-import { MOTION_CLIP_PRESETS, motionClipPresetCommands } from "../motion/motionClipPresets";
+import { createMotionGraphic, legacyMotionGraphicSeed } from "../motion/composition";
+import { FLOATING_VIDEO_FRAME_PRESETS, floatingVideoFramePresetV2 } from "../motion/floatingVideoFrame";
+import { FLOATING_FRAME_SCENE_PRESETS } from "../motion/floatingFrameScenes";
+import { MOTION_CLIP_PRESETS } from "../motion/motionClipPresets";
+import { registerMotionGraphicKitTools } from "./motionGraphicKitTools";
+import { registerProofStillToolsV1 } from "./proofStillToolsV1";
 import { compactMotionGraphicPresets, findMotionGraphicPreset, motionGraphicPresets } from "../creative/motionGraphicPresets";
 import { motionPresetVariantDescriptor } from "../application/motionPresetVariant";
+import { motionReferenceDesignInputSchema, prepareMotionReferenceDesign } from "../application/motionReferenceDesign";
+import { nativeMotionRevisionSchema, prepareNativeMotionRevision } from "../application/nativeMotionRevision";
+import { nativeGeometryMotionSchema, prepareNativeGeometryMotion } from "../application/nativeGeometryMotion";
+import { registerMesh3dTools } from "./mesh3dTools";
+import { registerReferenceMotionTemplateTools } from "./referenceMotionTemplateTools";
+import { registerMediaBootstrapTools } from "./mediaBootstrapTools";
+import { registerMediaSourceRelinkTools } from "./mediaSourceRelinkTools";
+import { REFERENCE_MOTION_TEMPLATES } from "../motion/referenceMotionTemplates";
 import { compactCinematicLanguageIndex, resolveCinematicRecipe } from "../creative/cinematicLanguage";
+import { rankStyleShotCandidates, type ShotSelectionStyleId } from "../creative/shotSelectionStyles";
 import { SHORT_FORM_TEMPLATES } from "../application/shortFormTemplates";
-import { LONG_FORM_TEMPLATES, LONG_FORM_WHITE_CAPTION_STYLE } from "../application/longFormTemplates";
+import { LONG_FORM_TEMPLATES } from "../application/longFormTemplates";
 import { editorialProfile } from "../application/editorialProfiles";
 import { registerAutopilotTools } from "./autopilotTools";
+import { registerLongformPlanSetToolsV1 } from "./longformPlanSetToolsV1";
 import { EDITKIN_MCP_INSTRUCTIONS, registerMaterialIntelligenceTools } from "./materialIntelligenceTools";
 import { registerPodcastTools } from "./podcastTools";
 import { registerEditorialBatchTools } from "./editorialBatchTools";
 import { registerAutopilotBatchTools } from "./autopilotBatchTools";
+import { registerTemplateShortTools } from "./templateShortTools";
+import { registerMultiSourceShortToolsV2 } from "./multiSourceShortToolsV2";
+import { registerLongformWordTimingToolsV1 } from "./longformWordTimingToolsV1";
+import { registerLongformSentenceAlignmentToolsV1 } from "./longformSentenceAlignmentToolsV1";
+import { registerLongform70NativeSceneToolsV1 } from "./longform70NativeSceneToolsV1";
+import { registerLongformUiFocusToolsV1 } from "./longformUiFocusToolsV1";
+import { registerLongformUiFocusHoldToolsV1 } from "./longformUiFocusHoldToolsV1";
+import { registerLongformUiFocusGeometryToolsV1 } from "./longformUiFocusGeometryToolsV1";
+import { registerLongformModuleScheduleToolsV1 } from "./longformModuleScheduleToolsV1";
+import { EDITKIN_ONE_SHOT_FLAG, runTemplateShortOneShotProcess } from "../service/templateShortService";
+import { createEditorialProjectFile } from "./projectCreation";
 import { registerRenderTools } from "./renderTools";
 import { registerPluginTools } from "./pluginTools";
 import { registerRotoKeyerAutopilotTools } from "./rotoKeyerAutopilotTools";
 import { registerMontageTools } from "./montageTools";
+import { registerMontageToolsV2 } from "./montageToolsV2";
+import { registerMusicVideoTools } from "./musicVideoTools";
 import { registerAutoColorTools } from "./autoColorTools";
+import { registerShotGradeToolsV1 } from "./shotGradeToolsV1";
+import { registerColorGradeTools } from "./colorGradeTools";
+import { registerFinalOutputScopeToolsV1 } from "./finalOutputScopesToolsV1";
 import { registerRemoteOnboardingTools } from "./remoteOnboardingTools";
 import { creativePackRoot, errorResult, personalMusicRoot, personalVisualRoot, textResult } from "./toolRuntime";
+import { clipMotionPresetRequestSchema, creativePresetCommands, floatingFrameSceneRequestSchema, nativeMotionSequenceRequestSchema, nativeReelSceneRequestSchema,
+  prepareAutopilotTemplatePackageFile, prepareClipMotionPresetFile, prepareFloatingFrameSceneFile, prepareNativeMotionSequenceFile, prepareNativeReelSceneFile,
+  templatePackageRequestSchema } from "./moduleCompilers";
+import { registerModuleTools } from "./moduleTools";
+import { advertisedEditorCommandSchema, compactAdvertisedInput, registerToolSchemaDescribeTool } from "./advertisedSchema";
+import { installMcpProfile, mcpProfileFromEnvironment } from "./mcpProfiles";
+import { registerEditkinStatusTools } from "./editkinStatusTools";
+import { guiUnsavedSessionFor, withDirtyGuiSessionOverride } from "./guiSessionState";
 import {
   applyProjectCommands,
-  createProjectFile,
   inspectProject,
+  projectFileExists,
+  projectLockState,
+  projectMediaState,
+  projectSummaryState,
   readProject,
-  resolveWorkspaceMediaPath,
+  readStoredProject,
+  resolveProjectAssetReadPath,
+  resolveProjectPath,
   workspaceRoot,
 } from "./storage";
 
@@ -80,20 +145,57 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
     { name: "editkin", version: "0.15.0" },
     { instructions: EDITKIN_MCP_INSTRUCTIONS },
   );
+  // W2-1: the profile decides what tools/list advertises; every registered tool stays callable by name.
+  const profile = installMcpProfile(server, mcpProfileFromEnvironment(environment));
   registerAutopilotTools(server);
+  registerLongformPlanSetToolsV1(server);
   registerMaterialIntelligenceTools(server);
   registerPodcastTools(server);
   registerEditorialBatchTools(server);
   registerAutopilotBatchTools(server);
+  registerTemplateShortTools(server);
+  registerMultiSourceShortToolsV2(server, environment);
+  registerLongformWordTimingToolsV1(server, environment);
+  registerLongformSentenceAlignmentToolsV1(server, environment);
+  registerLongform70NativeSceneToolsV1(server, environment);
+  const uiFocusSession = registerLongformUiFocusToolsV1(server, environment);
+  const uiFocusHolds = registerLongformUiFocusHoldToolsV1(server, uiFocusSession);
+  registerLongformUiFocusGeometryToolsV1(server, uiFocusSession, uiFocusHolds);
+  registerLongformModuleScheduleToolsV1(server);
   registerRenderTools(server);
   registerPluginTools(server);
   registerRotoKeyerAutopilotTools(server);
   registerMontageTools(server);
+  registerMontageToolsV2(server);
+  registerCaptionDeliveryTools(server);
+  registerCaptionTextReplacementToolsV1(server);
+  registerLongformCaptionDraftToolsV1(server, environment);
+  registerLongformSidecarBundleToolsV1(server, environment);
+  registerClipAudioGainTools(server);
+  registerClipRetimeTools(server);
+  registerClipTimeRemapToolsV1(server);
+  registerAutoReframeToolsV1(server);
+  registerAutoReframeSparseToolsV2(server);
+  registerMediaDiscoveryTools(server);
+  registerMediaConversionTools(server);
+  registerProjectMediaSearchTools(server);
+  registerMusicVideoTools(server);
   registerAutoColorTools(server);
+  registerShotGradeToolsV1(server);
+  registerColorGradeTools(server);
+  registerFinalOutputScopeToolsV1(server);
   registerRemoteOnboardingTools(server);
+  registerReferenceMotionTemplateTools(server, environment);
+  registerMotionGraphicKitTools(server);
+  registerProofStillToolsV1(server);
+  registerModuleTools(server, environment);
+  registerMediaBootstrapTools(server);
+  registerMediaSourceRelinkTools(server);
+  registerMesh3dTools(server);
+  registerAgentPaletteTools(server);
 
   server.registerTool("list_creative_presets", {
-    description: "列出 Editkin 可輸出的調色、特效、轉場、字幕、動態圖文、2D 片段動態、2.5D 浮空影片框與鏡頭語言 presets。動態圖文回低 Token 索引；motionPresetId 只展開單一 seed。",
+    description: "列出 Editkin 可輸出的調色、特效、轉場、字幕、動態圖文、2D 片段動態、2.5D 浮空影片框與鏡頭語言 presets。動態圖文回低 Token 索引；motionPresetId 只展開單一 seed。Motion Design v3（renderer hao-motion-composition/v3）的 text 每行一個欄位，依 textFields 順序填寫，至少 1 秒；v3 人名條不在索引中，人名請用證據綁定的人物字幕條。",
     inputSchema: z.object({
       kind: z.enum(["all", "look", "effect", "transition", "text", "motion", "template", "cinematic"]).default("all"),
       motionPresetId: z.string().min(1).max(128).optional(),
@@ -111,19 +213,25 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       transitions: kind === "all" || kind === "transition" ? compact(TRANSITION_PRESETS) : undefined,
       textStyles: kind === "all" || kind === "text" ? compact(TEXT_STYLE_PRESETS) : undefined,
       motionGraphics: !motionPresetId && (kind === "all" || kind === "motion") ? compactMotionGraphicPresets() : undefined,
+      motionGraphicCreation: kind === "all" || kind === "motion" ? { prepareTool: "prepare_motion_graphic_creation", schema: "editkin.motion-graphic-creation/v1", readOnly: true,
+        boundary: "registered_text_v2_exact_project_frames_verified_glyph; no_timeline_extension; not_art_or_v4_apply", scopes: ["existing_timeline", "empty_canvas"] } : undefined,
+      referenceMotionTemplates: !motionPresetId && (kind === "all" || kind === "motion") ? REFERENCE_MOTION_TEMPLATES.map(({ id, name, grammar, sourceSlots, maxSources, minSeconds }) => ({ id, name, grammar, sourceSlots, maxSources, minSeconds, prepareTool: "prepare_reference_motion_template", capabilityBoundary: "editable_2d_not_sphere_or_studio" })) : undefined,
         floatingVideoFrames: !motionPresetId && (kind === "all" || kind === "motion") ? FLOATING_VIDEO_FRAME_PRESETS.map(preset => ({
-          id: preset.id, name: preset.name, capability: "editable_2.5d_perspective_video_frame", frame: floatingVideoFramePreset(preset.id),
-          commandType: "set_clip_floating_frame", requires: ["rec709_video_clip", "no_scene25d", "no_mask_or_layout", ...(preset.id === "portrait_orbit" ? ["portrait_project"] : [])],
+          id: preset.id, name: preset.name, capability: "editable_2.5d_perspective_video_frame", frame: floatingVideoFramePresetV2(preset.id),
+          declaredSchema: "editkin.floating-video-frame/v2", mediaFit: "contain", sourceGeometry: "upright_display_aspect_ratio_or_legacy_stored_upright_dimensions",
+          capabilityBoundary: "perspective_plane_not_true_3d; saved_v1_unchanged; no_native_parity_claim",
+          commandType: "set_clip_floating_frame", requires: ["rec709_video_clip", "known_source_display_geometry", "at_least_13_clip_frames", "no_scene25d", "no_mask_or_layout", ...(preset.id === "portrait_orbit" ? ["portrait_project"] : [])],
         })) : undefined,
         floatingFrameScenes: !motionPresetId && (kind === "all" || kind === "motion") ? FLOATING_FRAME_SCENE_PRESETS.map(preset => ({
           ...preset, capability: "editable_portrait_three_layer_video_scene", prepareTool: "prepare_floating_frame_scene",
-          requires: ["portrait_project", "rec709_video_clip", "clean_clip_transform", "no_existing_keyframes"],
+          declaredSchema: "editkin.floating-video-frame/v2", aspect: "source", mediaFit: "contain", capabilityBoundary: "editable_2.5d_planes_not_true_3d",
+          requires: ["portrait_project", "rec709_video_clip", "known_source_display_geometry", "at_least_13_clip_frames", "clean_clip_transform", "no_existing_keyframes"],
         })) : undefined,
       motionClipPresets: !motionPresetId && (kind === "all" || kind === "motion") ? MOTION_CLIP_PRESETS.map(preset => ({
         ...preset, prepareTool: "prepare_clip_motion_preset", commandType: "add_keyframe", requires: ["clip_without_existing_keyframes", "at_least_12_frames"],
       })) : undefined,
       formatTemplates: kind === "all" || kind === "template" ? {
-        shortForm: SHORT_FORM_TEMPLATES.map(({ id, name, category, bestFor, rhythm, lookPresetId, effectPresetIds, transitionPresetId, captionPresetId, cinematicRecipeId }) => ({ id, name, category, bestFor, rhythm, lookPresetId, effectPresetIds, transitionPresetId, captionPresetId, cinematicRecipeId, executionBoundary: "visual_package_now_recipe_requires_evidence_gate" })),
+        shortForm: SHORT_FORM_TEMPLATES.map(({ id, name, category, bestFor, rhythm, lookPresetId, effectPresetIds, transitionPresetId, captionPresetId, cinematicRecipeId, motionGraphicPresetId, motionClipPresetId, floatingFrameScenePresetId }) => ({ id, name, category, bestFor, rhythm, lookPresetId, effectPresetIds, transitionPresetId, captionPresetId, cinematicRecipeId, motionGraphicPresetId, motionClipPresetId, floatingFrameScenePresetId, executionBoundary: "visual_package_now_recipe_requires_evidence_gate" })),
         longForm: LONG_FORM_TEMPLATES.map(({ id, name, category, bestFor, lookPresetId, effectPresetIds, introTransitionPresetId, cinematicRecipeId, cadence }) => ({ id, name, category, bestFor, lookPresetId, effectPresetIds, introTransitionPresetId, cinematicRecipeId, cadence, captionColorPolicy: "white_only", executionBoundary: "visual_package_now_recipe_requires_evidence_gate" })),
       } : undefined,
       cinematicLanguage: kind === "all" || kind === "cinematic" ? compactCinematicLanguageIndex() : undefined,
@@ -133,27 +241,134 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
   });
 
   server.registerTool("prepare_clip_motion_preset", {
-    description: "只讀：依專案 fps 與片段時長產生浮空入場或緩推鏡頭的精確 add_keyframe commands。將結果放入同一份 v4 plan，再 audit/apply；本工具不修改專案。",
-    inputSchema: z.object({ projectPath: z.string().min(1), clipId: z.string().min(1), presetId: z.enum(["float_in", "slow_push"]) }),
-  }, async ({ projectPath, clipId, presetId }) => {
-    try {
-      const project = await readProject(projectPath);
-      const clip = findClip(project, clipId);
-      return textResult({ status: "GREEN", clipId, projectRevision: project.revision, presetId,
-        commands: motionClipPresetCommands(clip, project.fps, presetId), readOnly: true, next: "bind commands to v4 motionTreatment and designEvidence, then audit/apply" });
-    } catch (error) { return errorResult(error); }
+    description: "只讀：依專案 fps、畫面尺寸與片段時長產生逐格 add_keyframe commands。舊版：float_in／slow_push／gallery_drift／chapter_snap。Motion Language 運鏡（只用於真實拍攝素材，生成圖保持靜止）：punch_in 重點推近、snap_zoom 衝擊回縮、push_settle 推近回穩、whip_in 甩入、impact_shake 衝擊震動（只給真撞擊）、drift_push 緩推續動；可選 energy（calm／standard／punchy／hype）、focus 焦點（0–1 畫面座標，推近時保持不動）與 direction。曲線烘焙成 linear 關鍵幀，預覽、FFmpeg 輸出與原生一致。將結果放入同一份 v4 plan，再 audit/apply；本工具不修改專案。",
+    inputSchema: clipMotionPresetRequestSchema,
+  }, async (request) => {
+    try { return textResult(await prepareClipMotionPresetFile(request)); }
+    catch (error) { return errorResult(error); }
   });
 
   server.registerTool("prepare_floating_frame_scene", {
-    description: "只讀：為直式專案中的使用者影片編譯前景環繞旋轉 + 後方兩片大型直式影片的五個 EditGraph commands。結果可編輯、可 Undo；放入 v4 plan 後 audit/apply，本工具不改專案。",
-    inputSchema: z.object({ projectPath: z.string().min(1), clipId: z.string().min(1), presetId: z.literal("portrait_duo") }),
-  }, async ({ projectPath, clipId, presetId }) => {
+    description: "只讀：將三份獨立使用者影片按真原片顯示比例編譯成 v2 完整嵌入、逐格進退場的五個 EditGraph commands；這是 2.5D 平面，不是真 3D。必須綁 rearRight/front 素材與來源入點，至少 13 格且僅原片保留音訊。結果可編輯、可 Undo；綁素材 receipts 放入 v4 plan 後 audit/apply。",
+    inputSchema: floatingFrameSceneRequestSchema,
+  }, async (request) => {
+    try { return textResult(await prepareFloatingFrameSceneFile(request)); }
+    catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_native_reel_scene", {
+    description: "只讀：編譯 Editkin 9:16 自研章節資訊（進度、短線、點陣、字）或特別指定的三素材空間展廊；不輸入第三方 UI。長片不搬整套章節，請用 prepare_native_motion_sequence 的局部提示。回傳可編輯 commands、v4 editorial graphic events 和代表幀排版 receipts。缺素材／文字／有效範圍會阻擋；仍須 v4 素材、designEvidence、motionTreatment audit/apply/render。",
+    inputSchema: nativeReelSceneRequestSchema,
+  }, async (request) => {
+    try { return textResult(await prepareNativeReelSceneFile(request)); }
+    catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_native_motion_sequence", {
+    description: "只讀：長片只提取短文字／局部焦點線條，保留原素材完整尺寸、剪點、旁白和播放速度；每次最多四秒，再回乾淨觀看。需要已觀察的文字留白位置，焦點提示另需明確來源區域。禁止整套直式章節、PPT 底板、分欄、縮小原片或自動浮窗。回傳可編輯 commands、v4 圖形 events 和 clean_hold，仍須 material receipts、audit/apply/render 與完整段落審查。",
+    inputSchema: nativeMotionSequenceRequestSchema,
+  }, async (request) => {
+    try { return textResult(await prepareNativeMotionSequenceFile(request)); }
+    catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_reference_motion_design", {
+    description: "只讀設計入口：完整參考每一段的動作、攝影手法、節奏、文字與轉場，再依自己的 Logo、配色、字型和核對服務內容重新設計。產出三種不同敘事／焦點分鏡與全片參考覆蓋表。缺來源、缺實體字型、Logo 或未實作場景明確保留缺口；禁止導入參考作者影片、第三方 UI 或把直式片拉寬。分鏡仍需同專案靜態稿、連續動態和 v4 audit/apply/render 驗收後才成為模板。",
+    inputSchema: motionReferenceDesignInputSchema.extend({ projectPath: z.string().min(1) }),
+  }, async ({ projectPath, ...input }) => {
+    try { return textResult(prepareMotionReferenceDesign(await readProject(projectPath), input)); }
+    catch (error) { return errorResult(error); }
+  });
+  server.registerTool("prepare_motion_graphic_creation", {
+    description: "唯讀新增圖文準備：依當前專案影格率、明示整格與真可用窗口，核對登記text v2配方、實體字型輪廓／逐格安全區及既有0.8秒最短閱讀停留。片尾不足清楚拒絕，不延長影片／音訊時鐘，不默退v1；空時間軸須明示empty_canvas。回傳普通新增命令仍須唯一v4 audit→atomic apply→render、完整QA／動態美術及效能；PREPARED不是已套用或完成。",
+    inputSchema: motionGraphicCreationInputSchema.extend({ projectPath: z.string().min(1) }),
+  }, async ({ projectPath, ...input }, context) => {
+    try {
+      return textResult(await prepareMotionGraphicCreationFile(projectPath, input, environment, context.mcpReq.signal));
+    } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_native_motion_revision", {
+    description: "只讀局部導演修訂：精確指定 Motion v2 元素、專案版本、完整元素影格範圍與入場／退場。動畫速度、影格時長、起始縮放及有界彈簧參數分開設定；彈簧沿既有入退場正規化進度求值。不改影片播放速度、音訊、文字及終點位置。回傳 before/after 和普通更新命令；含逐字錯開的閱讀停留不足、過期版本或錯誤對象會阻擋。實際修改需綁定 v4 designEvidence 與 motion treatment，經 audit/apply 重驗；不是連續形狀變形或美術認證。",
+    inputSchema: nativeMotionRevisionSchema.extend({ projectPath: z.string().min(1) }),
+  }, async ({ projectPath, ...input }) => {
+    try { return textResult(prepareNativeMotionRevision(await readProject(projectPath), input)); }
+    catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_original_motion_source", {
+    description: "Read-only canonical authored-source preparation. Reads owned .editkin/original-sources/<id>.json, verifies authored rights/style/cues and actual pinned physical fonts, compiles current editable scene commands. Explicit commandIndexOffset binds the eventual v4 plan. No clip receipts, reference media import, reality claims or automatic art approval.",
+    inputSchema: z.strictObject({ projectPath: z.string().min(1), sourcePath: z.string().min(1).max(1024), commandIndexOffset: z.number().int().min(0).max(99) }),
+  }, async ({ projectPath, sourcePath, commandIndexOffset }) => {
     try {
       const project = await readProject(projectPath);
-      return textResult({ status: "GREEN", clipId, projectRevision: project.revision, presetId,
-        commands: floatingFrameSceneCommands(project, clipId, presetId), readOnly: true,
-        next: "bind commands to v4 motionTreatment and designEvidence, then audit/apply" });
+      const result = await prepareOriginalMotionSourceFile(project, sourcePath, commandIndexOffset, { workspace: process.env.EDITKIN_WORKSPACE ?? process.env.HAO_EDITOR_WORKSPACE ?? process.cwd(), fontRoot: environment.EDITKIN_FONT_ROOT ?? resolve(import.meta.dirname, "../../public/fonts") });
+      return textResult({ status: "PREPARED_NOT_APPLIED", readOnly: true, ...result });
     } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_original_motion_source_revision", {
+    description: "Read-only versioned existing-owner preparation. Reads distinct immutable before/after authored files, recompiles both with actual physical fonts and every scene frame, verifies literal live owner, preserves IDs/camera/cues/geometry/time/rights. Canonical v4 independently rechecks at audit/apply/precommit; no manual-command promotion, automatic art or installed-product certification.",
+    inputSchema: z.strictObject({ projectPath: z.string().min(1), beforeSourcePath: z.string().min(1).max(1024), afterSourcePath: z.string().min(1).max(1024), commandIndexOffset: z.number().int().min(0).max(99), revisionScope: z.literal("painted_authored_overlay_preserve_media").optional() }),
+  }, async ({ projectPath, beforeSourcePath, afterSourcePath, commandIndexOffset, revisionScope }, context) => {
+    try {
+      const result = await prepareOriginalMotionSourceRevisionFile(await readProject(projectPath), beforeSourcePath, afterSourcePath, commandIndexOffset, {
+        workspace: process.env.EDITKIN_WORKSPACE ?? process.env.HAO_EDITOR_WORKSPACE ?? process.cwd(),
+        fontRoot: environment.EDITKIN_FONT_ROOT ?? resolve(import.meta.dirname, "../../public/fonts"), signal: context.mcpReq.signal, revisionScope,
+      });
+      return textResult({ status: "PREPARED_NOT_APPLIED", readOnly: true, ...result });
+    } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_original_motion_scene_2d", {
+    description: "唯讀原創場景編譯：固定可編輯圖文身分、逐影格語意 cue、共用保留速度的2D鏡頭與實體字形。需明示 standalone_showcase、自有品牌／文字及目的來源；不匯入第三方UI或參考媒體。文字由核對字型bytes準備，欠缺或逐格超框即阻擋。回傳普通命令、完整scope及hash；PREPARED_NOT_APPLIED／NOT_V4_ADMITTED，現行canonical原創source契約尚待接線，不可以假clip receipt或直接render繞過v4。",
+    inputSchema: originalMotionScene2dInputSchema.extend({ projectPath: z.string().min(1) }),
+  }, async ({ projectPath, ...input }) => {
+    try {
+      const project = await readProject(projectPath);
+      const bytes = new Map<string, Uint8Array>();
+      const fontRoot = environment.EDITKIN_FONT_ROOT ?? resolve(import.meta.dirname, "../../public/fonts");
+      return textResult(await prepareOriginalMotionScene2d(project, input, () => randomUUID(), {
+        prepareText: async (faceId, text) => {
+          let selected = bytes.get(faceId);
+          if (!selected) {
+            selected = await readBundledFontFace(fontRoot, faceId);
+            if (bytes.size >= 2) bytes.delete(bytes.keys().next().value!);
+            bytes.set(faceId, selected);
+          }
+          return prepareGlyphRun(faceId, text, selected);
+        },
+      }));
+    } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_original_scene_graphic_revision", {
+    description: "Read-only manual saved-scene content preparation: exact owner/revision, text/font/layout/colors and per-element timing. Uses actual glyphs and every camera frame; preserves scene/cues/IDs/ranges/media. Not reconstructed authoring/rights or native/art proof. NOT_V4_ADMITTED: canonical original source is add-only; no unbound automation or direct rendering.",
+    inputSchema: originalSceneGraphicRevisionInputSchema.extend({ projectPath: z.string().min(1) }),
+  }, async ({ projectPath, ...input }, context) => {
+    try {
+      const project = await readProject(projectPath), bytes = new Map<string, Uint8Array>();
+      const fontRoot = environment.EDITKIN_FONT_ROOT ?? resolve(import.meta.dirname, "../../public/fonts");
+      return textResult(await prepareOriginalSceneGraphicRevision(project, input, { signal: context.mcpReq.signal,
+        prepareText: async (faceId, text) => {
+          let selected = bytes.get(faceId);
+          if (!selected) {
+            selected = await readBundledFontFace(fontRoot, faceId);
+            if (bytes.size >= 2) bytes.delete(bytes.keys().next().value!);
+            bytes.set(faceId, selected);
+          }
+          return prepareGlyphRun(faceId, text, selected);
+        },
+      }));
+    } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("prepare_native_geometry_motion", {
+    description: "只讀：建立或修訂同一個可編輯連續輪廓，獨立設定四邊與圓角的影格目標及彈簧；變更目標時延續位置和速度。固定像素畫布、foreground、project fps 和 graphic ID；逐格拒絕反轉、超框、非法圓角及隱性裁切。修訂只回 vectorV2 更新，不改素材、位置、音訊或範圍。需要實際 purpose/evidenceRefs；仍須 v4 當代 designEvidence、motionTreatment、audit/atomic apply/render 及連續美術驗收。",
+    inputSchema: nativeGeometryMotionSchema.extend({ projectPath: z.string().min(1) }),
+  }, async ({ projectPath, ...input }) => {
+    try { return textResult(await prepareNativeGeometryMotion(await readProject(projectPath), input)); }
+    catch (error) { return errorResult(error); }
   });
 
   server.registerTool("resolve_cinematic_recipe", {
@@ -161,6 +376,20 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
     inputSchema: z.object({ recipeId: z.string().min(1).max(128), availableCapabilities: z.array(z.string().min(1).max(128)).max(64) }),
   }, async ({ recipeId, availableCapabilities }) => {
     try { return textResult(resolveCinematicRecipe(recipeId, availableCapabilities)); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("rank_style_shots", {
+    description: "唯讀選鏡建議：依已核對的來源時間碼、權利、段落用途與逐鏡觀察，對九種敘事風格的候選排序。輸出永遠待人工審核，不修改專案、時間軸或 v4 plan；未知線索不會被推測。",
+    inputSchema: z.object({
+      styleId: z.enum(["realist", "stylized", "suspense_horror", "action_adventure", "romance", "sci_fi_fantasy", "character_drama", "vlog", "commercial_ad"]),
+      candidates: z.array(z.object({
+        id: z.string().min(1).max(80), sourceRef: z.string().min(1).max(160),
+        rightsApproved: z.boolean(), beatPurposeMatched: z.boolean(),
+        observations: z.array(z.object({ signal: z.string().min(1).max(80), evidenceRef: z.string().max(160) })).max(16),
+      })).max(128),
+    }),
+  }, async ({ styleId, candidates }) => {
+    try { return textResult(rankStyleShotCandidates(styleId as ShotSelectionStyleId, candidates)); } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("apply_creative_preset", {
@@ -184,22 +413,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
     }),
   }, async ({ projectPath, clipId, lookPresetId, effectPresetIds, transitionInPresetId, transitionOutPresetId, textStylePresetId, motionGraphic }) => {
     try {
-      const commands = [] as import("../domain/commands").EditorCommand[];
-      if (lookPresetId) findLookPreset(lookPresetId);
-      for (const id of effectPresetIds ?? []) findEffectPreset(id);
-      const transitionIn = transitionInPresetId ? findTransitionPreset(transitionInPresetId) : undefined;
-      const transitionOut = transitionOutPresetId ? findTransitionPreset(transitionOutPresetId) : undefined;
-      const hasClipPatch = lookPresetId !== undefined || effectPresetIds !== undefined || transitionInPresetId !== undefined || transitionOutPresetId !== undefined;
-      if (hasClipPatch) {
-        if (!clipId) throw new Error("套用片段 Creative preset 時必須提供 clipId");
-        commands.push({ type: "set_clip_creative", clipId, patch: {
-          lookPresetId,
-          effectPresetIds,
-          transitionIn: transitionInPresetId === null ? null : transitionIn ? { presetId: transitionIn.id, duration: transitionIn.defaultDuration } : undefined,
-          transitionOut: transitionOutPresetId === null ? null : transitionOut ? { presetId: transitionOut.id, duration: transitionOut.defaultDuration } : undefined,
-        } });
-      }
-      if (textStylePresetId) commands.push({ type: "set_caption_style", patch: captionStyleFromPreset(textStylePresetId) });
+      const commands = creativePresetCommands({ clipId, lookPresetId, effectPresetIds, transitionInPresetId, transitionOutPresetId, textStylePresetId });
       if (motionGraphic) {
         const preset = findMotionGraphicPreset(motionGraphic.presetId);
         const kind = preset.seed.kind ?? "card";
@@ -215,7 +429,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       }
       if (!commands.length) throw new Error("至少提供一個 Creative preset");
       const project = await applyProjectCommands(projectPath, commands);
-      return textResult({ status: "GREEN", appliedCommandCount: commands.length, summary: summarizeProject(project) });
+      return textResult({ status: "GREEN", appliedCommandCount: commands.length, ...await projectSummaryState(projectPath, project) });
     } catch (error) { return errorResult(error); }
   });
 
@@ -251,86 +465,48 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
           redistributable: resolved.asset.redistributable, rightsBasis: resolved.asset.rightsBasis, distributionScope: resolved.asset.distributionScope } },
         { type: "add_clip", clip: { id: clipId, assetId, trackId, timelineStart, sourceStart: 0, duration, volume: 1, transform: { ...DEFAULT_TRANSFORM }, color: { ...DEFAULT_COLOR }, keyframes: [] } },
       ]);
-      return textResult({ status: "GREEN", creativeAssetId, assetId, clipId, sha256Verified: true, summary: summarizeProject(updated) });
+      return textResult({ status: "GREEN", creativeAssetId, assetId, clipId, sha256Verified: true, ...await projectSummaryState(projectPath, updated) });
     } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("auto_add_music", {
-    description: "從 Hao 社群授權 BGM 庫依專案主題、長度與 BPM 自動選曲，驗證 SHA-256 與可散布標記，鋪滿全片、crossfade 並標記 background-music 讓輸出自動 ducking。一次呼叫完成，不需要 Computer Use。",
+    description: "從 Hao 社群授權 BGM 庫依片型、專案名稱、長度與 BPM 自動選曲（沒有主題關鍵字時用中性配樂），驗證 SHA-256 與可散布標記，依畫面長度鋪滿全片（重跑會依目前畫面重算，不沿用舊配樂長度）、crossfade 並標記 background-music 讓輸出自動 ducking。回傳 selection.reason 說明選曲理由。一次呼叫完成，不需要 Computer Use。",
     inputSchema: z.object({ projectPath: z.string(), targetBpm: z.number().min(55).max(190).optional() }),
   }, async ({ projectPath, targetBpm }) => {
     try {
       const project = await readProject(projectPath);
-      const targetDuration = projectDuration(project);
+      // The picture decides the length; the previous bed must not (B7: a re-run after trimming kept the old length).
+      const targetDuration = musicBedDuration(project);
       if (targetDuration <= 0) throw new Error("專案尚無可配樂的影片長度");
       const library = await listCreativeLibrary(creativePackRoot(), personalMusicRoot(), personalVisualRoot());
-      const musicHints = project.editorialProfile === "gaming"
-        ? ["game", "gaming", "玩具", "玩具開箱", "模型", "陀螺", "對戰"]
-        : project.editorialProfile === "food" ? ["food", "美食", "料理"]
-          : project.editorialProfile === "travel" ? ["travel", "旅遊", "出國"]
-            : project.editorialProfile.startsWith("podcast") ? ["podcast", "訪談", "教學"] : [];
-      const selected = selectAutomaticMusicAsset(library.assets, {
+      // One genre table with the in-app auto edit and batch; no topic match → a neutral bed, never an unrelated genre.
+      const choice = chooseAutomaticMusicAsset(library.assets, {
         projectName: project.name,
         duration: targetDuration,
         targetBpm: targetBpm ?? editorialProfile(project.editorialProfile).targetBpm,
-        contentHints: musicHints,
-        preferHighEnergy: project.editorialProfile === "gaming",
+        ...automaticMusicPreferences(project.editorialProfile),
       });
-      if (!selected) throw new Error("Hao 社群音樂庫沒有可選曲目");
+      if (!choice) throw new Error("Hao 社群音樂庫沒有可選曲目");
+      const selected = choice.asset;
       const resolved = await resolveCreativeLibraryAsset(creativePackRoot(), selected.id, personalMusicRoot(), personalVisualRoot());
       const probe = await inspectMedia(resolved.absolutePath, process.env.HAO_FFPROBE_PATH);
-      const assetId = `asset-music-${randomUUID()}`;
-      const commands: import("../domain/commands").EditorCommand[] = [];
-      for (const track of project.tracks.filter((item) => item.id === "audio-music-a" || item.id === "audio-music-b")) {
-        commands.push(...track.clips.map((clip) => ({ type: "delete_clip" as const, clipId: clip.id })), { type: "delete_track", trackId: track.id });
-      }
-      commands.push(
-        { type: "import_asset", asset: { id: assetId, name: selected.name, kind: "audio", uri: creativeAssetUri(selected.id), duration: probe.duration, role: "background-music", bpm: selected.bpm, license: selected.license, provenance: selected.provenance, redistributable: selected.redistributable } },
-        { type: "add_track", track: { id: "audio-music-a", name: "配樂 A", kind: "audio", locked: false, muted: false, clips: [] } },
-        { type: "add_track", track: { id: "audio-music-b", name: "配樂 B", kind: "audio", locked: false, muted: false, clips: [] } },
-      );
-      const crossfade = Math.min(1.2, probe.duration / 5, targetDuration / 5);
-      let cursor = 0; let index = 0; let clipCount = 0;
-      while (cursor < targetDuration - 0.5 / project.fps) {
-        const duration = Math.min(probe.duration, targetDuration - cursor);
-        commands.push({ type: "add_clip", clip: { id: `music-clip-${randomUUID()}`, assetId, trackId: index % 2 ? "audio-music-b" : "audio-music-a", timelineStart: cursor, sourceStart: 0, duration, volume: 0.24, transform: { ...DEFAULT_TRANSFORM }, color: { ...DEFAULT_COLOR }, keyframes: [] } });
-        clipCount += 1;
-        if (duration >= targetDuration - cursor) break;
-        cursor += Math.max(1 / project.fps, duration - crossfade); index += 1;
-      }
-      const updated = await applyProjectCommands(projectPath, commands);
-      return textResult({ status: "GREEN", selected: { id: selected.id, name: selected.name, bpm: selected.bpm, category: selected.category }, clipCount, crossfade, ducking: true, sha256Verified: true, summary: summarizeProject(updated) });
+      const plan = buildLoopingMusicPlan(project, { id: `asset-music-${randomUUID()}`, name: selected.name, kind: "audio", uri: creativeAssetUri(selected.id),
+        duration: probe.duration, role: "background-music", bpm: selected.bpm, license: selected.license, provenance: selected.provenance,
+        redistributable: selected.redistributable }, () => `music-clip-${randomUUID()}`);
+      const updated = await applyProjectCommands(projectPath, plan.commands);
+      return textResult({ status: "GREEN", selected: { id: selected.id, name: selected.name, bpm: selected.bpm, category: selected.category },
+        selection: { profile: project.editorialProfile, pool: choice.pool, matchedWords: choice.matchedWords, reason: describeAutomaticMusicChoice(choice, project.editorialProfile) },
+        targetDuration, clipCount: plan.commands.filter((command) => command.type === "add_clip").length, crossfade: plan.crossfade, ducking: true, sha256Verified: true,
+        ...await projectSummaryState(projectPath, updated) });
     } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("prepare_autopilot_template_package", {
     description: "只讀編譯已選短片／長片模板的原生 Look 與長片半透明黑底白字字幕命令。需要明確 clipIds；不帶模板假文案、預設字卡、無證據 VFX／轉場或自動重剪。Agent 把回傳命令放入 v4 plan，根據設計 brief 選 Motion v2 圖卡並逐項 audit/apply。",
-    inputSchema: z.object({ projectPath: z.string(), format: z.enum(["short", "long"]), templateId: z.string().min(1),
-      clipIds: z.array(z.string().min(1)).min(1).max(64) }),
-  }, async ({ projectPath, format, templateId, clipIds }) => {
-    try {
-      if (new Set(clipIds).size !== clipIds.length) throw new Error("模板 clipIds 不可重複");
-      const template = format === "short"
-        ? SHORT_FORM_TEMPLATES.find(item => item.id === templateId)
-        : LONG_FORM_TEMPLATES.find(item => item.id === templateId);
-      if (!template) throw new Error(`未知 ${format} 模板：${templateId}`);
-      findLookPreset(template.lookPresetId);
-      const project = await readProject(projectPath);
-      for (const clipId of clipIds) {
-        const clip = findClip(project, clipId);
-        const track = findTrack(project, clip.trackId);
-        if (track.kind !== "video") throw new Error(`模板只能用於畫面軌：${clipId}`);
-      }
-      const commands: EditorCommand[] = clipIds.map(clipId => ({ type: "set_clip_creative", clipId,
-        patch: { lookPresetId: template.lookPresetId } }));
-      if (format === "long") commands.push({ type: "set_caption_style", patch: LONG_FORM_WHITE_CAPTION_STYLE });
-      return textResult({ status: "REVIEW_REQUIRED", projectId: project.id, projectRevision: project.revision,
-        templateId, format, commands, suggestions: { effectPresetIds: template.effectPresetIds,
-          transitionPresetId: "transitionPresetId" in template ? template.transitionPresetId : template.introTransitionPresetId,
-          captionPresetId: "captionPresetId" in template ? template.captionPresetId : LONG_FORM_WHITE_CAPTION_STYLE.presetId,
-          cinematicRecipeId: template.cinematicRecipeId },
-        instruction: "Only the Look and long-form caption style are precompiled. Add motivated effects/transitions and exact Motion v2 graphics after material and design evidence; bind every command to motionTreatment and audit/apply once." });
-    } catch (error) { return errorResult(error); }
+    inputSchema: templatePackageRequestSchema,
+  }, async (request) => {
+    try { return textResult(await prepareAutopilotTemplatePackageFile(request)); }
+    catch (error) { return errorResult(error); }
   });
 
   const motionTrackInput = z.object({
@@ -346,7 +522,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
     const asset = findAsset(project, clip.assetId);
     if (asset.kind !== "video") throw new Error("動態追蹤只支援影片片段");
     const creativeId = creativeAssetIdFromUri(asset.uri);
-    const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveWorkspaceMediaPath(asset.uri);
+    const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveProjectAssetReadPath(project, asset);
     const result = await analyzeMotionTrack({ sourcePath, sourceStart: clip.sourceStart, duration: clip.duration, fps: project.fps,
       sourceWidth: asset.width ?? project.width, sourceHeight: asset.height ?? project.height, initialTime, initialRect: rect,
       sourceSha256: asset.derivatives?.sourceSha256 }, {
@@ -380,14 +556,14 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
   }, async ({ projectPath, clipId, initialTime, rect, label }) => {
     try {
       const prepared = await prepareMotionTrack(projectPath, clipId, initialTime, rect, label);
-      const graphic = createMotionGraphic(`motion-${randomUUID()}`, "tag", label, prepared.clip.timelineStart + initialTime, Math.max(0.5, prepared.clip.duration - initialTime), prepared.trackId);
+      const graphic = createMotionGraphic(`motion-${randomUUID()}`, "tag", label, prepared.clip.timelineStart + initialTime, Math.max(0.5, prepared.clip.duration - initialTime), prepared.trackId, legacyMotionGraphicSeed("tag"));
       const updated = await applyProjectCommands(projectPath, [prepared.command, { type: "add_motion_graphic", graphic }]);
-      return textResult({ status: "GREEN", trackId: prepared.trackId, graphicId: graphic.id, validPercent: Math.round((1 - prepared.result.lostRatio) * 100), cacheHit: prepared.result.cacheHit, summary: summarizeProject(updated) });
+      return textResult({ status: "GREEN", trackId: prepared.trackId, graphicId: graphic.id, validPercent: Math.round((1 - prepared.result.lostRatio) * 100), cacheHit: prepared.result.cacheHit, ...await projectSummaryState(projectPath, updated) });
     } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("create_project", {
-    description: "建立新的 Editkin EditGraph 專案。所有路徑限制在 EDITKIN_WORKSPACE。",
+    description: "建立新的 Editkin EditGraph 專案。所有路徑限制在 EDITKIN_WORKSPACE。預設只建立：路徑上已有專案（或可復原的 .previous）時回 PROJECT_EXISTS，不覆寫。確定要取代時傳 overwrite:true；Editkin 桌面版對它有未儲存修改，或正在儲存／自動剪輯鎖定時仍拒絕。回傳 summary.revision、projectSha256。",
     inputSchema: z.object({
       projectPath: z.string().describe("相對 workspace 的 .editkin.json 路徑（相容舊 .haoedit.json）"),
       name: z.string().min(1),
@@ -395,15 +571,23 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       height: z.number().int().positive().default(1080),
       fps: z.number().positive().max(240).default(30),
       editorialProfile: z.enum(["auto", "gaming", "food", "travel", "podcast_on_camera", "podcast_no_face"]).default("auto"),
+      colorPipeline: z.enum(["rec709", "aces2"]).optional().describe("aces2 creates the approved phone BT.1886 SDR recipe; omission preserves existing template creation"),
+      overwrite: z.boolean().optional().describe("true replaces an existing project (its last version stays as .previous); still refused while the desktop editor has unsaved changes for it or it is locked"),
     }),
-  }, async ({ projectPath, name, width, height, fps, editorialProfile: profile }) => {
+  }, async ({ projectPath, name, width, height, fps, editorialProfile: profile, colorPipeline, overwrite }) => {
     try {
-      const project = await createProjectFile(projectPath, name, width, height, fps);
-      const updated = await applyProjectCommands(projectPath, [{ type: "batch", commands: [
-        { type: "set_editorial_profile", profile },
-        { type: "set_aesthetic_system", aestheticSystem: resolveAestheticSystem(profile, width > height ? "longform" : "shorts") },
-      ] }]);
-      return textResult({ status: "GREEN", projectPath, editorialProfile: updated.editorialProfile, summary: summarizeProject(updated) });
+      const absolute = await resolveProjectPath(projectPath);
+      const existed = await projectFileExists(absolute);
+      if (existed && overwrite !== true) throw new Error("PROJECT_EXISTS: 這個路徑已有 Editkin 專案（或可復原的上一版），create_project 預設不覆寫。請換一個 projectPath；確定要取代時傳 overwrite:true。");
+      if (existed) {
+        const unsaved = await guiUnsavedSessionFor(absolute);
+        if (unsaved) throw new Error(`PROJECT_OPEN_IN_GUI: Editkin 桌面版對這個專案有未儲存的修改（復原快照 ${unsaved.savedAt}），overwrite 不能取代它。請先在桌面版儲存或關閉。`);
+        const locks = await projectLockState(absolute);
+        if (locks.saveLocked || locks.autopilotLocked) throw new Error(`PROJECT_LOCKED: 專案正在${locks.saveLocked ? "儲存" : "自動剪輯"}，overwrite 不能取代它；請稍後再試。`);
+      }
+      // The same body the one-tool Short uses (projectCreation.ts): profile, policy-bound aesthetic, re-checked at commit.
+      const updated = await createEditorialProjectFile(projectPath, name, width, height, fps, profile, colorPipeline, { createOnly: overwrite !== true });
+      return textResult({ status: "GREEN", projectPath, editorialProfile: updated.editorialProfile, ...(existed ? { overwritten: true } : {}), ...await projectSummaryState(projectPath, updated) });
     } catch (error) { return errorResult(error); }
   });
 
@@ -426,53 +610,50 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
   }, async ({ projectPath, start, end, maxItems }) => {
     try {
       if (end <= start) throw new Error("end 必須大於 start");
-      const project = await readProject(projectPath);
-      const assetNames = new Map(project.assets.map((asset) => [asset.id, { name: asset.name, kind: asset.kind }]));
-      const allClips = project.tracks.flatMap((track) => track.clips
-        .filter((clip) => clip.timelineStart < end && clip.timelineStart + clip.duration > start)
-        .map((clip) => ({
-          id: clip.id, trackId: track.id, trackName: track.name, trackKind: track.kind,
-          assetId: clip.assetId, asset: assetNames.get(clip.assetId),
-          timelineStart: clip.timelineStart, sourceStart: clip.sourceStart, duration: clip.duration, volume: clip.volume,
-        })))
-        .sort((left, right) => left.timelineStart - right.timelineStart);
-      const allCaptions = project.captions.filter((caption) => caption.start < end && caption.start + caption.duration > start)
-        .map((caption) => ({ id: caption.id, start: caption.start, duration: caption.duration, text: caption.text, translation: caption.translation }));
-      const combined = [
-        ...allClips.map((item) => ({ type: "clip" as const, time: item.timelineStart, item })),
-        ...allCaptions.map((item) => ({ type: "caption" as const, time: item.start, item })),
-      ].sort((left, right) => left.time - right.time);
-      const page = combined.slice(0, maxItems);
-      return textResult({
-        status: "GREEN", window: { start, end }, totalItems: combined.length, returnedItems: page.length,
-        hasMore: combined.length > page.length,
-        clips: page.filter((entry) => entry.type === "clip").map((entry) => entry.item),
-        captions: page.filter((entry) => entry.type === "caption").map((entry) => entry.item),
-      });
+      const stored = await readStoredProject(projectPath);
+      return textResult({ ...timelineWindow(stored.project, start, end, maxItems), revision: stored.project.revision, projectSha256: stored.projectSha256,
+        ...(stored.readFrom === "previous" ? { readFrom: "previous" } : {}), ...await projectMediaState(stored.project) });
     } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("validate_project", {
-    description: "驗證 EditGraph schema、素材、時間範圍、軌道相容性與 clip overlap。",
+    description: "驗證 EditGraph schema、素材、時間範圍、軌道相容性與 clip overlap。專案有輸出不支援的變速（set_clip_speed／set_clip_time_remap，例如 ACES 2、HDR、預合成裡、曲線聲音跟隨）時回 BLOCK 與 renderBlockers（每段的原因代碼），而不是 GREEN；支援的變速仍是 GREEN。",
     inputSchema: z.object({ projectPath: z.string() }),
   }, async ({ projectPath }) => {
-    try { return textResult(await inspectProject(projectPath)); }
-    catch (error) { return errorResult(error); }
+    try {
+      const stored = await readStoredProject(projectPath);
+      const state = await projectSummaryState(projectPath, stored.project, stored);
+      // The same admission the speed commands and the export use (clipTimeRemapRenderRefusalV1): speeds that render stay GREEN.
+      const blockers = clipTimeRemapRenderBlockersV1(stored.project);
+      if (!blockers.length) return textResult({ status: "GREEN", ...state });
+      return textResult({ status: "BLOCK", ...state, renderBlockers: blockers.slice(0, 6).map(({ clipId, code }) => ({ clipId, code })),
+        renderBlockerCount: blockers.length, renderBlockerHint: blockers[0].message });
+    } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("apply_edit_commands", {
-    description: "用一個 bounded call 原子套用一批剪輯 commands，成功後回傳精簡摘要。",
-    inputSchema: z.object({
+    description: "用一個 bounded call 原子套用一批剪輯 commands，成功後回傳精簡摘要。改到已儲存標題模板的主片段時（trim_clip_start／trim_clip_end、move_clip／move_clip_to_track／compact_track、extend_clip、split_clip，或 ripple_delete_clip／extend_clip 把它往前後推），模板在同一次寫入跟著重新排好並保持可編輯；templateFollow.followed 列出跟上的模板，needsReapply 列出沒跟上、要在編輯器「依目前片段重新套用」的模板與白話原因。ripple_delete_clip 與編輯器的刪除相同：主畫面補空隙；整段在片段內的字幕、標題、標記與片段上的標題模板一起刪除，部分重疊的修短；之後的字幕、標題、標記跟著前移；其他軌道只在不會重疊時跟著前移，否則留在原位（rippleDelete 逐筆說明）；不會刪除其他軌道的畫面或聲音。鎖定軌道上的片段一律拒絕修改。選填 expectedRevision：專案在磁碟上仍是這個 revision 才寫入（get_project_summary 的 summary.revision；inspect_reference_motion_instances 的 update 也會給）。commands 的完整 schema 用 describe_tool_input_schema（commandType）讀取，伺服器端每次仍完整驗證。Editkin 桌面版對此專案有未儲存修改時預設拒絕；確定要覆寫時傳 allowDirtyGuiSession:true。",
+    inputSchema: compactAdvertisedInput("apply_edit_commands", z.object({
       projectPath: z.string(),
       commands: z.array(editorCommandSchema).min(1).max(100),
-    }),
-  }, async ({ projectPath, commands }) => {
+      expectedRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+      allowDirtyGuiSession: z.boolean().optional(),
+    }), z.object({
+      projectPath: z.string(),
+      commands: z.array(advertisedEditorCommandSchema).min(1).max(100),
+      expectedRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+      allowDirtyGuiSession: z.boolean().optional().describe("true = knowingly write a project the Editkin desktop editor holds unsaved changes for; refused by default"),
+    })),
+  }, async ({ projectPath, commands, expectedRevision, allowDirtyGuiSession }) => {
     try {
-      const project = await applyProjectCommands(projectPath, commands);
+      const { project, templates, rippleDelete } = await withDirtyGuiSessionOverride(allowDirtyGuiSession === true,
+        () => applyEditCommandsWithTemplates(projectPath, commands, { expectedRevision }));
       return textResult({
         status: "GREEN",
         appliedCommandCount: commands.length,
-        summary: summarizeProject(project),
+        ...(templates ? { templateFollow: templates } : {}),
+        ...(rippleDelete ? { rippleDelete } : {}),
+        ...await projectSummaryState(projectPath, project),
       });
     } catch (error) { return errorResult(error); }
   });
@@ -494,7 +675,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       const asset = findAsset(project, clip.assetId);
       if (asset.kind === "image") throw new Error("Smart Cut 不支援圖片片段");
       const creativeId = creativeAssetIdFromUri(asset.uri);
-      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveWorkspaceMediaPath(asset.uri);
+      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveProjectAssetReadPath(project, asset);
       const result = await analyzeSmartCut({
         sourcePath, sourceStart: clip.sourceStart, duration: clip.duration, fps: project.fps,
         options: { thresholdDb, minSilence, padding, minKeep },
@@ -502,7 +683,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
         ffmpegPath: process.env.HAO_FFMPEG_PATH ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../vendor/ffmpeg/win32-x64/ffmpeg.exe") : "ffmpeg"),
         nativeCorePath: process.env.HAO_NATIVE_CORE_PATH ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../native/bin/win32-x64/hao-core.exe") : "hao-core"),
       });
-      if (result.removedFrames <= 0) return textResult({ status: "GREEN", changed: false, result, summary: summarizeProject(project) });
+      if (result.removedFrames <= 0) return textResult({ status: "GREEN", changed: false, result, ...await projectSummaryState(projectPath, project) });
       const keepRanges = result.ranges.map((range) => ({ start: range.startFrame / result.fps, end: range.endFrame / result.fps }));
       const updated = await applyProjectCommands(projectPath, [{
         type: "smart_cut_clip",
@@ -512,7 +693,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       }]);
       return textResult({
         status: "GREEN", changed: true, removedSeconds: result.removedFrames / result.fps,
-        cutCount: result.cutCount, engine: result.engine, summary: summarizeProject(updated),
+        cutCount: result.cutCount, engine: result.engine, ...await projectSummaryState(projectPath, updated),
       });
     } catch (error) { return errorResult(error); }
   });
@@ -523,16 +704,18 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       projectPath: z.string(),
       clipId: z.string(),
       language: z.string().regex(/^(?:auto|[a-z]{2,3}(?:-[a-z0-9]{2,8})?)$/i).default("auto"),
+      whisperModel: z.enum(["small", "medium"]).optional(),
       translationTarget: z.literal("en").optional().describe("設為 en 會產生原文＋英文雙行字幕；兩行都可再編輯"),
+      script: z.enum(["zh-TW", "original"]).optional().describe("中文字幕預設以 OpenCC s2twp 轉成台灣繁體；original 保留辨識原文"),
     }),
-  }, async ({ projectPath, clipId, language, translationTarget }) => {
+  }, async ({ projectPath, clipId, language, translationTarget, whisperModel, script }, mcpContext) => {
     try {
       const project = await readProject(projectPath);
       const clip = findClip(project, clipId);
       const asset = findAsset(project, clip.assetId);
       if (asset.kind === "image") throw new Error("自動字幕不支援圖片片段");
       const creativeId = creativeAssetIdFromUri(asset.uri);
-      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveWorkspaceMediaPath(asset.uri);
+      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveProjectAssetReadPath(project, asset);
       const modelRoot = process.env.EDITKIN_MODEL_ROOT ?? resolve(workspaceRoot(), ".editkin-models");
       const result = await transcribeAutomaticCaptions({
         sourcePath,
@@ -541,11 +724,15 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
         sourceSha256: asset.derivatives?.sourceSha256,
         language,
         translationTarget,
+        whisperModel,
+        script,
       }, {
         ffmpegPath: process.env.HAO_FFMPEG_PATH ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../vendor/ffmpeg/win32-x64/ffmpeg.exe") : "ffmpeg"),
         whisperCliPath: process.env.EDITKIN_WHISPER_CLI_PATH ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../vendor/whisper/win32-x64/whisper-cli.exe") : "whisper-cli"),
         modelRoot,
         modelPath: process.env.EDITKIN_WHISPER_MODEL_PATH,
+        mediumModelPath: process.env.EDITKIN_WHISPER_MEDIUM_MODEL_PATH,
+        signal: mcpContext.mcpReq.signal,
         cacheRoot: process.env.EDITKIN_CACHE_ROOT ?? resolve(modelRoot, "../media-cache"),
       });
       const planned = buildAutomaticCaptionCommand(project, clip, result, () => `caption-auto-${Date.now()}-${randomUUID()}`);
@@ -554,11 +741,12 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
         status: "GREEN",
         addedCaptions: planned.added,
         replacedCaptions: planned.replaced,
+        ...(planned.keptTemplateCaptions ? { keptTemplateCaptions: planned.keptTemplateCaptions } : {}),
         engine: result.engine,
         acceleration: result.acceleration,
         modelDownloaded: result.modelDownloaded,
         cacheHit: result.cacheHit,
-        summary: summarizeProject(updated),
+        ...await projectSummaryState(projectPath, updated),
       });
     } catch (error) { return errorResult(error); }
   });
@@ -578,7 +766,7 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       const asset = findAsset(project, clip.assetId);
       if (asset.kind !== "video") throw new Error("自動分鏡只支援影片片段");
       const creativeId = creativeAssetIdFromUri(asset.uri);
-      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveWorkspaceMediaPath(asset.uri);
+      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveProjectAssetReadPath(project, asset);
       const result = await analyzeSceneCuts({
         sourcePath,
         sourceStart: clip.sourceStart,
@@ -591,12 +779,12 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
         ffmpegPath: process.env.HAO_FFMPEG_PATH ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../vendor/ffmpeg/win32-x64/ffmpeg.exe") : "ffmpeg"),
         cacheRoot: process.env.EDITKIN_CACHE_ROOT,
       });
-      if (!result.cuts.length) return textResult({ status: "GREEN", changed: false, sceneCount: 1, result, summary: summarizeProject(project) });
+      if (!result.cuts.length) return textResult({ status: "GREEN", changed: false, sceneCount: 1, result, ...await projectSummaryState(projectPath, project) });
       const planned = buildSceneSplitCommand(project, clip, result.cuts, () => `clip-scene-${Date.now()}-${randomUUID()}`);
       const updated = await applyProjectCommands(projectPath, [planned.command]);
       return textResult({
         status: "GREEN", changed: true, splitCount: planned.splitCount, sceneCount: planned.splitCount + 1,
-        engine: result.engine, cacheHit: result.cacheHit, summary: summarizeProject(updated),
+        engine: result.engine, cacheHit: result.cacheHit, ...await projectSummaryState(projectPath, updated),
       });
     } catch (error) { return errorResult(error); }
   });
@@ -607,26 +795,29 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
       projectPath: z.string(),
       clipId: z.string(),
       language: z.string().regex(/^(?:auto|[a-z]{2,3}(?:-[a-z0-9]{2,8})?)$/i).default("auto"),
+      whisperModel: z.enum(["small", "medium"]).optional(),
       targetRatio: z.number().min(0.2).max(1).default(0.65),
     }),
-  }, async ({ projectPath, clipId, language, targetRatio }) => {
+  }, async ({ projectPath, clipId, language, targetRatio, whisperModel }, mcpContext) => {
     try {
       const project = await readProject(projectPath);
       const clip = findClip(project, clipId);
       const asset = findAsset(project, clip.assetId);
       if (asset.kind === "image") throw new Error("智慧成片不支援圖片片段");
       const creativeId = creativeAssetIdFromUri(asset.uri);
-      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveWorkspaceMediaPath(asset.uri);
+      const sourcePath = creativeId ? (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath : await resolveProjectAssetReadPath(project, asset);
       const ffmpegPath = process.env.HAO_FFMPEG_PATH ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../vendor/ffmpeg/win32-x64/ffmpeg.exe") : "ffmpeg");
       const modelRoot = process.env.EDITKIN_MODEL_ROOT ?? resolve(workspaceRoot(), ".editkin-models");
       const transcriptPromise = transcribeAutomaticCaptions({
         sourcePath, sourceStart: clip.sourceStart, duration: clip.duration,
-        sourceSha256: asset.derivatives?.sourceSha256, language,
+        sourceSha256: asset.derivatives?.sourceSha256, language, whisperModel,
       }, {
         ffmpegPath,
         whisperCliPath: process.env.EDITKIN_WHISPER_CLI_PATH
           ?? (process.platform === "win32" ? resolve(import.meta.dirname, "../../vendor/whisper/win32-x64/whisper-cli.exe") : "whisper-cli"),
         modelRoot, modelPath: process.env.EDITKIN_WHISPER_MODEL_PATH,
+        mediumModelPath: process.env.EDITKIN_WHISPER_MEDIUM_MODEL_PATH,
+        signal: mcpContext.mcpReq.signal,
         cacheRoot: process.env.EDITKIN_CACHE_ROOT ?? resolve(modelRoot, "../media-cache"),
       });
       const scenesPromise = asset.kind === "video" ? analyzeSceneCuts({
@@ -643,11 +834,13 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
         segmentCount: built.segmentCount, addedCaptions: built.addedCaptions,
         selectedReasons: plan.segments.filter((segment) => segment.selected).map(({ start, end, score, reasons }) => ({ start, end, score, reasons })),
         transcriptEngine: transcript.engine, sceneEngine: asset.kind === "video" ? "ffmpeg-scdet-8" : "not-applicable",
-        summary: summarizeProject(updated),
+        ...await projectSummaryState(projectPath, updated),
       });
     } catch (error) { return errorResult(error); }
   });
 
+  registerEditkinStatusTools(server, { profile, environment });
+  registerToolSchemaDescribeTool(server);
   return server;
 }
 
@@ -655,17 +848,28 @@ export function createServer(): McpServer {
   return createServerForEnvironment(process.env);
 }
 
-const handle = serveStdio(createServer);
-console.error(`Editkin MCP 0.15.0 ready; workspace=${workspaceRoot()}`);
+if (process.argv.includes(EDITKIN_ONE_SHOT_FLAG)) {
+  // In-app template Short (desktop, M1 wave 4): one request on stdin, one JSON envelope on stdout, no MCP server. It runs
+  // in this bundle because only mcp.mjs carries the material-colour code identity sidecar that preparing material needs.
+  void runTemplateShortOneShotProcess();
+} else {
+  const handle = serveStdio(createServer);
+  console.error(`Editkin MCP 0.15.0 ready; workspace=${workspaceRoot()}`);
 
-let closingMaterialJobs = false;
-async function closeOwnedMaterialJobs() {
-  if (closingMaterialJobs) return;
-  closingMaterialJobs = true;
-  const { closeMaterialPreparationJobs } = await import("../application/materialPreparationJobs");
-  await closeMaterialPreparationJobs();
-  await handle.close();
+  let closingMaterialJobs = false;
+  const closeOwnedMaterialJobs = async () => {
+    if (closingMaterialJobs) return;
+    closingMaterialJobs = true;
+    const { closeMaterialPreparationJobs } = await import("../application/materialPreparationJobs");
+    const { closeLongformWordTimingJobsV1 } = await import("../application/longformWordTimingJobsV1");
+    const { closeLongformSentenceAlignmentJobsV1 } = await import("../application/longformSentenceAlignmentJobsV1");
+    const { closeLongformUiFocusJobsV1 } = await import("../application/longformUiFocusJobsV1");
+    const { closeLongformUiFocusHoldJobsV1 } = await import("../application/longformUiFocusHoldJobsV1");
+    const { closeLongformUiFocusGeometryJobsV1 } = await import("../application/longformUiFocusGeometryJobsV1");
+    await Promise.all([closeMaterialPreparationJobs(), closeLongformWordTimingJobsV1(), closeLongformSentenceAlignmentJobsV1(), closeLongformUiFocusJobsV1(), closeLongformUiFocusHoldJobsV1(), closeLongformUiFocusGeometryJobsV1()]);
+    await handle.close();
+  };
+  process.on("SIGINT", () => { void closeOwnedMaterialJobs(); });
+  process.on("SIGTERM", () => { void closeOwnedMaterialJobs(); });
+  process.stdin.on("end", () => { void closeOwnedMaterialJobs(); });
 }
-process.on("SIGINT", () => { void closeOwnedMaterialJobs(); });
-process.on("SIGTERM", () => { void closeOwnedMaterialJobs(); });
-process.stdin.on("end", () => { void closeOwnedMaterialJobs(); });

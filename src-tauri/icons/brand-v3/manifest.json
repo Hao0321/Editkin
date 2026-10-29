@@ -1,0 +1,69 @@
+{
+  "schema": "editkin.desktop-branding-conversion/v1",
+  "recipe": "existing-sky-v3-rgba-lanczos-png-ico/v2-largest-frame-first",
+  "source": {
+    "path": "public/brand/editkin-symbol-v3-sky.webp",
+    "bytes": 20604,
+    "sha256": "1c4f081f09fa78b892440dd47a105821f420f6e725a53e358f7cf19b1231b5f1"
+  },
+  "decodedRgba256Sha256": "ff97bd86192c82551dc7086c106bd801fee3ece849abde29e5d144bdc1cfb9ec",
+  "outputs": [
+    {
+      "path": "src-tauri/icons/brand-v3/128x128@2x.png",
+      "bytes": 81047,
+      "sha256": "8f78a706321555e72aeaaf2d830bae6da87c8227d3ea290c8cb1cd6f7f81100f",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "path": "src-tauri/icons/brand-v3/128x128.png",
+      "bytes": 23567,
+      "sha256": "91ec83a8eb1b4d81247c0144a6021a47b190adf319628fb919d45b664c0ba068",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "src-tauri/icons/brand-v3/32x32.png",
+      "bytes": 2833,
+      "sha256": "3c64a46d1f9728f551e2dbf26834ccf55fb13cec025fc154c4f517f06fd4054b",
+      "width": 32,
+      "height": 32
+    },
+    {
+      "path": "src-tauri/icons/brand-v3/icon.ico",
+      "bytes": 123351,
+      "sha256": "fdf9607de0780dd0fe1a57abee6107f698c3bc4acf667ec5e35c71df7d7978f4",
+      "frames": [
+        [
+          256,
+          256
+        ],
+        [
+          128,
+          128
+        ],
+        [
+          64,
+          64
+        ],
+        [
+          48,
+          48
+        ],
+        [
+          32,
+          32
+        ],
+        [
+          24,
+          24
+        ],
+        [
+          16,
+          16
+        ]
+      ]
+    }
+  ],
+  "scope": "Existing artwork size/format conversion only; ART_PENDING_CLAUDE. Original WebP and legacy rollback icons unchanged."
+}

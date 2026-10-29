@@ -1,5 +1,8 @@
+import { translateUi as uiText, useI18n } from "./i18n/interfacePreferences";
 import { useEffect, useState } from "react";
-import type { ClipExpressionProperty, ClipLayerState, HaoExpressionSource, LayerBlendMode, TimelineClip, TrackMatteMode } from "../domain/types";
+import type { ClipExpressionProperty, ClipLayerState, HaoExpressionSource, TimelineClip, TrackMatteMode } from "../domain/types";
+import { useClipLayerHostV1 } from "./clipLayerHostV1";
+import { clipLayerLabelV1, pictureLayerClipsV1 } from "./clipLayerNamesV1";
 
 const EXPRESSION_PROPERTIES: Array<{ property: ClipExpressionProperty; label: string; example: string }> = [
   { property: "x", label: "左右位置", example: "value + sin(time * 4) * 18" },
@@ -23,6 +26,12 @@ function normalizeExpression(value: string): HaoExpressionSource | null {
 }
 
 export function LayerExpressionPanel({ clip, clips, onLayerChange, onExpressionChange }: LayerExpressionPanelProps) {
+  useI18n();
+  // The pickers name clips by their media and place (not raw ids) and offer picture clips only; without the shell's
+  // project (a standalone render) they keep the ids they were given.
+  const project = useClipLayerHostV1()?.project;
+  const candidates = project ? pictureLayerClipsV1(project) : clips;
+  const label = (candidate: TimelineClip) => project ? clipLayerLabelV1(project, candidate, uiText).label : candidate.id;
   const [drafts, setDrafts] = useState<Record<ClipExpressionProperty, string>>({
     x: "", y: "", scale: "", rotation: "", opacity: "",
   });
@@ -39,61 +48,42 @@ export function LayerExpressionPanel({ clip, clips, onLayerChange, onExpressionC
 
   return (
     <details className="inspector-section layer-expression-panel" data-testid="layer-expression-section">
-      <summary>圖層與表達式 <small>進階 · 安全運算</small></summary>
+      <summary>{uiText("圖層與表達式")}<small>{uiText("進階 · 安全運算")}</small></summary>
       <div className="layer-controls">
-        <label className="layer-enabled"><input type="checkbox" checked={clip.layer?.enabled ?? true} onChange={(event) => onLayerChange({ enabled: event.target.checked })} /> 顯示這個圖層</label>
-        {(clip.layer?.role ?? "content") !== "controller" && <label>混合模式
-          <select value={clip.layer?.blendMode ?? "normal"} onChange={(event) => onLayerChange({ blendMode: event.target.value as LayerBlendMode })} data-testid="layer-blend-mode">
-            <option value="normal">Normal · 一般</option>
-            <option value="add">Add · 發光疊加</option>
-            <option value="screen">Screen · 濾色</option>
-            <option value="multiply">Multiply · 色彩增值</option>
-            <option value="overlay">Overlay · 覆蓋</option>
-            <option value="soft_light">Soft Light · 柔光</option>
-            <option value="hard_light">Hard Light · 實光</option>
-            <option value="difference">Difference · 差值</option>
-            <option value="darken">Darken · 變暗</option>
-            <option value="lighten">Lighten · 變亮</option>
-            <option value="color_dodge">Color Dodge · 顏色加亮</option>
-            <option value="color_burn">Color Burn · 顏色加深</option>
-          </select>
-        </label>}
-        <label>圖層角色
-          <select value={clip.layer?.role ?? "content"} onChange={(event) => onLayerChange({ role: event.target.value as ClipLayerState["role"] })} data-testid="layer-role">
-            <option value="content">內容圖層</option>
-            <option value="adjustment">調整圖層（影響下方）</option>
-            <option value="controller">Null 控制器（不渲染）</option>
+        <label className="layer-enabled"><input type="checkbox" checked={clip.layer?.enabled ?? true} onChange={(event) => onLayerChange({ enabled: event.target.checked })} /> {uiText("顯示這個圖層")}</label>
+        {/* 混合模式 lives in 調整 › 混合 (both modes, with a hover preview); this panel keeps role, parent and matte. */}
+        <label>{uiText("圖層角色")}<select value={clip.layer?.role ?? "content"} onChange={(event) => onLayerChange({ role: event.target.value as ClipLayerState["role"] })} data-testid="layer-role">
+            <option value="content">{uiText("內容圖層")}</option>
+            <option value="adjustment">{uiText("調整圖層（影響下方）")}</option>
+            <option value="controller">{uiText("Null 控制器（不渲染）")}</option>
           </select>
         </label>
-        {clip.layer?.role === "controller" && <p className="expression-help" data-testid="layer-controller-help">控制器只輸出位置、縮放、旋轉與透明度；不播放原素材，也不占用影片解碼器。把其他圖層的父層設為它即可整組控制。</p>}
-        <label>跟隨父圖層
-          <select value={clip.layer?.parentClipId ?? ""} onChange={(event) => onLayerChange({ parentClipId: event.target.value || undefined })} data-testid="layer-parent">
-            <option value="">不跟隨</option>
-            {clips.filter((candidate) => candidate.id !== clip.id && candidate.layer?.role !== "adjustment").map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.id}{candidate.layer?.role === "controller" ? " · Null" : ""}</option>)}
+        {clip.layer?.role === "controller" && <p className="expression-help" data-testid="layer-controller-help">{uiText("控制器只輸出位置、縮放、旋轉與透明度；不播放原素材，也不占用影片解碼器。把其他圖層的父層設為它即可整組控制。")}</p>}
+        <label>{uiText("跟隨父圖層")}<select value={clip.layer?.parentClipId ?? ""} onChange={(event) => onLayerChange({ parentClipId: event.target.value || undefined })} data-testid="layer-parent">
+            <option value="">{uiText("不跟隨")}</option>
+            {candidates.filter((candidate) => candidate.id !== clip.id && candidate.layer?.role !== "adjustment").map((candidate) => <option key={candidate.id} value={candidate.id}>{label(candidate)}{!project && candidate.layer?.role === "controller" ? " · Null" : ""}</option>)}
           </select>
         </label>
-        {(clip.layer?.role ?? "content") === "content" && <label>Track Matte 來源
-          <select value={clip.layer?.trackMatte?.sourceClipId ?? ""} onChange={(event) => onLayerChange({ trackMatte: event.target.value ? { sourceClipId: event.target.value, mode: clip.layer?.trackMatte?.mode ?? "alpha" } : undefined })} data-testid="layer-track-matte-source">
-            <option value="">無</option>
-            {clips.filter((candidate) => candidate.id !== clip.id && (candidate.layer?.role ?? "content") === "content").map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.id}</option>)}
+        {(clip.layer?.role ?? "content") === "content" && <label>{uiText("Track Matte 來源")}<select value={clip.layer?.trackMatte?.sourceClipId ?? ""} onChange={(event) => onLayerChange({ trackMatte: event.target.value ? { sourceClipId: event.target.value, mode: clip.layer?.trackMatte?.mode ?? "alpha" } : undefined })} data-testid="layer-track-matte-source">
+            <option value="">{uiText("無")}</option>
+            {candidates.filter((candidate) => candidate.id !== clip.id && (candidate.layer?.role ?? "content") === "content").map((candidate) => <option key={candidate.id} value={candidate.id}>{label(candidate)}</option>)}
           </select>
         </label>}
-        {(clip.layer?.role ?? "content") === "content" && clip.layer?.trackMatte && <label>Track Matte 模式
-          <select value={clip.layer.trackMatte.mode} onChange={(event) => onLayerChange({ trackMatte: { ...clip.layer!.trackMatte!, mode: event.target.value as TrackMatteMode } })} data-testid="layer-track-matte-mode">
-            <option value="alpha">Alpha</option><option value="alpha_inverted">Alpha 反相</option>
-            <option value="luma">Luma</option><option value="luma_inverted">Luma 反相</option>
+        {(clip.layer?.role ?? "content") === "content" && clip.layer?.trackMatte && <label>{uiText("Track Matte 模式")}<select value={clip.layer.trackMatte.mode} onChange={(event) => onLayerChange({ trackMatte: { ...clip.layer!.trackMatte!, mode: event.target.value as TrackMatteMode } })} data-testid="layer-track-matte-mode">
+            <option value="alpha">Alpha</option><option value="alpha_inverted">{uiText("Alpha 反相")}</option>
+            <option value="luma">Luma</option><option value="luma_inverted">{uiText("Luma 反相")}</option>
           </select>
         </label>}
       </div>
-      <p className="expression-help">表達式只接受 Editkin 安全 DSL，不會執行 JavaScript。可用 time、frame、value、entrance、exit 與 sin、lerp、clamp 等函式。</p>
+      <p className="expression-help">{uiText("表達式只接受 Editkin 安全 DSL，不會執行 JavaScript。可用 time、frame、value、entrance、exit 與 sin、lerp、clamp 等函式。")}</p>
       <div className="expression-list">
         {EXPRESSION_PROPERTIES.map(({ property, label, example }) => (
           <form key={property} onSubmit={(event) => { event.preventDefault(); onExpressionChange(property, normalizeExpression(drafts[property])); }}>
             <label>{label}
-              <input value={drafts[property]} placeholder={example} onChange={(event) => setDrafts((current) => ({ ...current, [property]: event.target.value }))} aria-label={`${label}表達式`} />
+              <input value={drafts[property]} placeholder={example} onChange={(event) => setDrafts((current) => ({ ...current, [property]: event.target.value }))} aria-label={uiText("{value0}表達式", { value0: label })} />
             </label>
-            <button type="submit">套用</button>
-            <button type="button" onClick={() => { setDrafts((current) => ({ ...current, [property]: "" })); onExpressionChange(property, null); }}>清除</button>
+            <button type="submit">{uiText("套用")}</button>
+            <button type="button" onClick={() => { setDrafts((current) => ({ ...current, [property]: "" })); onExpressionChange(property, null); }}>{uiText("清除")}</button>
           </form>
         ))}
       </div>

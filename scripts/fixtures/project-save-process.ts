@@ -4,7 +4,7 @@ import { syncBuiltinESMExports } from "node:module";
 const [path, mode, revisionText, name] = process.argv.slice(2);
 if (!path || !mode || !name || !process.send) throw Error("Owned IPC test fixture only");
 const revision = Number(revisionText);
-const original = { open: filesystem.open, rename: filesystem.rename, rm: filesystem.rm };
+const original = { open: filesystem.open, rename: filesystem.rename, link: filesystem.link, rm: filesystem.rm };
 let stopped = false;
 const hold = async (boundary: string) => {
   if (stopped) return;
@@ -23,6 +23,12 @@ filesystem.open = (async (...args: Parameters<typeof filesystem.open>) => {
 filesystem.rename = async (...args: Parameters<typeof filesystem.rename>) => {
   if (mode === "before-publish" && String(args[1]) === path) await hold("before-publish");
   return original.rename(...args);
+};
+// Current publication uses a no-replace hard link; retain rename above for the
+// historical baseline while placing the same barrier on the actual producer.
+filesystem.link = async (...args: Parameters<typeof filesystem.link>) => {
+  if (mode === "before-publish" && String(args[1]) === path) await hold("before-publish");
+  return original.link(...args);
 };
 filesystem.rm = async (...args: Parameters<typeof filesystem.rm>) => {
   if (String(args[0]).startsWith(`${path}.`) && String(args[0]).endsWith(".tmp")) {

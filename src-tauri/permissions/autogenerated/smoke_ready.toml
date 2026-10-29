@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-smoke-ready"
+description = "Enables the smoke_ready command without any pre-configured scope."
+commands.allow = ["smoke_ready"]
+
+[[permission]]
+identifier = "deny-smoke-ready"
+description = "Denies the smoke_ready command without any pre-configured scope."
+commands.deny = ["smoke_ready"]

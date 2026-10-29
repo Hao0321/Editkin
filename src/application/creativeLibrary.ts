@@ -1,10 +1,15 @@
-import { createHash } from "node:crypto";
+import { secondaryHslSourceNodesV1 } from "../domain/secondaryHslV1Nodes";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { access, readFile, realpath, stat } from "node:fs/promises";
-import { isAbsolute, resolve, sep } from "node:path";
+import { access, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, resolve, sep } from "node:path";
 import type { EditProject } from "../domain/types";
+import { CUBE_MAX_SOURCE_BYTES, parseCubeFile, type ParsedCube } from "../color/cubeLut";
+import { gradeWorkingSpace, type GradeWorkingSpace } from "../color/gradeV2";
+import { exportColorGradeV2Cube } from "../color/gradeLutBake";
 import { validatePublicAssetRights, validatePublicGrant } from "../shared/visualAssetRights.mjs";
 import { creativeAssetIdFromUri } from "../shared/creativeAssetUri";
+import { colorLutLibraryLocationV1 } from "./colorLutLibraryLocationV1";
 export { creativeAssetIdFromUri, creativeAssetUri } from "../shared/creativeAssetUri";
 
 const PROCEDURAL_BACKGROUND_IDS = new Set([
@@ -322,6 +327,152 @@ export async function resolveCreativeLibraryPreviewAsset(packRoot: string, asset
   const file = source.derivatives[mode] ?? (mode === "media" ? source : undefined);
   if (!file) throw new Error("Private Visual Pack 沒有已驗證的 poster");
   return { asset: publicPrivateVisualAsset(source), absolutePath: await verifiedVisualPath(personalVisualRoot, file), sha256: file.sha256 };
+}
+
+// ---------------------------------------------------------------- colour LUT library (W1-4)
+
+export const COLOR_LUT_LIBRARY_SCHEMA = "editkin.color-lut-library/v1" as const;
+const COLOR_LUT_MANIFEST = "editkin-color-luts.json";
+const RIGHTS_TEXT = /^[^\u0000-\u001f]{1,200}$/;
+
+export interface ColorLutLibraryEntry {
+  id: string;
+  name: string;
+  kind: "3d" | "1d";
+  size: number;
+  sha256: string;
+  bytes: number;
+  path: string;
+  /** Working space the table expects on input and produces on output. */
+  inputSpace: GradeWorkingSpace;
+  license: string;
+  provenance: string;
+  rightsBasis: string;
+  title?: string;
+  importedAt: string;
+}
+
+interface ColorLutManifest { schema: typeof COLOR_LUT_LIBRARY_SCHEMA; luts: ColorLutLibraryEntry[] }
+
+/** User-imported LUTs live beside the personal packs, never inside the redistributable creator pack. */
+export function colorLutLibraryRoot(): string {
+  return colorLutLibraryLocationV1(process.cwd(), { EDITKIN_COLOR_LUT_ROOT: process.env.EDITKIN_COLOR_LUT_ROOT, EDITKIN_PERSONAL_VISUAL_ROOT: process.env.EDITKIN_PERSONAL_VISUAL_ROOT });
+}
+
+function validColorLutEntry(entry: ColorLutLibraryEntry): boolean {
+  return /^lut:[a-f0-9]{16}$/.test(entry.id) && /^[a-f0-9]{64}$/.test(entry.sha256) && entry.id === `lut:${entry.sha256.slice(0, 16)}`
+    && entry.path === `luts/${entry.sha256}.cube` && (entry.kind === "3d" || entry.kind === "1d") && Number.isSafeInteger(entry.size)
+    && Number.isSafeInteger(entry.bytes) && entry.bytes > 0 && ["rec709_display", "acescct"].includes(entry.inputSpace)
+    && [entry.name, entry.license, entry.provenance, entry.rightsBasis].every(value => typeof value === "string" && RIGHTS_TEXT.test(value.trim()));
+}
+
+async function readColorLutManifest(root: string): Promise<ColorLutManifest> {
+  const path = resolve(root, COLOR_LUT_MANIFEST);
+  if (!await pathExists(path)) return { schema: COLOR_LUT_LIBRARY_SCHEMA, luts: [] };
+  const manifest = JSON.parse(await readFile(path, "utf8")) as ColorLutManifest;
+  if (manifest.schema !== COLOR_LUT_LIBRARY_SCHEMA || !Array.isArray(manifest.luts) || !manifest.luts.every(validColorLutEntry)
+    || new Set(manifest.luts.map(entry => entry.id)).size !== manifest.luts.length) throw new Error("Color LUT 素材庫 manifest 不合法");
+  return manifest;
+}
+
+async function writeColorLutManifest(root: string, manifest: ColorLutManifest): Promise<void> {
+  const path = resolve(root, COLOR_LUT_MANIFEST);
+  const temporary = `${path}.${randomUUID()}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(manifest, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+  try { await rename(temporary, path); }
+  catch (error) { await rm(temporary, { force: true }); throw error; }
+}
+
+export interface ColorLutImportRequest {
+  /** Absolute path of the .cube to copy into the library. */
+  sourcePath: string;
+  name: string;
+  license: string;
+  provenance: string;
+  /** Why this LUT may be used (e.g. "owner-authored", "purchased-license-#…"). Required: no anonymous packs. */
+  rightsBasis: string;
+  inputSpace: GradeWorkingSpace;
+}
+
+/**
+ * Validates a .cube with the strict parser, stores it content-addressed with its licence,
+ * provenance and rights basis, and returns the library entry. Re-importing identical bytes
+ * returns the existing entry; differing metadata for the same bytes is refused.
+ */
+export async function importColorLut(root: string, request: ColorLutImportRequest): Promise<ColorLutLibraryEntry> {
+  if (!isAbsolute(request.sourcePath) || !/\.cube$/i.test(request.sourcePath)) throw new Error("LUT 匯入只接受絕對路徑的 .cube 檔");
+  for (const [field, value] of [["name", request.name], ["license", request.license], ["provenance", request.provenance], ["rightsBasis", request.rightsBasis]] as const) {
+    if (typeof value !== "string" || !RIGHTS_TEXT.test(value.trim())) throw new Error(`LUT 匯入需要 ${field}（1–200 字）`);
+  }
+  if (request.inputSpace !== "rec709_display" && request.inputSpace !== "acescct") throw new Error("LUT inputSpace 必須是 rec709_display 或 acescct");
+  const info = await stat(request.sourcePath);
+  if (!info.isFile() || info.size <= 0 || info.size > CUBE_MAX_SOURCE_BYTES) throw new Error("LUT 檔案大小不合法（上限 64 MiB）");
+  const bytes = await readFile(request.sourcePath);
+  const parsed = parseCubeFile(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const entry: ColorLutLibraryEntry = {
+    id: `lut:${sha256.slice(0, 16)}`, name: request.name.trim(), kind: parsed.kind, size: parsed.size, sha256, bytes: bytes.byteLength,
+    path: `luts/${sha256}.cube`, inputSpace: request.inputSpace, license: request.license.trim(), provenance: request.provenance.trim(),
+    rightsBasis: request.rightsBasis.trim(), ...(parsed.title ? { title: parsed.title } : {}), importedAt: new Date().toISOString(),
+  };
+  await mkdir(resolve(root, "luts"), { recursive: true });
+  const manifest = await readColorLutManifest(root);
+  const existing = manifest.luts.find(item => item.sha256 === sha256);
+  if (existing) {
+    if (existing.inputSpace !== entry.inputSpace || existing.license !== entry.license || existing.rightsBasis !== entry.rightsBasis) {
+      throw new Error(`相同內容的 LUT 已以不同授權或色彩空間匯入：${existing.id}`);
+    }
+    return existing;
+  }
+  const target = resolve(root, entry.path);
+  if (!await pathExists(target)) {
+    const temporary = `${target}.${randomUUID()}.tmp`;
+    await writeFile(temporary, bytes, { flag: "wx" });
+    try { await rename(temporary, target); } catch (error) { await rm(temporary, { force: true }); throw error; }
+  }
+  await writeColorLutManifest(root, { schema: COLOR_LUT_LIBRARY_SCHEMA, luts: [...manifest.luts, entry] });
+  return entry;
+}
+
+export async function listColorLuts(root: string): Promise<ColorLutLibraryEntry[]> {
+  return (await readColorLutManifest(root)).luts.map(entry => ({ ...entry }));
+}
+
+/** Resolves a grade node's LUT reference: manifest entry, contained path, byte length and full SHA-256 must all agree. */
+export async function resolveColorLut(root: string, id: string, expectedSha256?: string): Promise<{ entry: ColorLutLibraryEntry; cube: ParsedCube }> {
+  const entry = (await readColorLutManifest(root)).luts.find(item => item.id === id);
+  if (!entry) throw new Error(`Color LUT 素材庫找不到：${id}`);
+  if (expectedSha256 && entry.sha256 !== expectedSha256) throw new Error(`Color LUT ${id} 的 SHA-256 與調色引用不一致`);
+  const base = await realpath(root), path = await realpath(resolve(base, entry.path));
+  if (!path.startsWith(`${base}${sep}`)) throw new Error("Color LUT 路徑離開素材庫");
+  const bytes = await readFile(path);
+  if (bytes.byteLength !== entry.bytes || createHash("sha256").update(bytes).digest("hex") !== entry.sha256) throw new Error(`Color LUT ${id} 完整性驗證失敗`);
+  return { entry: { ...entry }, cube: parseCubeFile(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) };
+}
+
+/**
+ * Writes one clip's whole non-spatial Color Grade v2 (nodes, LUT strengths and Film Look)
+ * as a 65³ .cube for the project's working space. Spatial finishing is reported, not baked.
+ */
+export async function exportClipGradeCube(project: EditProject, clipId: string, outputPath: string, lutRoot = colorLutLibraryRoot()): Promise<{
+  path: string; sha256: string; bytes: number; size: number; space: GradeWorkingSpace; omittedSpatial: string[];
+}> {
+  if (!isAbsolute(outputPath) || !/\.cube$/i.test(outputPath)) throw new Error("LUT 匯出路徑必須是絕對路徑的 .cube");
+  const clip = [...project.tracks, ...project.compositions.flatMap(composition => composition.tracks)].flatMap(track => track.clips).find(item => item.id === clipId);
+  if (!clip?.gradeV2) throw new Error(`片段 ${clipId} 沒有 Color Grade v2`);
+  const space = gradeWorkingSpace(project.colorManagement);
+  const cubes = new Map<string, ParsedCube>();
+  for (const node of secondaryHslSourceNodesV1(clip.gradeV2.nodes ?? [])) {
+    if (!node.lut || cubes.has(node.lut.sha256)) continue;
+    const resolved = await resolveColorLut(lutRoot, node.lut.id, node.lut.sha256);
+    if (resolved.entry.inputSpace !== space) throw new Error(`LUT ${node.lut.id} 需要 ${resolved.entry.inputSpace} 工作空間，專案目前是 ${space}`);
+    cubes.set(node.lut.sha256, resolved.cube);
+  }
+  const exported = exportColorGradeV2Cube(clip.gradeV2, space, `${project.name} · ${clipId}`, ref => cubes.get(ref.sha256)!);
+  const bytes = new TextEncoder().encode(exported.text);
+  await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, bytes, { flag: "wx" });
+  return { path: outputPath, sha256: createHash("sha256").update(bytes).digest("hex"), bytes: bytes.byteLength, size: exported.size, space, omittedSpatial: exported.omittedSpatial };
 }
 
 export async function materializeCreativeAssets(project: EditProject, packRoot: string, personalMusicRoot?: string, personalVisualRoot?: string): Promise<EditProject> {

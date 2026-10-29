@@ -1,0 +1,37 @@
+/* The timeline's two tools at the left of the toolbar row (選取 A, 剪刀 B), the icons of 切開 and 刪除, and the 剪刀 cut
+   line that follows the pointer over a clip (Timeline.tsx, timelineBlade.ts). */
+.timeline-shell .timeline-tool-toggle { display: inline-flex; flex: 0 0 auto; align-items: stretch; gap: 2px; padding: 2px;
+  border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); }
+.app-shell[data-interface-mode] .timeline-shell .timeline-tool-toggle > button,
+.timeline-shell .timeline-toolbar .timeline-tool-toggle > button {
+  display: inline-flex; align-items: center; gap: 5px; height: auto; min-height: calc(var(--ui-target-size, 40px) - 6px);
+  padding: 0 9px; border: 0; border-radius: 8px; background: transparent; color: var(--soft); white-space: nowrap; }
+.app-shell[data-interface-mode] .timeline-shell .timeline-tool-toggle > button[aria-pressed="true"],
+.app-shell[data-interface-mode] .timeline-shell .timeline-tool-toggle > button[aria-pressed="true"]:hover,
+.timeline-shell .timeline-toolbar .timeline-tool-toggle > button[aria-pressed="true"],
+.timeline-shell .timeline-toolbar .timeline-tool-toggle > button[aria-pressed="true"]:hover { background: var(--accent); color: var(--accent-ink); }
+.timeline-shell .timeline-tool-toggle kbd {
+  display: inline-grid; place-items: center; min-width: 1.45em; height: 1.45em; padding: 0 3px; border: 1px solid currentColor;
+  border-bottom-width: 2px; border-radius: 4px; font: inherit; font-size: .72em; font-weight: 800; line-height: 1; opacity: .8; }
+.app-shell[data-interface-mode] .timeline-shell .timeline-quick-actions > .timeline-icon-action,
+.timeline-shell .timeline-quick-actions > .timeline-icon-action { display: inline-flex; align-items: center; gap: 5px; }
+.timeline-shell .timeline-quick-actions .easy-icon { flex: 0 0 auto; width: calc(16px * var(--ui-scale, 1)); height: calc(16px * var(--ui-scale, 1)); }
+
+/* 剪刀 on: a scissors cursor over a clip it can cut (crosshair where the image cannot load), no trim handles, and a plain
+   arrow over what it leaves alone (captions, titles, empty track space). A locked clip says no before the click does. */
+.timeline-shell[data-tool="blade"] .track-lane .timeline-clip:not(.caption):not(.locked) {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg stroke='%23fff' stroke-width='4.5'%3E%3Ccircle cx='6.5' cy='6.5' r='2.5'/%3E%3Ccircle cx='6.5' cy='17.5' r='2.5'/%3E%3Cpath d='M8.6 8 20 18M8.6 16 20 6'/%3E%3C/g%3E%3Cg stroke='%23111827' stroke-width='2'%3E%3Ccircle cx='6.5' cy='6.5' r='2.5'/%3E%3Ccircle cx='6.5' cy='17.5' r='2.5'/%3E%3Cpath d='M8.6 8 20 18M8.6 16 20 6'/%3E%3C/g%3E%3C/svg%3E") 13 12, crosshair;
+}
+.timeline-shell[data-tool="blade"] .track-lane .timeline-clip.locked { cursor: not-allowed; }
+.timeline-shell[data-tool="blade"] :is(.track-lane, .timeline-clip.caption, .motion-block) { cursor: default; }
+.timeline-shell[data-tool="blade"] .clip-trim-handle { display: none; }
+
+/* The cut line: white with a dark outline (it reads on any clip colour) and the time a click cuts at. */
+.timeline-blade-line { position: absolute; z-index: 30; width: 2px; margin-left: -1px; background: #fff;
+  box-shadow: 0 0 0 1px rgb(17 24 39 / .9); pointer-events: none; }
+.timeline-blade-line[hidden] { display: none; }
+.timeline-blade-line > span { position: absolute; top: 3px; left: 6px; padding: 1px 6px; border: 1px solid rgb(17 24 39 / .9);
+  border-radius: 5px; background: #fff; color: #111827; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+  line-height: 1.4; white-space: nowrap; }
+/* Pulled to the playhead or an edge: the readout says so with the accent ring. */
+.timeline-blade-line:is([data-snap="playhead"], [data-snap="edge"]) > span { box-shadow: 0 0 0 2px var(--accent); }

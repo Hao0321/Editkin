@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-template-short-project"
+description = "Enables the open_template_short_project command without any pre-configured scope."
+commands.allow = ["open_template_short_project"]
+
+[[permission]]
+identifier = "deny-open-template-short-project"
+description = "Denies the open_template_short_project command without any pre-configured scope."
+commands.deny = ["open_template_short_project"]

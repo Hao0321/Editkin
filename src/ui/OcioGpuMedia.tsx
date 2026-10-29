@@ -1,3 +1,4 @@
+import { translateUi as uiText, useI18n } from "./i18n/interfacePreferences";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { ColorAdjustments, ColorManagementSettings, MediaAsset } from "../domain/types";
 import { buildOcioFragmentShader, OCIO_VERTEX_SHADER, ocioGradeUniformValues, resolveOcioGpuPipeline, type OcioGpuStage, type OcioGpuTexture } from "../color/ocioGpu";
@@ -88,6 +89,7 @@ function uploadGradeUniforms(gl: WebGL2RenderingContext, program: WebGLProgram, 
 }
 
 export default function OcioGpuMedia({ asset, color, management, source, className, style, muted = true, videoRef, testId }: OcioGpuMediaProps) {
+  useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const mediaRef = useRef<HTMLVideoElement>(null);
@@ -199,9 +201,7 @@ export default function OcioGpuMedia({ asset, color, management, source, classNa
   }, [asset, isVideo, management, source]);
 
   return <>
-    <canvas ref={canvasRef} className={className} style={style} role="img" aria-label={`${asset.name} · ACES 2.0 OCIO GPU 預覽`} data-testid={testId} data-ocio-status={status} title={error} />
-    {isVideo
-      ? <video ref={(node) => { mediaRef.current = node; videoRef?.(node); }} src={source} playsInline muted={muted} preload="auto" aria-hidden style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }} />
-      : <img ref={imageRef} src={source} alt="" aria-hidden draggable={false} style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }} />}
+    <canvas ref={canvasRef} className={className} style={style} role="img" aria-label={uiText("{value0} · ACES 2.0 OCIO GPU 預覽", { value0: asset.name })} data-testid={testId} data-ocio-status={status} title={error} />
+    {isVideo ? <video ref={(node) => { mediaRef.current = node; videoRef?.(node); }} src={source} playsInline muted={muted} preload="auto" aria-hidden style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }} /> : <img ref={imageRef} src={source} alt="" aria-hidden draggable={false} style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }} />}
   </>;
 }

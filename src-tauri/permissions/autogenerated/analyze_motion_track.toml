@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-analyze-motion-track"
+description = "Enables the analyze_motion_track command without any pre-configured scope."
+commands.allow = ["analyze_motion_track"]
+
+[[permission]]
+identifier = "deny-analyze-motion-track"
+description = "Denies the analyze_motion_track command without any pre-configured scope."
+commands.deny = ["analyze_motion_track"]

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, writeFile, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, writeFile, stat } from "node:fs/promises";
+import { useTempRoots } from "../test/tempRoot.mjs";
 import { join, resolve } from "node:path";
 import { collectRenderArtifactIdentity, parseOutputFrameIdentity } from "./renderArtifactIdentity";
 import { renderReviewContentJson } from "../shared/renderReviewContent";
@@ -10,6 +10,7 @@ import { createDemoProject } from "../domain/demo";
 import { resolveAestheticSystem } from "../application/editkinAesthetic";
 import { runProcess } from "./ffmpegMedia";
 import { renderProject } from "./ffmpeg";
+const temp = useTempRoots();
 
 const fingerprint = "a".repeat(64);
 describe("render output identity (not aesthetic certification)", () => {
@@ -36,7 +37,7 @@ describe("render output identity (not aesthetic certification)", () => {
     expect(() => parseOutputFrameIdentity('{"streams":[{"avg_frame_rate":"0/0"}]}')).toThrow();
   });
   it("rejects mutation during probing and preserves the output", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "editkin-identity-mutation-"));
+    const dir = await temp.create("editkin-identity-mutation-");
     const path = join(dir, "owned.mp4"); await writeFile(path, "initial");
     await expect(collectRenderArtifactIdentity(path, fingerprint, "fixture", async () => {
       await writeFile(path, "changed bytes");
@@ -45,7 +46,7 @@ describe("render output identity (not aesthetic certification)", () => {
     expect((await stat(path)).size).toBeGreaterThan(0);
   });
   it("uses bounded count fallback and rejects missing counts", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "editkin-identity-probe-")); const path = join(dir, "owned.bin"); await writeFile(path, "synthetic probe fixture");
+    const dir = await temp.create("editkin-identity-probe-"); const path = join(dir, "owned.bin"); await writeFile(path, "synthetic probe fixture");
     const calls: string[][] = [];
     const receipt = await collectRenderArtifactIdentity(path, fingerprint, "fixture", async (_exe,args,timeout) => {
       calls.push(args); expect(timeout).toBeLessThanOrEqual(60000);
@@ -55,7 +56,7 @@ describe("render output identity (not aesthetic certification)", () => {
     await expect(collectRenderArtifactIdentity(path, fingerprint, "fixture", async () => ({ stdout: '{"streams":[{"avg_frame_rate":"30/1"}]}', stderr: "" }))).rejects.toThrow("幀數");
   });
   it("binds a real rendered synthetic video to actual bytes and measured frames", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "editkin-render-identity-real-"));
+    const dir = await temp.create("editkin-render-identity-real-");
     const source = join(dir,"synthetic-source.mp4"); const output = join(dir,"rendered.mp4");
     const ffmpegPath = resolve("vendor/ffmpeg/win32-x64/ffmpeg.exe"); const ffprobePath = resolve("vendor/ffmpeg/win32-x64/ffprobe.exe");
     await runProcess(ffmpegPath,["-v","error","-f","lavfi","-i","testsrc2=size=160x90:rate=30","-f","lavfi","-i","sine=frequency=440:sample_rate=48000","-t","1","-c:v","libx264","-c:a","aac",source],30000);

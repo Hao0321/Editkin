@@ -1,0 +1,37 @@
+/* 標題模板編輯器: opened from the footer button, the timeline, the main clip's Inspector, the Motion studio or a title in the preview. */
+.saved-template-manager > summary { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border: 1px solid var(--warning); border-radius: 10px;
+  background: color-mix(in srgb, var(--warning) 14%, var(--surface)); color: var(--ink); font-size: 13px; font-weight: 800; list-style: none; cursor: pointer; }
+.saved-template-manager > summary::-webkit-details-marker { display: none; }
+/* The button sits at the left of the status bar, so the panel opens to the right of it, fully on screen. */
+.saved-template-panel { position: absolute; z-index: 85; left: 0; bottom: calc(100% + 8px); box-sizing: border-box; width: min(640px, 94vw); max-height: 72vh; overflow: auto;
+  padding: 0 18px 18px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); color: var(--ink); font-size: 15px; line-height: 1.55;
+  box-shadow: var(--shadow); }
+.saved-template-header { position: sticky; z-index: 2; top: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 -18px 8px; padding: 12px 18px;
+  border-bottom: 1px solid var(--line); background: var(--surface); }
+.saved-template-header strong { font-size: 17px; }
+.saved-template-panel button { min-height: 44px; padding: 0 14px; font-size: 15px; }
+/* Stronger than the Motion studio's small `.floating-source-slots label`, whichever stylesheet loads last. */
+.saved-template-panel label, .saved-template-panel .saved-template-form label { display: grid; gap: 4px; margin: 10px 0; font-size: 14px; font-weight: 700; }
+.saved-template-panel input:not([type="color"]), .saved-template-panel select, .saved-template-panel textarea { min-height: 40px; font-size: 15px; }
+.saved-template-panel small { color: var(--muted); font-size: 13px; font-weight: 400; }
+.saved-template-panel dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 10px 0; }
+.saved-template-panel dl > div { display: contents; }
+.saved-template-panel dt { color: var(--muted); }
+.saved-template-panel dd { margin: 0; overflow-wrap: anywhere; }
+.saved-template-form [data-testid="reference-instance-status"] strong { color: var(--warning); }
+.saved-template-form [data-testid="reference-instance-status"][data-status="CURRENT"] strong { color: var(--success); }
+.saved-template-warning { display: grid; gap: 6px; margin: 4px 0 12px; padding: 12px; border: 2px solid var(--warning); border-radius: 10px;
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface)); }
+.saved-template-warning button { justify-self: start; }
+.saved-template-position { margin: 12px 0; font-weight: 700; }
+.saved-template-position > div { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.saved-template-position button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 800; }
+.saved-template-panel [data-testid="revise-reference-motion-instance"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 800; }
+.saved-template-panel [data-testid="revise-reference-motion-instance"]:disabled { border-color: var(--line); background: var(--surface-2); color: var(--muted); }
+/* 「依目前片段重新套用」 for a template that went out of date: the button and its one-line reason, right under the status. */
+.saved-template-reapply { display: grid; gap: 6px; justify-items: start; margin: 6px 0 12px; padding: 12px; border: 2px solid var(--warning); border-radius: 10px;
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface)); }
+.saved-template-reapply button { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 800; }
+.saved-template-reapply button:disabled { border-color: var(--line); background: var(--surface-2); color: var(--muted); }
+.saved-template-reapply span { font-size: 14px; line-height: 1.5; }
+.saved-template-reapply[data-state="BLOCKED"] span { font-weight: 700; }

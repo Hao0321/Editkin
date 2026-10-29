@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
+import { useTempRoots } from "../test/tempRoot.mjs";
 import { extractMaterialKeyframes } from "./materialKeyframeExtraction";
 import { colorFileSha, getMaterialColorRuntimeIdentity } from "./materialColorSamplingRuntime";
 import { verifyMaterialKeyframeDisplay } from "./materialKeyframeValidation";
@@ -14,9 +15,10 @@ const app = fileURLToPath(new URL("../../", import.meta.url));
 const ffmpegPath = join(app, "vendor/ffmpeg/win32-x64/ffmpeg.exe"), ffprobePath = join(app, "vendor/ffmpeg/win32-x64/ffprobe.exe");
 const runtime = { ffmpegPath, ffprobePath };
 function run(args: string[]) { const r = spawnSync(ffmpegPath, args, { windowsHide: true, timeout: 30000, maxBuffer: 16 * 1024 * 1024 }); expect(r.status, r.stderr.toString()).toBe(0); return r.stdout; }
+// Removed when each test finishes unless EDITKIN_TEST_EVIDENCE_ROOT keeps them.
+const temp = useTempRoots();
 async function fixture(input: "rec709" | "hlg" | "pq", graph = "nullsrc=s=96x64:r=10:d=1,format=yuv420p10le,geq=lum='128+640*X/W':cb='400+200*Y/H':cr=512") {
-  await mkdir(join(app, ".rd/material-keyframe-normalization-20260831"), { recursive: true });
-  const root = await mkdtemp(join(app, ".rd/material-keyframe-normalization-20260831/test-")), path = join(root, "source.mkv");
+  const root = await temp.create("test-", { parent: join(app, ".rd/material-keyframe-normalization-20260831") }), path = join(root, "source.mkv");
   const hdr = input !== "rec709";
   const tagged = `${graph},setparams=range=limited:color_primaries=${hdr ? "bt2020" : "bt709"}:color_trc=${input === "hlg" ? "arib-std-b67" : input === "pq" ? "smpte2084" : "bt709"}:colorspace=${hdr ? "bt2020nc" : "bt709"}`;
   run(["-v", "error", "-f", "lavfi", "-i", tagged, "-c:v", "ffv1", path]);

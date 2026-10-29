@@ -1,3 +1,4 @@
+import { fixedTemplateWindowPathV3 } from "./fixedTemplateWindowPathV3";
 import type { ClipMask, EditProject, MaskPathPoint, MaskShapeKind, MotionTrackPoint, TimelineClip } from "./types";
 import { clipLocalProjectFrame, compileClipAlphaPlan, floorClipAlphaSampleIndex, pixelMatteOperation } from "./clipAlphaPlan";
 
@@ -36,6 +37,7 @@ export interface ResolvedMaskPath {
 }
 
 export function resolveMaskPath(project: EditProject, clip: TimelineClip, mask: ClipMask, localTime: number): ResolvedMaskPath {
+  if (mask.fixedWindowV3) return { points: fixedTemplateWindowPathV3(project, clip, mask, localTime), status: "manual" };
   if (mask.trackId) {
     const track = project.motionTracks.find((item) => item.id === mask.trackId && item.clipId === clip.id);
     if (!track || track.points.length === 0) return { points: mask.path, status: "lost" };

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-native-audio-preview-status"
+description = "Enables the native_audio_preview_status command without any pre-configured scope."
+commands.allow = ["native_audio_preview_status"]
+
+[[permission]]
+identifier = "deny-native-audio-preview-status"
+description = "Denies the native_audio_preview_status command without any pre-configured scope."
+commands.deny = ["native_audio_preview_status"]

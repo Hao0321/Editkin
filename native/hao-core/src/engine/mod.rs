@@ -1,4 +1,6 @@
 pub mod audio;
+pub mod audio_beats;
+pub mod audio_beats_codec;
 pub mod audio_codec_pipe;
 mod audio_codec_schedule;
 pub mod audio_codec_stream;
@@ -16,17 +18,28 @@ pub mod audio_stream_transport;
 #[path = "../../../shared/owned_process.rs"]
 pub mod owned_process;
 pub mod auto_roto;
+pub mod auto_roto_v2;
+mod auto_roto_v2_io;
+mod auto_roto_v2_types;
 #[cfg(feature = "auto-roto-research-onnx")]
 pub mod auto_roto_onnx;
 pub mod composite;
 pub mod diagnostics;
+pub mod floating_video_frame;
+pub mod timeline_pair_v1;
 pub mod model;
+pub mod motion_paint;
+pub mod motion_paint_track;
+pub mod vector_stroke;
 pub mod optical_alpha;
 pub mod pipeline;
 pub mod planar_track;
 pub mod plugin;
 pub mod region_memory_roto;
 pub mod roto;
+pub mod roto_edge_v2;
+mod roto_edge_color_v2;
+pub mod roto_edge_png_v2;
 pub mod runtime;
 pub mod scene;
 pub mod validate;
@@ -250,6 +263,9 @@ mod tests {
                     italic: false,
                     shadow: 1.0,
                     letter_spacing: 0.0,
+                    shadow_color: None,
+                    shadow_blur: 0.0,
+                    lines: None,
                     translation: None,
                 },
             },

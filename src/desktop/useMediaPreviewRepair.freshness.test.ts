@@ -105,6 +105,47 @@ describe("historical preview freshness repair", () => {
     } finally { await act(async () => f.root.unmount()); }
   });
 
+  it("rejects the exact retired r4 SAR-losing recipe and accepts only a new physical-DAR generation", async () => {
+    const f = await fixture();
+    try {
+      const retired = prepared(f.asset, "editkin.browser-proxy-bt2100-hable-thumbnail-srgb/2026-09-28-r4");
+      expect(isMediaPreviewCurrent(retired.derivatives)).toBe(false);
+      let task!: Promise<void>; await act(async () => { task = f.hook.repairPreview(f.asset.id); });
+      await settle(f.jobs[0]!, retired, task);
+      expect(f.hook.previewRepair?.phase).toBe("failed");
+      expect(f.session.getSnapshot().history.present).toBe(f.initial);
+      expect(f.submitted[0]!.uri).toBe(f.asset.uri);
+      await act(async () => { task = f.hook.repairPreview(f.asset.id); });
+      await settle(f.jobs[1]!, prepared(f.asset), task);
+      expect(f.hook.previewRepair?.phase).toBe("prepared");
+      const current = f.session.getSnapshot().history.present.assets[0]!;
+      expect(current.uri).toBe(f.asset.uri);
+      expect(current.derivatives?.previewRecipe).toBe(CURRENT_MEDIA_PREVIEW_RECIPE);
+      expect(isMediaPreviewCurrent(current.derivatives)).toBe(true);
+    } finally { await act(async () => f.root.unmount()); }
+  });
+
+  it("reports whether a rebuilt preview was committed, so a finished call is never taken as success", async () => {
+    const f = await fixture();
+    try {
+      const outcomes: boolean[] = [];
+      let task!: Promise<void>;
+      await act(async () => { task = f.hook.repairPreview(f.asset.id, rebuilt => outcomes.push(rebuilt)); });
+      // A second request while one runs is skipped, and says so.
+      await act(async () => { await f.hook.repairPreview(f.asset.id, rebuilt => outcomes.push(rebuilt)); });
+      expect(f.jobs).toHaveLength(1); expect(outcomes).toEqual([false]);
+      // A rejected preparation still resolves, reporting no rebuilt preview.
+      await settle(f.jobs[0]!, prepared(f.asset, null), task);
+      expect(f.hook.previewRepair?.phase).toBe("failed"); expect(outcomes).toEqual([false, false]);
+      await act(async () => { task = f.hook.repairPreview(f.asset.id, rebuilt => outcomes.push(rebuilt)); });
+      await settle(f.jobs[1]!, prepared(f.asset), task);
+      expect(f.hook.previewRepair?.phase).toBe("prepared"); expect(outcomes).toEqual([false, false, true]);
+      // An asset that is gone is skipped.
+      await act(async () => { await f.hook.repairPreview("missing-asset", rebuilt => outcomes.push(rebuilt)); });
+      expect(outcomes).toEqual([false, false, true, false]);
+    } finally { await act(async () => f.root.unmount()); }
+  });
+
   it("preserves concurrent edits, while relink/session replacement drops stale completion", async () => {
     const f = await fixture();
     try {

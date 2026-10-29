@@ -1,0 +1,10 @@
+/* A small card in the corner, not a dialog: editing and preview go on underneath it. Below modal backdrops (z-index 100). */
+.plain-problem-notice.project-outside-media-prompt { position: fixed; right: 16px; bottom: 16px; z-index: 90; box-sizing: border-box; width: min(560px, calc(100vw - 32px)); max-height: min(70vh, 560px); overflow: auto; grid-template-columns: auto minmax(0, 1fr); border: 1px solid var(--line); border-left: 6px solid var(--accent); border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, .28); }
+.project-outside-media-prompt .plain-problem-actions { grid-column: 1 / -1; }
+.project-outside-media-question { font-weight: 650; }
+.project-outside-media-files { margin-top: 4px; font-size: 15px; }
+.project-outside-media-files summary { min-height: 32px; color: var(--soft); cursor: pointer; }
+.project-outside-media-files ul { display: grid; gap: 4px; max-height: 180px; overflow: auto; margin: 6px 0 0; padding: 0; list-style: none; }
+.project-outside-media-files li { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.project-outside-media-files b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+.project-outside-media-files small { flex: none; color: var(--muted); font-size: 13px; white-space: nowrap; }

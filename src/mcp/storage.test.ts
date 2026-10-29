@@ -10,6 +10,7 @@ import {
   createProjectFile,
   readAutopilotExecutionAttribution,
   readProject,
+  resolveLutExportPath,
   resolveProjectPath,
   resolveRenderPath,
   resolveWorkspaceMediaPath,
@@ -37,6 +38,8 @@ describe("MCP workspace boundary", () => {
     await expect(resolveWorkspaceMediaPath("clip.mp4")).resolves.toBe(join(workspace, "clip.mp4"));
     await expect(resolveProjectPath("project.editkin.json")).resolves.toBe(join(workspace, "project.editkin.json"));
     await expect(resolveRenderPath("exports/output.mp4")).resolves.toBe(join(workspace, "exports/output.mp4"));
+    await expect(resolveLutExportPath(join(workspace, "looks", "grade.cube"))).resolves.toBe(join(workspace, "looks", "grade.cube"));
+    await expect(resolveLutExportPath("looks/grade.mp4")).rejects.toBeInstanceOf(WorkspaceBoundaryError);
     await expect(resolveWorkspaceMediaPath("../outside.mp4")).rejects.toBeInstanceOf(WorkspaceBoundaryError);
   });
 
@@ -51,6 +54,7 @@ describe("MCP workspace boundary", () => {
 
     await expect(resolveWorkspaceMediaPath("linked/clip.mp4")).rejects.toBeInstanceOf(WorkspaceBoundaryError);
     await expect(resolveRenderPath("linked/output.mp4")).rejects.toBeInstanceOf(WorkspaceBoundaryError);
+    await expect(resolveLutExportPath(join(workspace, "linked", "grade.cube"))).rejects.toBeInstanceOf(WorkspaceBoundaryError);
   });
 
   it("persists receipts in two phases and learning events as immutable evidence", async () => {

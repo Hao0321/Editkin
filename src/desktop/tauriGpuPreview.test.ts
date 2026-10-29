@@ -10,7 +10,7 @@ describe("Tauri preview ownership wire contract",()=>{
       :command==="end_gpu_preview_owner"?{released:true,superseded:false}:{outputPath:"frame.png",receipt:{outputHash:"hash",frame:{outputHash:"hash"}}});
     const owner=await createTauriGpuPreviewOwner();
     const args:unknown[]=["gpu-owner-42-7-image",{}, {}, 0];
-    const entries=Object.entries(owner.desktop).filter(([name])=>!["startGpuPreviewPlayback","stopGpuPreviewPlayback","inspectGpuPreviewPlayback"].includes(name));expect(entries).toHaveLength(20);
+    const entries=Object.entries(owner.desktop).filter(([name])=>!["startGpuPreviewPlayback","stopGpuPreviewPlayback","inspectGpuPreviewPlayback"].includes(name));expect(entries).toHaveLength(23);
     for(const [name,method] of entries){
       const result=await (method as (...values:unknown[])=>Promise<unknown>)(...(name==="bindGpuPreviewSurface"?[{x:0,y:0,width:32,height:32}]:args));
       expect(ipc.invoke.mock.calls.at(-1)?.[1]).toMatchObject({previewOwner:"gpu-owner-42-7"});

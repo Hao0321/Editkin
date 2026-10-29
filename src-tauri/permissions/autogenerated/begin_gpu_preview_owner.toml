@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-begin-gpu-preview-owner"
+description = "Enables the begin_gpu_preview_owner command without any pre-configured scope."
+commands.allow = ["begin_gpu_preview_owner"]
+
+[[permission]]
+identifier = "deny-begin-gpu-preview-owner"
+description = "Denies the begin_gpu_preview_owner command without any pre-configured scope."
+commands.deny = ["begin_gpu_preview_owner"]

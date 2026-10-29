@@ -1,0 +1,5 @@
+/* In-point (source start) of the selected clip: visible without opening the advanced sections. */
+.clip-in-point { display: grid; gap: 6px; margin: 2px 0 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.clip-in-point .number-field input:disabled { color: var(--muted); cursor: not-allowed; }
+.clip-in-point-note { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.clip-in-point-error { color: var(--danger); font-size: 11px; font-weight: 700; line-height: 1.45; }

@@ -6,6 +6,12 @@ import { createMotionGraphic } from "../motion/composition";
 import { createEmptyEditkinSkillSelectionReceipt } from "../plugins/skillPack";
 
 describe("video-autopilot plan contract", () => {
+  it("advertises artifact-bound agent review so stale runtimes fail before material preparation", () => {
+    expect(compactAutopilotContract().visualReview).toMatchObject({
+      step: "visual-review", policyBound: true,
+      modes: ["human", "agent_reference_comparison"], outcomeCheckpoints: ["human_review", "agent_review"],
+    });
+  });
   it("publishes the closed-world Roto/Keyer planning tool IDs without exposing research routes", () => {
     expect(compactAutopilotContract().rotoKeyerAutomation).toMatchObject({
       inspect: "inspect_roto_keyer_capabilities",
@@ -161,6 +167,12 @@ describe("video-autopilot plan contract", () => {
       graphic: createMotionGraphic("rogue-name", "card", "杜撰人物", 0, 1.5, undefined, findMotionGraphicPreset("lower_third_clean_blue_name").seed),
     };
     expect(() => parseAutopilotPlan({ ...accepted, commands: [...accepted.commands, rogueCommand] })).toThrow(/沒有 evidence-bound editorial identity event/);
+    // A single-graphic v3 name bar would bypass the evidence-bound name/affiliation pairing, so plans cannot carry one.
+    const rogueV3NameBar = {
+      type: "add_motion_graphic" as const,
+      graphic: createMotionGraphic("rogue-v3-name", "card", "杜撰人物\n職稱", 0, 1.5, undefined, findMotionGraphicPreset("v3_lower_third_bar").seed),
+    };
+    expect(() => parseAutopilotPlan({ ...accepted, commands: [...accepted.commands, rogueV3NameBar] })).toThrow(/v3 人名條/);
 
     const forgedTiming = structuredClone(parsed);
     for (const command of forgedTiming.commands) {

@@ -1,12 +1,13 @@
 import { captionStyleFromPreset } from "../creative/corePack";
+import { SHORTS_CAPTION_REFERENCE, cjkSafeCaptionStyle, isGeneratedDefaultCaptionStyle, isVerticalCanvas, shortsCaptionStyle } from "../creative/shortsCaptionStyle";
 import { resolveAestheticSystem } from "./editkinAesthetic";
 import { applyCommand, type EditorCommand } from "../domain/commands";
 import { alignTime, projectDuration } from "../domain/editGraph";
 import { conservativePolicy, validatePolicy, type NativeEditingPolicy } from "./nativeAutopilotPolicy";
-import { DEFAULT_COLOR, DEFAULT_TRANSFORM, type DirectorMarker, type EditProject, type EditorialProfileId, type MediaAsset, type TimelineClip } from "../domain/types";
+import { DEFAULT_COLOR, DEFAULT_TRANSFORM, type CaptionStyle, type DirectorMarker, type EditProject, type EditorialProfileId, type MediaAsset, type TimelineClip } from "../domain/types";
 import type { AutomaticCaptionDesktopResult, MotionTrackDesktopResult } from "../desktop/types";
 import { buildSemanticAutoEditCommand } from "./semanticAutoEditCommands";
-import type { SemanticAutoEditPlan, SemanticCue, SemanticCut } from "./semanticAutoEdit";
+import { NARRATION_PAUSE_TRIM, type SemanticAutoEditPlan, type SemanticCue, type SemanticCut } from "./semanticAutoEdit";
 import { editorialProfile, type EditingRhythm } from "./editorialProfiles";
 export type { EditingRhythm } from "./editorialProfiles";
 
@@ -145,10 +146,50 @@ export function buildDuckedMusicCommands(project: EditProject, asset: MediaAsset
   return commands;
 }
 
-function receiptMarker(id: string, clip: TimelineClip, creative: NativeAutopilotCreativePlan, selections: { music?: string; tracking: string; graphics: string }): DirectorMarker {
-  const note = [...creative.decisions, { family: "music", selection: selections.music ?? "skipped", reason: selections.music ? `依 ${creative.rhythm.targetBpm} BPM 與片長選曲，旁白區間降至 12%` : "素材庫未提供可用曲目" }, { family: "tracking", selection: selections.tracking, reason: creative.tracking.reason }, { family: "graphicSafety", selection: selections.graphics, reason: "可選重複圖卡僅放字幕空檔，無足夠空檔則略過；空間排版 solver 未完成" }]
+type ReceiptDecision = { family: string; selection: string; reason: string };
+
+function receiptMarker(id: string, clip: TimelineClip, creative: NativeAutopilotCreativePlan, selections: { music?: string; tracking: string; graphics: string; caption?: ReceiptDecision; extra: ReceiptDecision[] }): DirectorMarker {
+  const decisions = creative.decisions.map((item) => item.family === "caption" && selections.caption ? selections.caption : item);
+  const note = [...decisions, ...selections.extra, { family: "music", selection: selections.music ?? "skipped", reason: selections.music ? `依 ${creative.rhythm.targetBpm} BPM 與片長選曲，旁白區間降至 12%` : "素材庫未提供可用曲目" }, { family: "tracking", selection: selections.tracking, reason: creative.tracking.reason }, { family: "graphicSafety", selection: selections.graphics, reason: "可選重複圖卡僅放字幕空檔，無足夠空檔則略過；空間排版 solver 未完成" }]
     .map((item) => `${item.family}=${item.selection}（${item.reason}）`).join("\n");
   return { id, time: clip.timelineStart, title: `原生自動成片 · ${creative.rhythm.mode}`, note, kind: "beat", status: "open", createdAt: new Date().toISOString() };
+}
+
+/** Which caption look an automatic run writes. */
+export type NativeCaptionStyleDecision = "shorts-vertical" | "longform-monochrome" | "preset" | "preserved";
+
+/**
+ * A 9:16 canvas always gets Shorts captions when the run owns styling (explicit format, or the
+ * untouched generated default); horizontal long-video captions keep the existing white-on-black rule.
+ */
+function automaticCaptionStyle(project: EditProject, policy: NativeEditingPolicy, creative: NativeAutopilotCreativePlan, cues: readonly SemanticCue[]):
+  { decision: NativeCaptionStyleDecision; patch?: Partial<CaptionStyle>; receipt?: ReceiptDecision } {
+  if (policy.ownership !== "automatic") return { decision: "preserved" };
+  if (isVerticalCanvas(project.width, project.height) && (policy.format !== "unknown" || isGeneratedDefaultCaptionStyle(project.captionStyle, project))) {
+    const style = shortsCaptionStyle(project, project.editorialProfile);
+    const baseline = Math.round(SHORTS_CAPTION_REFERENCE.baselineLimitY * project.height / SHORTS_CAPTION_REFERENCE.height);
+    const glyph = Math.round(SHORTS_CAPTION_REFERENCE.glyphHeight * style.fontSize / SHORTS_CAPTION_REFERENCE.assFontSize[style.fontFamily as keyof typeof SHORTS_CAPTION_REFERENCE.assFontSize]);
+    return { decision: "shorts-vertical", patch: style, receipt: { family: "caption", selection: style.presetId,
+      reason: `直式畫布 Shorts 白字：${style.fontFamily} 字高約 ${glyph}px（ASS ${style.fontSize}）、每行最多 ${style.maxLineEm} 字、柔和陰影${style.presetId.endsWith("green_edge") ? "與綠邊" : ""}、marginV ${style.marginV}，基線不低於 y${baseline}` } };
+  }
+  if (policy.format === "unknown") return { decision: "preserved" };
+  if (policy.format === "longform") {
+    return { decision: "longform-monochrome", patch: { ...project.captionStyle, color: "#FFFFFF", backgroundColor: "#000000B3", outlineColor: "#000000", outlineWidth: Math.max(4, Math.round(16 * project.height / 1080)), shadow: 0, shadowColor: undefined, shadowBlur: undefined, maxLineEm: undefined, translationColor: "#FFFFFF" } };
+  }
+  const preset = captionStyleFromPreset(creative.captionPresetId);
+  const safe = cjkSafeCaptionStyle(preset, cues.map((cue) => cue.text));
+  return { decision: "preset", patch: safe, receipt: safe === preset ? undefined
+    : { family: "caption", selection: creative.captionPresetId, reason: `${preset.fontFamily} 沒有中文字形，中文字幕改用 ${safe.fontFamily}` } };
+}
+
+function editModeReceipt(plan: SemanticAutoEditPlan): ReceiptDecision {
+  if (plan.engine === "editkin-narration-pause-trim-0.1") {
+    return { family: "editMode", selection: "narration-pause-trim", reason: `長片／談話：保留全部語句，只剪 ${NARRATION_PAUSE_TRIM.minPause} 秒以上的停頓（移除 ${plan.removedDuration.toFixed(1)} 秒）` };
+  }
+  if (plan.engine === "editkin-visual-quality-0.1") {
+    return { family: "editMode", selection: "visual-quality", reason: `沒有可用語音：依畫面穩定度選段，保留 ${plan.keptDuration.toFixed(1)} 秒並配樂` };
+  }
+  return { family: "editMode", selection: "highlight", reason: `Shorts 依語意分數濃縮至約 ${Math.round(plan.targetRatio * 100)}%，剪點只落在語句之間` };
 }
 
 function retainedTransition(transition: { presetId: string; duration: number } | undefined, availableDuration: number, fps: number) {
@@ -161,14 +202,16 @@ function retainedTransition(transition: { presetId: string; duration: number } |
 export function buildNativeAutopilotCommand(input: {
   project: EditProject;
   clip: TimelineClip;
-  transcript: Pick<AutomaticCaptionDesktopResult, "cues">;
+  transcript: Pick<AutomaticCaptionDesktopResult, "cues" | "skippedCaptionBlocks">;
   semantic: SemanticAutoEditPlan;
   creative: NativeAutopilotCreativePlan;
   musicAsset?: MediaAsset;
   musicSelectionId?: string;
   trackingResult?: MotionTrackDesktopResult;
   idFactory?: (kind: string, index: number) => string;
-}): { command: EditorCommand; segmentCount: number; addedCaptions: number; trackingStatus: string } {
+  /** Recognizer cues left out as non-speech (sound descriptions, outro boilerplate, noise tokens). */
+  speechFilter?: { dropped: number; usable: boolean };
+}): { command: EditorCommand; segmentCount: number; addedCaptions: number; trackingStatus: string; captionStyle: NativeCaptionStyleDecision } {
   let idIndex = 0;
   const id = (kind: string) => input.idFactory?.(kind, idIndex++) ?? `autopilot-${kind}-${Date.now()}-${idIndex++}`;
   const base = buildSemanticAutoEditCommand(input.project, input.clip, input.transcript, input.semantic, (kind) => id(kind));
@@ -177,9 +220,18 @@ export function buildNativeAutopilotCommand(input: {
   const commands: EditorCommand[] = [base.command];
   if (policy.ownership === "automatic" && policy.format !== "unknown") {
     commands.push({ type: "set_aesthetic_system", aestheticSystem: resolveAestheticSystem(input.project.editorialProfile, policy.format) });
-    commands.push({ type: "set_caption_style", patch: policy.format === "longform"
-      ? { ...input.project.captionStyle, color: "#FFFFFF", backgroundColor: "#000000B3", outlineColor: "#000000", outlineWidth: Math.max(4, Math.round(16 * input.project.height / 1080)), shadow: 0, translationColor: "#FFFFFF" }
-      : captionStyleFromPreset(input.creative.captionPresetId) });
+  }
+  const captionStyle = automaticCaptionStyle(input.project, policy, input.creative, input.transcript.cues);
+  if (captionStyle.patch) commands.push({ type: "set_caption_style", patch: captionStyle.patch });
+  const extraReceipts: ReceiptDecision[] = [editModeReceipt(input.semantic)];
+  const skippedBlocks = input.transcript.skippedCaptionBlocks ?? [];
+  if (skippedBlocks.length) {
+    extraReceipts.push({ family: "captionParse", selection: `skipped-${skippedBlocks.length}`,
+      reason: `語音辨識輸出有 ${skippedBlocks.length} 段格式不合法已略過（${skippedBlocks.slice(0, 8).map((item) => `${item.window === undefined ? "" : `窗${item.window + 1}・`}第${item.block}段`).join("、")}${skippedBlocks.length > 8 ? "…" : ""}），其餘字幕保留` });
+  }
+  if (input.speechFilter && (input.speechFilter.dropped > 0 || !input.speechFilter.usable)) {
+    extraReceipts.push({ family: "speechFilter", selection: input.speechFilter.usable ? `dropped-${input.speechFilter.dropped}` : "no-usable-speech",
+      reason: `${input.speechFilter.dropped} 段辨識結果是環境聲描述、片尾套話或雜訊，未做成字幕${input.speechFilter.usable ? "" : "；剩下的語音太少，整段改依畫面選段"}` });
   }
   base.segmentIds.forEach((clipId, index) => commands.push({ type: "set_clip_creative", clipId, patch: {
     // Undefined preserves; null deletes. Smart Cut inherits creative state, so
@@ -202,6 +254,6 @@ export function buildNativeAutopilotCommand(input: {
   const trackingStatus = "disabled-no-semantic-evidence";
   graphicDecisions.push("tag:disabled-no-semantic-evidence");
   if (input.musicAsset) commands.push(...buildDuckedMusicCommands(postBase, input.musicAsset, voiceIntervals(input.clip, input.transcript.cues, input.semantic)));
-  commands.push({ type: "add_director_marker", marker: receiptMarker(id("receipt"), input.clip, input.creative, { music: input.musicSelectionId, tracking: trackingStatus, graphics: graphicDecisions.join(",") }) });
-  return { command: { type: "batch", commands }, segmentCount: base.segmentCount, addedCaptions: base.addedCaptions, trackingStatus };
+  commands.push({ type: "add_director_marker", marker: receiptMarker(id("receipt"), input.clip, input.creative, { music: input.musicSelectionId, tracking: trackingStatus, graphics: graphicDecisions.join(","), caption: captionStyle.receipt, extra: extraReceipts }) });
+  return { command: { type: "batch", commands }, segmentCount: base.segmentCount, addedCaptions: base.addedCaptions, trackingStatus, captionStyle: captionStyle.decision };
 }

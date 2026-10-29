@@ -1,9 +1,10 @@
 import { expect, it, vi } from "vitest";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { REPO_TMP, useTempRoots } from "../test/tempRoot.mjs";
 import { createDemoProject } from "../domain/demo";
 import { createClipMask } from "../domain/masks";
 import { DEFAULT_TRANSFORM, type EditProject, type TimelineClip, type Transform2D } from "../domain/types";
@@ -27,6 +28,8 @@ vi.mock("node:child_process", async importOriginal => {
 const app = fileURLToPath(new URL("../../", import.meta.url));
 const ff = resolve(app, "vendor/ffmpeg/win32-x64/ffmpeg.exe"), fp = resolve(app, "vendor/ffmpeg/win32-x64/ffprobe.exe");
 const width = 192, height = 128, fps = 30, totalFrames = 12, startFrame = 3;
+// Evidence folders are removed after each case unless EDITKIN_PARENT_EVIDENCE_ROOT names a folder to keep them in.
+const temp = useTempRoots();
 const sha = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const tx = (patch: Partial<Transform2D> = {}): Transform2D => ({ ...DEFAULT_TRANSFORM, ...patch });
 const clamp = (n: number, low: number, high: number) => Math.max(low, Math.min(high, n));
@@ -61,7 +64,7 @@ const cases: Case[] = [
 function localOracle(spec: Case, time: number): Transform2D {
   const duration = spec.duration ?? .4, local = clamp(time - (spec.start ?? 0), 0, duration);
   const base = tx(spec.base), result = { ...base };
-  for (const key of Object.keys(spec.end ?? {}) as Array<keyof Transform2D>) result[key] = base[key] + (spec.end![key]! - base[key]) * local / duration;
+  for (const key of Object.keys(spec.end ?? {}) as Array<Exclude<keyof Transform2D, "flipX" | "flipY">>) result[key] = base[key] + (spec.end![key]! - base[key]) * local / duration;
   if (spec.expression) { result.x = 40 * local; result.rotation = -12 + 100 * local; result.opacity = .4 + 2 * local; }
   return result;
 }
@@ -114,8 +117,7 @@ it("compiles unchanged keyframe channels as constants without dropping true anim
 });
 
 it.each(cases)("inherits transforms in decoded output against independent frame snapshots: $id", async spec => {
-  const base = process.env.EDITKIN_PARENT_EVIDENCE_ROOT ?? resolve(app, ".rd/tmp"); await mkdir(base, { recursive: true });
-  const root = await mkdtemp(resolve(base, `${spec.id}-`)), processes: object[] = []; productionProcesses.length = 0;
+  const root = await temp.create(`${spec.id}-`, { parent: REPO_TMP, keepEnv: "EDITKIN_PARENT_EVIDENCE_ROOT" }), processes: object[] = []; productionProcesses.length = 0;
   const run = (args: string[], input?: Buffer) => {
     const child = spawnSync(ff, args, { input, windowsHide: true, timeout: 30000, maxBuffer: 16 * 1024 * 1024 });
     processes.push({ executable: ff, args, pid: child.pid, code: child.status, signal: child.signal, stderr: child.stderr?.toString() });
