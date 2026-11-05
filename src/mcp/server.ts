@@ -27,6 +27,7 @@ import { MOTION_CLIP_PRESETS, motionClipPresetCommands } from "../motion/motionC
 import { compactMotionGraphicPresets, findMotionGraphicPreset, motionGraphicPresets } from "../creative/motionGraphicPresets";
 import { motionPresetVariantDescriptor } from "../application/motionPresetVariant";
 import { compactCinematicLanguageIndex, resolveCinematicRecipe } from "../creative/cinematicLanguage";
+import { rankStyleShotCandidates, type ShotSelectionStyleId } from "../creative/shotSelectionStyles";
 import { SHORT_FORM_TEMPLATES } from "../application/shortFormTemplates";
 import { LONG_FORM_TEMPLATES, LONG_FORM_WHITE_CAPTION_STYLE } from "../application/longFormTemplates";
 import { editorialProfile } from "../application/editorialProfiles";
@@ -161,6 +162,20 @@ export function createServerForEnvironment(environment: NodeJS.ProcessEnv): McpS
     inputSchema: z.object({ recipeId: z.string().min(1).max(128), availableCapabilities: z.array(z.string().min(1).max(128)).max(64) }),
   }, async ({ recipeId, availableCapabilities }) => {
     try { return textResult(resolveCinematicRecipe(recipeId, availableCapabilities)); } catch (error) { return errorResult(error); }
+  });
+
+  server.registerTool("rank_style_shots", {
+    description: "唯讀選鏡建議：依已核對的來源時間碼、權利、段落用途與逐鏡觀察，對九種敘事風格的候選排序。輸出永遠待人工審核，不修改專案、時間軸或 v4 plan；未知線索不會被推測。",
+    inputSchema: z.object({
+      styleId: z.enum(["realist", "stylized", "suspense_horror", "action_adventure", "romance", "sci_fi_fantasy", "character_drama", "vlog", "commercial_ad"]),
+      candidates: z.array(z.object({
+        id: z.string().min(1).max(80), sourceRef: z.string().min(1).max(160),
+        rightsApproved: z.boolean(), beatPurposeMatched: z.boolean(),
+        observations: z.array(z.object({ signal: z.string().min(1).max(80), evidenceRef: z.string().max(160) })).max(16),
+      })).max(128),
+    }),
+  }, async ({ styleId, candidates }) => {
+    try { return textResult(rankStyleShotCandidates(styleId as ShotSelectionStyleId, candidates)); } catch (error) { return errorResult(error); }
   });
 
   server.registerTool("apply_creative_preset", {
