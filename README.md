@@ -1,5 +1,7 @@
 # Editkin
 
+> **Notice (2026-11-05):** The source code in this repository stops at 0.15.0-preview.20261029 and stays available under the GPL for anyone who wants to keep developing it. It will not be updated. From Editkin 0.16.0 on, Editkin is free proprietary software that anyone may use, including commercially, forever. Download the installer from [Releases](https://github.com/Hao0321/Editkin/releases).
+
 [繁體中文說明](README.zh-TW.md)
 
 Editkin is a local-first video editor with an editable timeline, a shared EditGraph, and structured commands for AI tools. This repository is the community source edition. It includes neutral default presets and synthetic demo footage. It does not contain the maintainer's private creative packs, music, personal Skills, model weights, signing credentials, or prebuilt media runtimes.
