@@ -1,5 +1,7 @@
 # Editkin
 
+> **公告（2026-11-05）：** 這個 repo 的原始碼停在 0.15.0-preview.20261029，依 GPL 提供給想自己繼續開發的人，之後不再更新。Editkin 0.16.0 起是免費、任何人都可以永久商用的閉源軟體，請到 [Releases](https://github.com/Hao0321/Editkin/releases) 下載安裝檔。
+
 ## 最新開發來源：2026-10-05
 
 目前整合分支為 `feat/latest-agent-engine-20261001`，集中在 [PR #77](https://github.com/Hao0321/Editkin/pull/77)。開始寫新功能前，請先看這個分支與[開發進度／避免重複實作](docs/DEVELOPMENT_STATUS.zh-TW.md)。本次公開目前的原創 Motion、保留媒體的改稿流程、schema 9／10 與工作區修正，讓社群直接延續已有實作。維護者的37項強化交付旅程仍只有3項完整驗收；其他項目已有不同程度的程式，正在驗證。正式桌面下載另走發布驗收。

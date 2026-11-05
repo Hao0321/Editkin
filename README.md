@@ -1,5 +1,7 @@
 # Editkin
 
+> **Notice (2026-11-05):** The source code in this repository stops at 0.15.0-preview.20261029 and stays available under the GPL for anyone who wants to keep developing it. It will not be updated. From Editkin 0.16.0 on, Editkin is free proprietary software that anyone may use, including commercially, forever. Download the installer from [Releases](https://github.com/Hao0321/Editkin/releases).
+
 ## Current development snapshot — 2026-10-05
 
 The active source integration is [PR #77](https://github.com/Hao0321/Editkin/pull/77), branch `feat/latest-agent-engine-20261001`. Feature contributors should inspect that branch and [Development status](docs/DEVELOPMENT_STATUS.md) before starting work. It includes the current original Motion authoring, painted media revision, project schema 9/10 and workspace changes. Maintainer acceptance remains 3 of 37 complete strengthening journeys; source features in the remaining areas are still being verified. Official desktop downloads follow a separate release process.
