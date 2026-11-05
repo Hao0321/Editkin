@@ -5,6 +5,14 @@ import "./styles.css";
 // Complete desktop API setup before evaluating App, while keeping the boot entry small.
 const App = lazy(async () => {
   await import("./desktop/tauriBridge");
+  // Recovered projects can reach Preview before the preset browser or Inspector mounts.
+  // Register every shipped creative extension before React renders any project clip.
+  const [{ initializeStudioCreativeAssets }, { initializeWave2Registry }] = await Promise.all([
+    import("./creative/studioAssets"),
+    import("./creative/wave2Registry"),
+  ]);
+  initializeStudioCreativeAssets();
+  initializeWave2Registry();
   if (typeof window !== "undefined") void window.haoDesktop?.integrationSmokeEnabled?.().then(async enabled => {
     if (enabled === true) (await import("./desktop/integrationUiPerformance")).installIntegrationUiPerformance(true);
   }).catch(() => undefined);

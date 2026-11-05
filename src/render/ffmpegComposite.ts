@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { tmpdir } from "node:os";
+import { availableParallelism, tmpdir } from "node:os";
 import type { EditProject, MediaAsset, OpenExrImageSequence, TimelineClip, TrackMatteMode } from "../domain/types";
 import { acesOutputFilter, primaryExposureFilter, primaryToneFilters } from "../color/primaryGrade";
 import { DEFAULT_COLOR_MANAGEMENT } from "../domain/types";
@@ -136,12 +136,16 @@ function compositorVideoFilters(input: CompositeInput, outputLabel: string, plan
   const effects = effectFilters(clip);
   const pixelMatte = pixelMatteOperation(input.alphaPlan);
   const hasMasks = input.alphaPlan.operations.length > 0;
-  const animated = clip.keyframes.length > 0 || Object.keys(clip.expressions ?? {}).length > 0;
-  const eqNeeded = animated
+  // Transform-only animation must not force two full-frame color filters on
+  // every illustration layer. colorExpression already resolves uniform keys.
+  const eqAnimated = clip.keyframes.some(key => key.color.brightness !== clip.color.brightness
+    || key.color.contrast !== clip.color.contrast || key.color.saturation !== clip.color.saturation);
+  const hueAnimated = clip.keyframes.some(key => key.color.hue !== clip.color.hue);
+  const eqNeeded = eqAnimated
     || clip.color.brightness !== 0 || clip.color.contrast !== 1 || clip.color.saturation !== 1
     || look.brightness !== "0" || look.contrast !== "1" || look.saturation !== "1"
     || transitionBrightnessExpression(clip) !== "0";
-  const hueNeeded = animated || clip.color.hue !== 0 || look.hue !== "0";
+  const hueNeeded = hueAnimated || clip.color.hue !== 0 || look.hue !== "0";
   // Admission follows the composed channels, not the child's local flags.
   // Otherwise a default child loses inherited scale/rotation, while unrelated
   // position/color keyframes force a needless full-frame geometry round trip.
@@ -313,6 +317,27 @@ async function addCompositeInput(
   else args.push("-ss", finite(clip.sourceStart));
   args.push("-t", finite(clip.duration), "-i", assetPath);
   return { clip, alphaPlan, asset, assetPath, inputIndex: nextIndex, probe };
+}
+
+const FILTER_SCRIPT_THRESHOLD = 8_192;
+
+/**
+ * Windows CreateProcess rejects a long command line before FFmpeg can start,
+ * so long graphs go through -filter_complex_script. The script is created
+ * exclusively (0600) inside a fresh mkdtemp directory (0700 on POSIX) rather
+ * than under a predictable name next to the export, and the directory is
+ * removed even when writing or rendering fails.
+ */
+export async function withFilterGraphArgs<T>(filterGraph: string, run: (filterArgs: string[]) => Promise<T>): Promise<T> {
+  if (filterGraph.length <= FILTER_SCRIPT_THRESHOLD) return run(["-filter_complex", filterGraph]);
+  const directory = await mkdtemp(join(tmpdir(), "editkin-filtergraph-"));
+  try {
+    const scriptPath = join(directory, "filtergraph.txt");
+    await writeFile(scriptPath, filterGraph, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    return await run(["-filter_complex_script", scriptPath]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 }
 
 export async function renderComposite(
@@ -511,12 +536,19 @@ export async function renderComposite(
       filters.push(`[voicemix]atrim=duration=${finite(plan.duration)},asetpts=PTS-STARTPTS[aout]`);
     }
   }
-  args.push(
-    "-filter_complex", filters.join(";"), "-map", "[vout]", "-map", "[aout]",
-    ...encoderArgs(encoder), "-pix_fmt", pixelFormat,
-    ...outputColorMetadataArgs(encoder, !preserveHighBitDepthAlpha && project.colorManagement?.mode === "aces2" ? project.colorManagement.outputTransform : "rec709_sdr"),
-    "-c:a", preserveHighBitDepthAlpha ? "pcm_s24le" : "aac", ...(preserveHighBitDepthAlpha ? [] : ["-b:a", "192k"]), "-ar", "48000", "-ac", "2",
-    "-t", finite(plan.duration), "-video_track_timescale", "90000", "-movflags", "+faststart", output,
-  );
-  await runProcess(ffmpegPath, args, timeoutMs);
+  const filterGraph = filters.join(";");
+  await withFilterGraphArgs(filterGraph, async filterArgs => {
+    args.push(
+      // The illustrated MV image graph benefits from a bounded worker pool.
+      // Three full-HD floating video frames need FFmpeg's normal parallelism;
+      // constraining that perspective/alpha graph slowed the delivered render.
+      ...(floatingBackdrop ? [] : ["-filter_complex_threads", String(Math.max(1, Math.min(12, availableParallelism())))]),
+      ...filterArgs, "-map", "[vout]", "-map", "[aout]",
+      ...encoderArgs(encoder), "-pix_fmt", pixelFormat,
+      ...outputColorMetadataArgs(encoder, !preserveHighBitDepthAlpha && project.colorManagement?.mode === "aces2" ? project.colorManagement.outputTransform : "rec709_sdr"),
+      "-c:a", preserveHighBitDepthAlpha ? "pcm_s24le" : "aac", ...(preserveHighBitDepthAlpha ? [] : ["-b:a", "192k"]), "-ar", "48000", "-ac", "2",
+      "-t", finite(plan.duration), "-video_track_timescale", "90000", "-movflags", "+faststart", output,
+    );
+    await runProcess(ffmpegPath, args, timeoutMs);
+  });
 }

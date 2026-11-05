@@ -133,7 +133,11 @@ export function floatingFrameFfmpegFilters(value: FloatingVideoFrame, width: num
     `pad=${outerWidth}:${outerHeight}:${border}:${border}:color=${panel}`,
     `drawbox=x=0:y=0:w=${outerWidth}:h=${Math.max(2, border / 3 | 0)}:color=${accent}:t=fill`,
     `drawbox=x=${outerWidth - Math.max(2, border / 3 | 0)}:y=0:w=${Math.max(2, border / 3 | 0)}:h=${outerHeight}:color=${edge}:t=fill`,
+    // Feather the small panel before padding it to the full project canvas.
+    // The final perspective keeps its soft alpha while avoiding a full-canvas
+    // Gaussian pass for every floating video frame.
     `format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*clip(${cornerRadius + .5}-${cornerDistance},0,1)*clip(${edgeDistance}/${feather},0,1)':interpolation=nearest`,
+    "gblur=sigma=1.2:steps=2:planes=8",
     `pad=${width}:${height}:${x}:${y}:color=black@0`,
     `drawbox=x=${x + outerWidth}:y=${y + 3}:w=2:h=${outerHeight}:color=${shadowColor}@0.34:t=fill`,
     `drawbox=x=${x + outerWidth + 2}:y=${y + 4}:w=3:h=${outerHeight}:color=${shadowColor}@0.17:t=fill`,
@@ -142,7 +146,7 @@ export function floatingFrameFfmpegFilters(value: FloatingVideoFrame, width: num
     `drawbox=x=${x + 4}:y=${y + outerHeight + 2}:w=${outerWidth}:h=3:color=${shadowColor}@0.17:t=fill`,
     `drawbox=x=${x + 5}:y=${y + outerHeight + 5}:w=${outerWidth}:h=${Math.max(2, shadow - 5)}:color=${shadowColor}@0.07:t=fill`,
     `perspective=x0='${corners[0]}':y0='${corners[1]}':x1='${corners[2]}':y1='${corners[3]}':x2='${corners[4]}':y2='${corners[5]}':x3='${corners[6]}':y3='${corners[7]}':sense=source:interpolation=cubic:eval=${value.orbit ? "frame" : "init"}`,
-    "format=rgba,gblur=sigma=1.2:steps=2:planes=8",
+    "format=rgba",
   ];
 }
 

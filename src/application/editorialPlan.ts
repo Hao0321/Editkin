@@ -61,7 +61,7 @@ const graphicEventSchema = z.strictObject({
   presetVariant: motionPresetVariantSchema.optional(),
   range: frameRangeSchema,
   kind: z.enum([
-    "title_card", "context_card", "tracked_value_label", "challenge_ledger", "telemetry_callout",
+    "title_card", "lyric_line", "context_card", "tracked_value_label", "challenge_ledger", "telemetry_callout",
     "subject_sheen", "money_burst", "proof_freeze", "scale_ladder", "map", "diagram",
     "lower_third_name", "lower_third_affiliation",
   ]),

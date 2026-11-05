@@ -231,6 +231,7 @@ export function isCurrentAutopilotPlan(plan: AutopilotPlan): plan is CurrentAuto
 
 const NATIVE_GRAPHIC_KINDS = {
   title_card: new Set(["title"]),
+  lyric_line: new Set(["title"]),
   context_card: new Set(["card"]),
   tracked_value_label: new Set(["tag"]),
   challenge_ledger: new Set(["counter"]),
@@ -359,12 +360,13 @@ export function assertAutopilotProjectTimelineBinding(plan: CurrentAutopilotPlan
   const commands = plan.commands.filter((command): command is Extract<EditorCommand, { type: "add_motion_graphic" }> => command.type === "add_motion_graphic");
   for (const event of plan.editorial.graphics) {
     const lowerThird = event.kind === "lower_third_name" || event.kind === "lower_third_affiliation";
-    if (!lowerThird && !event.presetVariant) continue;
-    const label = lowerThird ? "人物字幕條" : "圖文變體";
+    const lyricLine = event.kind === "lyric_line";
+    if (!lowerThird && !lyricLine && !event.presetVariant) continue;
+    const label = lowerThird ? "人物字幕條" : lyricLine ? "MV 歌詞" : "圖文變體";
     const matches = commands.filter((command) => command.graphic.id === event.id);
     if (matches.length !== 1) throw new Error(`${label} ${event.id} 必須正好綁定一個 add_motion_graphic command`);
     const graphic = matches[0].graphic;
-    if (event.presetVariant) assertMotionGraphicV2Contract(graphic, projectFps);
+    if (event.presetVariant || lyricLine) assertMotionGraphicV2Contract(graphic, projectFps);
     const expectedStart = event.range.startFrame / projectFps;
     const expectedEnd = event.range.endFrame / projectFps;
     const fullDuration = expectedEnd - expectedStart;
