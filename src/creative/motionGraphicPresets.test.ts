@@ -5,6 +5,7 @@ import { createEmptyProject } from "../domain/editGraph";
 import { editorCommandSchema, projectSchema } from "../domain/schema";
 import { createMotionGraphic } from "../motion/composition";
 import { assertMotionGraphicPresetBinding, compactMotionGraphicPresets, findMotionGraphicPreset, motionGraphicPresets } from "./motionGraphicPresets";
+import { MOTION_DESIGN_V3_FIELDS } from "../domain/motionCompositionV3Contract";
 
 // These four original editorial candidates predate the commercial asset pack.
 // Their existence/instantiation does not imply visual or human art approval.
@@ -35,6 +36,38 @@ const EXPECTED_PRESET_IDS = [
   "exp26w2_local_editorial_calm", "exp26w2_surreal_signal_play",
 ] as const;
 
+// Motion Design v3 presets lead the registry; their multi-field copy is covered by motionCompositionV3Contract.test.ts.
+const V3_PRESET_IDS = [
+  "v3_title_reveal",
+  "v3_title_reveal_panel",
+  "v3_title_reveal_paper",
+  "v3_title_impact",
+  "v3_title_impact_signal",
+  "v3_title_editorial",
+  "v3_lower_third_bar",
+  "v3_lower_third_paper",
+  "v3_lower_third_clean",
+  "v3_lower_third_glass",
+  "v3_chapter_number",
+  "v3_chapter_card",
+  "v3_stat_counter",
+  "v3_stat_counter_signal",
+  "v3_progress_bar",
+  "v3_compare_bars",
+  "v3_tag_live",
+  "v3_tag_chip",
+  "v3_location_pin",
+  "v3_location_card",
+  "v3_callout_line",
+  "v3_highlight_sweep",
+  "v3_highlight_signal",
+  "v3_quote",
+  "v3_quote_card",
+  "v3_steps",
+  "v3_cta_subscribe",
+  "v3_cta_cobalt",
+] as const;
+
 function surfaceTrackingProject() {
   // Explicit synthetic manual quad: tests the authoring contract, not a tracker.
   return applyCommand(createDemoProject(), { type: "add_motion_track", track: {
@@ -47,25 +80,30 @@ function surfaceTrackingProject() {
 }
 
 describe("shared motion graphic preset registry", () => {
-  it("exposes exactly the 64 known built-in, lower-third, travel, hologram, Studio and Wave 2 presets", () => {
+  it("exposes exactly the 28 Motion Design v3 and 64 built-in, lower-third, travel, hologram, Studio and Wave 2 presets", () => {
     const presets = motionGraphicPresets();
     expect(EXPECTED_PRESET_IDS).toHaveLength(64);
-    expect(presets).toHaveLength(64);
-    expect(presets.map((item) => item.id).sort()).toEqual([...EXPECTED_PRESET_IDS].sort());
+    expect(V3_PRESET_IDS).toHaveLength(28);
+    expect(presets).toHaveLength(92);
+    expect(presets.map((item) => item.id).sort()).toEqual([...V3_PRESET_IDS, ...EXPECTED_PRESET_IDS].sort());
+    expect(presets.slice(0, V3_PRESET_IDS.length).every((item) => item.renderer === "hao-motion-composition/v3")).toBe(true);
     expect(new Set(presets.map((item) => item.id)).size).toBe(presets.length);
     expect(presets.every((item) => item.seed.presetId === item.id && item.license && item.provenance)).toBe(true);
   });
 
   it("returns a compact low-token index and expands one exact editable seed on demand", () => {
     const compact = compactMotionGraphicPresets();
-    expect(compact).toHaveLength(64);
-    expect(new Set(compact.map((item) => item.id)).size).toBe(64);
+    expect(compact).toHaveLength(92);
+    expect(new Set(compact.map((item) => item.id)).size).toBe(92);
     expect(compact.every((item) => !Object.hasOwn(item, "seed"))).toBe(true);
     expect(compact).toEqual(motionGraphicPresets().map((preset) => ({
       id: preset.id, name: preset.name, family: preset.family, license: preset.license,
       renderer: preset.renderer, kind: preset.seed.kind ?? "card", animation: preset.seed.animation ?? "fade",
-      visualStyle: preset.seed.visualStyle ?? "solid_panel", ...(preset.routing ? { routing: preset.routing } : {}),
+      visualStyle: preset.seed.visualStyle ?? "solid_panel",
+      ...(preset.seed.designV3 ? { template: preset.seed.designV3.template, textFields: MOTION_DESIGN_V3_FIELDS[preset.seed.designV3.template] } : {}),
+      ...(preset.routing ? { routing: preset.routing } : {}),
     })));
+    expect(findMotionGraphicPreset("v3_compare_bars")).toMatchObject({ renderer: "hao-motion-composition/v3", seed: { schema: "hao.motion-composition/v3", designV3: { template: "compare_split" } } });
     for (const item of compact) expect(findMotionGraphicPreset(item.id)).toBe(motionGraphicPresets().find((preset) => preset.id === item.id));
     const resolved = findMotionGraphicPreset("studio_marker_burst");
     expect(resolved.seed).toMatchObject({ presetId: "studio_marker_burst", kind: "title", animation: "pop" });

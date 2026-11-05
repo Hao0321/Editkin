@@ -2,7 +2,9 @@ import type { EditProject, NormalizedRect } from "../domain/types";
 import { cssFontFamily, resolveBundledFontFace } from "../typography/fontFaces";
 import { motionGraphicFrame } from "../motion/composition";
 import { motionGraphicV2FrameReceipt, motionGraphicV2LayoutReceipt } from "../motion/compositionV2";
+import { motionGraphicV3Frame, motionGraphicV3Layout } from "../motion/compositionV3";
 import { motionPanelPaths } from "../motion/panelGeometry";
+import MotionV3Graphic from "./MotionV3Graphic";
 import "./motionStudio.css";
 
 interface MotionOverlayProps {
@@ -15,6 +17,15 @@ interface MotionOverlayProps {
 export default function MotionOverlay({ project, playhead, trackingSelectionEnabled, trackingSelection }: MotionOverlayProps) {
   return <>
     {project.motionGraphics.map((graphic) => {
+      if (graphic.schema === "hao.motion-composition/v3") {
+        try {
+          const layout = motionGraphicV3Layout(project, graphic);
+          const frame = motionGraphicV3Frame(project, graphic, Math.round(playhead * project.fps), layout);
+          return frame.visible ? <MotionV3Graphic key={graphic.id} project={project} graphic={graphic} template={layout.template} frame={frame} /> : null;
+        } catch (error) {
+          return <div key={graphic.id} className="motion-v2-blocked" data-testid="motion-v3-blocked" title={error instanceof Error ? error.message : String(error)}>v3 版型受阻</div>;
+        }
+      }
       const face = resolveBundledFontFace(graphic.fontFamily ?? "Noto Sans TC", graphic.fontWeight ?? 700);
       if (graphic.schema === "hao.motion-composition/v2") {
         try {

@@ -7,7 +7,7 @@ export function projectFromComposition(
   compositions: EditComposition[] = root.compositions,
 ): EditProject {
   return {
-    schemaVersion: 8,
+    schemaVersion: 9,
     revision: root.revision,
     id: `${root.id}:composition:${composition.id}`,
     name: composition.name,

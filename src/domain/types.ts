@@ -66,7 +66,21 @@ export type MotionGraphicVisualStyle =
   | "telemetry_beam_amber"
   | "neon_extrude_white"
   | "quantum_label_magenta";
-export type MotionCompositionSchema = "hao.motion-composition/v1" | "hao.motion-composition/v2";
+export type MotionCompositionSchema = "hao.motion-composition/v1" | "hao.motion-composition/v2" | "hao.motion-composition/v3";
+/** Motion Design v3 layouts. Copy stays in `text`, one field per line. */
+export type MotionDesignV3TemplateId =
+  | "title_reveal" | "title_impact" | "title_editorial"
+  | "lower_third_bar" | "lower_third_glass"
+  | "chapter_number"
+  | "stat_counter" | "progress_bar" | "compare_split"
+  | "tag_pill" | "location_pin" | "callout_line"
+  | "highlight_sweep" | "quote_card" | "steps_list" | "cta_subscribe";
+
+/** fontSize and letterSpacing of a v3 graphic are design pixels at a 1080-pixel
+ * short side; the template scales them with the canvas. */
+export interface MotionDesignV3 {
+  template: MotionDesignV3TemplateId;
+}
 export type MotionGraphicV2SequenceUnit = "all" | "word" | "character";
 export type MotionGraphicV2SequenceOrder = "forward" | "reverse" | "center_out";
 
@@ -139,6 +153,8 @@ export interface MotionGraphic {
   offsetY: number;
   motionV2?: MotionGraphicV2Motion;
   layoutV2?: MotionGraphicV2Layout;
+  /** Present only on hao.motion-composition/v3 graphics. */
+  designV3?: MotionDesignV3;
   templateOwner?: TemplateElementOwner;
 }
 
@@ -215,7 +231,7 @@ export interface EditComposition {
 }
 
 export interface EditProject {
-  schemaVersion: 8;
+  schemaVersion: 9;
   revision: number;
   id: string;
   name: string;

@@ -36,7 +36,7 @@ export function createEmptyProject(
 ): EditProject {
   const now = new Date().toISOString();
   return {
-    schemaVersion: 8,
+    schemaVersion: 9,
     revision: 0,
     id: options.id ?? "project-untitled",
     name,
@@ -64,7 +64,7 @@ export function createEmptyProject(
 export function migrateProject(input: unknown): EditProject {
   if (!input || typeof input !== "object") throw new EditGraphError("專案內容不是有效物件");
   const raw = input as Record<string, unknown>;
-  if (raw.schemaVersion !== 1 && raw.schemaVersion !== 2 && raw.schemaVersion !== 3 && raw.schemaVersion !== 4 && raw.schemaVersion !== 5 && raw.schemaVersion !== 6 && raw.schemaVersion !== 7 && raw.schemaVersion !== 8) {
+  if (raw.schemaVersion !== 1 && raw.schemaVersion !== 2 && raw.schemaVersion !== 3 && raw.schemaVersion !== 4 && raw.schemaVersion !== 5 && raw.schemaVersion !== 6 && raw.schemaVersion !== 7 && raw.schemaVersion !== 8 && raw.schemaVersion !== 9) {
     throw new EditGraphError(`不支援的 EditGraph schema：${String(raw.schemaVersion)}`);
   }
   const source = structuredClone(input) as Record<string, unknown>;
@@ -186,7 +186,8 @@ export function migrateProject(input: unknown): EditProject {
       }
     }
   }
-  source.schemaVersion = 8;
+  // 8 -> 9 adds the optional Motion Design v3 graphic schema; existing data is unchanged.
+  source.schemaVersion = 9;
   return source as unknown as EditProject;
 }
 

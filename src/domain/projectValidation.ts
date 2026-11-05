@@ -7,6 +7,7 @@ import { EditGraphError } from "./editGraphError";
 import { validateParticleSimulationProductContract, validateScene25dProductContract } from "./sceneValidation";
 import { projectFromComposition } from "./projectComposition";
 import { assertMotionGraphicV2Contract } from "./motionCompositionV2Contract";
+import { assertMotionGraphicV3Contract } from "./motionCompositionV3Contract";
 import {
   PRODUCT_AUTO_ROTO_ENGINE,
   PRODUCT_AUTO_ROTO_MAX_ALPHA_BYTES,
@@ -270,7 +271,7 @@ export function validateMediaAsset(project: Pick<EditProject, "fps">, asset: Med
 }
 
 export function validateProject(project: EditProject): EditProject {
-  if (project.schemaVersion !== 8) throw new EditGraphError("不支援的 EditGraph schema");
+  if (project.schemaVersion !== 9) throw new EditGraphError("不支援的 EditGraph schema");
   if (!Number.isInteger(project.revision) || project.revision < 0) throw new EditGraphError("專案 revision 不合法");
   if (!project.id.trim() || !project.name.trim()) throw new EditGraphError("專案 id 與名稱不可空白");
   if (project.width <= 0 || project.height <= 0 || project.fps <= 0 || project.fps > 240) {
@@ -519,7 +520,7 @@ export function validateProject(project: EditProject): EditProject {
   const graphicIds = new Set<string>();
   const cssColor = /^#[0-9a-f]{6}(?:[0-9a-f]{2})?$/i;
   for (const graphic of project.motionGraphics) {
-    if (!["hao.motion-composition/v1", "hao.motion-composition/v2"].includes(graphic.schema) || !graphic.id.trim() || graphicIds.has(graphic.id) || !graphic.name.trim() || !graphic.text.trim()) throw new EditGraphError(`動態圖卡 ${graphic.id} 的識別或文字不合法`);
+    if (!["hao.motion-composition/v1", "hao.motion-composition/v2", "hao.motion-composition/v3"].includes(graphic.schema) || !graphic.id.trim() || graphicIds.has(graphic.id) || !graphic.name.trim() || !graphic.text.trim()) throw new EditGraphError(`動態圖卡 ${graphic.id} 的識別或文字不合法`);
     if (![graphic.timelineStart, graphic.duration, graphic.x, graphic.y, graphic.width, graphic.fontSize, graphic.offsetX, graphic.offsetY, graphic.fontWeight ?? 700, graphic.letterSpacing ?? 0, graphic.outlineWidth ?? 0, graphic.shadowDepth ?? 0, graphic.cornerRadius ?? 0].every(Number.isFinite)
       || graphic.timelineStart < 0 || graphic.duration <= 0 || graphic.x < 0 || graphic.x > 1 || graphic.y < 0 || graphic.y > 1 || graphic.width <= 0 || graphic.width > 1 || graphic.fontSize <= 0
       || (graphic.fontFamily !== undefined && !graphic.fontFamily.trim()) || (graphic.fontWeight ?? 700) < 100 || (graphic.fontWeight ?? 700) > 1000 || (graphic.outlineWidth ?? 0) < 0 || (graphic.outlineWidth ?? 0) > 30 || (graphic.shadowDepth ?? 0) < 0 || (graphic.shadowDepth ?? 0) > 40
@@ -530,6 +531,9 @@ export function validateProject(project: EditProject): EditProject {
       || (graphic.trackingMode === "surface" && (!graphic.trackId || project.motionTracks.find((track) => track.id === graphic.trackId)?.points.some((point) => point.status !== "lost" && !point.quad)))) throw new EditGraphError(`動態圖卡 ${graphic.id} 的版面或追蹤參照不合法`);
     try { assertMotionGraphicV2Contract(graphic, project.fps); } catch (error) {
       throw new EditGraphError(`動態圖卡 ${graphic.id} 的 v2 合成契約不合法：${error instanceof Error ? error.message : String(error)}`);
+    }
+    try { assertMotionGraphicV3Contract(graphic); } catch (error) {
+      throw new EditGraphError(`動態圖卡 ${graphic.id} 的 v3 版型契約不合法：${error instanceof Error ? error.message : String(error)}`);
     }
     graphicIds.add(graphic.id);
   }
