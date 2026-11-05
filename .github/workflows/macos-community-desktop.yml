@@ -1,0 +1,278 @@
+name: macOS community desktop
+
+# Unsigned (ad-hoc) Apple Silicon build of the community desktop app for the
+# maintainer's own use. Not an official release; see docs/BUILDING.md.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/macos-community-desktop.yml
+      - scripts/stage-macos-community-runtime.mjs
+      - scripts/macos-community-app-gate.ts
+      - scripts/lib/macos-community-runtime.mjs
+      - src-tauri/tauri.macos.community.conf.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: Community app (macOS arm64, ad-hoc signed)
+    # Manual runs: only from main and only by the maintainer. Pull requests: only
+    # when they change this pipeline and come from this repository, not a fork.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.actor_id == '126182090')
+      || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: macos-15
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      HOMEBREW_NO_ANALYTICS: "1"
+      HOMEBREW_NO_ENV_HINTS: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: "1"
+      EVIDENCE: ${{ github.workspace }}/.rd/macos-community
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.23.2
+          cache: npm
+
+      - name: Show the build host
+        run: |
+          set -euxo pipefail
+          mkdir -p "$EVIDENCE"
+          sw_vers
+          uname -a
+          sysctl -n machdep.cpu.brand_string hw.ncpu hw.memsize
+          xcodebuild -version
+          clang --version
+          cmake --version
+          python3 --version
+          node --version
+          npm --version
+          brew --version
+          df -h "$GITHUB_WORKSPACE"
+
+      - name: Install pinned Rust
+        run: |
+          set -euxo pipefail
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup default 1.98.1
+          rustc --version
+          cargo --version
+
+      - name: Install FFmpeg build dependencies (Homebrew bottles)
+        run: |
+          set -euxo pipefail
+          brew install pkgconf x264 x265 zimg libass dav1d
+          brew list --versions pkgconf x264 x265 zimg libass dav1d
+          pkg-config --modversion x264 x265 zimg libass dav1d
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build the web UI
+        run: npm run build
+
+      - name: Build the service, MCP and Remote entrypoints
+        run: |
+          set -euxo pipefail
+          node scripts/build-desktop.mjs --community --with-mcp-and-remote
+          ls -la desktop-dist
+          shasum -a 256 desktop-dist/*
+
+      # The GPU compositor is not built: it embeds generated ACES 2 LUTs that are
+      # not in this repository (see COMMUNITY_OMITTED_RUNTIME_FILES).
+      - name: Build hao-core
+        run: |
+          set -euxo pipefail
+          cargo build --release --locked --manifest-path native/hao-core/Cargo.toml
+          file native/hao-core/target/release/hao-core
+          otool -L native/hao-core/target/release/hao-core
+          shasum -a 256 native/hao-core/target/release/hao-core
+          df -h "$GITHUB_WORKSPACE"
+
+      - name: Stage the runtime (FFmpeg, Node.js, whisper-cli, font faces)
+        run: |
+          set -euxo pipefail
+          node scripts/stage-macos-community-runtime.mjs | tee "$EVIDENCE/stage-summary.json"
+          cp .platform-runtime/manifest.json "$EVIDENCE/PLATFORM-MANIFEST.json"
+          cp .platform-runtime/FFMPEG-PROVENANCE.json "$EVIDENCE/FFMPEG-PROVENANCE.json"
+          find .platform-runtime -type f -not -path '.platform-runtime/font-pack/*' -print0 | sort -z | xargs -0 shasum -a 256
+          for binary in .platform-runtime/ffmpeg .platform-runtime/ffprobe .platform-runtime/lib/*.dylib; do
+            file "$binary"
+            otool -L "$binary"
+          done
+          .platform-runtime/ffmpeg -hide_banner -version
+
+      - name: Declare the minimum macOS the bundled binaries need
+        run: |
+          set -euxo pipefail
+          # shellcheck disable=SC2016 # the single-quoted program is JavaScript, not shell
+          node --input-type=module -e '
+            import { readFileSync, writeFileSync } from "node:fs";
+            import { effectiveMinimumMacOS } from "./scripts/lib/macos-community-runtime.mjs";
+            const declared = JSON.parse(readFileSync("src-tauri/tauri.macos.community.conf.json", "utf8")).bundle.macOS.minimumSystemVersion;
+            const measured = JSON.parse(readFileSync(".platform-runtime/manifest.json", "utf8")).community.minimumMacOS;
+            const minimum = effectiveMinimumMacOS(declared, measured);
+            writeFileSync(process.argv[1], JSON.stringify({ bundle: { macOS: { minimumSystemVersion: minimum } } }));
+            console.log(`declared ${declared}; bundled binaries need ${measured}; LSMinimumSystemVersion ${minimum}`);
+          ' "$RUNNER_TEMP/editkin-minimum-macos.conf.json"
+          cat "$RUNNER_TEMP/editkin-minimum-macos.conf.json"
+
+      - name: Build the app and DMG (ad-hoc signed)
+        run: |
+          set -euxo pipefail
+          npx tauri build --ci --ignore-version-mismatches --features community-desktop --bundles app,dmg \
+            --config src-tauri/tauri.macos.community.conf.json \
+            --config "$RUNNER_TEMP/editkin-minimum-macos.conf.json" \
+            -- --locked
+          ls -la src-tauri/target/release/bundle/macos src-tauri/target/release/bundle/dmg
+
+      - name: Inspect the app bundle
+        id: bundle
+        run: |
+          set -euxo pipefail
+          APP="$GITHUB_WORKSPACE/src-tauri/target/release/bundle/macos/Editkin.app"
+          DMG="$(ls "$GITHUB_WORKSPACE"/src-tauri/target/release/bundle/dmg/*.dmg)"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dvvv "$APP" 2>&1
+          plutil -p "$APP/Contents/Info.plist"
+          (cd "$APP/Contents" && find . -not -path './Resources/font-packs/*/render/*' -not -path './Resources/runtime/licenses/*' | sort)
+          du -sh "$APP" "$DMG"
+          df -h "$GITHUB_WORKSPACE"
+          spctl --assess --type execute --verbose=4 "$APP" || echo "spctl rejected the app: expected for an ad-hoc signature without notarization"
+          echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
+
+      - name: Copy the app out of the DMG
+        env:
+          DMG: ${{ steps.bundle.outputs.dmg }}
+        run: |
+          set -euxo pipefail
+          mkdir -p "$RUNNER_TEMP/dmg" "$RUNNER_TEMP/clean"
+          hdiutil attach -nobrowse -readonly -mountpoint "$RUNNER_TEMP/dmg" "$DMG"
+          ls -la "$RUNNER_TEMP/dmg"
+          ditto "$RUNNER_TEMP/dmg/Editkin.app" "$RUNNER_TEMP/clean/Editkin.app"
+          hdiutil detach "$RUNNER_TEMP/dmg"
+          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP/clean/Editkin.app"
+
+      - name: List the delivered runtime binaries
+        run: |
+          set -euxo pipefail
+          RUNTIME="$RUNNER_TEMP/clean/Editkin.app/Contents/Resources/runtime"
+          ls -la "$RUNTIME" "$RUNTIME/lib"
+          for binary in "$RUNTIME/node" "$RUNTIME/ffmpeg" "$RUNTIME/ffprobe" "$RUNTIME/hao-core" "$RUNTIME/whisper-cli" "$RUNTIME"/lib/*.dylib; do
+            echo "== $binary"
+            file "$binary"
+            lipo -archs "$binary"
+            otool -L "$binary"
+            otool -l "$binary" | grep -A2 LC_RPATH || true
+            codesign -dv "$binary" 2>&1 | grep -E '^(Identifier|Signature|TeamIdentifier|Authority)' || true
+          done
+          "$RUNTIME/ffmpeg" -hide_banner -version
+          "$RUNTIME/ffprobe" -hide_banner -version
+          "$RUNTIME/node" --version
+
+      - name: Verify the delivered app (runtime closure, FFmpeg, import, preview, save, export)
+        run: |
+          set -euxo pipefail
+          npx tsx scripts/macos-community-app-gate.ts "$RUNNER_TEMP/clean/Editkin.app" "$EVIDENCE/app-gate.json" --source-root "$GITHUB_WORKSPACE"
+
+      - name: Run the source journey with the bundled FFmpeg
+        run: |
+          set -euxo pipefail
+          export HAO_FFMPEG_PATH="$RUNNER_TEMP/clean/Editkin.app/Contents/Resources/runtime/ffmpeg"
+          export HAO_FFPROBE_PATH="$RUNNER_TEMP/clean/Editkin.app/Contents/Resources/runtime/ffprobe"
+          npm run test:journey
+
+      - name: Launch the app
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/clean/Editkin.app"
+          BIN="$APP/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
+          LOGS="$EVIDENCE/launch"
+          mkdir -p "$LOGS"
+          echo "::group::EDITKIN_SMOKE=1: the web UI must load and call smoke_ready over IPC, then the app exits 0"
+          EDITKIN_SMOKE=1 "$BIN" > "$LOGS/smoke.stdout.log" 2> "$LOGS/smoke.stderr.log" &
+          PID=$!
+          STATUS=timeout
+          for _ in $(seq 1 120); do
+            if ! kill -0 "$PID" 2> /dev/null; then
+              set +e
+              wait "$PID"
+              STATUS=$?
+              set -e
+              break
+            fi
+            sleep 1
+          done
+          if [ "$STATUS" = timeout ]; then kill -9 "$PID" 2> /dev/null || true; fi
+          echo "smoke exit status: $STATUS"
+          cat "$LOGS/smoke.stdout.log" "$LOGS/smoke.stderr.log"
+          echo "::endgroup::"
+          echo "::group::Normal launch: must stay alive for 30 s"
+          "$BIN" > "$LOGS/run.stdout.log" 2> "$LOGS/run.stderr.log" &
+          RUN_PID=$!
+          sleep 30
+          ALIVE=0
+          if kill -0 "$RUN_PID" 2> /dev/null; then ALIVE=1; fi
+          PIDS="$(pgrep -f "$APP" | paste -sd , - || true)"
+          if [ -n "$PIDS" ]; then ps -o pid,ppid,etime,command -p "$PIDS" | tee "$LOGS/processes.txt"; fi
+          kill "$RUN_PID" 2> /dev/null || true
+          sleep 3
+          kill -9 "$RUN_PID" 2> /dev/null || true
+          pkill -9 -f "$APP/Contents/Resources/runtime/" || true
+          echo "alive after 30 s: $ALIVE"
+          cat "$LOGS/run.stdout.log" "$LOGS/run.stderr.log"
+          echo "::endgroup::"
+          if [ "$STATUS" != 0 ] || [ "$ALIVE" != 1 ]; then
+            echo "::error::App launch check failed (smoke exit status: $STATUS, alive after 30 s: $ALIVE)"
+            exit 1
+          fi
+
+      - name: Package the artifacts
+        env:
+          DMG: ${{ steps.bundle.outputs.dmg }}
+        run: |
+          set -euxo pipefail
+          OUT="$RUNNER_TEMP/artifacts"
+          mkdir -p "$OUT"
+          cp "$DMG" "$OUT/Editkin-community-macos-arm64.dmg"
+          ditto -c -k --keepParent "$RUNNER_TEMP/clean/Editkin.app" "$OUT/Editkin-community-macos-arm64.app.zip"
+          cd "$OUT"
+          shasum -a 256 Editkin-community-macos-arm64.dmg Editkin-community-macos-arm64.app.zip > SHA256SUMS
+          cat SHA256SUMS
+          ls -la
+
+      - name: Upload the community app
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Editkin-community-macos-arm64
+          path: |
+            ${{ runner.temp }}/artifacts/Editkin-community-macos-arm64.dmg
+            ${{ runner.temp }}/artifacts/Editkin-community-macos-arm64.app.zip
+            ${{ runner.temp }}/artifacts/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload the build evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-community-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .rd/macos-community
+            .rd/public-source-journey-*/receipt.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14

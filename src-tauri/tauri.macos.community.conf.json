@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "beforeBuildCommand": ""
+  },
+  "bundle": {
+    "targets": ["app", "dmg"],
+    "icon": ["icons/icon.icns", "icons/icon.png"],
+    "resources": {
+      "../public/fonts": null,
+      "../.platform-runtime/editkin-gpu-compositor": null,
+      "../.platform-runtime/font-pack": "font-packs/editkin-open-fonts",
+      "../desktop-dist/service.mjs": "runtime/service.mjs",
+      "../desktop-dist/mcp.mjs": "runtime/mcp.mjs",
+      "../desktop-dist/mcp.mjs.material-color-identity.json": "runtime/mcp.mjs.material-color-identity.json",
+      "../desktop-dist/remote.mjs": "runtime/remote.mjs",
+      "../scripts/editkin-product-mcp-launcher.mjs": "agent-runtime-v3/launcher.mjs",
+      "../scripts/lib/regular-file.mjs": "agent-runtime-v3/lib/regular-file.mjs",
+      "../src/shared/agentSetupContract.json": "agent-runtime-v3/agent-setup-contract.json",
+      "../.platform-runtime/lib": "runtime/lib",
+      "../.platform-runtime/licenses": "runtime/licenses",
+      "../.platform-runtime/FFMPEG-PROVENANCE.json": "runtime/FFMPEG-PROVENANCE.json",
+      "../.platform-runtime/COMMUNITY-BUILD-NOTICE.txt": "runtime/COMMUNITY-BUILD-NOTICE.txt"
+    },
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "signingIdentity": "-"
+    }
+  }
+}

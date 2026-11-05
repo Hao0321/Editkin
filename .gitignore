@@ -8,6 +8,8 @@
 /reports/
 /.rd/
 /vendor/
+/.platform-runtime/
+/.platform-runtime.stage-*/
 /native/**/target/
 /native/bin/
 /src-tauri/target/
