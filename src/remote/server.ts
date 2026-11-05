@@ -27,6 +27,8 @@ const remoteQueuePath = queuePath;
 const remoteSnapshotPath = snapshotPath;
 const remoteDevicesPath = devicesPath;
 const remoteTrustedDevicesPath = trustedDevicesPath;
+// Written only by the desktop, next to the trusted-device file, when it revokes a device.
+const remoteRevokedDevicesPath = join(remoteTrustedDevicesPath, "..", "revoked-devices.json");
 const remoteHealthProbeId = healthProbeId;
 const pairingExpiresAt = Date.now() + 10 * 60_000;
 const pairingWindow = new PairingWindow(pairingExpiresAt);
@@ -172,11 +174,39 @@ function validTrustedDevice(value: unknown): value is TrustedDevice {
     && typeof item.lastSeen === "string" && Number.isFinite(Date.parse(item.lastSeen));
 }
 
-async function readTrustedDevices(): Promise<TrustedDeviceStore> {
+// The desktop lists the credential hash of every device it revokes and the
+// server never writes that list, so a revoked credential stays refused even if
+// a trusted-device write that overlapped the revoke put the device back.
+async function readRevokedCredentialHashes(): Promise<Set<string>> {
+  let parsed: { credentialHashes?: unknown };
+  try {
+    parsed = JSON.parse(await readFile(remoteRevokedDevicesPath, "utf8")) as { credentialHashes?: unknown };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return new Set();
+    throw error;
+  }
+  if (!Array.isArray(parsed.credentialHashes)) throw new Error("revoked device list is malformed");
+  return new Set(parsed.credentialHashes.filter((hash): hash is string => typeof hash === "string"));
+}
+
+// Throws when the revocation list cannot be read, so callers fail closed.
+async function loadTrustedDevices(): Promise<TrustedDeviceStore> {
+  let devices: TrustedDevice[] = [];
   try {
     const parsed = JSON.parse(await readFile(remoteTrustedDevicesPath, "utf8")) as Partial<TrustedDeviceStore>;
-    const devices = Array.isArray(parsed.devices) ? parsed.devices.filter(validTrustedDevice) : [];
-    return { schemaVersion: 1, devices: devices.slice(0, 20) };
+    devices = Array.isArray(parsed.devices) ? parsed.devices.filter(validTrustedDevice) : [];
+  } catch {
+    // A missing or unreadable store trusts no device.
+  }
+  // Read after the store: the desktop lists a revocation before it rewrites the
+  // store, so a store read that overlapped a revoke is still checked against it.
+  const revoked = await readRevokedCredentialHashes();
+  return { schemaVersion: 1, devices: devices.filter((device) => !revoked.has(device.credentialHash)).slice(0, 20) };
+}
+
+async function readTrustedDevices(): Promise<TrustedDeviceStore> {
+  try {
+    return await loadTrustedDevices();
   } catch {
     return { schemaVersion: 1, devices: [] };
   }
@@ -192,6 +222,49 @@ async function writeTrustedDevices(store: TrustedDeviceStore): Promise<void> {
     await rm(temporary, { force: true }).catch(() => undefined);
     throw error;
   }
+}
+
+let trustedDeviceUpdates: Promise<unknown> = Promise.resolve();
+
+// Changes the trusted-device file as it is on disk now, one change at a time.
+// The desktop revokes a device by rewriting this file, so a write based on an
+// earlier read would restore the revoked device. `change` returns the devices
+// to store, or undefined to leave the file untouched.
+function updateTrustedDevices(change: (devices: TrustedDevice[]) => TrustedDevice[] | undefined): Promise<void> {
+  const update = trustedDeviceUpdates.then(async () => {
+    const devices = change((await loadTrustedDevices()).devices);
+    if (devices) await writeTrustedDevices({ schemaVersion: 1, devices });
+  });
+  trustedDeviceUpdates = update.catch(() => undefined);
+  return update;
+}
+
+// Replaces any earlier pairing of the same device id; false at the device limit.
+async function addTrustedDevice(device: TrustedDevice): Promise<boolean> {
+  let added = false;
+  await updateTrustedDevices((devices) => {
+    const others = devices.filter((item) => item.id !== device.id);
+    if (others.length >= 20) return undefined;
+    added = true;
+    return [...others, device];
+  });
+  return added;
+}
+
+function recordTrustedDeviceSeen(device: TrustedDevice, now: number): Promise<void> {
+  return updateTrustedDevices((devices) => {
+    const current = devices.find((item) => item.id === device.id && item.credentialHash === device.credentialHash);
+    if (!current || Date.parse(current.lastSeen) >= now) return undefined;
+    current.lastSeen = new Date(now).toISOString();
+    return devices;
+  });
+}
+
+function removeTrustedDevice(device: TrustedDevice): Promise<void> {
+  return updateTrustedDevices((devices) => {
+    const remaining = devices.filter((item) => item.credentialHash !== device.credentialHash);
+    return remaining.length < devices.length ? remaining : undefined;
+  });
 }
 
 async function writeDeviceStatus() {
@@ -241,16 +314,12 @@ async function pairRelayDevice(input: { token?: unknown; deviceId?: unknown; nam
     const deviceId = typeof input.deviceId === "string" ? input.deviceId.trim().slice(0, 100) : "";
     const name = typeof input.name === "string" ? input.name.trim().slice(0, 60) : "手機";
     if (!deviceId) throw new Error("DEVICE_ID_REQUIRED");
-    const trusted = await readTrustedDevices();
     for (const [hash, session] of sessions) if (session.deviceId === deviceId) sessions.delete(hash);
-    trusted.devices = trusted.devices.filter((device) => device.id !== deviceId);
-    if (trusted.devices.length >= 20) throw new Error("DEVICE_LIMIT");
     const credential = randomBytes(32).toString("base64url");
     const hash = credentialHash(credential);
     const now = Date.now();
     const pairedAt = new Date(now).toISOString();
-    trusted.devices.push({ id: deviceId, name: name || "手機", credentialHash: hash, pairedAt, lastSeen: pairedAt });
-    await writeTrustedDevices(trusted);
+    if (!await addTrustedDevice({ id: deviceId, name: name || "手機", credentialHash: hash, pairedAt, lastSeen: pairedAt })) throw new Error("DEVICE_LIMIT");
     paired = true;
     sessions.set(hash, { credentialHash: hash, deviceId, name: name || "手機", pairedAt: now, lastSeen: now });
     await writeDeviceStatus();
@@ -273,17 +342,13 @@ async function authenticateRelayDevice(credential: unknown, deviceId: unknown, c
     }
     const now = Date.now();
     if (deviceIdleExpired(device.lastSeen, now)) {
-      trusted.devices = trusted.devices.filter((item) => item !== device);
       relaySessions.delete(clientId);
       sessions.delete(remembered.credentialHash);
-      await writeTrustedDevices(trusted);
+      await removeTrustedDevice(device);
       return undefined;
     }
     remembered.lastSeen = now;
-    if (now - Date.parse(device.lastSeen) >= 60_000) {
-      device.lastSeen = new Date(now).toISOString();
-      await writeTrustedDevices(trusted);
-    }
+    if (now - Date.parse(device.lastSeen) >= 60_000) await recordTrustedDeviceSeen(device, now);
     sessions.set(remembered.credentialHash, remembered);
     await writeDeviceStatus();
     return remembered;
@@ -294,18 +359,14 @@ async function authenticateRelayDevice(credential: unknown, deviceId: unknown, c
   if (!device) return undefined;
   const now = Date.now();
   if (deviceIdleExpired(device.lastSeen, now)) {
-    trusted.devices = trusted.devices.filter((item) => item !== device);
     sessions.delete(hash);
-    await writeTrustedDevices(trusted);
+    await removeTrustedDevice(device);
     return undefined;
   }
   const session = { credentialHash: hash, deviceId: device.id, name: device.name, pairedAt: Date.parse(device.pairedAt), lastSeen: now };
   sessions.set(hash, session);
   relaySessions.set(clientId, session);
-  if (now - Date.parse(device.lastSeen) >= 60_000) {
-    device.lastSeen = new Date(now).toISOString();
-    await writeTrustedDevices(trusted);
-  }
+  if (now - Date.parse(device.lastSeen) >= 60_000) await recordTrustedDeviceSeen(device, now);
   await writeDeviceStatus();
   return session;
 }
@@ -400,9 +461,8 @@ async function authenticate(request: IncomingMessage, url: URL): Promise<boolean
   if (!device) return false;
   const now = Date.now();
   if (deviceIdleExpired(device.lastSeen, now)) {
-    trusted.devices = trusted.devices.filter((item) => item !== device);
     sessions.delete(hash);
-    await writeTrustedDevices(trusted);
+    await removeTrustedDevice(device);
     return false;
   }
   const existing = sessions.get(hash);
@@ -413,10 +473,7 @@ async function authenticate(request: IncomingMessage, url: URL): Promise<boolean
     pairedAt: Date.parse(device.pairedAt),
     lastSeen: now,
   });
-  if (!existing || now - Date.parse(device.lastSeen) >= 60_000) {
-    device.lastSeen = new Date(now).toISOString();
-    await writeTrustedDevices(trusted);
-  }
+  if (!existing || now - Date.parse(device.lastSeen) >= 60_000) await recordTrustedDeviceSeen(device, now);
   await writeDeviceStatus();
   return true;
 }
@@ -501,15 +558,13 @@ const server = createServer(async (request, response) => {
         const deviceId = typeof input.deviceId === "string" ? input.deviceId.trim().slice(0, 100) : "";
         const name = typeof input.name === "string" ? input.name.trim().slice(0, 60) : "手機";
         if (!deviceId) return send(response, 400, JSON.stringify({ error: "缺少裝置識別碼" }));
-        const trusted = await readTrustedDevices();
         for (const [hash, session] of sessions) if (session.deviceId === deviceId) sessions.delete(hash);
-        trusted.devices = trusted.devices.filter((device) => device.id !== deviceId);
-        if (trusted.devices.length >= 20) return send(response, 429, JSON.stringify({ error: "已達綁定裝置上限" }));
         const deviceCredential = randomBytes(32).toString("base64url");
         const hash = credentialHash(deviceCredential);
         const pairedAt = new Date(now).toISOString();
-        trusted.devices.push({ id: deviceId, name: name || "手機", credentialHash: hash, pairedAt, lastSeen: pairedAt });
-        await writeTrustedDevices(trusted);
+        if (!await addTrustedDevice({ id: deviceId, name: name || "手機", credentialHash: hash, pairedAt, lastSeen: pairedAt })) {
+          return send(response, 429, JSON.stringify({ error: "已達綁定裝置上限" }));
+        }
         paired = true;
         sessions.set(hash, { credentialHash: hash, deviceId, name: name || "手機", pairedAt: now, lastSeen: now });
         await writeDeviceStatus();

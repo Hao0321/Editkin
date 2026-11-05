@@ -5421,6 +5421,79 @@ fn get_mobile_remote_status(state: State<'_, AppState>) -> Result<Value, String>
     Ok(status)
 }
 
+/// Credential hashes of revoked devices, written only by the desktop. The Remote
+/// server (`src/remote/server.ts`) also rewrites the trusted-device file, and a
+/// write it based on a read taken just before a revoke can land just after it
+/// and list the device again; the server refuses every credential listed here.
+fn mobile_revoked_devices_path(trusted_devices_path: &Path) -> PathBuf {
+    trusted_devices_path.with_file_name("revoked-devices.json")
+}
+
+const MOBILE_REVOKED_CREDENTIAL_LIMIT: usize = 256;
+
+fn revoke_trusted_device(trusted_path: &Path, device_id: &str) -> Result<bool, String> {
+    let mut store = fs::read_to_string(trusted_path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<Value>(&content).ok())
+        .unwrap_or_else(|| json!({ "schemaVersion": 1, "devices": [] }));
+    let devices = store
+        .get_mut("devices")
+        .and_then(Value::as_array_mut)
+        .ok_or("永久綁定裝置資料格式不正確")?;
+    let before = devices.len();
+    let mut credential_hashes = Vec::new();
+    devices.retain(|device| {
+        if device.get("id").and_then(Value::as_str) != Some(device_id) {
+            return true;
+        }
+        if let Some(hash) = device
+            .get("credentialHash")
+            .and_then(Value::as_str)
+            .filter(|hash| {
+                hash.len() == 64
+                    && hash
+                        .bytes()
+                        .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+            })
+        {
+            credential_hashes.push(hash.to_owned());
+        }
+        false
+    });
+    let revoked = devices.len() != before;
+    if !credential_hashes.is_empty() {
+        let revoked_path = mobile_revoked_devices_path(trusted_path);
+        // An unreadable list is replaced so that this revoke still takes effect.
+        let mut listed: Vec<String> = read_remote_json(&revoked_path)
+            .ok()
+            .flatten()
+            .and_then(|value| {
+                value
+                    .get("credentialHashes")
+                    .and_then(Value::as_array)
+                    .map(|hashes| {
+                        hashes
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .map(str::to_owned)
+                            .collect()
+                    })
+            })
+            .unwrap_or_default();
+        listed.retain(|hash| !credential_hashes.contains(hash));
+        listed.extend(credential_hashes);
+        let excess = listed.len().saturating_sub(MOBILE_REVOKED_CREDENTIAL_LIMIT);
+        listed.drain(..excess);
+        // Listed before the trusted file changes, so the device is refused from here on.
+        write_remote_json_atomic(
+            &revoked_path,
+            &json!({ "schemaVersion": 1, "credentialHashes": listed }),
+        )?;
+    }
+    write_json_atomic(trusted_path, &store)?;
+    Ok(revoked)
+}
+
 #[tauri::command]
 fn revoke_mobile_device(
     app: AppHandle,
@@ -5431,25 +5504,17 @@ fn revoke_mobile_device(
     if device_id.is_empty() || device_id.len() > 100 {
         return Err("裝置識別碼不合法".into());
     }
-    let trusted_path = state
+    // Held until the revoke is written, so two revokes cannot drop each other's
+    // entry from the revocation list.
+    let remote_state = state
         .mobile_remote
         .lock()
-        .map_err(|_| "mobile remote lock poisoned")?
+        .map_err(|_| "mobile remote lock poisoned")?;
+    let trusted_path = remote_state
         .as_ref()
         .map(|remote| remote.trusted_devices_path.clone())
         .unwrap_or(mobile_trusted_devices_path(&app)?);
-    let mut store = fs::read_to_string(&trusted_path)
-        .ok()
-        .and_then(|content| serde_json::from_str::<Value>(&content).ok())
-        .unwrap_or_else(|| json!({ "schemaVersion": 1, "devices": [] }));
-    let devices = store
-        .get_mut("devices")
-        .and_then(Value::as_array_mut)
-        .ok_or("永久綁定裝置資料格式不正確")?;
-    let before = devices.len();
-    devices.retain(|device| device.get("id").and_then(Value::as_str) != Some(device_id));
-    let revoked = devices.len() != before;
-    write_json_atomic(&trusted_path, &store)?;
+    let revoked = revoke_trusted_device(&trusted_path, device_id)?;
     Ok(json!({ "revoked": revoked, "deviceId": device_id }))
 }
 
@@ -10788,6 +10853,78 @@ mod tests {
         fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
         restrict_to_owner(&path, 0o600).unwrap();
         assert_eq!(mode(&path), 0o600);
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn revoking_a_mobile_device_lists_its_credential_before_dropping_it() {
+        let root = env::temp_dir().join(format!("editkin-mobile-revoke-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let trusted = root.join("mobile-remote").join("trusted-devices.json");
+        let revoked = mobile_revoked_devices_path(&trusted);
+        let hash = |index: usize| format!("{index:064x}");
+        let device = |id: &str, credential: usize| {
+            json!({
+                "id": id,
+                "name": id,
+                "credentialHash": hash(credential),
+                "pairedAt": "2026-01-01T00:00:00.000Z",
+                "lastSeen": "2026-01-01T00:00:00.000Z"
+            })
+        };
+        let listed = || read_remote_json(&revoked).unwrap().unwrap()["credentialHashes"].clone();
+        let trusted_ids = || {
+            let store: Value =
+                serde_json::from_str(&fs::read_to_string(&trusted).unwrap()).unwrap();
+            store["devices"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|item| item["id"].as_str().unwrap().to_owned())
+                .collect::<Vec<_>>()
+        };
+        write_json_atomic(
+            &trusted,
+            &json!({ "schemaVersion": 1, "devices": [device("phone", 1), device("tablet", 2)] }),
+        )
+        .unwrap();
+
+        assert_eq!(
+            revoked,
+            root.join("mobile-remote").join("revoked-devices.json")
+        );
+        assert!(revoke_trusted_device(&trusted, "phone").unwrap());
+        assert_eq!(listed(), json!([hash(1)]));
+        assert_eq!(trusted_ids(), ["tablet"]);
+        assert!(!revoke_trusted_device(&trusted, "phone").unwrap());
+        assert_eq!(listed(), json!([hash(1)]));
+
+        // An unreadable list is replaced instead of blocking the revoke.
+        fs::write(&revoked, "not json").unwrap();
+        assert!(revoke_trusted_device(&trusted, "tablet").unwrap());
+        assert_eq!(listed(), json!([hash(2)]));
+        assert!(trusted_ids().is_empty());
+
+        // A full list keeps the most recent revocations.
+        let full = (100..100 + MOBILE_REVOKED_CREDENTIAL_LIMIT)
+            .map(hash)
+            .collect::<Vec<_>>();
+        write_remote_json_atomic(
+            &revoked,
+            &json!({ "schemaVersion": 1, "credentialHashes": full }),
+        )
+        .unwrap();
+        write_json_atomic(
+            &trusted,
+            &json!({ "schemaVersion": 1, "devices": [device("watch", 3)] }),
+        )
+        .unwrap();
+        assert!(revoke_trusted_device(&trusted, "watch").unwrap());
+        let hashes = listed();
+        let hashes = hashes.as_array().unwrap();
+        assert_eq!(hashes.len(), MOBILE_REVOKED_CREDENTIAL_LIMIT);
+        assert_eq!(hashes.first(), Some(&json!(hash(101))));
+        assert_eq!(hashes.last(), Some(&json!(hash(3))));
         fs::remove_dir_all(&root).unwrap();
     }
 
