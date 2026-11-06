@@ -16,6 +16,14 @@ The Rust and Tauri source is included for development. The desktop media pipelin
 
 Do not distribute a binary as an official Editkin release based solely on a passing web build or source test. A public installer needs a fresh, exact-artifact review: third-party corresponding source and notices (especially FFmpeg), platform-specific build and edit/export testing, final hashes and SBOM, a verified release identity, and provenance attestation. The current packaged Windows updater specifically requires Authenticode; an unsigned community build cannot use that updater. [RELEASE.md](RELEASE.md) tracks the available release paths.
 
+### macOS local community app
+
+[MACOS.md](MACOS.md) documents the prerequisites, the one-command build/install
+helper, the Finder `.command` entry point, and verification limits. It builds a
+new local app without overwriting an installed copy or altering the source
+checkout. It relies on this Mac's installed runtime libraries and does not create
+a redistributable or official release.
+
 ### Linux community desktop (GTK 0.19 migration)
 
 Use Node.js 22.13+ on `PATH`, Rust 1.92 or newer (verification used 1.98.1), a C/C++ toolchain, and `pkg-config`. GTK **Rust crate** 0.19 still targets system GTK **3**, not GTK 4. The locked Linux features require GTK 3.24+, GLib/GIO 2.70+, WebKitGTK 4.1 API 2.40+, JavaScriptCoreGTK 4.1 API 2.38+, and libsoup 3.0+. These minimums come from the enabled sys-crate features and their `system-deps` metadata.
