@@ -17,10 +17,20 @@ export function materialKeyframeFilters(input: "rec709" | "hlg" | "pq", width: n
     ...rec709DisplayToSrgbFilters(), "scale=in_range=full:out_range=full:out_color_matrix=bt601", "format=yuvj444p"];
 }
 
+/** A still JPEG is a viewing source, with no inferred Rec.709 or sRGB camera metadata. */
+export function imageKeyframeFilters(width: number, height: number): string[] {
+  const ratio = Math.min(1, 1280 / Math.max(width, height));
+  const outputWidth = Math.max(1, Math.round(width * ratio));
+  const outputHeight = Math.max(1, Math.round(height * ratio));
+  return [`scale=${outputWidth}:${outputHeight}:flags=lanczos`, "format=yuvj444p"];
+}
+
 /** Each returned JPEG and decoded clock comes from the same bounded FFmpeg process. */
 export async function extractMaterialKeyframes(request: MaterialColorRequest, runtime: MaterialColorRuntime, expectedIdentity: MaterialColorRuntimeIdentity) {
   validateMaterialColorRequest(request);
-  const analysis: MaterialKeyframeAnalysis = { schema: "editkin.material-keyframe-analysis/v1", state: "blocked", policy: "neutral-srgb-display-v1", runtimeIdentitySha256: expectedIdentity.identitySha256, requestedSamples: structuredClone(request.samples), omitted: [] };
+  const analysis: MaterialKeyframeAnalysis = { schema: "editkin.material-keyframe-analysis/v1", state: "blocked",
+    policy: request.kind === "image" ? "source-image-display-v1" : "neutral-srgb-display-v1",
+    runtimeIdentitySha256: expectedIdentity.identitySha256, requestedSamples: structuredClone(request.samples), omitted: [] };
   const frames: Array<{ id: string; time: number; sceneIndex: number; display: MaterialKeyframeDisplay; data: Buffer }> = [];
   if (request.kind === "audio") return { analysis: { ...analysis, state: "not_applicable" as const }, frames };
   let reason = "display-extraction-failed";
@@ -33,16 +43,22 @@ export async function extractMaterialKeyframes(request: MaterialColorRequest, ru
     const probe = JSON.parse(probeResult.stdout.toString("utf8"));
     const streams = Array.isArray(probe.streams) ? probe.streams.filter((s: Record<string, unknown>) => s.codec_type === "video") : [];
     if (streams.length !== 1) throw Error("single-video-stream-required");
-    const stream = streams[0] as Record<string, unknown>, verifiedColor = sourceDisplayColorMetadata(stream, request.color), input = verifiedColor.interpretation as "rec709" | "hlg" | "pq";
-    const width = Number(stream.width), height = Number(stream.height), origin = Number(probe.format?.start_time ?? stream.start_time);
+    const stream = streams[0] as Record<string, unknown>, image = request.kind === "image";
+    const width = Number(stream.width), height = Number(stream.height);
+    const origin = image ? 0 : Number(probe.format?.start_time ?? stream.start_time);
     if (!Number.isFinite(origin)) throw Error("source-timeline-origin-unverified");
     if (![width, height].every(n => Number.isSafeInteger(n) && n > 0 && n <= 32768)) throw Error("invalid-source-dimensions");
-    const filters = materialKeyframeFilters(input, width, height, verifiedColor);
+    if (image && (!/\.jpe?g$/i.test(request.sourcePath) || stream.codec_name !== "mjpeg" || request.sourceStart !== 0
+      || request.samples.length !== 1 || request.samples[0].time !== 0)) throw Error("unsupported-image-source");
+    const verifiedColor = image ? undefined : sourceDisplayColorMetadata(stream, request.color);
+    const input = verifiedColor?.interpretation as "rec709" | "hlg" | "pq";
+    const filters = image ? imageKeyframeFilters(width, height) : materialKeyframeFilters(input, width, height, verifiedColor!);
     for (const sample of request.samples) {
       const remaining = deadline - Date.now(); if (remaining <= 0) throw Error("display-time-budget");
       const target = request.sourceStart + sample.time;
-      const result = await runColorProcess(tools.ffmpeg, ["-hide_banner", "-loglevel", "info", "-nostdin", "-copyts", "-ss", String(target), "-i", request.sourcePath,
-        "-map", "0:v:0", "-an", "-vf", [`select='gte(t,${origin + target})'`, ...filters, "showinfo"].join(","), "-frames:v", "1", "-fps_mode", "passthrough",
+      const result = await runColorProcess(tools.ffmpeg, ["-hide_banner", "-loglevel", "info", "-nostdin",
+        ...(image ? [] : ["-copyts", "-ss", String(target)]), "-i", request.sourcePath,
+        "-map", "0:v:0", "-an", "-vf", [...(image ? [] : [`select='gte(t,${origin + target})'`]), ...filters, "showinfo"].join(","), "-frames:v", "1", "-fps_mode", "passthrough",
         // q=1 alone is clamped by the encoder's default qmin=2. Permit the
         // lower quantizer explicitly to retain calibrated colored-edge detail.
         "-c:v", "mjpeg", "-q:v", "1", "-qmin", "1", "-pix_fmt", "yuvj444p", "-f", "image2pipe", "pipe:1"], 8 * 1024 * 1024, Math.min(timeout, remaining), runtime.signal);
@@ -54,7 +70,9 @@ export async function extractMaterialKeyframes(request: MaterialColorRequest, ru
         source: { sha256: request.sourceSha256, start: request.sourceStart, duration: request.duration }, requested: { ...sample },
         decoded: { ...decoded, timelineOrigin: origin, sceneIndex, sceneAttributionVerified: request.sceneCuts !== undefined },
         probe: { sha256: colorBytesSha(probeResult.stdout), metadata: { stream, format: probe.format ?? {} } },
-        normalization: { interpretation: input, filters, intermediateTransfer: "bt709", displayEotf: "bt1886-ideal", purpose: "neutral-display-proxy", transfer: "srgb", primaries: "bt709", range: "full", exposure: 0, creativeLook: false, maximumDimension: 1280 },
+        normalization: image ? { interpretation: "unverified-image", filters, purpose: "source-image-display-proxy",
+          transfer: "unverified", primaries: "unverified", range: "full", exposure: 0, creativeLook: false, maximumDimension: 1280 }
+          : { interpretation: input, filters, intermediateTransfer: "bt709", displayEotf: "bt1886-ideal", purpose: "neutral-display-proxy", transfer: "srgb", primaries: "bt709", range: "full", exposure: 0, creativeLook: false, maximumDimension: 1280 },
         jpeg: { sha256: colorBytesSha(result.stdout), bytes: result.stdout.length, mimeType: "image/jpeg" } };
       display.receiptSha256 = colorDigest({ ...display, receiptSha256: undefined });
       frames.push({ id: sample.id, time: decoded.relativeTime, sceneIndex, display, data: result.stdout });

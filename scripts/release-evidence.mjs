@@ -28,7 +28,9 @@ function auditProduction() {
   const npmCli = process.env.npm_execpath;
   const result = npmCli
     ? spawnSync(process.execPath, [npmCli, "audit", "--omit=dev", "--json"], { cwd: root, encoding: "utf8", windowsHide: true, timeout: 120_000 })
-    : spawnSync("npm", ["audit", "--omit=dev", "--json"], { cwd: root, encoding: "utf8", windowsHide: true, timeout: 120_000, shell: process.platform === "win32" });
+    : process.platform === "win32"
+      ? spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", "npm audit --omit=dev --json"], { cwd: root, encoding: "utf8", windowsHide: true, timeout: 120_000, shell: false })
+      : spawnSync("npm", ["audit", "--omit=dev", "--json"], { cwd: root, encoding: "utf8", windowsHide: true, timeout: 120_000, shell: false });
   try {
     const report = JSON.parse(result.stdout || result.stderr);
     return { status: result.status === 0 ? "GREEN" : "BLOCK", exitCode: result.status, vulnerabilities: report.metadata?.vulnerabilities ?? null };
@@ -48,7 +50,7 @@ const creativePackManifestPath = resolve(root, ".creative-packs/hao-creator-libr
 const runtimePaths = [
   "vendor/node/win32-x64/node.exe", "vendor/ffmpeg/win32-x64/ffmpeg.exe", "vendor/ffmpeg/win32-x64/ffprobe.exe",
   "vendor/whisper/win32-x64/whisper-cli.exe", "vendor/whisper/win32-x64/whisper.dll", "vendor/whisper/win32-x64/ggml.dll", "vendor/whisper/win32-x64/ggml-base.dll", "vendor/whisper/win32-x64/ggml-cpu.dll",
-  "native/bin/win32-x64/hao-core.exe", "desktop-dist/service.mjs", "desktop-dist/mcp.mjs", "desktop-dist/mcp.mjs.material-color-identity.json", "desktop-dist/remote.mjs",
+  "native/bin/win32-x64/hao-core.exe", "desktop-dist/service.mjs", "desktop-dist/service.mjs.material-color-identity.json", "desktop-dist/mcp.mjs", "desktop-dist/mcp.mjs.material-color-identity.json", "desktop-dist/remote.mjs",
 ].map((path) => resolve(root, path));
 const requiredInputs = [
   "vendor/node/win32-x64/manifest.json", "vendor/node/win32-x64/NODE-LICENSE.txt",

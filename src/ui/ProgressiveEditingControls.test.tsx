@@ -19,19 +19,22 @@ describe("progressive editing controls", () => {
     expect((html.match(/role="radio"/g) ?? []).length).toBe(6);
   });
 
-  it("keeps auto edit visible and puts free-form and secondary actions behind one disclosure", () => {
+  it("shows story intake first and labels the separate rule-based rough cut", () => {
     const html = renderToStaticMarkup(<AgentPanel
       status="準備完成"
       hasMedia
       onSubmit={() => undefined}
+      onOpenLocalDraft={() => undefined}
       onSemanticAutoEdit={() => undefined}
       onSmartCut={() => undefined}
       onAutomaticCaptions={() => undefined}
       onSceneSplit={() => undefined}
     />);
     expect(html).toContain("data-testid=\"semantic-edit-panel-button\"");
+    expect(html).toContain("data-testid=\"open-local-story-draft\"");
+    expect(html.indexOf("open-local-story-draft")).toBeLessThan(html.indexOf("semantic-edit-panel-button"));
     expect(html).toContain("data-testid=\"agent-panel-disclosure\"");
-    expect(html).toContain("自訂修改與更多功能");
+    expect(html).toContain("規則式素材粗剪");
     expect(html).toContain("data-testid=\"agent-input\"");
     expect(html).not.toMatch(/data-testid="agent-panel-disclosure"[^>]*\sopen(?:=|\s|>)/);
   });

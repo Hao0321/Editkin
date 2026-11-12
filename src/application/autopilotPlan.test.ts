@@ -22,6 +22,18 @@ describe("video-autopilot plan contract", () => {
     expect(autopilotPlanCoverage(parsed).level).toBe("current_multimodal_editorial_contract");
   });
 
+  it("rejects an empty visual patch used to fake a design edit", () => {
+    const plan = createAutopilotV4Fixture();
+    expect(() => parseAutopilotPlan({ ...plan, commands: [...plan.commands, { type: "update_clip_transform", clipId: "clip-demo", patch: {} }] }))
+      .toThrow(/empty patch/);
+  });
+
+  it("allows a visual-only source without inventing an audio layer", () => {
+    const plan = createAutopilotV4Fixture();
+    expect(() => parseAutopilotPlan({ ...plan, editorial: { ...plan.editorial,
+      audio: { ...plan.editorial.audio, layers: [], impactFrames: [], breathFrames: [] } } })).not.toThrow();
+  });
+
   it("keeps v2 and v1 as explicit legacy layers, never current parity", () => {
     expect(autopilotPlanCoverage(parseAutopilotPlan(createAutopilotV2Fixture())).level).toBe("legacy_editorial_compatibility_only");
     const current = createAutopilotV4Fixture();

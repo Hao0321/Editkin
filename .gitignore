@@ -1,6 +1,7 @@
 /node_modules/
 /dist/
 /desktop-dist/
+/community-desktop-dist/
 /.web-public/
 /.web-public-*/
 /out/

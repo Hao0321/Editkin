@@ -7,7 +7,7 @@ import { autoColorGoalSchema, referenceWhiteBalanceGoalSchema } from "../applica
 import { proposeAutoColorExposure, proposeReferenceWhiteBalance } from "../application/autoColorEvidence";
 import { creativeAssetIdFromUri, resolveCreativeLibraryAsset } from "../application/creativeLibrary";
 import { creativePackRoot, personalMusicRoot, personalVisualRoot, textResult, errorResult } from "./toolRuntime";
-import { readProject, resolveWorkspaceMediaPath } from "./storage";
+import { readProject, resolveProjectAssetMediaPath } from "./storage";
 
 export function autoColorRuntime(project: EditProject) {
   const modelRoot = process.env.EDITKIN_MODEL_ROOT ?? resolve(process.cwd(), ".editkin-models");
@@ -15,7 +15,7 @@ export function autoColorRuntime(project: EditProject) {
     cacheRoot: process.env.EDITKIN_CACHE_ROOT ?? resolve(modelRoot, "../media-cache"),
     resolveSource: async (assetId: string) => {
       const asset = findAsset(project, assetId), id = creativeAssetIdFromUri(asset.uri);
-      return id ? (await resolveCreativeLibraryAsset(creativePackRoot(), id, personalMusicRoot(), personalVisualRoot())).absolutePath : resolveWorkspaceMediaPath(asset.uri);
+      return id ? (await resolveCreativeLibraryAsset(creativePackRoot(), id, personalMusicRoot(), personalVisualRoot())).absolutePath : resolveProjectAssetMediaPath(asset.uri);
     } };
 }
 export function registerAutoColorTools(server: McpServer) {

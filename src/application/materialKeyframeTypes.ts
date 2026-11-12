@@ -14,7 +14,7 @@ export type MaterialKeyframeSample = MaterialColorRequest["samples"][number];
 export interface MaterialKeyframeAnalysis {
   schema: "editkin.material-keyframe-analysis/v1";
   state: "ready" | "partial" | "blocked" | "not_applicable";
-  policy: "neutral-srgb-display-v1";
+  policy: "neutral-srgb-display-v1" | "source-image-display-v1";
   runtimeIdentitySha256: string;
   requestedSamples: MaterialKeyframeSample[];
   omitted: Array<{ id: string; reason: string }>;
@@ -27,6 +27,7 @@ export interface MaterialKeyframeDisplay {
   requested: MaterialKeyframeSample;
   decoded: { pts: number; timeBase: { numerator: number; denominator: number }; sourceTime: number; relativeTime: number; width: number; height: number; timelineOrigin: number; sceneIndex: number; sceneAttributionVerified: boolean };
   probe: { sha256: string; metadata: { stream: Record<string, unknown>; format: Record<string, unknown> } };
-  normalization: { interpretation: "rec709" | "hlg" | "pq"; filters: string[]; intermediateTransfer: "bt709"; displayEotf: "bt1886-ideal"; purpose: "neutral-display-proxy"; transfer: "srgb"; primaries: "bt709"; range: "full"; exposure: 0; creativeLook: false; maximumDimension: 1280 };
+  normalization: { interpretation: "rec709" | "hlg" | "pq"; filters: string[]; intermediateTransfer: "bt709"; displayEotf: "bt1886-ideal"; purpose: "neutral-display-proxy"; transfer: "srgb"; primaries: "bt709"; range: "full"; exposure: 0; creativeLook: false; maximumDimension: 1280 }
+    | { interpretation: "unverified-image"; filters: string[]; purpose: "source-image-display-proxy"; transfer: "unverified"; primaries: "unverified"; range: "full"; exposure: 0; creativeLook: false; maximumDimension: 1280 };
   jpeg: { sha256: string; bytes: number; mimeType: "image/jpeg" };
 }

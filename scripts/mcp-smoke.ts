@@ -114,7 +114,10 @@ async function main() {
     await client.connect(transport);
     const listed = await client.listTools();
     const names = listed.tools.map((tool) => tool.name).sort();
-    assert.deepEqual(names, ["add_creative_asset_to_timeline", "apply_autopilot_plan", "apply_creative_preset", "apply_edit_commands", "audit_autopilot_plan", "audit_editorial_batch_plan", "auto_add_music", "auto_cut_silence", "auto_edit_highlights", "auto_split_scenes", "auto_transcribe_captions", "build_autopilot_roto_keyer_decision", "cancel_autopilot_batch_job", "cancel_material_preparation_job", "compile_beat_montage", "compile_plugin_application", "configure_remote_access", "create_editorial_batch_projects", "create_project", "direct_podcast_speakers", "get_autopilot_batch_job", "get_autopilot_batch_status", "get_autopilot_contract", "get_autopilot_design_brief", "get_editkin_skill_pack", "get_editkin_workflow_profile", "get_material_context", "get_material_preparation_job", "get_plugin_capability", "get_project_summary", "get_remote_setup_status", "get_timeline_window", "inspect_roto_keyer_capabilities", "list_community_editing_knowledge", "list_creative_assets", "list_creative_presets", "list_installed_editkin_skills", "list_installed_plugins", "list_remote_provider_connectors", "prepare_ai_material", "prepare_autopilot_auto_roto", "prepare_autopilot_motion_track", "prepare_autopilot_template_package", "prepare_clip_motion_preset", "prepare_floating_frame_scene", "prepare_remote_setup", "propose_auto_color_exposure", "propose_reference_white_balance", "read_community_editing_knowledge", "record_autopilot_outcome", "record_material_semantics", "record_roto_keyer_evidence", "render_editorial_batch", "render_project", "resolve_autopilot_inference_route", "resolve_cinematic_recipe", "resolve_editkin_skill_workflow", "run_autopilot_batch", "start_ai_editing_session", "start_autopilot_batch_job", "track_subject_and_attach_label", "validate_project", "verify_remote_access", "view_material_keyframes"]);
+    assert(names.includes("get_autopilot_plan_structure"));
+    assert(names.includes("get_autopilot_aesthetic_system"));
+    assert(names.includes("validate_autopilot_plan_draft"));
+    assert.deepEqual(names.filter((name) => !["get_autopilot_plan_structure", "get_autopilot_aesthetic_system", "validate_autopilot_plan_draft"].includes(name)), ["add_creative_asset_to_timeline", "apply_autopilot_plan", "apply_creative_preset", "apply_edit_commands", "audit_autopilot_plan", "audit_editorial_batch_plan", "auto_add_music", "auto_cut_silence", "auto_edit_highlights", "auto_split_scenes", "auto_transcribe_captions", "build_autopilot_roto_keyer_decision", "cancel_autopilot_batch_job", "cancel_material_preparation_job", "compile_beat_montage", "compile_plugin_application", "configure_remote_access", "create_editorial_batch_projects", "create_project", "direct_podcast_speakers", "get_autopilot_batch_job", "get_autopilot_batch_status", "get_autopilot_contract", "get_autopilot_design_brief", "get_editkin_skill_pack", "get_editkin_workflow_profile", "get_material_context", "get_material_preparation_job", "get_plugin_capability", "get_project_summary", "get_remote_setup_status", "get_timeline_window", "inspect_roto_keyer_capabilities", "list_community_editing_knowledge", "list_creative_assets", "list_creative_presets", "list_installed_editkin_skills", "list_installed_plugins", "list_remote_provider_connectors", "prepare_ai_material", "prepare_autopilot_auto_roto", "prepare_autopilot_motion_track", "prepare_autopilot_template_package", "prepare_clip_motion_preset", "prepare_floating_frame_scene", "prepare_remote_setup", "propose_auto_color_exposure", "propose_reference_white_balance", "read_community_editing_knowledge", "record_autopilot_outcome", "record_material_semantics", "record_roto_keyer_evidence", "render_editorial_batch", "render_project", "resolve_autopilot_inference_route", "resolve_cinematic_recipe", "resolve_editkin_skill_workflow", "run_autopilot_batch", "start_ai_editing_session", "start_autopilot_batch_job", "track_subject_and_attach_label", "validate_project", "verify_remote_access", "view_material_keyframes"]);
 
     const asyncBatchPath = join(workspace, "async-batch.json");
     await writeFile(asyncBatchPath, JSON.stringify({
@@ -147,6 +150,17 @@ async function main() {
     assert.equal(autopilotContractPayload.liveInvocation.skill.id, "video-autopilot");
     assert.equal(autopilotContractPayload.liveInvocation.workflow.legacyPlanPolicy, "reject");
     assert.equal(autopilotContractPayload.requiredPlanSource.invocationBindingSha256, autopilotContractPayload.liveInvocation.bindingSha256);
+    const structureResult = await client.callTool({ name: "get_autopilot_plan_structure", arguments: {} });
+    assert.equal(structureResult.isError, undefined);
+    const structure = JSON.parse(String((structureResult.content[0] as { text?: string })?.text ?? "{}"));
+    assert.equal(structure.status, "EXAMPLE_ONLY");
+    assert.equal(structure.example.schema, "hao.video-autopilot.edit-plan/v4");
+    assert.notEqual(structure.example.source.skillSha256, autopilotContractPayload.requiredPlanSource.skillSha256);
+    assert(structure.addFromCurrentDesignBrief.includes("designEvidence"));
+    assert(JSON.stringify(structure).length < 16_000);
+    const draftCheck = await client.callTool({ name: "validate_autopilot_plan_draft", arguments: { plan: createAutopilotV4Fixture() } });
+    assert.equal(draftCheck.isError, undefined);
+    assert.equal(JSON.parse(String((draftCheck.content[0] as { text?: string })?.text ?? "{}")).status, "GREEN_DRAFT_SCHEMA");
     const inferenceRoute = await client.callTool({ name: "resolve_autopilot_inference_route", arguments: { taskClass: "quality_critical", priority: "quality" } });
     assert.equal(inferenceRoute.isError, undefined);
     const routePayload = JSON.parse(String((inferenceRoute.content[0] as { text?: string })?.text ?? "{}"));

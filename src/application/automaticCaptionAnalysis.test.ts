@@ -7,6 +7,7 @@ import {
   analyzeAutomaticCaptionTranscript, transcribeAutomaticCaptions, parseWhisperRecognition,
   AutomaticCaptionParseError, EmptyAutomaticCaptionError, PINNED_WHISPER_MODEL,
   automaticCaptionRuntimeSha256,
+  isWhisperRuntimeLibraryName,
   whisperCaptionSegmentation,
   type AutomaticCaptionAnalysisResult,
 } from "./automaticCaptions";
@@ -15,6 +16,13 @@ const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
 const sha = (input: string) => createHash("sha256").update(input).digest("hex");
 const korean = "1\n00:00:00,000 --> 00:00:01,000\n안녕하세요\n\n2\n00:00:01,000 --> 00:00:02,000\n(upbeat music)\n";
+
+it.each([
+  ["whisper.dll", true], ["libwhisper.dylib", true], ["libwhisper.so", true], ["libwhisper.so.1.2", true],
+  ["libwhisper.so.", false], ["libwhisper.so.1x", false], ["whisper.txt", false],
+])("classifies bounded shared-library name %s", (name, expected) => {
+  expect(isWhisperRuntimeLibraryName(name)).toBe(expected);
+});
 
 async function cachedFixture(raw = "\uFEFF\r\n", mutate?: (record: { schemaVersion: number; result: AutomaticCaptionAnalysisResult }) => void) {
   const root = await mkdtemp(join(tmpdir(), "editkin-empty-asr-cache-"));

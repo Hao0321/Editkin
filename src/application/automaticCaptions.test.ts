@@ -20,6 +20,7 @@ afterEach(async () => Promise.all(temporaryPaths.splice(0).map((path) => rm(path
 
 describe("automatic captions", () => {
   it("uses recognizer token timing for CJK and auto detection instead of whitespace-only splitting", () => {
+    expect(buildWhisperCliArgs("ggml-small-q5_1.bin", "speech.wav", "result", "zh")[1]).toBe("ggml-small-q5_1.bin");
     for (const language of ["auto", "zh", "ja"]) {
       const args = buildWhisperCliArgs("model.bin", "speech.wav", "result", language);
       expect(args).not.toContain("-sow");

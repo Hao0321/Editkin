@@ -6,11 +6,14 @@ import "./agentConnectModal.css";
 interface AgentConnectModalProps {
   onClose: () => void;
   onConnect: (target: AgentTarget) => Promise<AgentSetupResult | undefined>;
+  onUseInternal?: () => void;
+  internalReady?: boolean;
 }
 
 const AGENT_NAME: Record<AgentTarget, string> = { codex: "Codex", claude: "Claude Code" };
 
-export function AgentConnectModal({ onClose, onConnect }: AgentConnectModalProps) {
+export function AgentConnectModal({ onClose, onConnect, onUseInternal, internalReady = true }: AgentConnectModalProps) {
+  const [externalOpened, setExternalOpened] = useState(!onUseInternal);
   const [busyTarget, setBusyTarget] = useState<AgentTarget>();
   const [result, setResult] = useState<AgentSetupResult>();
   const [copied, setCopied] = useState(false);
@@ -62,9 +65,16 @@ export function AgentConnectModal({ onClose, onConnect }: AgentConnectModalProps
       <section className="agent-connect-modal" role="dialog" aria-modal="true" aria-labelledby="agent-connect-title" data-testid="agent-connect-modal">
         <button type="button" className="modal-close" onClick={onClose} disabled={Boolean(busyTarget)} aria-label="關閉">×</button>
 
-        {!busyTarget && !result && <>
+        {!busyTarget && !result && onUseInternal && !externalOpened && <div className="agent-internal-start">
+          <span className="agent-connect-kicker">EDITKIN AGENT</span><h2 id="agent-connect-title">直接在剪輯台交代任務</h2>
+          <p className="agent-connect-lead">Agent 會取得目前專案與送出時的選取，只讀取任務需要的資料。簡單調整直接剪輯，完整自動剪輯依素材證據與審核流程執行。</p>
+          <button type="button" className="agent-primary-action" disabled={!internalReady} onClick={onUseInternal} data-testid="use-internal-agent">開始對話 →</button>
+          <small>{internalReady ? "本機、API 與登入來源共用同一個對話視窗；連線方式在設定裡。" : "請先開啟專案或匯入素材，再開始對話。"}</small>
+          <button type="button" className="agent-external-toggle" onClick={() => setExternalOpened(true)} data-testid="advanced-external-agent">進階：連接外部 AI 工作階段</button>
+        </div>}
+        {!busyTarget && !result && externalOpened && <>
           <span className="agent-connect-kicker">EDITKIN × YOUR AI</span>
-          <h2 id="agent-connect-title">連上你已經在用的 AI</h2>
+          <h2 id="agent-connect-title">連接外部 AI 工作階段</h2>
           <p className="agent-connect-lead">不用申請 API key，也不會讀取或保存登入資料。Editkin 只把本機剪輯工具接進你自己的 Codex／Claude Code session。</p>
           <div className="agent-choice-grid">
             <button type="button" onClick={() => void connect("codex")} data-testid="connect-codex-button">
@@ -77,6 +87,7 @@ export function AgentConnectModal({ onClose, onConnect }: AgentConnectModalProps
           <p className="agent-workspace-note">按下後，請選擇要授權給 AI 的工作資料夾。專案與素材需在這個範圍內；每次都可重新選擇，取消不會變更設定。</p>
           <div className="agent-trust-row"><span>✓ 素材留在本機</span><span>✓ 不儲存密鑰</span><span>✓ 可隨時移除 editkin MCP</span></div>
           <p className="agent-connect-note">連上後，AI 負責看懂題材與規劃；Editkin 在本機執行剪輯、字幕、音樂、效果與可編輯 Timeline。</p>
+          {onUseInternal && <button type="button" className="agent-external-toggle" onClick={() => setExternalOpened(false)}>返回內建 Agent</button>}
         </>}
 
         {busyTarget && <div className="agent-connect-progress" aria-live="polite">

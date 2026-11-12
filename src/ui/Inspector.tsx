@@ -13,6 +13,7 @@ import { createTransformMotionBlurInstance, isTransformMotionBlurInstance } from
 import { LayerExpressionPanel } from "./LayerExpressionPanel";
 import { CaptionPresetGallery, CreativePresetGallery } from "./PresetPreviewGallery";
 import { Scene25dLightControls } from "./Scene25dLightControls";
+import { CaptionTextEditor } from "./CaptionTextEditor";
 import type { AutoRotoRuntimeStatus } from "./autoRotoRuntimeStatus";
 import "./inspectorDiscovery.css";
 import "./captionEditor.css";
@@ -44,6 +45,10 @@ interface InspectorProps {
   asset?: MediaAsset;
   previewSource?: string;
   caption?: CaptionCue;
+  captions?: CaptionCue[];
+  auditioningCaptionId?: string;
+  onSelectCaption?: (captionId: string) => void;
+  onAuditionCaption?: () => void;
   captionStyle: CaptionStyle;
   tracks: TimelineTrack[];
   canTransitionIn: boolean;
@@ -108,7 +113,7 @@ interface InspectorProps {
   pluginRegistry?: PluginRegistrySummary;
 }
 
-export function Inspector({ playhead, projectFps, clip, asset, previewSource, caption, captionStyle, tracks, canTransitionIn, canTransitionOut, onMove, onTrackChange, onVolumeChange, onTrimStart, onTrimEnd, onTransformChange, scene25d, onScene25dToggle, onScene25dChange, onTransform3dChange, onSetFloatingFrame, onApplyFloatingScene, portraitCanvas, onApplyClipMotionPreset, particleSimulation, onParticleSimulationToggle, onParticleSimulationChange, onLayerChange, onExpressionChange, onMediaFrameApply, onColorChange, onCreativeChange, onNativeEffectAdd, onNativeEffectUpdate, onNativeEffectReorder, onNativeEffectRemove, onAddKeyframe, onKeyframeEasingChange, onDeleteKeyframe, motionTracks, trackingBusy, trackingSelectionActive, trackingSelection, onBeginMotionTrack, onCorrectMotionTrack, onDeleteMotionTrack, onAddMotionGraphic, motionGraphics, onUpdateMotionGraphic, onDeleteMotionGraphic, onCaptionChange, onCaptionStyleChange, onCaptionStylePatch, onOpenColorWorkspace, onAddCaption, onMakePictureInPicture, onAddMask, onUpdateMask, onDeleteMask, onBindMaskTrack, onSetMaskKeyframe, onFreezeMask, onAutoRotoMask, onQuickAutoRoto, onChromaKeyChange, autoRotoBusy, autoRotoRuntimeStatus, pluginRegistry }: InspectorProps) {
+export function Inspector({ playhead, projectFps, clip, asset, previewSource, caption, captions = [], auditioningCaptionId, onSelectCaption, onAuditionCaption, captionStyle, tracks, canTransitionIn, canTransitionOut, onMove, onTrackChange, onVolumeChange, onTrimStart, onTrimEnd, onTransformChange, scene25d, onScene25dToggle, onScene25dChange, onTransform3dChange, onSetFloatingFrame, onApplyFloatingScene, portraitCanvas, onApplyClipMotionPreset, particleSimulation, onParticleSimulationToggle, onParticleSimulationChange, onLayerChange, onExpressionChange, onMediaFrameApply, onColorChange, onCreativeChange, onNativeEffectAdd, onNativeEffectUpdate, onNativeEffectReorder, onNativeEffectRemove, onAddKeyframe, onKeyframeEasingChange, onDeleteKeyframe, motionTracks, trackingBusy, trackingSelectionActive, trackingSelection, onBeginMotionTrack, onCorrectMotionTrack, onDeleteMotionTrack, onAddMotionGraphic, motionGraphics, onUpdateMotionGraphic, onDeleteMotionGraphic, onCaptionChange, onCaptionStyleChange, onCaptionStylePatch, onOpenColorWorkspace, onAddCaption, onMakePictureInPicture, onAddMask, onUpdateMask, onDeleteMask, onBindMaskTrack, onSetMaskKeyframe, onFreezeMask, onAutoRotoMask, onQuickAutoRoto, onChromaKeyChange, autoRotoBusy, autoRotoRuntimeStatus, pluginRegistry }: InspectorProps) {
   initializeStudioCreativeAssets();
   const wave2 = initializeWave2Registry();
   const [motionStudioOpened, setMotionStudioOpened] = useState(false);
@@ -117,6 +122,8 @@ export function Inspector({ playhead, projectFps, clip, asset, previewSource, ca
   const [engineToolsOpened, setEngineToolsOpened] = useState(Boolean(scene25d?.enabled || particleSimulation?.enabled));
   const [clipTool, setClipTool] = useState<ClipTool>("adjust");
   const [captionToolsOpened, setCaptionToolsOpened] = useState(false);
+  const orderedCaptions = [...captions].sort((a, b) => a.start - b.start || a.id.localeCompare(b.id));
+  const captionIndex = orderedCaptions.findIndex(item => item.id === caption?.id);
   const creatorTabs = useRef<HTMLElement>(null);
   useNativeWheelScroll(creatorTabs, "horizontal", caption ? "caption" : clip?.id);
   return (
@@ -134,13 +141,18 @@ export function Inspector({ playhead, projectFps, clip, asset, previewSource, ca
             <div className="selected-icon">T</div>
             <div><strong>{caption.text}</strong><span>字幕 · {formatTime(caption.duration)}</span></div>
           </div>
-          <label className="field-label">第一行 · 原文
-            <textarea value={caption.text} onChange={(event) => onCaptionChange({ text: event.target.value })} data-testid="caption-text-input" />
-          </label>
+          <div className="caption-review-controls" data-testid="caption-review-controls">
+            <div className="caption-review-heading"><strong>逐句校對</strong><span>{captionIndex >= 0 ? `${captionIndex + 1} / ${orderedCaptions.length}` : "目前字幕"}</span></div>
+            <div className="caption-review-actions">
+              <button type="button" disabled={!onSelectCaption || captionIndex <= 0} onClick={() => onSelectCaption?.(orderedCaptions[captionIndex - 1].id)} data-testid="caption-previous">← 上一句</button>
+              <button type="button" disabled={!onAuditionCaption} onClick={onAuditionCaption} aria-pressed={auditioningCaptionId === caption.id} data-testid="caption-audition">{auditioningCaptionId === caption.id ? "停止播放" : "▶ 播放這句"}</button>
+              <button type="button" disabled={!onSelectCaption || captionIndex < 0 || captionIndex >= orderedCaptions.length - 1} onClick={() => onSelectCaption?.(orderedCaptions[captionIndex + 1].id)} data-testid="caption-next">下一句 →</button>
+            </div>
+            <small>{formatTime(caption.start)} — {formatTime(caption.start + caption.duration)} · 校對成片字幕，素材逐字稿保留原始結果。</small>
+          </div>
+          <CaptionTextEditor key={caption.id} value={caption.text} label="第一行 · 字幕文字" testId="caption-text-input" onCommit={text => onCaptionChange({ text })} />
           {caption.translation ? <div className="caption-translation-editor" data-testid="caption-translation-editor">
-            <label className="field-label">第二行 · {caption.translation.language === "en" ? "英文翻譯" : caption.translation.language}
-              <textarea value={caption.translation.text} onChange={(event) => onCaptionChange({ translation: { ...caption.translation!, text: event.target.value } })} data-testid="caption-translation-input" />
-            </label>
+            <CaptionTextEditor key={`${caption.id}:${caption.translation.language}`} value={caption.translation.text} label={`第二行 · ${caption.translation.language === "en" ? "英文翻譯" : caption.translation.language}`} testId="caption-translation-input" onCommit={text => onCaptionChange({ translation: { ...caption.translation!, text } })} />
             <button type="button" onClick={() => onCaptionChange({ translation: null })}>改回單語字幕</button>
           </div> : <p className="caption-bilingual-hint">需要雙語？在「更多一鍵功能 → 字幕類型」選擇「原文＋英文雙語」。</p>}
           <button type="button" className="preview-center-entry caption" onClick={() => setCaptionToolsOpened(true)} data-testid="caption-preview-entry"><span aria-hidden="true"><i>字</i><i>Aa</i><i>黑底</i></span><b><strong>打開字幕樣式預覽</strong><small>字型、顏色、描邊、半透明黑底都能直接看</small></b><em>查看 →</em></button>

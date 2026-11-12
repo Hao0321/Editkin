@@ -19,9 +19,9 @@ export function FirstProjectStart({ isDesktop, onImport, onDesktopImport, onOpen
     <section className="first-project-start" data-testid="first-project-start" aria-labelledby="first-project-title">
       <div className="first-project-glow" aria-hidden="true" />
       <div className="first-project-card">
-        <div className="first-project-kicker"><span>✦</span> 不用先學剪輯軟體</div>
-        <h1 id="first-project-title">把影片丟進來，<br /><em>Editkin 幫你剪好。</em></h1>
-        <p>自動判斷直式或橫式、分析畫面與語音、套用節奏、字幕、配樂與效果。完成後每一段都能自己改。</p>
+        <div className="first-project-kicker">開始新作品</div>
+        <h1 id="first-project-title">從你的素材開始，<br /><em>剪出第一版。</em></h1>
+        <p>加入影片、照片或聲音，建立可編輯的時間軸。需要時再使用本機粗剪或 Agent；輸出前由你檢查畫面與節奏。</p>
 
         <button type="button" className="first-project-import" onClick={chooseMedia} data-testid="import-media-button" data-beginner-action="加入影片">
           <span aria-hidden="true">＋</span>
@@ -42,12 +42,12 @@ export function FirstProjectStart({ isDesktop, onImport, onDesktopImport, onOpen
           }}
         />
         <div className="first-project-drop-hint"><span aria-hidden="true">⇣</span> 也可以直接把檔案拖到這個視窗</div>
-        {isDesktop && onConnectAgent && <button type="button" className="first-project-agent" onClick={onConnectAgent} data-testid="welcome-agent-connect"><span>✦</span><strong>想讓 AI 看懂題材？連接 Codex／Claude Code</strong><small>沿用自己的訂閱 · 不用 API key</small></button>}
+        {isDesktop && onConnectAgent && <button type="button" className="first-project-agent" onClick={onConnectAgent} data-testid="welcome-agent-connect"><strong>了解 Agent 剪輯助理</strong><small>開啟專案後，直接在右側交代任務</small></button>}
 
-        <ol className="first-project-steps" aria-label="自動剪輯流程">
-          <li><b>1</b><span><strong>加入影片</strong><small>自動判斷直橫與素材</small></span></li>
-          <li><b>2</b><span><strong>選擇片型</strong><small>遊戲、美食、旅遊、Podcast…</small></span></li>
-          <li><b>3</b><span><strong>一鍵完成</strong><small>剪完仍可拖曳微調</small></span></li>
+        <ol className="first-project-steps" aria-label="開始剪輯的步驟">
+          <li><b>1</b><span><strong>加入素材</strong><small>影片、照片與聲音</small></span></li>
+          <li><b>2</b><span><strong>剪輯與檢查</strong><small>每個片段都能修改</small></span></li>
+          <li><b>3</b><span><strong>{isDesktop ? "輸出影片" : "保存編輯資料"}</strong><small>完成前先審片</small></span></li>
         </ol>
 
         <div className="first-project-secondary" aria-label="其他開始方式">
@@ -55,7 +55,7 @@ export function FirstProjectStart({ isDesktop, onImport, onDesktopImport, onOpen
           <button type="button" onClick={onExploreDemo} data-testid="explore-editor-button">先看看剪輯介面</button>
           <button type="button" onClick={onHelp}>看 30 秒教學</button>
         </div>
-        <div className="first-project-trust"><span>✓ 素材留在本機</span><span>✓ 原生自動剪輯不花 AI 額度</span><span>✓ 隨時可復原</span></div>
+        <div className="first-project-trust"><span>✓ 素材留在本機</span><span>✓ 時間軸可逐段修改</span><span>✓ 操作可以復原</span></div>
       </div>
     </section>
   );

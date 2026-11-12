@@ -3,7 +3,7 @@ import { lstat, readFile, readdir } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const ignoredGeneratedDirs = new Set([".git", ".rd", "node_modules", "dist", "desktop-dist", ".web-public", "out", "release", "reports", "target"]);
+const ignoredGeneratedDirs = new Set([".git", ".rd", "node_modules", "dist", "desktop-dist", "community-desktop-dist", ".web-public", "out", "release", "reports", "target"]);
 const forbiddenDirs = new Set([".personal-packs", ".creative-packs", "vendor", "desktop-deliveries", ".desktop-resources", ".desktop-product-release-candidates"]);
 const forbiddenRootFiles = new Set(["audit.config.json", "autopilot-capabilities.json", "market-parity-contract.json", "model-capability-contract.json", "product-capabilities.json", "video-autopilot-rule-coverage.json"]);
 const forbiddenExt = new Set([".exe", ".dll", ".pdb", ".zip", ".dmg", ".p12", ".pfx", ".pem", ".key"]);

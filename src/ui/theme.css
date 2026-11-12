@@ -60,7 +60,7 @@
 }
 
 :root[data-theme="volt"] {
-  color-scheme: light;
+  color-scheme: dark;
   --bg: #0f1411;
   --surface: #151b17;
   --surface-1: #171e19;

@@ -53,7 +53,7 @@ if (!community) {
   });
 }
 
-await build({
+await buildMaterialColorBundle({
   entryPoints: ["src/service/cli.ts"],
   bundle: true,
   platform: "node",

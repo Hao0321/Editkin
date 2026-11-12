@@ -1,0 +1,10 @@
+{
+  "schema": "editkin.agent-provenance/v1",
+  "originId": "urn:uuid:d366cab7-d5a4-44d8-b80d-4c7ce4daf65d",
+  "attribution": "djguan-jpg",
+  "profile": "https://github.com/djguan-jpg",
+  "license": "AGPL-3.0-or-later",
+  "sourceDigest": "94e316256c00f97247833b008b522370ab3bb35dbc0f487a9df5f57db00b22be",
+  "notice": "AGENT-NOTICE.md",
+  "manifest": "AGENT-PROVENANCE.json"
+}

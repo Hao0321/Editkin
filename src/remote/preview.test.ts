@@ -52,7 +52,7 @@ describe("LAN remote server preview and Host handling", () => {
       stdio: ["ignore", "pipe", "ignore"],
       env: {
         ...process.env,
-        EDITKIN_REMOTE_TOKEN: "0123456789abcdef0123456789abcdef",
+        EDITKIN_REMOTE_TOKEN: "t".repeat(32),
         EDITKIN_REMOTE_HEALTH_PROBE_ID: "1".repeat(32),
         EDITKIN_REMOTE_PORT: String(port),
         EDITKIN_REMOTE_QUEUE: join(root, "commands"),

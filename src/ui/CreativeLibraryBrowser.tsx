@@ -44,12 +44,12 @@ export default function CreativeLibraryBrowser({library,loading,importingId,prev
     data-library-total={library?.assetCount??0}
     data-library-loading={loading?"true":"false"}
   >
-    <div className="library-heading"><span><strong>內建素材</strong><small>{loading?"載入中":`${filtered.length} 項`}</small></span>{onAutoMusic&&Boolean(library?.musicAssetCount)?<button type="button" className="auto-music-button compact" onClick={onAutoMusic}>♫ 智慧配樂</button>:null}</div>
+    <div className="library-heading"><span><strong>{library?.packInstalled === false ? "本機素材庫" : "內建素材"}</strong><small>{loading?"載入中":`${filtered.length} 項`}</small></span>{onAutoMusic&&Boolean(library?.musicAssetCount)?<button type="button" className="auto-music-button compact" onClick={onAutoMusic}>♫ 智慧配樂</button>:null}</div>
     <div className="library-filter-row"><select className="library-kind-select" aria-label="素材類型" value={kind} onChange={event=>setKind(event.target.value as LibraryKind)}>{kinds.map(([id,label])=><option key={id} value={id}>{label}</option>)}</select>
     <input className="library-search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜尋素材…" aria-label="搜尋素材"/></div>
     <div className="visual-library-grid" ref={scroll} data-testid="creative-library-scroll" data-wheel-scroll="vertical" tabIndex={0} aria-label={`${filtered.length} 項素材，可持續捲動`}>
       {windowed.before>0?<div aria-hidden="true" className="library-spacer" style={{height:windowed.before}}/>:null}
-      {loading?<small>正在讀取素材清單…</small>:!filtered.length?<small>沒有符合的素材</small>:windowed.items.map(asset=><article key={`${revision}:${asset.id}`} className="creative-asset-card" style={{height:CREATIVE_LIBRARY_ROW_HEIGHT-10}} title={`${asset.name} · ${asset.provenance} · ${asset.license}`}>
+      {loading?<small>正在讀取素材清單…</small>:!filtered.length?<small>{library?.packInstalled === false && library.assetCount === 0 ? "此版本未附內建素材庫。請到「專案」加入自己的影片、音訊或圖片。" : "沒有符合的素材"}</small>:windowed.items.map(asset=><article key={`${revision}:${asset.id}`} className="creative-asset-card" style={{height:CREATIVE_LIBRARY_ROW_HEIGHT-10}} title={`${asset.name} · ${asset.provenance} · ${asset.license}`}>
         <CreativePreviewTile asset={asset} revision={revision} active={activeId===asset.id} playing={previewingId===asset.id} resolve={onResolvePreview} onActivate={activate} onDeactivate={deactivate} onAudioPreview={onAudioPreview}/>
         <div className="creative-asset-copy"><strong>{asset.name}</strong><small>{kinds.find(([id])=>id===libraryAssetKind(asset))?.[1]}{asset.suggestedUse?` · ${asset.suggestedUse}`:""}</small></div>
         <button type="button" className="library-add" disabled={!onImport||Boolean(importingId)} onClick={()=>onImport?.(asset.id)} aria-label={onImport?`加入 ${asset.name}`:`${asset.name} 需由桌面版加入`}>{importingId===asset.id?"加入中":onImport?"加入":"桌面加入"}</button>

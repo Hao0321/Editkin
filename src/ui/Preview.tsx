@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { cssFontFamily, resolveBundledFontFace } from "../typography/fontFaces";
 import type { ActivePreviewLayer } from "../application/previewMedia";
 import { isMediaPreviewCurrent } from "../application/mediaDerivativeColor";
+import { isStarterDemo } from "../application/sourceOrientation";
 import { compileClipAlphaPlan, type ClipAlphaPlan } from "../domain/clipAlphaPlan";
 import { animatedClipState } from "../domain/editGraph";
 import { isTransformMotionBlurInstance } from "../domain/transformMotionBlur";
@@ -141,6 +142,7 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
   const mediaRefs = useRef(new Map<string, HTMLMediaElement>());
   const imageRefs = useRef(new Map<string, HTMLImageElement>());
   const [mediaFailures,setMediaFailures]=useState<Record<string,{name:string;detail:string}>>({});
+  const showStarterSlate = isStarterDemo(project) && project.revision === 0 && !playing && playhead === 0 && Object.keys(mediaFailures).length === 0;
   const failureKey=(id:string,source:string)=>JSON.stringify([id,source]);
   const clearMediaFailure=(id:string,source:string)=>setMediaFailures(current=>{const key=failureKey(id,source);if(!current[key])return current;const next={...current};delete next[key];return next;});
   const failMedia=(id:string,source:string,name:string,error?:MediaError|null)=>setMediaFailures(current=>({...current,[failureKey(id,source)]:{name,detail:error?`解碼錯誤 ${error.code}：${error.message||"瀏覽器無法播放這份預覽"}`:"圖片預覽無法解碼或讀取"}}));
@@ -525,14 +527,15 @@ export function Preview({ onRebuildPreview, previewRepair, layers, audioLayers, 
           );
         }) : (
           <div className="empty-preview">
-            {projectDuration > 0
+            {atProjectEnd
               ? <button type="button" className="empty-preview-action" onClick={togglePlayback} aria-label="從頭播放">↺</button>
               : <div>{audioLayers.length > 0 ? "♫" : "▶"}</div>}
-            <strong>{atProjectEnd ? "已到影片結尾" : audioLayers.length > 0 ? "正在播放聲音" : "這裡會顯示你的影片"}</strong>
-            <span>{atProjectEnd ? "按一下從頭播放" : audioLayers.length > 0 ? "目前只有聲音，所以畫面保持黑色" : "先從左側加入影片或照片"}</span>
+            <strong>{atProjectEnd ? "已到影片結尾" : audioLayers.length > 0 ? "正在播放聲音" : projectDuration > 0 ? "這裡沒有畫面" : "這裡會顯示你的影片"}</strong>
+            <span>{atProjectEnd ? "按一下從頭播放" : audioLayers.length > 0 ? "目前只有聲音，所以畫面保持黑色" : projectDuration > 0 ? "播放頭位於空白間隙；請移到時間軸上的片段" : project.assets.length > 0 ? "把左側素材加入時間軸即可預覽" : "先從左側加入影片或照片"}</span>
           </div>
         )}
         {!nativeGpuPreview&&!gpuPreviewUrl&&layers.filter(layer=>mediaFailures[failureKey(layer.clip.id,layer.source)]).map(layer=>{const failure=mediaFailures[failureKey(layer.clip.id,layer.source)]!;return <div key={`error:${layer.clip.id}`} role="alert" data-testid="preview-media-error" style={{position:"absolute",inset:"12px",zIndex:100,background:"var(--surface)",color:"var(--ink)",padding:16,fontSize:16,overflow:"auto"}}><strong>「{failure.name}」預覽無法顯示</strong><p>{onRebuildPreview&&layer.asset.kind==="video"?"預覽無法解碼或讀取。可重建預覽；原片與既有剪輯保留。":"預覽無法解碼或讀取。請重新載入並確認來源仍可讀取；原片與既有剪輯保留。"}</p>{onRebuildPreview&&layer.asset.kind==="video"&&<><button type="button" style={{fontSize:16,minHeight:44}} disabled={previewRepair?.phase==="preparing"} onClick={()=>void onRebuildPreview(layer.asset.id)}>重建預覽</button>{previewRepair?.assetId===layer.asset.id&&<p role="status">{previewRepair.message}</p>}{previewRepair?.phase==="preparing"&&previewRepair.assetId!==layer.asset.id&&<p role="status">正在重建另一份素材的預覽，完成後即可重建這份素材。</p>}</>}<details><summary>查看原因</summary><p>{failure.detail}</p></details><button type="button" style={{fontSize:16,minHeight:44}} onClick={()=>{const node=mediaRefs.current.get(layer.clip.id),image=imageRefs.current.get(layer.clip.id);if(node)node.load();else if(image)image.src=layer.source;}}>重新載入預覽</button></div>;})}
+        {showStarterSlate && <div className="starter-preview-slate" data-testid="starter-preview-slate" role="note"><span className="starter-preview-kicker">Editkin · 預覽</span><div><strong>從素材開始</strong><p>從左側加入影片或圖片，就能在這裡查看剪輯結果。</p></div><small>內建示範片段 · 按播放可查看</small></div>}
         {audioLayers.map(({ clip, source }) => (
           <audio key={`audio:${clip.id}:${source}`} ref={(node) => { if (node) mediaRefs.current.set(clip.id, node); else mediaRefs.current.delete(clip.id); }} src={source} preload="auto" muted={nativeAudio.mode === "native"} />
         ))}

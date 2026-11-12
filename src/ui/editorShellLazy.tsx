@@ -12,8 +12,9 @@ export const Preview = lazy(() => import("./Preview").then((module) => ({ defaul
 export const BeginnerGuide = lazy(() => import("./BeginnerGuide").then((module) => ({ default: module.BeginnerGuide })));
 export const MediaBin = lazy(() => import("./MediaBin").then((module) => ({ default: module.MediaBin })));
 export const Timeline = lazy(() => import("./Timeline").then((module) => ({ default: module.Timeline })));
-export const WorkspaceDropImport = lazy(() => import("./WorkspaceDropImport").then((module) => ({ default: module.WorkspaceDropImport })));
 export const AgentConnectModal = lazy(() => import("./AgentConnectModal").then((module) => ({ default: module.AgentConnectModal })));
+export const LocalStoryDraftDialog = lazy(() => import("./LocalStoryDraftDialog").then((module) => ({ default: module.LocalStoryDraftDialog })));
+export const MaterialReviewDialog = lazy(() => import("./MaterialReviewDialog").then((module) => ({ default: module.MaterialReviewDialog })));
 export const AutoEditDialog = lazy(() => import("./AutoEditDialog").then((module) => ({ default: module.AutoEditDialog })));
 
 export const BEGINNER_GUIDE_KEY = "editkin.beginner-guide.v1";

@@ -1,9 +1,11 @@
+// Agent integration: urn:uuid:d366cab7-d5a4-44d8-b80d-4c7ce4daf65d. Existing GPL license retained; see AGENT-NOTICE.md.
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { prepareMaterialIntelligence, readMaterialIntelligence } from "./materialIntelligence";
+import { assertAgentMaterialAccess } from "../mcp/agentMaterialAccess";
 
 // Source/cache bytes are real. Probe is a labelled audio fixture, not a decoder test.
 vi.mock("./inspectMedia", () => ({ inspectMedia: vi.fn(async () => ({ duration: 3, hasAudio: true, hasVideo: false })) }));
@@ -42,6 +44,17 @@ it("does not reuse another clip's IDs for the same source window", async () => {
   const next = await prepareMaterialIntelligence({ ...request, assetId: "asset-b", clipId: "clip-b" }, runtime);
   expect(next.packet.materialId).not.toBe(first.packet.materialId);
   expect(next.packet.source).toMatchObject({ assetId: "asset-b", clipId: "clip-b" });
+});
+it("separates copied projects even when source bytes and clip IDs match", async () => {
+  const { request, runtime } = await fixture();
+  const aScope = "a".repeat(64), bScope = "b".repeat(64);
+  const a = await prepareMaterialIntelligence({ ...request, agentProjectScope: aScope }, runtime);
+  const b = await prepareMaterialIntelligence({ ...request, agentProjectScope: bScope }, runtime);
+  expect(a.packet.materialId).not.toBe(b.packet.materialId);
+  expect(() => assertAgentMaterialAccess(aScope, a.packet)).not.toThrow();
+  expect(() => assertAgentMaterialAccess(aScope, b.packet)).toThrow(/目前 Agent 專案/);
+  expect((await prepareMaterialIntelligence({ ...request, agentProjectScope: aScope }, runtime)).cacheHit).toBe(true);
+  expect((await readMaterialIntelligence(runtime.cacheRoot, b.packet.materialId)).cache?.identity.agentProjectScope).toBe(bScope);
 });
 it("invalidates changed colour interpretation without replacing earlier evidence", async () => {
   const { request, runtime } = await fixture();

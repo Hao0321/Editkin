@@ -2,11 +2,20 @@ import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { createFileSymlinkOrSkip } from "../../testSupport/fileSymlink";
 import { MAX_JSON_BYTES } from "./constants";
 import { ProposalAlreadyExistsError, readJson, remoteSetupPaths, writeJsonAtomic, writeJsonCreateNew } from "./stateFiles";
 
-const temporaryRoot = () => mkdtemp(join(tmpdir(), "editkin-remote-state-"));
+const temporaryRoots: string[] = [];
+const temporaryRoot = async () => {
+  const root = await mkdtemp(join(tmpdir(), "editkin-remote-state-"));
+  temporaryRoots.push(root);
+  return root;
+};
+afterEach(async () => {
+  await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
 
 describe("remote onboarding state files", () => {
   it.skipIf(process.platform === "win32")("rejects a FIFO without waiting for a writer", async () => {
@@ -30,16 +39,16 @@ describe("remote onboarding state files", () => {
     expect(() => remoteSetupPaths({ EDITKIN_AGENT_STATE_ROOT: join(root, "agent-runtime-v2") })).toThrow("generation");
   });
 
-  it("reads missing files as absent but rejects symlinks and oversized files", async () => {
+  it("reads missing files as absent but rejects symlinks and oversized files", async (context) => {
     const root = await temporaryRoot();
     const file = join(root, "receipt.json");
     expect(await readJson(file)).toBeUndefined();
     await writeFile(file, '{"ok":true}');
     expect(await readJson(file)).toEqual({ ok: true });
-    await symlink(file, join(root, "link.json"));
-    await expect(readJson(join(root, "link.json"))).rejects.toThrow("symlink");
     await writeFile(join(root, "big.json"), " ".repeat(MAX_JSON_BYTES + 1));
     await expect(readJson(join(root, "big.json"))).rejects.toThrow();
+    await createFileSymlinkOrSkip(file, join(root, "link.json"), context);
+    await expect(readJson(join(root, "link.json"))).rejects.toThrow("symlink");
   });
 
   it("publishes create-new receipts without replacing an existing one or leaving temporaries", async () => {
@@ -53,18 +62,18 @@ describe("remote onboarding state files", () => {
     expect(await readdir(join(root, "state"))).toEqual(["pending.json"]);
   });
 
-  it("atomically replaces regular files but refuses symlink destinations and symlinked parents", async () => {
+  it("atomically replaces regular files but refuses symlink destinations and symlinked parents", async (context) => {
     const root = await temporaryRoot();
     const file = join(root, "config.json");
     await writeJsonAtomic(file, { revision: 1 });
     await writeJsonAtomic(file, { revision: 2 });
     expect(JSON.parse(await readFile(file, "utf8"))).toEqual({ revision: 2 });
-    await symlink(file, join(root, "link.json"));
-    await expect(writeJsonAtomic(join(root, "link.json"), { revision: 3 })).rejects.toThrow("symlink");
-    expect(JSON.parse(await readFile(file, "utf8"))).toEqual({ revision: 2 });
     await mkdir(join(root, "real"));
-    await symlink(join(root, "real"), join(root, "parent-link"));
+    await symlink(join(root, "real"), join(root, "parent-link"), process.platform === "win32" ? "junction" : "dir");
     await expect(writeJsonAtomic(join(root, "parent-link", "x.json"), {})).rejects.toThrow("symlink");
     expect(await readdir(join(root, "real"))).toEqual([]);
+    await createFileSymlinkOrSkip(file, join(root, "link.json"), context);
+    await expect(writeJsonAtomic(join(root, "link.json"), { revision: 3 })).rejects.toThrow("symlink");
+    expect(JSON.parse(await readFile(file, "utf8"))).toEqual({ revision: 2 });
   });
 });

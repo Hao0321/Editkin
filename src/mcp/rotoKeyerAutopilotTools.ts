@@ -18,14 +18,14 @@ import type { ChromaKeySettings } from "../domain/types";
 import { editorCommandSchema } from "../domain/schema";
 import { findAsset } from "../domain/editGraph";
 import { creativePackRoot, errorResult, personalMusicRoot, personalVisualRoot, textResult } from "./toolRuntime";
-import { readProject, resolveWorkspaceMediaPath } from "./storage";
+import { readProject, resolveProjectAssetMediaPath } from "./storage";
 
 const sha256Schema = z.string().regex(/^[a-f0-9]{64}$/);
 
 async function resolveAssetSource(uri: string): Promise<string> {
   const creativeId = creativeAssetIdFromUri(uri);
   if (creativeId) return (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath;
-  return resolveWorkspaceMediaPath(uri);
+  return resolveProjectAssetMediaPath(uri);
 }
 
 function runtime() {

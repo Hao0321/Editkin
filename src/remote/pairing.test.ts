@@ -43,7 +43,7 @@ describe("device credential lifetime", () => {
 });
 
 describe("LAN remote server pairing", () => {
-  const token = "0123456789abcdef0123456789abcdef";
+  const token = "t".repeat(32);
   let root: string;
   let child: ChildProcess;
   let origin: string;

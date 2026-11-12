@@ -124,7 +124,7 @@ export function MediaBin({ assets, runtimeUrls, onImport, onDesktopImport, creat
         <strong>{userAssets.length ? "加入更多素材" : "加入素材"}</strong>
         <small>選擇檔案，或拖入這個視窗</small>
       </button>
-      {onCreativeImport && <button type="button" className="library-discovery" onClick={() => setTab("library")} data-testid="asset-preview-entry">
+      {onCreativeImport && Boolean(creativeLibrary?.assetCount) && <button type="button" className="library-discovery" onClick={() => setTab("library")} data-testid="asset-preview-entry">
         <span className="library-discovery-visuals" aria-hidden="true"><i>▶</i><i>♫</i><i>▧</i></span>
         <span><strong>打開素材庫預覽</strong><small>補充鏡頭、轉場、音樂與圖片；先預覽，再加入</small></span>
         <b>查看 {creativeLibrary?.assetCount ?? "…"} 份 →</b>
@@ -142,7 +142,7 @@ export function MediaBin({ assets, runtimeUrls, onImport, onDesktopImport, creat
         </div>
       </details>}
       <div className="asset-list" ref={assetScrollRef} data-testid="user-asset-list" data-wheel-scroll="vertical" tabIndex={0} aria-label="專案素材，可捲動瀏覽" onScroll={(event) => setAssetScrollTop(event.currentTarget.scrollTop)}>
-        {userAssets.length === 0 && <div className="asset-list-empty"><b>這裡只放你的素材</b><span>上方的彩色畫面是操作示範，不會算進專案，也不能誤輸出。</span></div>}
+        {userAssets.length === 0 && <div className="asset-list-empty"><b>這裡只放你的素材</b><span>{assets.some((asset) => asset.id === "asset-demo") ? "預覽區目前是內建示範片；加入自己的素材時會自動移除它。" : "按上方「加入素材」選擇影片、聲音或圖片，開始編輯。"}</span></div>}
         {assetWindow.before > 0 && <div aria-hidden="true" className="library-spacer" style={{ height: assetWindow.before }} />}
         {assetWindow.items.map((asset) => (
           <div className="asset-row" key={asset.id} draggable={true} data-asset-id={asset.id} title="拖到時間軸的空白軌道；落點逐幀對齊，靠近片段邊緣會吸附" onDragStart={(event) => {

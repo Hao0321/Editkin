@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { createFileSymlinkOrSkip } from "../testSupport/fileSymlink";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -120,7 +121,7 @@ describe("updater cache containment and ownership", () => {
     await outsideIntact(outside);
   });
 
-  it.each(["hardlink", "file-symlink", "directory-junction"])("rejects cached artifact %s without removing it", async (kind) => {
+  for (const kind of ["hardlink", "file-symlink", "directory-junction"]) it(`rejects cached artifact ${kind} without removing it`, async (context) => {
     const { cacheRoot, outside } = await fixture();
     const input = manifest();
     const { directory, artifact } = paths(cacheRoot, input);
@@ -128,7 +129,7 @@ describe("updater cache containment and ownership", () => {
     await writeFile(original, "installer-fixture");
     await mkdir(directory, { recursive: true });
     if (kind === "hardlink") await link(original, artifact);
-    if (kind === "file-symlink") await symlink(original, artifact, "file");
+    if (kind === "file-symlink") await createFileSymlinkOrSkip(original, artifact, context);
     if (kind === "directory-junction") await symlink(outside, artifact, "junction");
     const before = await lstat(artifact);
     const config = options(cacheRoot);

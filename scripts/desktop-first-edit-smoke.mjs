@@ -19,6 +19,13 @@ function assertPackagedUrl(value) {
   const url = new URL(value);
   assert(["http:", "https:"].includes(url.protocol) && url.hostname === "tauri.localhost" && !url.port, `Not the packaged Tauri UI: ${value}`);
 }
+function assertApplicationExecutable(path) {
+  const name = basename(path).toLowerCase();
+  assert(["editkin.exe", "autopilotdesk-community-preview.exe"].includes(name), "Pass the application executable, never an installer");
+}
+function startupControlsReady(state) {
+  return Boolean(state.desktop && state.toolbar && (state.welcome || state.importControl));
+}
 function assertRecoveryHealthy(state) {
   assert(!state.saveFailed && !state.saveState?.includes("失敗"), `Application autosave failed: ${JSON.stringify(state)}`);
 }
@@ -51,6 +58,12 @@ function assertOutput(probe, project, duration) {
   assert(probe.format?.format_name?.split(",").includes("mp4"), "Output is not an MP4 container");
 }
 if (process.argv[2] === "--self-test") {
+  assertApplicationExecutable("C:/package/editkin.exe");
+  assertApplicationExecutable("C:/package/AutopilotDesk-Community-Preview.exe");
+  assert.throws(() => assertApplicationExecutable("C:/package/Editkin_0.15.0_x64-setup.exe"));
+  assert(startupControlsReady({ desktop: true, toolbar: true, welcome: true, importControl: false }));
+  assert(startupControlsReady({ desktop: true, toolbar: true, welcome: false, importControl: true }));
+  assert.equal(startupControlsReady({ desktop: true, toolbar: true, welcome: false, importControl: false }), false);
   assertPackagedUrl("http://tauri.localhost/");
   for (const url of ["http://localhost:5173/", "http://127.0.0.1:5173/", "http://tauri.localhost:5173/", "https://tauri.localhost.example/"]) assert.throws(() => assertPackagedUrl(url));
   const project = { width: 640, height: 360, fps: 30 };
@@ -146,7 +159,7 @@ if (process.argv[2] === "--self-test") {
     mark("preflight-owned-fixture-and-pinned-model");
     assert.equal(process.platform, "win32", "This bounded journey currently targets Windows Tauri");
     const executable = await realpath(resolve(process.argv[2]));
-    assert.equal(basename(executable).toLowerCase(), "editkin.exe", "Pass the application executable, never an installer");
+    assertApplicationExecutable(executable);
     report.executable = await identity(executable);
     report.evaluator = await identity(fileURLToPath(import.meta.url));
     const speechPath = resolve(root, "../../.rd/fixtures/editkin-caption-ground-truth.wav");
@@ -185,7 +198,7 @@ if (process.argv[2] === "--self-test") {
     page = await harness.target();
     assertPackagedUrl(page.url);
     report.url = page.url;
-    await poll("Startup controls", () => evaluate(`JSON.stringify({desktop:window.haoDesktop?.isDesktop,toolbar:!!document.querySelector('[data-testid="editor-toolbar"]'),welcome:!!document.querySelector('[data-testid="first-project-start"]')})`), (state) => state.desktop && state.toolbar && state.welcome, 45000);
+    report.startup = await poll("Startup controls", () => evaluate(`JSON.stringify({desktop:window.haoDesktop?.isDesktop,toolbar:!!document.querySelector('[data-testid="editor-toolbar"]'),welcome:!!document.querySelector('[data-testid="first-project-start"]'),importControl:!!document.querySelector('[data-testid="semantic-edit-button"]')})`), startupControlsReady, 45000);
     report.buildManifest = await evaluate(`window.__TAURI_INTERNALS__.invoke('release_input_manifest').then(v=>JSON.stringify({product:v.product,productVersion:v.productVersion,inputIdentity:v.inputIdentity,outputIdentity:v.outputIdentity}))`);
     await screenshot("01-first-start");
     const guide = await evaluate(`JSON.stringify(!!document.querySelector('[data-testid="guide-skip"]'))`);
@@ -266,6 +279,9 @@ if (process.argv[2] === "--self-test") {
     await harness.cdpCommand(page.webSocketDebuggerUrl, "Input.dispatchKeyEvent", { type: "keyDown", key: "End", code: "End", windowsVirtualKeyCode: 35, modifiers: 2 }, remaining());
     await harness.cdpCommand(page.webSocketDebuggerUrl, "Input.dispatchKeyEvent", { type: "keyUp", key: "End", code: "End", windowsVirtualKeyCode: 35, modifiers: 2 }, remaining());
     await harness.cdpCommand(page.webSocketDebuggerUrl, "Input.insertText", { text: " · 測試" }, remaining());
+    await poll("Manual caption edit pending", () => evaluate(`JSON.stringify({value:document.querySelector('[data-testid="caption-text-input"]')?.value,applyDisabled:document.querySelector('[data-testid="caption-text-input-apply"]')?.disabled})`),
+      (value) => value.value === `${caption.text} · 測試` && value.applyDisabled === false, 5000);
+    await click('[data-testid="caption-text-input-apply"]');
     const edited = await poll("Manual caption edit persisted", () => evaluate(`window.haoDesktop.loadRecovery().then(v=>JSON.stringify(v))`), (value) => value.found && value.snapshot.project.captions.find((item) => item.id === caption.id)?.text === `${caption.text} · 測試`, 15000);
     const project = edited.snapshot.project;
     await writeFile(resolve(workspace, "editable-result.editkin.json"), json(project), { flag: "wx" });

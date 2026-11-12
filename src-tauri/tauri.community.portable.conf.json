@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Autopilot Desk Community Preview",
+  "identifier": "studio.hao.autopilotdesk.communitypreview",
+  "app": {
+    "windows": [
+      {
+        "title": "Autopilot Desk Community Preview",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1080,
+        "minHeight": 720,
+        "backgroundColor": "#eaf2ff"
+      }
+    ]
+  },
+  "bundle": {
+    "active": false,
+    "resources": null
+  }
+}

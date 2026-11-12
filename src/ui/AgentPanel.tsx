@@ -16,12 +16,12 @@ interface AgentPanelProps {
   semanticAutoEditBusy?: boolean;
   semanticAutoEditStage?: SemanticAutoEditStage;
   onOpenAgentConnect?: () => void;
-  /** Set when the runtime cannot run the local engines (browser build); the one-click actions are disabled with this reason. */
+  onOpenLocalDraft?: () => void;
   unavailableReason?: string;
   hasMedia: boolean;
 }
 
-export function AgentPanel({ status, onSubmit, onSmartCut, smartCutBusy = false, onAutomaticCaptions, automaticCaptionsBusy = false, onSceneSplit, sceneSplitBusy = false, onSemanticAutoEdit, semanticAutoEditBusy = false, semanticAutoEditStage, onOpenAgentConnect, unavailableReason, hasMedia }: AgentPanelProps) {
+export function AgentPanel({ status, onSubmit, onSmartCut, smartCutBusy = false, onAutomaticCaptions, automaticCaptionsBusy = false, onSceneSplit, sceneSplitBusy = false, onSemanticAutoEdit, semanticAutoEditBusy = false, semanticAutoEditStage, onOpenAgentConnect, onOpenLocalDraft, unavailableReason, hasMedia }: AgentPanelProps) {
   const [instruction, setInstruction] = useState("");
   const [captionMode, setCaptionMode] = useState<"original" | "bilingual-en">("original");
   const submit = () => {
@@ -34,16 +34,17 @@ export function AgentPanel({ status, onSubmit, onSmartCut, smartCutBusy = false,
       <div className="agent-lead">
         <div className="agent-orb" aria-hidden="true"><span>2</span>✦</div>
         <div className="agent-copy">
-          <div><strong>讓 Editkin 自動剪</strong><span>完成後每一段都還能改</span></div>
+          <div><strong>剪輯工作台</strong><span>先確認故事與素材，再剪成片</span></div>
           <p data-testid="agent-status" aria-live="polite">{status}</p>
         </div>
       </div>
       <div className="agent-primary-workbench">
-        {onSemanticAutoEdit && <button type="button" className="semantic-edit-button auto-complete-button" onClick={onSemanticAutoEdit} disabled={semanticAutoEditBusy || !hasMedia || Boolean(unavailableReason)} title={unavailableReason} data-testid="semantic-edit-panel-button" data-stage={semanticAutoEditStage?.step} data-beginner-action="一鍵自動完成"><b>✦</b><span><strong>{semanticAutoEditStage?.title ?? (hasMedia ? "一鍵自動完成" : "請先加入你的影片")}</strong><small>{unavailableReason ?? semanticAutoEditStage?.detail ?? "分析畫面與語音，自動處理停頓、場景、字幕、配樂、調色、轉場與適合的效果"}</small></span><i>{semanticAutoEditStage ? `${semanticAutoEditStage.step} / 4` : hasMedia ? "開始 →" : "先做第 1 步"}</i></button>}
+        {onOpenLocalDraft && <button type="button" className="local-story-primary" onClick={onOpenLocalDraft} data-testid="open-local-story-draft"><strong>從歌詞寫故事</strong><small>先編劇、審稿；看片核對後才能剪輯</small><span>開啟提案 →</span></button>}
         <details className="agent-panel-disclosure" data-testid="agent-panel-disclosure">
-          <summary>自訂修改與更多功能</summary>
+          <summary>素材粗剪與其他工具</summary>
           <div className="agent-panel-disclosure-body">
-            <div className="auto-edit-how" data-testid="auto-edit-how"><strong>操作順序</strong><span className={hasMedia ? "done" : "current"}>1 加入影片</span><span>2 選片型</span><span>3 按下自動剪輯</span><i>本機原生 · 0 AI 額度</i></div>
+            {onSemanticAutoEdit && <button type="button" className="semantic-edit-button auto-complete-button" onClick={onSemanticAutoEdit} disabled={semanticAutoEditBusy || !hasMedia || Boolean(unavailableReason)} title={unavailableReason} data-testid="semantic-edit-panel-button" data-stage={semanticAutoEditStage?.step} data-beginner-action="規則式素材粗剪"><b>✦</b><span><strong>{semanticAutoEditStage?.title ?? (hasMedia ? "規則式素材粗剪" : "請先加入你的影片")}</strong><small>{unavailableReason ?? semanticAutoEditStage?.detail ?? "按畫面／語音規則處理素材；不會理解歌詞故事，結果需逐段審查"}</small></span><i>{semanticAutoEditStage ? `${semanticAutoEditStage.step} / 4` : hasMedia ? "開始粗剪 →" : "先加入影片"}</i></button>}
+            <div className="auto-edit-how" data-testid="auto-edit-how"><strong>粗剪操作</strong><span className={hasMedia ? "done" : "current"}>1 加入影片</span><span>2 選片型</span><span>3 檢查粗剪</span><i>本機原生 · 0 AI 額度</i></div>
             <div className="agent-input-row">
               <span className="agent-input-icon" aria-hidden="true">✦</span>
               <input
@@ -61,7 +62,7 @@ export function AgentPanel({ status, onSubmit, onSmartCut, smartCutBusy = false,
                 <summary>更多一鍵功能</summary>
                 {unavailableReason && <p className="agent-unavailable-note" data-testid="agent-unavailable-note">{unavailableReason}</p>}
                 <div className="automation-actions" aria-label="一鍵自動剪輯">
-                  {onOpenAgentConnect && <button type="button" className="agent-long-source" onClick={onOpenAgentConnect} title="讓你的 Codex／Claude 看懂一支長片，再拆成多個獨立可編輯 Reels"><b>AI</b><span>長片拆多支 Reels</span></button>}
+                  {onOpenAgentConnect && <button type="button" className="agent-long-source" onClick={onOpenAgentConnect} title="直接在內部 Agent 交代素材範圍、影片目標與剪輯方式"><b>AI</b><span>交給 Agent 剪輯</span></button>}
                   {onSmartCut && <button type="button" className="smart-cut-button" onClick={onSmartCut} disabled={smartCutBusy || !hasMedia || Boolean(unavailableReason)} title={unavailableReason ?? (hasMedia ? "自動找出並刪除停頓" : "請先加入你的影片")} data-testid="smart-cut-button"><b aria-hidden="true">✂</b><span><strong>{smartCutBusy ? "分析中…" : "刪掉停頓"}</strong><small>自動找出空白</small></span></button>}
                   {onAutomaticCaptions && <div className="automatic-caption-choice">
                     <label htmlFor="automatic-caption-mode">字幕類型</label>

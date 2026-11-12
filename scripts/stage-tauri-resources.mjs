@@ -26,6 +26,7 @@ if (mcpCandidateStage && !/^candidate-[a-f0-9]{16}$/u.test(basename(envelopeRoot
 }
 const resources = [
   ["desktop-dist/service.mjs", "service.mjs"],
+  ["desktop-dist/service.mjs.material-color-identity.json", "service.mjs.material-color-identity.json"],
   ["desktop-dist/mcp.mjs", "mcp.mjs"],
   ["desktop-dist/mcp.mjs.material-color-identity.json", "mcp.mjs.material-color-identity.json"],
   ["desktop-dist/remote.mjs", "remote.mjs"],
@@ -102,8 +103,8 @@ let preserveStagingForRecovery = false;
 let transaction;
 try {
   for (const [source, destination] of resources) {
-    if (destination === "mcp.mjs.material-color-identity.json") continue;
-    if (destination === "mcp.mjs") {
+    if (destination === "mcp.mjs.material-color-identity.json" || destination === "service.mjs.material-color-identity.json") continue;
+    if (destination === "mcp.mjs" || destination === "service.mjs") {
       await stageMaterialColorRuntimePair(resolve(source), resolve(stagedRuntime, destination));
       continue;
     }

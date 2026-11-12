@@ -6,7 +6,8 @@ import { join, resolve } from "node:path";
 import { createEmptyProject } from "../domain/editGraph";
 import { createAutopilotV4Fixture } from "./autopilotPlanFixture";
 import { parseAutopilotPlan, type CurrentAutopilotPlan } from "./autopilotPlan";
-import { designEvidenceSchema, designRequestSchema } from "./autopilotDesignContract";
+import { assertDesignDecisionBinding, designEvidenceSchema, designRequestSchema } from "./autopilotDesignContract";
+import type { EditorCommand } from "../domain/commands";
 import { MOTION_TREATMENT_FAMILIES } from "./motionTreatment";
 import { sha256Canonical } from "./autopilotInvocationIdentity";
 import { compileCurrentDesign, designIdentity, verifyAutopilotDesign, type CurrentDesignBrief } from "../mcp/autopilotDesignTools";
@@ -41,6 +42,18 @@ function fixture() {
 }
 
 describe("live private design execution binding", () => {
+  it.each<EditorCommand>([
+    { type: "smart_cut_clip", clipId: "source", keepRanges: [{ start: 0, end: 1 }], segmentIds: ["source"] },
+    { type: "trim_clip_start", clipId: "source", seconds: 1 },
+    { type: "trim_clip_end", clipId: "source", seconds: 1 },
+    { type: "ripple_delete_clip", clipId: "source" },
+  ])("accepts native timeline edit $type as a visible design decision", command => {
+    const f = fixture();
+    const evidence = structuredClone(f.plan.designEvidence!);
+    evidence.decisions[0].commandIndexes = [f.plan.commands.length];
+    expect(() => assertDesignDecisionBinding(evidence, [...f.plan.commands, command],
+      f.plan.editorial.narrative.beats.map(beat => beat.id))).not.toThrow();
+  });
   it.skipIf(!existsSync(join(publicSkillSource, "editkin_design_bridge.py")))("compiles an installed public Kit without the private profile and detects design drift", async () => {
     const root = await mkdtemp(join(tmpdir(), "editkin-public-design-"));
     const skillRoot = join(root, "video-autopilot");

@@ -392,6 +392,10 @@ export function parseAutopilotPlan(input: unknown): AutopilotPlan {
     const expectedRouter = inferenceRouterSha256(renderInferenceRouterMarkdown(plan.inference.taskClass, plan.inference.priority));
     if (plan.inference.context.markdownRouterSha256 !== expectedRouter) throw new Error("Autopilot Markdown router hash 與標準 bounded packet 不一致");
     if (plan.route.mode === "build") assertBuildNarrative(plan.editorial);
+    for (const [index, command] of plan.commands.entries()) {
+      if ((command.type === "update_clip_transform" || command.type === "update_clip_transform_3d" || command.type === "set_clip_color")
+        && Object.keys(command.patch).length === 0) throw new Error(`Autopilot command ${index} (${command.type}) has an empty patch and cannot demonstrate an edit`);
+    }
     assertVisibleEditorialExecution(plan);
     assertLowerThirdEvidenceReceiptBinding(plan);
     assertMotionTreatmentBinding(plan.editorial.motionTreatment, plan.commands as EditorCommand[], plan.editorial.narrative.beats.map(beat => beat.id));

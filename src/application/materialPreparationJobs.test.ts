@@ -1,3 +1,4 @@
+// Agent integration: urn:uuid:d366cab7-d5a4-44d8-b80d-4c7ce4daf65d. Existing GPL license retained; see AGENT-NOTICE.md.
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,6 +22,34 @@ async function until(check: () => Promise<boolean>) {
   while (!await check()) { if (Date.now() > deadline) throw Error("test condition timeout"); await new Promise(done => setTimeout(done, 5)); }
 }
 describe("nonblocking material jobs (control fixtures, not media quality)", () => {
+  it("keeps job status, cancellation and resume within the issuing Agent project", async () => {
+    const { manager, runtime, root } = await fixture(async () => ({ packet, cacheHit: true }));
+    const aScope = "a".repeat(64), bScope = "b".repeat(64);
+    await expect(manager.start(request, runtime, undefined, aScope)).rejects.toThrow(/範圍不一致/);
+    const scopedRequest = { ...request, agentProjectScope: aScope };
+    const started = await manager.start(scopedRequest, runtime, undefined, aScope);
+    await until(async () => (await manager.status(started.job.jobId, aScope)).state === "COMPLETED");
+    const reopened = new MaterialPreparationJobs(root, async () => ({ packet, cacheHit: true })); managers.push(reopened);
+    expect((await reopened.status(started.job.jobId, aScope)).state).toBe("COMPLETED");
+    await expect(reopened.status(started.job.jobId, bScope)).rejects.toThrow(/不屬於/);
+    await expect(reopened.cancel(started.job.jobId, bScope)).rejects.toThrow(/不屬於/);
+    await expect(reopened.start({ ...request, agentProjectScope: bScope }, runtime, started.job.jobId, bScope)).rejects.toThrow(/不屬於/);
+  });
+  it("starts a fresh scoped job after an unscoped dead owner without reusing its result", async () => {
+    const { manager, runtime, root } = await fixture(async () => ({ packet, cacheHit: true }));
+    const initial = await manager.start(request, runtime);
+    await until(async () => (await manager.status(initial.job.jobId)).state === "COMPLETED");
+    const exited = await runAnalysisProcess(process.execPath, ["-e", "process.stdout.write(String(process.pid))"], { label: "dead-owner fixture", timeoutMs: 1000 });
+    const path = join(root, "material-preparation-jobs", `${initial.job.jobId}.json`);
+    const state = JSON.parse(await readFile(path, "utf8"));
+    await writeFile(path, JSON.stringify({ ...state, ownerPid: Number(exited.stdout.toString()), state: "RUNNING", result: undefined }));
+    const restarted = new MaterialPreparationJobs(root, async () => ({ packet, cacheHit: true })); managers.push(restarted);
+    const scopedRequest = { ...request, agentProjectScope: "a".repeat(64) };
+    const fresh = await restarted.start(scopedRequest, runtime, undefined, "a".repeat(64));
+    expect(fresh.job.jobId).not.toBe(initial.job.jobId);
+    expect(fresh.job.resumedFrom).toBeUndefined();
+    await until(async () => (await restarted.status(fresh.job.jobId, "a".repeat(64))).state === "COMPLETED");
+  });
   it("requires explicit resume after an independently proven dead owner", async () => {
     const { manager, runtime, root } = await fixture(async () => ({ packet, cacheHit: true }));
     const initial = await manager.start(request, runtime);

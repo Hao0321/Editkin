@@ -140,7 +140,7 @@ export const editorialPlanSchema = z.strictObject({
   transitions: z.array(transitionSchema).max(128),
   audio: z.strictObject({
     dialoguePriority: z.literal(true), blanketWhooshEveryCut: z.literal(false),
-    layers: z.array(audioLayerSchema).min(1).max(32),
+    layers: z.array(audioLayerSchema).max(32),
     impactFrames: z.array(z.number().int().nonnegative()).max(64),
     breathFrames: z.array(z.number().int().nonnegative()).max(64),
   }),

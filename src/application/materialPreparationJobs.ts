@@ -1,3 +1,4 @@
+// Agent integration: urn:uuid:d366cab7-d5a4-44d8-b80d-4c7ce4daf65d. Existing GPL license retained; see AGENT-NOTICE.md.
 import { createHash, randomUUID } from "node:crypto";
 import { lstat, mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { readBoundedFile } from "../shared/boundedFile";
@@ -12,6 +13,7 @@ const digest = (value: unknown) => createHash("sha256").update(canonicalJson(val
 const stateSchema = z.object({
   schema: z.literal("editkin.material-preparation-job/v1"), jobId: idSchema,
   requestHash: z.string().regex(/^[a-f0-9]{64}$/), ownerPid: z.number().int().positive(), ownerInstance: idSchema,
+  agentProjectScope: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   state: z.enum(["RUNNING", "CANCELLING", "CANCELLED", "FAILED", "COMPLETED", "INTERRUPTED"]),
   startedAt: z.string(), updatedAt: z.string(), resumedFrom: idSchema.optional(),
   progress: z.union([
@@ -82,14 +84,16 @@ export class MaterialPreparationJobs {
     try { await handle.writeFile(this.instance); return await work(); }
     finally { await handle.close(); await rm(path); }
   }
-  async status(jobId: string): Promise<MaterialPreparationJob> {
+  async status(jobId: string, agentProjectScope?: string): Promise<MaterialPreparationJob> {
     const state = this.jobs.get(jobId)?.published ?? await this.read(jobId);
+    if (agentProjectScope && state.agentProjectScope !== agentProjectScope) throw Error("素材工作不屬於目前 Agent 專案");
     if (active(state) && !alive(state.ownerPid)) return { ...state, state: "INTERRUPTED", error: "分析程序已停止；以相同 prepare 要求和 resumeJobId 明確續跑，已完成字幕分段可重用" };
     return structuredClone(state);
   }
-  async start(request: PrepareMaterialRequest, runtime: MaterialRuntime, resumeJobId?: string) {
+  async start(request: PrepareMaterialRequest, runtime: MaterialRuntime, resumeJobId?: string, agentProjectScope?: string) {
     if (this.closed) throw Error("素材工作服務正在停止");
-    const requestHash = digest({ request, runtime: { ffmpegPath: resolve(runtime.ffmpegPath), ffprobePath: runtime.ffprobePath,
+    if (agentProjectScope && request.agentProjectScope !== agentProjectScope) throw Error("素材工作與 Agent 專案範圍不一致");
+    const requestHash = digest({ request, ...(agentProjectScope ? { agentProjectScope } : {}), runtime: { ffmpegPath: resolve(runtime.ffmpegPath), ffprobePath: runtime.ffprobePath,
       modelRoot: resolve(runtime.modelRoot), modelPath: runtime.modelPath, whisperCliPath: configuredWhisperCliPath(runtime), cacheRoot: resolve(runtime.cacheRoot) } });
     return this.exclusive(async () => {
       const activePath = join(this.directory, "active.json");
@@ -98,15 +102,19 @@ export class MaterialPreparationJobs {
       catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
       if (owner && active(owner) && alive(owner.ownerPid)) {
         if (owner.requestHash !== requestHash) throw Error("已有素材分析進行中，請先等待或取消該工作");
-        return { job: await this.status(owner.jobId), coalesced: true };
+        return { job: await this.status(owner.jobId, agentProjectScope), coalesced: true };
       }
-      if (owner && active(owner) && resumeJobId !== owner.jobId) throw Error("前次素材工作中斷，請指定 resumeJobId；未自動重跑");
+      // A dead job from another project (or before project scopes existed)
+      // cannot be resumed here. Replace only its active pointer; never reuse it.
+      if (owner && active(owner) && (!agentProjectScope || owner.agentProjectScope === agentProjectScope)
+        && resumeJobId !== owner.jobId) throw Error("前次素材工作中斷，請指定 resumeJobId；未自動重跑");
       if (resumeJobId) {
-        const previous = await this.status(resumeJobId);
+        const previous = await this.status(resumeJobId, agentProjectScope);
         if (previous.requestHash !== requestHash || active(previous)) throw Error("續跑要求不一致或工作仍在執行");
       }
       const now = new Date().toISOString();
       const state: MaterialPreparationJob = { schema: "editkin.material-preparation-job/v1", jobId: randomUUID(), requestHash,
+        ...(agentProjectScope ? { agentProjectScope } : {}),
         ownerPid: process.pid, ownerInstance: this.instance, state: "RUNNING", startedAt: now, updatedAt: now,
         progress: { phase: "identity" }, ...(resumeJobId ? { resumedFrom: resumeJobId } : {}) };
       await this.save(state);
@@ -139,15 +147,16 @@ export class MaterialPreparationJobs {
     catch (error) { state.state = "FAILED"; state.error = `素材工作狀態無法保存 (${(error as NodeJS.ErrnoException).code ?? "I/O"})`; delete state.result; }
     local.published = structuredClone(state);
   }
-  async cancel(jobId: string) {
+  async cancel(jobId: string, agentProjectScope?: string) {
+    await this.status(jobId, agentProjectScope);
     const local = this.jobs.get(jobId);
-    if (!local) { const state = await this.status(jobId); if (!active(state)) return state; throw Error("工作由其他仍在執行的程序持有，請在原連線取消"); }
+    if (!local) { const state = await this.status(jobId, agentProjectScope); if (!active(state)) return state; throw Error("工作由其他仍在執行的程序持有，請在原連線取消"); }
     if (active(local.state)) {
       // Owner remains CANCELLING until prepare has closed its actual children.
       local.state.state = "CANCELLING"; local.abort.abort();
       local.published = { ...local.published, state: "CANCELLING" };
     }
-    return this.status(jobId);
+    return this.status(jobId, agentProjectScope);
   }
   async close() {
     this.closed = true;

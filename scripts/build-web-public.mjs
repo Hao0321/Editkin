@@ -1,9 +1,12 @@
+// Agent integration: urn:uuid:d366cab7-d5a4-44d8-b80d-4c7ce4daf65d. Existing GPL license retained; see AGENT-NOTICE.md.
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { copyFile, cp, mkdir, rename, rm } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { verifyAgentProvenance } from "./lib/agent-provenance.mjs";
 
 const root = resolve(import.meta.dirname, "..");
+await verifyAgentProvenance(root);
 const output = resolve(root, ".web-public");
 const staging = resolve(root, `.web-public-staging-${process.pid}-${randomUUID()}`);
 const backup = resolve(root, `.web-public-backup-${process.pid}-${randomUUID()}`);

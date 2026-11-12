@@ -4,6 +4,18 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { AgentConnectModal } from "./AgentConnectModal";
 
 describe("agent workspace UI contract (SSR/source, not native dialog automation)", () => {
+  it("defaults to the shared internal conversation instead of an external setup prompt", () => {
+    const html = renderToStaticMarkup(<AgentConnectModal onClose={() => undefined} onConnect={async () => undefined} onUseInternal={() => undefined} />);
+    expect(html).toContain('data-testid="use-internal-agent"');
+    expect(html).toContain("本機、API 與登入來源共用同一個對話視窗");
+    expect(html).toContain("advanced-external-agent");
+    expect(html).not.toContain("connect-codex-button");
+    expect(html).not.toContain("connect-claude-button");
+    expect(html).not.toContain("複製啟動");
+    const unopened = renderToStaticMarkup(<AgentConnectModal onClose={() => undefined} onConnect={async () => undefined} onUseInternal={() => undefined} internalReady={false} />);
+    expect(unopened).toMatch(/<button[^>]*disabled=""[^>]*data-testid="use-internal-agent"/);
+    expect(unopened).toContain("請先開啟專案或匯入素材");
+  });
   it("explains explicit directory permission and cancellation beside both host choices", () => {
     const html = renderToStaticMarkup(<AgentConnectModal onClose={() => undefined} onConnect={async () => undefined} />);
     expect(html).toContain("connect-codex-button");

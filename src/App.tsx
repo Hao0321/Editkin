@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import "./generated/fontFaces.css";
 import { activeMediaLayers } from "./application/previewMedia";
 import { downloadEditGraph } from "./application/exportGraph";
@@ -15,11 +15,12 @@ import type { OpenProjectResult } from "./desktop/types";
 import { compileAgentInstruction, isAutomaticCaptionInstruction, isSceneSplitInstruction, isSemanticAutoEditInstruction, isSmartCutInstruction } from "./domain/agent";
 import type { EditorCommand } from "./domain/commands";
 import { activeVideoClip, alignTime, animatedClipState, createEmptyProject, findCaption, findClip, projectDuration } from "./domain/editGraph";
-import { createUiDemoProject } from "./domain/demo";
+import { createUiDemoProject, UI_DEMO_PREVIEW_URI } from "./domain/demo";
 import { dispatchCommandSafely, redo, undo } from "./domain/history";
 import { DEFAULT_CLIP_LAYER, DEFAULT_COLOR, DEFAULT_TRANSFORM, type ClipLayout, type MotionGraphicKind, type MotionGraphicPresetSeed, type NormalizedRect } from "./domain/types";
 import { importBrowserMedia, type ImportedBrowserMedia } from "./lib/browserMedia";
-import { canvasResolutionForAsset, isStarterDemo } from "./application/sourceOrientation";
+import { isStarterDemo } from "./application/sourceOrientation";
+import { planImportedMediaPlacement } from "./application/importPlacement";
 import { resolveAestheticSystem } from "./application/editkinAesthetic";
 import { buildLoopingMusicPlan } from "./application/loopingMusic";
 import { makeId } from "./lib/format";
@@ -40,6 +41,7 @@ import { createAppRenderActions } from "./application/appRenderActions";
 import { createAestheticOutputOwner } from "./application/aestheticOutputOwner";
 import { buildLowerThirdCommand, type LowerThirdPresetId } from "./application/lowerThirds";
 import { templateApplicationCleanupCommands, templateOwnedElementCount } from "./application/templateLifecycle";
+import { openAgentProjectResult, type AgentProjectResult } from "./application/agentProjectResult";
 
 function App() {
   const [projectSession] = useState(() => {
@@ -47,7 +49,9 @@ function App() {
     demo.aestheticSystem = resolveAestheticSystem("auto", "longform");
     return createProjectSession(demo);
   });
-  const { history, projectPath, cleanUpdatedAt, dirty, recoveryOwner, sessionId } = useSyncExternalStore(projectSession.subscribe, projectSession.getSnapshot, projectSession.getSnapshot);
+  const agentWorkingCopy = useRef<{ sessionId: number; projectId: string; path: string; revision: number; contentOwner: object; demoSourceUri?: string } | undefined>(undefined);
+  const agentWorkingCopyPending = useRef<Promise<string> | undefined>(undefined);
+  const { history, projectPath, cleanUpdatedAt, dirty, recoveryOwner, sessionId, savePending } = useSyncExternalStore(projectSession.subscribe, projectSession.getSnapshot, projectSession.getSnapshot);
   const aestheticOutputOwner = useMemo(() => createAestheticOutputOwner(), [sessionId]);
   const [aestheticOutputVersion, setAestheticOutputVersion] = useState(0);
   const setHistory = projectSession.setHistory;
@@ -57,6 +61,8 @@ function App() {
   const [selectedCaptionId, setSelectedCaptionId] = useState<string | undefined>();
   const [runtimeUrls, setRuntimeUrls] = useState<Record<string, string>>({});
   const [status, setStatus] = useState("選取片段後，直接告訴我你想怎麼改。");
+  const renderGate = useRef(false);
+  const [renderBusy, setRenderBusy] = useState(false);
   const [trackingMode, setTrackingMode] = useState<TrackingMode>();
   const [trackingSelection, setTrackingSelection] = useState<NormalizedRect>();
   const [trackingBusy, setTrackingBusy] = useState(false);
@@ -118,9 +124,9 @@ function App() {
     },
     onStatus: setStatus,
   });
-  const loadOpenedProject = (opened: OpenProjectResult) => {
+  const loadOpenedProject = (opened: OpenProjectResult, dirty = false) => {
     if (!opened.project) return;
-    projectSession.replaceProject(opened.project, opened.path);
+    projectSession.replaceProject(opened.project, opened.path, { dirty });
     setRuntimeUrls(opened.runtimeUrls ?? {});
     const firstClip = opened.project.tracks.flatMap((track) => track.clips)[0];
     setSelectedClipId(firstClip?.id);
@@ -129,6 +135,94 @@ function App() {
     setPlaying(false);
     setTrackingMode(undefined);
     setTrackingSelection(undefined);
+  };
+  const ensureAgentWorkingProject = useCallback(async (): Promise<string> => {
+    const api = window.haoDesktop;
+    if (!api) throw new Error("只有桌面版能建立 Agent 剪輯工作副本");
+    if (agentWorkingCopyPending.current) return agentWorkingCopyPending.current;
+    const prepare = async (projectSwitches = 0): Promise<string> => {
+      const started = projectSession.getSnapshot();
+      const existing = agentWorkingCopy.current;
+      if (existing && existing.sessionId === started.sessionId && existing.projectId === started.history.present.id) {
+        if (existing.contentOwner === started.contentOwner) return existing.path;
+        const copy = structuredClone(started.history.present);
+        if (copy.id === "editkin-demo" && existing.demoSourceUri) {
+          const demo = copy.assets.find((asset) => asset.id === "asset-demo" && asset.uri === UI_DEMO_PREVIEW_URI);
+          if (demo) demo.uri = existing.demoSourceUri;
+        }
+        copy.revision = existing.revision;
+        const saved = await api.saveProject(copy, existing.path, false);
+        if (saved.canceled || !saved.project || saved.path !== existing.path || saved.project.id !== existing.projectId)
+          throw new Error("Agent 工作副本未完成同步");
+        const current = projectSession.getSnapshot();
+        if (current.sessionId !== started.sessionId && projectSwitches < 2)
+          return prepare(projectSwitches + 1);
+        if (current.sessionId !== started.sessionId || current.contentOwner !== started.contentOwner)
+          throw new Error("同步期間剪輯台又有修改；請再送一次，避免 Agent 使用舊內容");
+        existing.revision = saved.project.revision;
+        existing.contentOwner = current.contentOwner;
+        return existing.path;
+      }
+      if (started.projectPath) return started.projectPath;
+      const created = await api.createAgentWorkingProject(started.history.present);
+      const current = projectSession.getSnapshot();
+      if ((current.sessionId !== started.sessionId || current.projectPath) && projectSwitches < 2)
+        return prepare(projectSwitches + 1);
+      if (current.sessionId !== started.sessionId || current.contentOwner !== started.contentOwner || current.projectPath)
+        throw new Error("準備 Agent 工作副本期間專案已變動；請再試一次");
+      if (!created.path || created.project.id !== started.history.present.id)
+        throw new Error("Agent 工作副本建立結果不完整");
+      agentWorkingCopy.current = { sessionId: started.sessionId, projectId: created.project.id,
+        path: created.path, revision: created.project.revision, contentOwner: started.contentOwner,
+        demoSourceUri: started.history.present.id === "editkin-demo"
+          ? created.project.assets.find((asset) => asset.id === "asset-demo")?.uri : undefined };
+      return created.path;
+    };
+    const pending = prepare();
+    agentWorkingCopyPending.current = pending;
+    try { return await pending; }
+    finally { if (agentWorkingCopyPending.current === pending) agentWorkingCopyPending.current = undefined; }
+  }, [projectSession]);
+  const openCompletedAgentProject = async (result: AgentProjectResult) => {
+    const api = window.haoDesktop;
+    if (!api) throw new Error("只有桌面版能開啟先前的 Agent 剪輯結果。");
+    return openAgentProjectResult({ result, session: projectSession, load: api.reloadProjectFromPath,
+      confirm: (message) => window.confirm(message), open: (opened) => {
+        loadOpenedProject(opened, result.workingCopy);
+        if (result.workingCopy && opened.project) {
+          const current = projectSession.getSnapshot();
+          agentWorkingCopy.current = { sessionId: current.sessionId, projectId: opened.project.id,
+            path: result.path, revision: opened.project.revision, contentOwner: current.contentOwner };
+        }
+        setStatus("已開啟先前的 Agent 剪輯結果；請審片，滿意後儲存正式專案。");
+      } });
+  };
+  const reloadAgentProject = async (agentPath?: string, allowConflictReplace = false) => {
+    const snapshot = projectSession.getSnapshot();
+    const working = agentWorkingCopy.current;
+    if (agentPath && working?.path === agentPath && working.sessionId === snapshot.sessionId) {
+      if (!window.haoDesktop || snapshot.savePending) throw new Error("剪輯台正在儲存；稍後再載入 Agent 版本");
+      if (snapshot.contentOwner !== working.contentOwner && (!allowConflictReplace || !window.confirm(
+        "Agent 執行期間，你也修改了剪輯台。載入 Agent 版本後，可按『復原』回到目前剪輯。確定載入 Agent 版本？",
+      ))) throw new Error("保留目前剪輯台；Agent 工作副本仍在磁碟上");
+      const opened = await window.haoDesktop.reloadProjectFromPath(agentPath);
+      const current = projectSession.getSnapshot();
+      if (!opened.project || opened.project.id !== working.projectId || current.sessionId !== snapshot.sessionId
+        || current.contentOwner !== snapshot.contentOwner) throw new Error("載入期間專案狀態已改變；未覆蓋目前時間軸");
+      projectSession.setHistory((history) => ({ ...history, past: [...history.past.slice(-99), history.present],
+        present: opened.project!, future: [] }));
+      working.revision = opened.project.revision;
+      working.contentOwner = projectSession.getSnapshot().contentOwner;
+      setRuntimeUrls(opened.runtimeUrls ?? {});
+      setSelectedClipId((selected) => opened.project!.tracks.some((track) => track.clips.some((clip) => clip.id === selected))
+        ? selected : opened.project!.tracks.flatMap((track) => track.clips)[0]?.id);
+      setStatus("Agent 的剪輯已載入時間軸；請審片，滿意後儲存正式專案。");
+      return;
+    }
+    if (!snapshot.projectPath || snapshot.dirty || snapshot.savePending || !window.haoDesktop) throw new Error("請先儲存目前專案，才能重新載入 Agent 的磁碟變更");
+    const opened = await window.haoDesktop.reloadProjectFromPath(snapshot.projectPath);
+    if (projectSession.getSnapshot() !== snapshot) throw new Error("載入期間專案狀態已改變；未覆蓋目前時間軸");
+    loadOpenedProject(opened);
   };
   const batchAutoEdit = useBatchAutoEdit({ api: window.haoDesktop, projectSession, onOpenProject: loadOpenedProject, onStatus: setStatus });
   useAutomaticUpdates(window.haoDesktop?.checkForUpdates, setStatus);
@@ -337,7 +431,7 @@ function App() {
     if (!importedFiles.length) return;
     // Import is additive: use the live graph, not the render that opened the picker.
     const project = projectSession.getSnapshot().history.present;
-    if (options.backgroundMusic) {
+    if (options.backgroundMusic && !isStarterDemo(project) && projectDuration(project) > 0) {
       const imported = importedFiles[0];
       const music = buildLoopingMusicPlan(project, imported.asset, () => makeId("music-clip"));
       if (!runCommand({ type: "batch", commands: music.commands }, `已自動鋪滿 ${music.targetDuration.toFixed(1)} 秒配樂，重複處使用 ${music.crossfade.toFixed(1)} 秒 crossfade，旁白會自動 ducking。`)) return;
@@ -346,55 +440,14 @@ function App() {
       setSelectedClipId(music.lastClipId);
       return;
     }
-    const firstVisual = importedFiles.find(({ asset }) => asset.kind !== "audio")?.asset;
-    const replaceStarter = Boolean(firstVisual && isStarterDemo(project));
-    const canvas = firstVisual ? canvasResolutionForAsset(firstVisual) : undefined;
-    let timelineCursor = replaceStarter ? 0 : projectDuration(project);
-    const commands: EditorCommand[] = [];
-    let lastClipId: string | undefined;
-    if (replaceStarter) {
-      commands.push(
-        { type: "delete_clip", clipId: "clip-demo" },
-        { type: "delete_asset", assetId: "asset-demo" },
-      );
-    }
-    if (canvas && (replaceStarter || !project.assets.some((asset) => asset.kind !== "audio"))) {
-      commands.push({ type: "set_project_resolution", width: canvas.width, height: canvas.height });
-    }
-    for (const imported of importedFiles) {
-      const targetTrack = project.tracks.find((track) => (
-        imported.asset.kind === "audio" ? track.kind === "audio" : track.kind === "video"
-      ));
-      if (!targetTrack) throw new Error("找不到適合這份素材的軌道");
-      const clipId = makeId("clip");
-      commands.push(
-        { type: "import_asset", asset: imported.asset },
-        { type: "add_clip", clip: {
-          id: clipId,
-          assetId: imported.asset.id,
-          trackId: targetTrack.id,
-          timelineStart: timelineCursor,
-          sourceStart: 0,
-          duration: imported.asset.duration,
-          volume: 1,
-          transform: { ...DEFAULT_TRANSFORM },
-          color: { ...DEFAULT_COLOR },
-          keyframes: [],
-        } },
-      );
-      timelineCursor += imported.asset.duration;
-      lastClipId = clipId;
-    }
-    const orientationMessage = canvas && (replaceStarter || !project.assets.some((asset) => asset.kind !== "audio"))
-      ? `，已依第一支素材自動設成 ${canvas.label}（${canvas.width}×${canvas.height}）`
-      : "";
-    if (!runCommand({ type: "batch", commands }, `已匯入 ${importedFiles.length} 份素材${orientationMessage}，並從 0 秒依序排好。`)) return;
+    const placement = planImportedMediaPlacement(project, importedFiles.map(({ asset }) => asset), () => makeId("clip"));
+    if (!runCommand({ type: "batch", commands: placement.commands }, `已匯入 ${importedFiles.length} 份素材${placement.orientationMessage}；畫面與聲音分軌接續。`)) return;
     setRuntimeUrls((current) => Object.fromEntries([
       ...Object.entries(current),
       ...importedFiles.map(({ asset, runtimeUrl }) => [asset.id, runtimeUrl]),
     ]));
     setSelectedCaptionId(undefined);
-    setSelectedClipId(lastClipId);
+    setSelectedClipId(placement.lastClipId);
   };
   const importFiles = async (files: File[]) => {
     const task = projectSession.beginTask();
@@ -526,7 +579,7 @@ function App() {
   const mobile = useMobileRemote({ api: window.haoDesktop, snapshot: mobileSnapshot, onInstruction: submitAgentInstruction, onStatus: setStatus });
 
   const { renderVideo, renderOpenExrSequence, renderAlphaMaster } = createAppRenderActions({
-    api: window.haoDesktop, project, setStatus, session: projectSession,
+    api: window.haoDesktop, project, setStatus, session: projectSession, renderGate, onRenderBusyChange: setRenderBusy,
     onArtifactReady: async (snapshot, artifact) => {
       if (!projectSession.isCurrentSession(sessionId)) return false;
       const bound = await aestheticOutputOwner.bind(snapshot, artifact);
@@ -556,12 +609,12 @@ function App() {
   if (!recovery.ready) return <main className="app-loading" aria-busy="true" data-shortcuts-blocked="true">正在檢查未儲存的工作…</main>;
 
   return <Suspense fallback={<main className="app-loading" aria-label="正在載入 Editkin">正在載入 Editkin 剪輯工作區…</main>}><EditorShell currentAestheticArtifact={currentAestheticArtifact} {...{
-    history, project, projectSession, duration, theme, setTheme, isDesktop, playhead, setPlayhead, seekRevision, onPlaybackClock, playing, setPlaying,
+    history, project, projectPath, projectSavePending: savePending, projectSession, ensureAgentWorkingProject, reloadAgentProject, openCompletedAgentProject, duration, theme, setTheme, isDesktop, playhead, setPlayhead, seekRevision, onPlaybackClock, playing, setPlaying,
     selectedClipId, setSelectedClipId, selectedCaptionId, setSelectedCaptionId, selectedClip,
     selectedClipAtPlayhead, selectedCaption, transitionNeighbors, selectedMotionTracks, activeLayers,
     activeAudioLayers, runtimeUrls, status, setStatus, trackingMode, setTrackingMode, trackingSelection,
     setTrackingSelection, trackingBusy, recovery, desktopActions, automatic, creativeLibrary, batchAutoEdit, mobile,
-    newProject, openProject, saveProject, undoEdit, redoEdit, renderVideo, renderOpenExrSequence, renderAlphaMaster, importFiles,
+    newProject, openProject, saveProject, undoEdit, redoEdit, renderVideo, renderBusy, renderOpenExrSequence, renderAlphaMaster, importFiles,
     acceptTrackingSelection, startPodcastDirector, submitAgentInstruction, runCommand, updateAnimatedClipProperty,
     addMotionGraphic, addCaption, addTrack, addAssetToTimeline, makeSelectedPictureInPicture, precomposeSelected, applyShortFormTemplate, applyLongFormTemplate, addLowerThird, clearTemplateApplication, splitSelected, deleteSelected,
   }} /></Suspense>;

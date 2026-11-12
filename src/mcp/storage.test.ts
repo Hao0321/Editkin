@@ -1,3 +1,5 @@
+// Agent integration: urn:uuid:d366cab7-d5a4-44d8-b80d-4c7ce4daf65d. Existing GPL license retained; see AGENT-NOTICE.md.
+import { realpathSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,9 +10,11 @@ import {
   applyProjectCommands,
   commitAutopilotReceipt,
   createProjectFile,
+  pinBoundProjectMediaSources,
   readAutopilotExecutionAttribution,
   readProject,
   resolveProjectPath,
+  resolveProjectAssetMediaPath,
   resolveRenderPath,
   resolveWorkspaceMediaPath,
   WorkspaceBoundaryError,
@@ -22,6 +26,7 @@ const roots: string[] = [];
 const previousWorkspace = process.env.EDITKIN_WORKSPACE;
 
 afterEach(async () => {
+  pinBoundProjectMediaSources({});
   if (previousWorkspace === undefined) delete process.env.EDITKIN_WORKSPACE;
   else process.env.EDITKIN_WORKSPACE = previousWorkspace;
   await Promise.all(roots.splice(0).map((path) => rm(path, { recursive: true, force: true })));
@@ -170,5 +175,50 @@ describe("MCP workspace boundary", () => {
     expect(saved.assets[0].uri).toBe(creative.uri);
     await expect(applyProjectCommands(projectPath, [{ type: "import_asset", asset: { ...creative, id: "escape", uri: "../outside.wav" } }])).rejects.toBeInstanceOf(WorkspaceBoundaryError);
     expect((await readProjectFile(join(workspace, projectPath))).revision).toBe(saved.revision);
+  });
+
+  it("edits a bound project with its original external import without granting new outside paths", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "editkin-project-"));
+    const media = await mkdtemp(join(tmpdir(), "editkin-imports-"));
+    roots.push(workspace, media);
+    process.env.EDITKIN_WORKSPACE = workspace;
+    const original = join(media, "original.mov");
+    const unapproved = join(media, "unapproved.mov");
+    await writeFile(original, "original bytes");
+    await writeFile(unapproved, "other bytes");
+    const projectPath = join(workspace, "external.editkin.json");
+    const project = await createProjectFile("external.editkin.json", "External import", 1920, 1080, 30);
+    project.assets.push({ id: "original", name: "original.mov", kind: "video", uri: original, duration: 2 });
+    await writeFile(projectPath, JSON.stringify(project));
+
+    await expect(resolveProjectAssetMediaPath(original)).rejects.toBeInstanceOf(WorkspaceBoundaryError);
+    pinBoundProjectMediaSources({ EDITKIN_WORKSPACE: workspace, EDITKIN_AGENT_PROJECT_PATH: projectPath });
+    await expect(resolveProjectAssetMediaPath(original)).resolves.toBe(realpathSync(original));
+    await expect(resolveProjectAssetMediaPath(unapproved)).rejects.toBeInstanceOf(WorkspaceBoundaryError);
+    const saved = await applyProjectCommands("external.editkin.json", [], project.revision);
+    expect(saved.assets[0].uri).toBe(realpathSync(original));
+    const savedAgain = await applyProjectCommands("external.editkin.json", [], saved.revision);
+    expect(savedAgain.assets[0].uri).toBe(realpathSync(original));
+    expect(await readFile(original, "utf8")).toBe("original bytes");
+    await expect(applyProjectCommands("external.editkin.json", [{ type: "import_asset", asset: {
+      id: "new", name: "unapproved.mov", kind: "video", uri: unapproved, duration: 2,
+    } }], savedAgain.revision)).rejects.toBeInstanceOf(WorkspaceBoundaryError);
+    expect((await readProjectFile(projectPath)).revision).toBe(savedAgain.revision);
+  });
+
+  it("does not pin a workspace path that escapes through a junction", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "editkin-project-"));
+    const outside = await mkdtemp(join(tmpdir(), "editkin-imports-"));
+    roots.push(workspace, outside);
+    process.env.EDITKIN_WORKSPACE = workspace;
+    await writeFile(join(outside, "clip.mov"), "source");
+    await symlink(outside, join(workspace, "linked"), process.platform === "win32" ? "junction" : "dir");
+    const linked = join(workspace, "linked", "clip.mov");
+    const projectPath = join(workspace, "linked.editkin.json");
+    const project = await createProjectFile("linked.editkin.json", "Linked", 1920, 1080, 30);
+    project.assets.push({ id: "linked", name: "clip.mov", kind: "video", uri: linked, duration: 2 });
+    await writeFile(projectPath, JSON.stringify(project));
+    pinBoundProjectMediaSources({ EDITKIN_WORKSPACE: workspace, EDITKIN_AGENT_PROJECT_PATH: projectPath });
+    await expect(resolveProjectAssetMediaPath(linked)).rejects.toBeInstanceOf(WorkspaceBoundaryError);
   });
 });

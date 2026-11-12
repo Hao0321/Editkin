@@ -28,8 +28,9 @@ describe("Auto Roto service artifact identity", () => {
       autoRotoVideoHost: "external-pack/host.py",
     })).toThrow(/未允許欄位/);
     const ffmpeg = resolve(process.cwd(), "vendor/ffmpeg/win32-x64/ffmpeg.exe");
-    const runtime = bindAutoRotoRuntimeToServiceArtifact({ ffmpeg });
+    const runtime = bindAutoRotoRuntimeToServiceArtifact({ ffmpeg, whisperModel: "models/ggml-small-q5_1.bin" });
     expect(runtime.ffmpeg).toBe(ffmpeg);
+    expect(runtime.whisperModel).toBe("models/ggml-small-q5_1.bin");
     expect(runtime.autoRotoDistributionMode).toBe("product");
     expect(runtime.autoRotoExternalResearchEnabled).toBe(false);
     expect(evaluateAutoRotoProductBoundary(runtime).status).toBe("allowed");

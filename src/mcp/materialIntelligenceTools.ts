@@ -1,3 +1,4 @@
+// Agent integration: urn:uuid:d366cab7-d5a4-44d8-b80d-4c7ce4daf65d. Existing GPL license retained; see AGENT-NOTICE.md.
 import type { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import { join, resolve } from "node:path";
@@ -18,9 +19,10 @@ import {
   MATERIAL_KEYFRAME_MAX_RESPONSE_BYTES,
   paginateAgentRows,
 } from "../application/agentContextBudget";
-import { readProject, resolveWorkspaceMediaPath, workspaceRoot } from "./storage";
+import { readProject, resolveProjectAssetMediaPath, workspaceRoot } from "./storage";
 import { personalVisualRoot } from "./toolRuntime";
 import { materialPreparationJobs } from "../application/materialPreparationJobs";
+import { assertAgentMaterialAccess, boundAgentProjectScope } from "./agentMaterialAccess";
 
 function textResult(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload) }] };
@@ -55,7 +57,7 @@ function runtime() {
 async function resolveAssetSource(uri: string): Promise<string> {
   const creativeId = creativeAssetIdFromUri(uri);
   if (creativeId) return (await resolveCreativeLibraryAsset(creativePackRoot(), creativeId, personalMusicRoot(), personalVisualRoot())).absolutePath;
-  return resolveWorkspaceMediaPath(uri);
+  return resolveProjectAssetMediaPath(uri);
 }
 
 export function compactMaterialKeyframe(frame: MaterialKeyframe) {
@@ -173,17 +175,21 @@ export function registerMaterialIntelligenceTools(server: McpServer): void {
       const clip = findClip(project, clipId);
       const asset = findAsset(project, clip.assetId);
       const sourcePath = await resolveAssetSource(asset.uri);
+      const agentProjectScope = boundAgentProjectScope();
       const request = {
         assetId: asset.id, clipId, sourcePath, sourceStart: clip.sourceStart, duration: clip.duration,
+        ...(agentProjectScope ? { agentProjectScope } : {}),
         fps: project.fps, kind: asset.kind, sourceSha256: asset.derivatives?.sourceSha256,
         language, includeTranscript, maxKeyframes, ...(keyframeTimes !== undefined ? { keyframeTimes } : {}), color: asset.color, colorManagement: project.colorManagement,
       };
       const current = runtime();
       if (execution === "background" || resumeJobId || (execution === "auto" && clip.duration > 60)) {
-        const started = await materialPreparationJobs(current.cacheRoot).start(request, current, resumeJobId);
+        const started = await materialPreparationJobs(current.cacheRoot).start(request, current, resumeJobId, agentProjectScope);
         return textResult({ status: started.job.state, ...started, nextTool: "get_material_preparation_job", pollAfterMs: 10000 });
       }
-      return textResult(preparedResult(await prepareMaterialIntelligence(request, current)));
+      const prepared = await prepareMaterialIntelligence(request, current);
+      assertAgentMaterialAccess(agentProjectScope, prepared.packet);
+      return textResult(preparedResult(prepared));
     } catch (error) { return errorResult(error); }
   });
 
@@ -192,10 +198,12 @@ export function registerMaterialIntelligenceTools(server: McpServer): void {
     inputSchema: z.object({ jobId: z.string().uuid() }),
   }, async ({ jobId }) => {
     try {
-      const current = runtime(), job = await materialPreparationJobs(current.cacheRoot).status(jobId);
+      const current = runtime(), agentProjectScope = boundAgentProjectScope();
+      const job = await materialPreparationJobs(current.cacheRoot).status(jobId, agentProjectScope);
       if (job.state !== "COMPLETED" || !job.result) return textResult({ status: job.state, job, pollAfterMs: 10000 });
       const packet = await readMaterialIntelligence(current.cacheRoot, job.result.materialId);
       if (packet.cache?.packetSha256 !== job.result.packetSha256) throw Error("素材工作結果與封存 packet 不一致");
+      assertAgentMaterialAccess(agentProjectScope, packet);
       return textResult({ ...preparedResult({ packet, cacheHit: job.result.cacheHit }), job });
     } catch (error) { return errorResult(error); }
   });
@@ -204,7 +212,7 @@ export function registerMaterialIntelligenceTools(server: McpServer): void {
     description: "取消此連線持有的素材準備；CANCELLING 代表仍在收尾，等到 CANCELLED 才已停止。原片不變，完成的辨識分段保留供明確續跑。",
     inputSchema: z.object({ jobId: z.string().uuid() }),
   }, async ({ jobId }) => {
-    try { const job = await materialPreparationJobs(runtime().cacheRoot).cancel(jobId); return textResult({ status: job.state, job }); }
+    try { const job = await materialPreparationJobs(runtime().cacheRoot).cancel(jobId, boundAgentProjectScope()); return textResult({ status: job.state, job }); }
     catch (error) { return errorResult(error); }
   });
 
@@ -221,10 +229,12 @@ export function registerMaterialIntelligenceTools(server: McpServer): void {
     }),
   }, async ({ materialId, start, end, maxCues, afterCueIndex, maxTokens, maxCuts }) => {
     try {
+      const current = runtime(), packet = await readMaterialIntelligence(current.cacheRoot, materialId);
+      assertAgentMaterialAccess(boundAgentProjectScope(), packet);
       return textResult({
         status: "GREEN",
         context: compactMaterialContext(
-          await readMaterialIntelligence(runtime().cacheRoot, materialId),
+          packet,
           start,
           end,
           maxCues,
@@ -240,7 +250,9 @@ export function registerMaterialIntelligenceTools(server: McpServer): void {
     inputSchema: z.object({ materialId: z.string().regex(/^[a-f0-9]{64}$/), frameIds: z.array(z.string().regex(/^kf-\d+$/)).min(1).max(MATERIAL_KEYFRAME_MAX_IMAGES) }),
   }, async ({ materialId, frameIds }) => {
     try {
-      const frames = await Promise.all(frameIds.map((frameId) => readMaterialKeyframe(runtime().cacheRoot, materialId, frameId)));
+      const current = runtime(), packet = await readMaterialIntelligence(current.cacheRoot, materialId);
+      assertAgentMaterialAccess(boundAgentProjectScope(), packet);
+      const frames = await Promise.all(frameIds.map((frameId) => readMaterialKeyframe(current.cacheRoot, materialId, frameId)));
       const totalImageBytes = frames.reduce((sum, frame) => sum + frame.data.length, 0);
       if (totalImageBytes > MATERIAL_KEYFRAME_MAX_RESPONSE_BYTES) {
         throw new Error(`關鍵幀回應超過 ${MATERIAL_KEYFRAME_MAX_RESPONSE_BYTES} bytes，請減少 frameIds 後重試`);
@@ -259,7 +271,9 @@ export function registerMaterialIntelligenceTools(server: McpServer): void {
     inputSchema: materialSemanticsInputSchema,
   }, async (input) => {
     try {
-      const receipt = await recordMaterialSemantics(runtime().cacheRoot, input);
+      const current = runtime(), packet = await readMaterialIntelligence(current.cacheRoot, input.materialId);
+      assertAgentMaterialAccess(boundAgentProjectScope(), packet);
+      const receipt = await recordMaterialSemantics(current.cacheRoot, input);
       return textResult({ status: "GREEN", receipt: { schema: receipt.schema, materialId: receipt.materialId, sourceSha256: receipt.sourceSha256, semanticReceiptSha256: receipt.semanticReceiptSha256, segmentCount: receipt.segments.length, createdAt: receipt.createdAt } });
     } catch (error) { return errorResult(error); }
   });

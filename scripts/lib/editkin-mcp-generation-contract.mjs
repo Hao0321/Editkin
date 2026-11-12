@@ -29,7 +29,8 @@ const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const CANDIDATE_ID_PATTERN = /^candidate-[a-f0-9]{16}$/u;
 const GENERATION_DIRECTORY_PATTERN = /^([a-f0-9]{64})--([a-f0-9]{32})$/u;
 const SELECTION_REVISION_PATTERN = /^[a-f0-9]{32}$/u;
-const MANIFEST_PATH_PATTERN = /^[^\\/:*?"<>|\u0000-\u001f]+(?:\/[^\\/:*?"<>|\u0000-\u001f]+)*$/u;
+const INVALID_MANIFEST_SEGMENT_CHARACTER = /[\\:*?"<>|\u0000-\u001f]/u;
+const MAX_MANIFEST_PATH_LENGTH = 4096;
 
 export const SNAPSHOT_TOP_LEVEL_DIRECTORIES = Object.freeze([
   "color",
@@ -60,6 +61,7 @@ export const EDITKIN_RELEASE_RUNTIME_FILES = Object.freeze([
   "node.exe",
   "remote.mjs",
   "service.mjs",
+  "service.mjs.material-color-identity.json",
   "THIRD_PARTY_NOTICES.md",
   "whisper-cli.exe",
   "WHISPER-LICENSE.txt",
@@ -187,10 +189,13 @@ export function validateGenerationDirectoryName(value, expectedGenerationId) {
 }
 
 export function normalizeManifestPath(value, label = "Snapshot path") {
-  if (typeof value !== "string" || value !== value.normalize("NFC") || !MANIFEST_PATH_PATTERN.test(value)) {
+  if (typeof value !== "string" || value !== value.normalize("NFC") || !value || value.length > MAX_MANIFEST_PATH_LENGTH) {
     throw new Error(`${label} is not a normalized relative manifest path`);
   }
   const segments = value.split("/");
+  if (segments.some((segment) => !segment || INVALID_MANIFEST_SEGMENT_CHARACTER.test(segment))) {
+    throw new Error(`${label} is not a normalized relative manifest path`);
+  }
   if (segments.some((segment) => segment === "." || segment === ".." || !segment)) {
     throw new Error(`${label} contains a traversal or empty segment`);
   }

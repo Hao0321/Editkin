@@ -27,6 +27,7 @@ const MANAGED_RUNTIME = [
   ["runtime/hao-core.exe", "native/bin/win32-x64/hao-core.exe"],
   ["runtime/editkin-gpu-compositor.exe", "native/bin/win32-x64/editkin-gpu-compositor.exe"],
   ["runtime/service.mjs", "desktop-dist/service.mjs"],
+  ["runtime/service.mjs.material-color-identity.json", "desktop-dist/service.mjs.material-color-identity.json"],
   ["runtime/mcp.mjs", "desktop-dist/mcp.mjs"],
   ["runtime/mcp.mjs.material-color-identity.json", "desktop-dist/mcp.mjs.material-color-identity.json"],
   ["runtime/remote.mjs", "desktop-dist/remote.mjs"],

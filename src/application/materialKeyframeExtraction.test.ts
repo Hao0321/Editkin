@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,7 +12,14 @@ import { prepareMaterialIntelligence, readMaterialIntelligence } from "./materia
 import { hashMaterialJson, sealMaterialPacket } from "./materialEvidenceCache";
 
 const app = fileURLToPath(new URL("../../", import.meta.url));
-const ffmpegPath = join(app, "vendor/ffmpeg/win32-x64/ffmpeg.exe"), ffprobePath = join(app, "vendor/ffmpeg/win32-x64/ffprobe.exe");
+const localFfmpeg = join(app, "vendor/ffmpeg/win32-x64/ffmpeg.exe"), localFfprobe = join(app, "vendor/ffmpeg/win32-x64/ffprobe.exe");
+const onPath = (name: string) => {
+  const path = spawnSync("where.exe", [name], { encoding: "utf8", windowsHide: true }).stdout?.split(/\r?\n/)[0].trim();
+  if (!path) throw Error(`${name} is unavailable for this integration test`);
+  return path;
+};
+const ffmpegPath = existsSync(localFfmpeg) ? localFfmpeg : onPath("ffmpeg"),
+  ffprobePath = existsSync(localFfprobe) ? localFfprobe : onPath("ffprobe");
 const runtime = { ffmpegPath, ffprobePath };
 function run(args: string[]) { const r = spawnSync(ffmpegPath, args, { windowsHide: true, timeout: 30000, maxBuffer: 16 * 1024 * 1024 }); expect(r.status, r.stderr.toString()).toBe(0); return r.stdout; }
 async function fixture(input: "rec709" | "hlg" | "pq", graph = "nullsrc=s=96x64:r=10:d=1,format=yuv420p10le,geq=lum='128+640*X/W':cb='400+200*Y/H':cr=512") {
@@ -79,6 +87,28 @@ it("unknown tags / contradictory Log and true alpha do not generate trusted JPEG
   const alpha = await fixture("rec709", "nullsrc=s=96x64:r=10:d=1,format=yuva444p,geq=lum=100:cb=128:cr=128:a=100");
   const alphaResult = await extractMaterialKeyframes(alpha.request, runtime, identity);
   expect(alphaResult.analysis.omitted[0].reason).toBe("unsupported-or-alpha-pixel-format"); expect(alphaResult.frames).toEqual([]);
+}, 30000);
+it("views a still JPEG once with source-bound evidence and no invented video colour tags", async () => {
+  const f = await fixture("rec709"), path = join(f.root, "portrait.jpg");
+  run(["-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=1080x1440", "-frames:v", "1", path]);
+  const sourceSha256 = await colorFileSha(path);
+  const request: MaterialColorRequest = { sourcePath: path, sourceSha256, sourceStart: 0, duration: 5,
+    kind: "image", samples: [{ id: "kf-1", time: 0, sceneIndex: 0 }], sceneCount: 1, sceneCountVerified: true, sceneCuts: [] };
+  const identity = await getMaterialColorRuntimeIdentity(runtime);
+  const result = await extractMaterialKeyframes(request, runtime, identity);
+  expect(result.analysis.state, JSON.stringify(result.analysis.omitted)).toBe("ready");
+  expect(result.analysis.policy).toBe("source-image-display-v1");
+  expect(result.frames).toHaveLength(1);
+  expect(result.frames[0].display.decoded).toMatchObject({ width: 960, height: 1280, relativeTime: 0 });
+  expect(result.frames[0].display.normalization.interpretation).toBe("unverified-image");
+  verifyMaterialKeyframeDisplay(result.analysis, result.frames.map(frame => ({ ...frame,
+    sha256: frame.display.jpeg.sha256, bytes: frame.data.length })),
+  { sourceSha256, sourceStart: 0, duration: 5, kind: "image" }, identity.identitySha256, []);
+  const prepared = await prepareMaterialIntelligence({ assetId: "portrait", clipId: "clip-portrait", sourcePath: path,
+    sourceStart: 0, duration: 5, fps: 30, kind: "image", includeTranscript: false },
+  { ...runtime, cacheRoot: f.root, modelRoot: f.root });
+  expect(prepared.packet.keyframes).toHaveLength(1);
+  expect(prepared.packet.keyframes[0].time).toBe(0);
 }, 30000);
 it("duplicates retain original request coverage without fake time stamps", async () => {
   const f = await fixture("rec709"), identity = await getMaterialColorRuntimeIdentity(runtime);

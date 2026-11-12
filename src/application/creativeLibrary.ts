@@ -71,6 +71,7 @@ export interface CreativeLibrarySummary {
   name: string;
   version: string;
   attribution: string;
+  packInstalled?: boolean;
   assetCount: number;
   assetBytes: number;
   assets: CreativeLibraryAsset[];
@@ -256,31 +257,34 @@ async function verifiedVisualPath(root: string, file: VisualFile): Promise<strin
 }
 
 export async function listCreativeLibrary(packRoot: string, personalMusicRoot?: string, personalVisualRoot?: string): Promise<CreativeLibrarySummary> {
-  const manifest = await readManifest(packRoot);
+  let manifest: CreativePackManifest | undefined;
+  try { manifest = await readManifest(packRoot); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
   const music = personalMusicRoot && await pathExists(resolve(personalMusicRoot, "editkin-personal-music.json"))
     ? await readPersonalMusicManifest(personalMusicRoot) : undefined;
   const musicAssets = music?.assets.map(publicPersonalMusicAsset) ?? [];
   const visual = personalVisualRoot && await pathExists(resolve(personalVisualRoot, "editkin-personal-visual.json"))
     ? await readPrivateVisualManifest(personalVisualRoot) : undefined;
   const uniqueVisual = (visual?.assets ?? []).filter(asset => {
-    const alias = validatedAliases.get(manifest)?.find(item => item.legacyId === asset.id);
+    const alias = manifest && validatedAliases.get(manifest)?.find(item => item.legacyId === asset.id);
     if (!alias) return true;
     if (asset.sha256 !== alias.sha256 || asset.bytes !== alias.bytes) throw new Error("Creative Pack legacy alias 與私人來源 hash/bytes 衝突");
     return false;
   });
   const visualAssets = uniqueVisual.map(publicPrivateVisualAsset);
-  const grantedIds = new Set(validatedAliases.get(manifest)?.map(alias => alias.assetId));
-  const publicAssets = [...manifest.assets.filter(asset => grantedIds.has(asset.id)), ...manifest.assets.filter(asset => !grantedIds.has(asset.id))].map(publicAsset);
+  const grantedIds = new Set(manifest ? validatedAliases.get(manifest)?.map(alias => alias.assetId) : undefined);
+  const publicAssets = manifest ? [...manifest.assets.filter(asset => grantedIds.has(asset.id)), ...manifest.assets.filter(asset => !grantedIds.has(asset.id))].map(publicAsset) : [];
   return {
-    id: manifest.id,
-    name: manifest.name,
-    version: manifest.version,
-    attribution: manifest.attribution,
-    assetCount: manifest.assetCount + musicAssets.length + visualAssets.length,
-    assetBytes: manifest.assetBytes + (music?.assetBytes ?? 0) + uniqueVisual.reduce((sum, asset) => sum + asset.bytes, 0),
+    id: manifest?.id ?? "editkin.local-library",
+    name: manifest?.name ?? "本機素材庫",
+    version: manifest?.version ?? "uninstalled",
+    attribution: manifest?.attribution ?? "",
+    packInstalled: Boolean(manifest),
+    assetCount: (manifest?.assetCount ?? 0) + musicAssets.length + visualAssets.length,
+    assetBytes: (manifest?.assetBytes ?? 0) + (music?.assetBytes ?? 0) + uniqueVisual.reduce((sum, asset) => sum + asset.bytes, 0),
     assets: [...visualAssets, ...publicAssets, ...musicAssets],
     musicAssetCount: musicAssets.length,
-    sfxAssetCount: manifest.assets.filter((asset) => asset.category === "sfx").length,
+    sfxAssetCount: manifest?.assets.filter((asset) => asset.category === "sfx").length ?? 0,
     restrictedAssetCount: visualAssets.length + musicAssets.filter((asset) => asset.redistributable === false).length,
   };
 }

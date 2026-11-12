@@ -41,7 +41,7 @@ export function nativeAces2PreviewLoadTransform(output: NativeAces2PreviewOutput
 }
 
 export function scene25dCoverageMatches(
-  receipt: import("./types").GpuEngineScene25dCoverage | null | undefined,
+  receipt: import("./gpuTypes").GpuEngineScene25dCoverage | null | undefined,
   expected: GpuEnginePreviewGraph["scene25dExpectation"],
   graph?: EngineRenderGraph,
   timelineFrame = 0,
@@ -93,7 +93,7 @@ export function scene25dCoverageMatches(
 }
 
 export function depthOfFieldCoverageMatches(
-  receipt: import("./types").GpuEngineDepthOfFieldCoverage | null | undefined,
+  receipt: import("./gpuTypes").GpuEngineDepthOfFieldCoverage | null | undefined,
   graph: EngineRenderGraph,
   timelineFrame = 0,
 ): boolean {
@@ -113,7 +113,7 @@ export function depthOfFieldCoverageMatches(
 }
 
 export function vfxSimulationCoverageMatches(
-  receipt: import("./types").GpuEngineVfxSimulationCoverage | null | undefined,
+  receipt: import("./gpuTypes").GpuEngineVfxSimulationCoverage | null | undefined,
   expected: GpuEnginePreviewGraph["vfxSimulationExpectation"],
 ): boolean {
   if (!expected) return receipt == null;
@@ -127,7 +127,7 @@ export function vfxSimulationCoverageMatches(
 }
 
 export function videoParticleReceiptMatches(
-  receipt: import("./types").GpuEngineVideoParticleReceipt | null | undefined,
+  receipt: import("./gpuTypes").GpuEngineVideoParticleReceipt | null | undefined,
   expected: EngineNode | undefined,
   graph: GpuEngineVideoPreviewGraph["graph"],
   timelineFrame: number,
@@ -171,7 +171,7 @@ export function boundsKey(bounds: NativePreviewBoundsLike): string {
   return `${bounds.x}:${bounds.y}:${bounds.width}:${bounds.height}:${bounds.revision}:${bounds.surfaceColorSpace ?? "srgb"}`;
 }
 
-export function legacySdrNativeSurfaceValid(surface: import("./types").GpuNativePreviewSurface): boolean {
+export function legacySdrNativeSurfaceValid(surface: import("./nativePreviewTypes").GpuNativePreviewSurface): boolean {
   return surface.bound === true
     && surface.backend === "Dx12"
     && surface.nativeSwapChain === true
@@ -195,12 +195,12 @@ export function legacyVideoFallbackAllowed(graph: EngineRenderGraph | undefined)
   return !graph || !graphRequiresRec709SdrV2(graph);
 }
 
-export function rec709SdrV2NativeSurfaceValid(surface: import("./types").GpuNativePreviewSurface): boolean {
+export function rec709SdrV2NativeSurfaceValid(surface: import("./nativePreviewTypes").GpuNativePreviewSurface): boolean {
   return surface.surfaceFormat === "Bgra8Unorm" && surface.pixelContract === "rec709-encoded-sdr-video/v2"
     && legacySdrNativeSurfaceValid({ ...surface, pixelContract: "legacy-sdr-video/v1" });
 }
 
-export function graphSdrNativeSurfaceValid(surface: import("./types").GpuNativePreviewSurface, graph: EngineRenderGraph): boolean {
+export function graphSdrNativeSurfaceValid(surface: import("./nativePreviewTypes").GpuNativePreviewSurface, graph: EngineRenderGraph): boolean {
   return graphRequiresRec709SdrV2(graph) ? rec709SdrV2NativeSurfaceValid(surface) : legacySdrNativeSurfaceValid(surface);
 }
 
@@ -211,7 +211,7 @@ export function activeSceneLinearInputTransform(layers: import("./residentGpuPre
     ? "editkin-rec709-to-linear-rec709-primary/v2" : "editkin-srgb-to-linear-rec709-primary/v1";
 }
 
-export function pqHdrNativeSurfaceValid(surface: import("./types").GpuNativePreviewSurface): boolean {
+export function pqHdrNativeSurfaceValid(surface: import("./nativePreviewTypes").GpuNativePreviewSurface): boolean {
   return surface.bound === true
     && surface.backend === "Dx12"
     && surface.nativeSwapChain === true
@@ -228,14 +228,14 @@ export function pqHdrNativeSurfaceValid(surface: import("./types").GpuNativePrev
 }
 
 export function nativeAces2PreviewSurfaceValid(
-  surface: import("./types").GpuNativePreviewSurface,
+  surface: import("./nativePreviewTypes").GpuNativePreviewSurface,
   output: NativeAces2PreviewOutput,
 ): boolean {
   return output === "rec709_sdr" ? legacySdrNativeSurfaceValid(surface) : pqHdrNativeSurfaceValid(surface);
 }
 
 export function sceneLinearAces2PresentContractValid(
-  receipt: import("./types").GpuEngineVideoPresentedFrame["receipt"],
+  receipt: import("./gpuFrameTypes").GpuEngineVideoPresentedFrame["receipt"],
   output: NativeAces2PreviewOutput = "rec709_sdr",
   expectedInputTransform: "editkin-srgb-to-linear-rec709-primary/v1" | "editkin-rec709-to-linear-rec709-primary/v2" = "editkin-srgb-to-linear-rec709-primary/v1",
 ): boolean {
@@ -281,7 +281,7 @@ export function sceneLinearAces2PresentContractValid(
 }
 
 export function sceneLinearCompositeReceiptMatches(
-  receipt: import("./types").GpuEngineVideoPresentedFrame["receipt"], activeSurfaceLayerCount: number, adjustmentCount: number,
+  receipt: import("./gpuFrameTypes").GpuEngineVideoPresentedFrame["receipt"], activeSurfaceLayerCount: number, adjustmentCount: number,
 ): boolean {
   if (receipt.compositeLayerCount !== activeSurfaceLayerCount) return false;
   if (receipt.compositeExecutionMode === "scene-linear-rgba16f-ping-pong/v1") {
@@ -297,7 +297,7 @@ export function sceneLinearCompositeReceiptMatches(
       && receipt.compositeFullFramePassCount === 3 && receipt.depthOfFieldExecutionMode === "scene-linear-depth32f-gather-dof/v1";
 }
 
-export function sceneLinearEffectReceiptMatches(receipt: import("./types").GpuEngineVideoPresentedFrame["receipt"]): boolean {
+export function sceneLinearEffectReceiptMatches(receipt: import("./gpuFrameTypes").GpuEngineVideoPresentedFrame["receipt"]): boolean {
   const visuals = [
     ...(receipt.visualLayers ?? []),
     ...(receipt.activeAdjustments ?? []).map((adjustment) => adjustment.visualGraph),
@@ -309,7 +309,7 @@ export function sceneLinearEffectReceiptMatches(receipt: import("./types").GpuEn
     && receipt.builtInEffectCount === builtInEffects;
 }
 
-export function matteExecutionReceiptMatches(receipt: import("./types").GpuEngineVideoPresentedFrame["receipt"], sceneLinearAces2: boolean): boolean {
+export function matteExecutionReceiptMatches(receipt: import("./gpuFrameTypes").GpuEngineVideoPresentedFrame["receipt"], sceneLinearAces2: boolean): boolean {
   const matteCount = (receipt.layers ?? []).filter((layer) => layer.matteLayerIndex !== null && layer.matteLayerIndex !== undefined).length;
   if (sceneLinearAces2) return matteCount > 0
     ? receipt.matteExecutionMode === "sampled-track-matte-scene-linear/v1" && receipt.mattePassCount === matteCount
@@ -319,7 +319,7 @@ export function matteExecutionReceiptMatches(receipt: import("./types").GpuEngin
     : (receipt.surface.matteExecutionMode == null || receipt.surface.matteExecutionMode === "none") && (receipt.surface.mattePassCount ?? 0) === 0;
 }
 
-export function captionReceiptMatches(receipt: import("./types").GpuEngineVideoCaptionReceipt, expected: EngineNode): boolean {
+export function captionReceiptMatches(receipt: import("./gpuTypes").GpuEngineVideoCaptionReceipt, expected: EngineNode): boolean {
   const timeline = expected.timeline as { timelineStartFrame: number; sourceStartFrame: number; durationFrames: number } | undefined;
   const glyphCount = [...String(expected.text)].filter((character) => !/\s/u.test(character)).length;
   return receipt.nodeId === expected.id && receipt.cueId === expected.cueId
@@ -402,7 +402,7 @@ export function motionGraphicExpectedSample(graphic: EngineNode, graph: GpuEngin
 }
 
 export function motionGraphicReceiptMatches(
-  receipt: import("./types").GpuEngineVideoMotionGraphicReceipt,
+  receipt: import("./gpuTypes").GpuEngineVideoMotionGraphicReceipt,
   expected: EngineNode,
   graph: GpuEngineVideoPreviewGraph["graph"],
   timelineFrame?: number,

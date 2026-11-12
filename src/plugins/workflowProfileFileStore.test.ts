@@ -1,4 +1,5 @@
-import { access, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createFileSymlinkOrSkip } from "../testSupport/fileSymlink";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
@@ -50,11 +51,11 @@ describe("host Workflow Profile file store", () => {
     expect(() => assertWorkflowProfileMatchesRegistry({ ...profile, enabledSkills: [], priority: [], grants: [{ ...profile.grants[0], skillId: skill.skillId }] }, registry)).toThrow();
   });
 
-  it("rejects symlink profile files instead of following them", async () => {
+  it("rejects symlink profile files instead of following them", async (context) => {
     const { root, path } = await fixture();
     const target = join(root, "target.json");
     await writeFile(target, JSON.stringify(safeEmptyWorkflowProfile()), "utf8");
-    await symlink(target, path, "file");
+    await createFileSymlinkOrSkip(target, path, context);
     await expect(readHostWorkflowProfile(path)).rejects.toThrow(/symlink/);
   });
 
@@ -66,11 +67,11 @@ describe("host Workflow Profile file store", () => {
     await expect(access(`${path}.previous`)).rejects.toThrow();
   });
 
-  it("rejects a forged symlink recovery file", async () => {
+  it("rejects a forged symlink recovery file", async (context) => {
     const { root, path } = await fixture();
     const target = join(root, "target.json");
     await writeFile(target, JSON.stringify(safeEmptyWorkflowProfile()), "utf8");
-    await symlink(target, `${path}.previous`, "file");
+    await createFileSymlinkOrSkip(target, `${path}.previous`, context);
     await expect(readHostWorkflowProfile(path)).rejects.toThrow(/previous recovery/);
   });
 });
